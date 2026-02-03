@@ -1,0 +1,1781 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>임대안내문 출력 - CRE PORTAL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ===== 기본 스타일 ===== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+            line-height: 1.4;
+        }
+        
+        /* ===== 컨트롤 바 (인쇄 시 숨김) ===== */
+        .control-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: #1e293b;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .control-bar h1 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        
+        .btn-secondary {
+            background: #475569;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #334155;
+        }
+        
+        .page-select {
+            padding: 8px 12px;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            background: #334155;
+            color: white;
+            font-size: 13px;
+        }
+        
+        /* ===== 페이지 컨테이너 ===== */
+        .pages-container {
+            padding: 80px 20px 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+        }
+        
+        /* ===== 개별 페이지 (A4 Landscape) ===== */
+        .print-page {
+            width: 297mm;
+            min-height: 210mm;
+            background: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            padding: 10mm;
+            page-break-after: always;
+            page-break-inside: avoid;
+        }
+        
+        /* ===== 빌딩 페이지 헤더 ===== */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 3mm;
+            margin-bottom: 3mm;
+            border-bottom: 2px solid #3b82f6;
+        }
+        
+        .building-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 18pt;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .building-title .icon {
+            font-size: 20pt;
+        }
+        
+        .exclusive-badge {
+            background: #dc2626;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10pt;
+            font-weight: 600;
+        }
+        
+        .region-info {
+            font-size: 11pt;
+            color: #64748b;
+            font-weight: 500;
+        }
+        
+        /* ===== 3열 본문 레이아웃 ===== */
+        .page-body {
+            display: flex;
+            gap: 4mm;
+            height: calc(210mm - 10mm - 10mm - 12mm); /* 페이지 높이 - 패딩 - 헤더 */
+        }
+        
+        .col {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 3mm;
+            min-width: 0;
+        }
+        
+        /* ★ 우측 컬럼 특수 레이아웃 - Space Availability는 상단, 나머지는 하단 정렬 */
+        .col-right {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 2mm;
+        }
+        
+        .col-right .section-vacancy {
+            flex-shrink: 0;
+        }
+        
+        .col-right .col-bottom {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2mm;
+        }
+        
+        /* Space Availability 테이블 - 내용에 맞게 자동 조절하되 100% 폭 유지 */
+        .vacancy-table {
+            width: 100%;
+            table-layout: auto;
+        }
+        
+        .vacancy-table th,
+        .vacancy-table td {
+            white-space: nowrap;
+            padding: 1.2mm 1.5mm;
+        }
+        
+        /* 층 컬럼은 고정 폭 */
+        .vacancy-table th:first-child,
+        .vacancy-table td:first-child {
+            width: 28px;
+            min-width: 28px;
+        }
+        
+        /* 나머지 컬럼은 내용에 따라 자동 조절 */
+        .vacancy-table th:not(:first-child),
+        .vacancy-table td:not(:first-child) {
+            width: auto;
+        }
+        
+        /* ===== 섹션 공통 ===== */
+        .section {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .section-title {
+            font-size: 9pt;
+            font-weight: 700;
+            color: #1e293b;
+            padding: 1.5mm 0;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 1.5mm;
+        }
+        
+        /* ===== 이미지 영역 (고정 높이) ===== */
+        .image-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .image-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .image-box.contain img {
+            object-fit: contain;
+        }
+        
+        /* ★ Building Photo / General Information 영역 - 동일 높이 (페이지 절반) */
+        .section-photo,
+        .section-info {
+            height: 85mm;
+            min-height: 85mm;
+            max-height: 85mm;
+        }
+        
+        .section-photo .image-box {
+            height: calc(85mm - 6mm); /* 타이틀 높이 제외 */
+        }
+        
+        .section-info table {
+            height: 100%;
+        }
+        
+        /* ★ Location / Typical Floor Plan 영역 - 동일 높이 (페이지 절반) */
+        .section-location,
+        .section-floorplan {
+            height: 85mm;
+            min-height: 85mm;
+            max-height: 85mm;
+        }
+        
+        .section-location .image-box,
+        .section-floorplan .image-box {
+            height: calc(85mm - 6mm); /* 타이틀 높이 제외 */
+        }
+        
+        .no-image {
+            color: #94a3b8;
+            font-size: 9pt;
+            text-align: center;
+        }
+        
+        /* ===== 테이블 공통 (여백 70% 축소) ===== */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+        }
+        
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 1.4mm 2.5mm; /* 상하 2mm → 1.4mm (70%) */
+            text-align: left;
+            vertical-align: middle;
+        }
+        
+        th {
+            background: #f1f5f9;
+            font-weight: 600;
+            color: #475569;
+        }
+        
+        /* 정보 테이블 (2열) */
+        .info-table th {
+            width: 25%;
+            background: #f1f5f9;
+        }
+        
+        /* 공실 테이블 */
+        .vacancy-table th {
+            text-align: center;
+            font-size: 7.5pt;
+            padding: 1.4mm 1.5mm;
+        }
+        
+        .vacancy-table td {
+            text-align: center;
+            padding: 1.4mm 1.5mm;
+        }
+        
+        .vacancy-table .floor {
+            font-weight: 600;
+        }
+        
+        .vacancy-table .total-row {
+            background: #f8fafc;
+            font-weight: 600;
+        }
+        
+        /* ★ 공실 없음 표시 스타일 */
+        .vacancy-table .no-vacancy-cell {
+            padding: 12px 8px;
+            color: #64748b;
+            font-size: 9pt;
+            text-align: center;
+        }
+        
+        /* 임대조건 테이블 */
+        .rent-table th,
+        .rent-table td {
+            text-align: center;
+            padding: 1.4mm 2mm;
+        }
+        
+        /* 담당자 테이블 */
+        .contact-table th,
+        .contact-table td {
+            text-align: center;
+            padding: 1.4mm 2mm;
+        }
+        
+        /* ===== NOTE 섹션 ===== */
+        .note-box {
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
+            border-radius: 4px;
+            padding: 1.5mm 2.5mm;
+            font-size: 8pt;
+            color: #92400e;
+        }
+        
+        .note-item {
+            margin-bottom: 0.7mm;
+        }
+        
+        .note-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        /* ===== 로딩 상태 ===== */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .loading::before {
+            content: '⏳';
+            margin-right: 8px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        /* ===== 인쇄 스타일 ===== */
+        @media print {
+            @page {
+                size: A4 landscape;
+                margin: 0;
+            }
+            
+            body {
+                background: white;
+            }
+            
+            .control-bar {
+                display: none !important;
+            }
+            
+            .pages-container {
+                padding: 0;
+                gap: 0;
+            }
+            
+            .print-page {
+                box-shadow: none;
+                margin: 0;
+                width: 100%;
+                height: 100vh;
+            }
+            
+            /* 특정 페이지만 출력 시 */
+            .print-page.hidden-for-print {
+                display: none !important;
+            }
+        }
+        
+        /* ===== 토스트 애니메이션 ===== */
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+        }
+        
+        /* ===== 표지 페이지 스타일 ===== */
+        .cover-page {
+            width: 297mm;
+            min-height: 210mm;
+            background: #1a1f2e;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            page-break-after: always;
+            page-break-inside: avoid;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .cover-page .cover-bg {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            overflow: hidden;
+        }
+        
+        .cover-page .cover-bg .skyline {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .cover-page .cover-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            width: 90%;
+        }
+        
+        .cover-page .cover-title {
+            font-size: 28pt;
+            font-weight: 700;
+            color: #f0f0f0;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+            white-space: nowrap;
+        }
+        
+        .cover-page .cover-subtitle {
+            font-size: 18pt;
+            color: #ec4899;
+            font-weight: 500;
+        }
+        
+        .cover-page .cover-slogan {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12pt;
+            color: rgba(255,255,255,0.7);
+            font-style: italic;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+        
+        .cover-page .cover-logo {
+            position: absolute;
+            bottom: 30px;
+            left: 40px;
+            right: 40px;
+            display: flex;
+        }
+        
+        .cover-page .cover-logo img {
+            max-height: 40px;
+            object-fit: contain;
+        }
+        
+        /* ===== 엔딩 페이지 스타일 (2컬럼 레이아웃) ===== */
+        .ending-page {
+            width: 297mm;
+            min-height: 210mm;
+            background: #0f172a;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            page-break-after: always;
+            page-break-inside: avoid;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        .ending-page .ending-left {
+            flex: 1;
+            padding: 30px 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .ending-page .ending-headlines {
+            margin-bottom: 24px;
+        }
+        
+        .ending-page .ending-headline {
+            font-size: 14pt;
+            color: #ec4899;
+            font-weight: 500;
+            line-height: 1.6;
+        }
+        
+        .ending-page .ending-company {
+            font-size: 22pt;
+            font-weight: 700;
+            margin-top: 8px;
+        }
+        
+        .ending-page .ending-descriptions {
+            margin-bottom: 24px;
+        }
+        
+        .ending-page .ending-descriptions p {
+            font-size: 10pt;
+            color: rgba(255,255,255,0.7);
+            margin-bottom: 4px;
+            line-height: 1.5;
+        }
+        
+        .ending-page .ending-thankyou {
+            font-size: 28pt;
+            font-weight: 700;
+            letter-spacing: 3px;
+            margin-bottom: 8px;
+        }
+        
+        .ending-page .ending-closing {
+            font-size: 10pt;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 20px;
+        }
+        
+        .ending-page .ending-logo-area {
+            margin-bottom: 16px;
+        }
+        
+        .ending-page .ending-logo-area img {
+            max-height: 35px;
+            object-fit: contain;
+        }
+        
+        .ending-page .ending-logo-placeholder {
+            font-size: 16pt;
+            color: rgba(255,255,255,0.6);
+            font-weight: 600;
+        }
+        
+        .ending-page .ending-slogan-text {
+            font-size: 11pt;
+            color: rgba(255,255,255,0.6);
+        }
+        
+        .ending-page .ending-right {
+            width: 45%;
+            padding: 15px;
+        }
+        
+        .ending-page .ending-image-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            gap: 8px;
+            height: 100%;
+        }
+        
+        .ending-page .ending-img-cell {
+            background: #1e293b;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .ending-page .ending-img-cell img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .ending-page .ending-img-empty {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+        }
+        
+        /* ===== 전체 목차 페이지 스타일 ===== */
+        .toc-full-page {
+            width: 297mm;
+            min-height: 210mm;
+            background: #fff;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            page-break-after: always;
+            page-break-inside: avoid;
+            padding: 30px 40px;
+        }
+        
+        .toc-full-page .toc-header {
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+            padding: 20px 30px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .toc-full-page .toc-header-logo img {
+            max-height: 40px;
+        }
+        
+        .toc-full-page .toc-header-title {
+            text-align: right;
+        }
+        
+        .toc-full-page .toc-header-title h1 {
+            font-size: 24pt;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 4px;
+            margin: 0;
+        }
+        
+        .toc-full-page .toc-header-title p {
+            font-size: 10pt;
+            color: rgba(255,255,255,0.8);
+            margin: 4px 0 0 0;
+            letter-spacing: 2px;
+        }
+        
+        .toc-full-page .toc-body {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+        }
+        
+        .toc-full-page .toc-region-col {
+            min-width: 180px;
+            flex: 1;
+        }
+        
+        .toc-full-page .toc-region-header {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .toc-full-page .toc-region-code {
+            font-size: 11pt;
+            font-weight: 600;
+            color: #ec4899;
+        }
+        
+        .toc-full-page .toc-region-name {
+            font-size: 24pt;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        
+        .toc-full-page .toc-region-count {
+            font-size: 11pt;
+            color: #6b7280;
+        }
+        
+        .toc-full-page .toc-building-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .toc-full-page .toc-building-item {
+            font-size: 11pt;
+            color: #374151;
+            padding: 6px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        /* ===== 권역별 목차 페이지 스타일 ===== */
+        .toc-region-page {
+            width: 297mm;
+            min-height: 210mm;
+            background: #fff;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            page-break-after: always;
+            page-break-inside: avoid;
+            padding: 30px 40px;
+        }
+        
+        .toc-region-page .region-header {
+            background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+            padding: 24px 30px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        
+        .toc-region-page .region-header-content {
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+        }
+        
+        .toc-region-page .region-code {
+            font-size: 28pt;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        .toc-region-page .region-name {
+            font-size: 18pt;
+            font-weight: 600;
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .toc-region-page .region-count {
+            font-size: 14pt;
+            color: rgba(255,255,255,0.8);
+            margin-left: auto;
+        }
+        
+        .toc-region-page .building-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .toc-region-page .building-row {
+            display: flex;
+            align-items: center;
+            padding: 14px 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .toc-region-page .building-row:hover {
+            background: #f9fafb;
+        }
+        
+        .toc-region-page .building-num {
+            font-size: 14pt;
+            font-weight: 700;
+            color: #3b82f6;
+            width: 50px;
+        }
+        
+        .toc-region-page .building-name {
+            font-size: 13pt;
+            font-weight: 600;
+            color: #1f2937;
+            flex: 1;
+        }
+        
+        .toc-region-page .building-addr {
+            font-size: 11pt;
+            color: #6b7280;
+            text-align: right;
+        }
+        
+        /* ===== 간지 페이지 스타일 ===== */
+        .divider-page {
+            width: 297mm;
+            height: 210mm;
+            background: #ffffff;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            page-break-after: always;
+            page-break-inside: avoid;
+            position: relative;
+            padding: 25px 35px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .divider-page .divider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 15px;
+            flex-shrink: 0;
+        }
+        
+        .divider-page .divider-header-building {
+            font-size: 18pt;
+            font-weight: 700;
+            color: #1f2937;
+        }
+        
+        .divider-page .divider-header-region {
+            font-size: 11pt;
+            color: #6b7280;
+            font-weight: 500;
+        }
+        
+        .divider-page .divider-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+        
+        .divider-page .divider-content .text-area {
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #1f2937;
+            margin-bottom: 12px;
+            flex-shrink: 0;
+        }
+        
+        .divider-page .divider-content .text-area p {
+            margin-bottom: 8px;
+        }
+        
+        .divider-page .divider-content .text-area:empty {
+            display: none;
+            margin: 0;
+        }
+        
+        /* ★ 이미지 그리드 - 남은 공간 100% 채우기 */
+        .divider-page .divider-content .image-grid {
+            display: grid;
+            gap: 8px;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .divider-page .divider-content .image-grid img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        
+        /* 이미지 없이 텍스트만 있는 경우 */
+        .divider-page .divider-content p {
+            margin-bottom: 12px;
+        }
+        
+        .divider-page .divider-content ul,
+        .divider-page .divider-content ol {
+            margin-left: 20px;
+            margin-bottom: 12px;
+        }
+        
+        .divider-page .divider-content li {
+            margin-bottom: 6px;
+        }
+        
+        /* 단일 이미지 (그리드 없이) */
+        .divider-page .divider-content > p > img,
+        .divider-page .divider-content > img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            margin: 12px 0;
+            display: block;
+        }
+        
+        .divider-page .divider-content .ql-align-center {
+            text-align: center;
+        }
+        
+        .divider-page .divider-content .ql-align-right {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <!-- 컨트롤 바 -->
+    <div class="control-bar">
+        <h1>📄 임대안내문 출력</h1>
+        <div class="control-buttons">
+            <select class="page-select" id="pageSelect" onchange="filterPages()">
+                <option value="all">전체 페이지</option>
+            </select>
+            <button class="btn btn-primary" onclick="window.print()">
+                🖨️ 인쇄 / PDF 저장
+            </button>
+            <button class="btn btn-secondary" onclick="shareUrl()">
+                🔗 공유하기
+            </button>
+            <button class="btn btn-secondary" onclick="closePage()" style="background:#64748b;">
+                ✕ 닫기
+            </button>
+        </div>
+    </div>
+    
+    <!-- 페이지 컨테이너 -->
+    <div class="pages-container" id="pagesContainer">
+        <div class="loading">데이터 로딩 중...</div>
+    </div>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    
+    <script>
+        // Firebase 설정
+        const firebaseConfig = {
+            apiKey: "AIzaSyD2GoecF7Ow-eSbXqNOoIctrcMFNkbvEYM",
+            authDomain: "cre-unified.firebaseapp.com",
+            databaseURL: "https://cre-unified-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "cre-unified",
+            storageBucket: "cre-unified.firebasestorage.app",
+            messagingSenderId: "212422657218",
+            appId: "1:212422657218:web:ac51847deea6d817c96dd6"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        
+        // URL 파라미터에서 guideId 가져오기
+        const urlParams = new URLSearchParams(window.location.search);
+        const guideId = urlParams.get('id');
+        const pageIndex = urlParams.get('page'); // 특정 페이지만 출력 시
+        
+        // 전역 상태
+        let guideData = null;
+        let buildingsData = {};
+        
+        // 숫자 포맷
+        function formatNumber(num) {
+            if (!num && num !== 0) return '-';
+            return Number(num).toLocaleString('ko-KR');
+        }
+        
+        // 가격 포맷 (원/평)
+        function formatPrice(val) {
+            if (!val) return '-';
+            const num = parseFloat(val);
+            if (isNaN(num)) return val;
+            return formatNumber(num);
+        }
+        
+        // 층 포맷
+        function formatFloor(floor) {
+            if (!floor || floor === '-') return '-';
+            let str = String(floor).trim().toUpperCase();
+            if (/^B\d+$/.test(str)) return str;
+            if (/^\d+F$/.test(str)) return str;
+            if (/^B\d+F$/.test(str)) return str.replace('F', '');
+            if (/^\d+층$/.test(str)) return str.replace('층', 'F');
+            if (/^\d+$/.test(str)) return str + 'F';
+            return str;
+        }
+        
+        // E/V 총 대수 (여러 필드 통합)
+        function getElevatorTotal(building) {
+            // 1순위: elevatorTotal (편집에서 저장된 값)
+            if (building.elevatorTotal) return building.elevatorTotal;
+            // 2순위: specs.passengerElevator
+            if (building.specs?.passengerElevator) return building.specs.passengerElevator;
+            // 3순위: specs.elevatorTotal
+            if (building.specs?.elevatorTotal) return building.specs.elevatorTotal;
+            return '-';
+        }
+        
+        // 주차 총 대수
+        function getParkingTotal(building) {
+            // 1순위: parkingTotal (편집에서 저장된 값)
+            if (building.parkingTotal) return building.parkingTotal;
+            // 2순위: parking.total
+            if (building.parking?.total) return building.parking.total;
+            return '-';
+        }
+        
+        // 주차 비고
+        function getParkingNote(building) {
+            // 1순위: parkingNote (편집에서 저장된 값)
+            if (building.parkingNote) return building.parkingNote;
+            // 2순위: parking.ratioPerPy로 계산
+            if (building.parking?.ratioPerPy) {
+                return `(1대/${building.parking.ratioPerPy}평)`;
+            }
+            return '';
+        }
+        
+        // ★ 빌딩 데이터 정규화 (편집 모드 guide-utils.js와 동일한 로직)
+        function normalizeBuilding(building) {
+            if (!building) return;
+            
+            // E/V 정규화: specs.elevator에서 숫자 추출
+            if (!building.elevatorTotal && building.specs?.elevator) {
+                const match = building.specs.elevator.match(/(\d+)\s*대/);
+                if (match) building.elevatorTotal = parseInt(match[1]);
+            }
+            
+            // 주차 정규화: parking.display에서 숫자 추출
+            if (!building.parkingTotal && building.parking?.display) {
+                const match = building.parking.display.match(/(\d+)\s*대/);
+                if (match) building.parkingTotal = parseInt(match[1]);
+            }
+            if (!building.parkingTotal && building.parking?.total) {
+                building.parkingTotal = building.parking.total;
+            }
+            
+            // 층수 정규화
+            if (!building.floorsAbove || !building.floorsBelow) {
+                // 1순위: floors.above / floors.below 객체
+                if (building.floors?.above) {
+                    building.floorsAbove = building.floors.above;
+                }
+                if (building.floors?.below) {
+                    building.floorsBelow = building.floors.below;
+                }
+                
+                // 2순위: floors.display에서 추출 ("지하6층, 지상27층" 패턴)
+                if (building.floors?.display) {
+                    const display = building.floors.display;
+                    // 지하 N층
+                    const belowMatch = display.match(/지하\s*(\d+)\s*층/);
+                    if (belowMatch && !building.floorsBelow) {
+                        building.floorsBelow = parseInt(belowMatch[1]);
+                    }
+                    // 지상 N층
+                    const aboveMatch = display.match(/지상\s*(\d+)\s*층/);
+                    if (aboveMatch && !building.floorsAbove) {
+                        building.floorsAbove = parseInt(aboveMatch[1]);
+                    }
+                }
+                
+                // 3순위: scale에서 추출 ("B6 / 27F" 패턴)
+                if (building.scale) {
+                    const belowMatch = building.scale.match(/B(\d+)/i);
+                    if (belowMatch && !building.floorsBelow) {
+                        building.floorsBelow = parseInt(belowMatch[1]);
+                    }
+                    const aboveMatch = building.scale.match(/(\d+)\s*F/i);
+                    if (aboveMatch && !building.floorsAbove) {
+                        building.floorsAbove = parseInt(aboveMatch[1]);
+                    }
+                }
+            }
+            
+            return building;
+        }
+        
+        // 외관 이미지 가져오기
+        function getExteriorImage(building) {
+            if (building.images?.exterior) {
+                if (Array.isArray(building.images.exterior)) {
+                    return building.images.exterior[0]?.url || building.images.exterior[0];
+                }
+                return building.images.exterior;
+            }
+            return null;
+        }
+        
+        // 평면도 이미지 가져오기
+        function getFloorPlanImage(building) {
+            if (building.images?.floorPlan) {
+                if (Array.isArray(building.images.floorPlan)) {
+                    return building.images.floorPlan[0]?.url || building.images.floorPlan[0];
+                }
+                return building.images.floorPlan;
+            }
+            return null;
+        }
+        
+        // 위치 이미지 가져오기
+        function getLocationImage(building, item) {
+            // 아이템에 저장된 지도 이미지 우선
+            if (item?.mapImage) return item.mapImage;
+            // Firebase Storage 이미지
+            if (building.images?.location) return building.images.location;
+            return null;
+        }
+        
+        // ★ 권역 표시명 가져오기 (별칭 우선 적용)
+        const DEFAULT_REGION_NAMES = {
+            'GBD': '강남', 'YBD': '여의도', 'CBD': '도심', 
+            'BBD': '분당', 'PAN': '판교', 'ETC': '기타'
+        };
+        
+        function getRegionDisplayName(regionCode, guideData) {
+            const code = (regionCode || 'ETC').toUpperCase();
+            // 1. 별칭 확인
+            const alias = guideData?.regionAliases?.[code];
+            if (alias && alias.displayName) {
+                return alias.displayName;
+            }
+            // 2. 커스텀 권역 확인
+            const customRegion = (guideData?.customRegions || []).find(r => r.code === code);
+            if (customRegion) {
+                return customRegion.name;
+            }
+            // 3. 기본 권역명
+            return DEFAULT_REGION_NAMES[code] || code;
+        }
+        
+        function getRegionDisplayNameEn(regionCode, guideData) {
+            const code = (regionCode || 'ETC').toUpperCase();
+            // 1. 별칭 확인
+            const alias = guideData?.regionAliases?.[code];
+            if (alias && alias.displayNameEn) {
+                return alias.displayNameEn;
+            }
+            // 2. 커스텀 권역 확인
+            const customRegion = (guideData?.customRegions || []).find(r => r.code === code);
+            if (customRegion) {
+                return customRegion.nameEn || customRegion.name;
+            }
+            // 3. 기본값 (코드 그대로)
+            return code;
+        }
+        
+        // ★ 표지 페이지 HTML 생성 (guide-preview.js와 동일)
+        function renderCoverPage(guideData) {
+            const cs = guideData.coverSettings || {};
+            const logoJustify = cs.logoPosition === 'left' ? 'flex-start' : 
+                               cs.logoPosition === 'center' ? 'center' : 'flex-end';
+            
+            return `
+                <div class="print-page cover-page" data-name="표지">
+                    <div class="cover-bg">
+                        <svg class="skyline" viewBox="0 0 400 60" preserveAspectRatio="none">
+                            <path d="M0,60 L0,45 L15,45 L15,30 L25,30 L25,45 L35,45 L35,20 L50,20 L50,45 L60,45 L60,35 L75,35 L75,45 L85,45 L85,15 L100,15 L100,45 L110,45 L110,40 L125,40 L125,45 L135,45 L135,25 L150,25 L150,45 L160,45 L160,10 L180,10 L180,45 L190,45 L190,30 L205,30 L205,45 L215,45 L215,20 L230,20 L230,45 L240,45 L240,35 L255,35 L255,45 L265,45 L265,25 L280,25 L280,45 L290,45 L290,15 L310,15 L310,45 L320,45 L320,40 L335,40 L335,45 L345,45 L345,30 L360,30 L360,45 L370,45 L370,20 L385,20 L385,45 L400,45 L400,60 Z" fill="rgba(255,255,255,0.15)"/>
+                        </svg>
+                    </div>
+                    <div class="cover-text">
+                        <div class="cover-title">${cs.title || 'Leasing Information'}</div>
+                        ${cs.subtitle ? `<div class="cover-subtitle">${cs.subtitle}</div>` : ''}
+                    </div>
+                    <div class="cover-slogan">${cs.slogan || 'Best Space For A Better Life'}</div>
+                    <div class="cover-logo" style="justify-content:${logoJustify}">
+                        ${cs.logoImage ? `<img src="${cs.logoImage}" alt="Logo">` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // ★ 엔딩 페이지 HTML 생성 (guide-preview.js와 동일)
+        function renderEndingPage(guideData) {
+            const es = guideData.endingSettings || {};
+            const cs = guideData.coverSettings || {};
+            const accentColor = es.accentColor || '#ec4899';
+            const images = es.images || [];
+            
+            return `
+                <div class="print-page ending-page" data-name="엔딩">
+                    <div class="ending-left">
+                        <div class="ending-headlines">
+                            <div class="ending-headline">${es.headline1 || '사람을 먼저 생각하는,'}</div>
+                            <div class="ending-headline">${es.headline2 || '고객의 미래를 위하는,'}</div>
+                            <div class="ending-headline">${es.headline3 || '공간을 혁신하는,'}</div>
+                            <div class="ending-company" style="color:${accentColor};">${es.companyName || '에스앤아이 코퍼레이션'}</div>
+                        </div>
+                        <div class="ending-descriptions">
+                            <p>${es.description1 || '공간에 대한 전문성과 혁신은 고객을 위한 것이어야 합니다'}</p>
+                            <p>${es.description2 || '우리는 공간에 대한 최고의 전문성과 앞선 기술력을 바탕으로'}</p>
+                            <p>${es.description3 || '고객의 비즈니스 성공을 지원하고 품격 있는 시간을 제공합니다'}</p>
+                            <p>${es.description4 || '사람이 없는 공간은 공허하고 무의미하기에'}</p>
+                            <p>${es.description5 || '우리는 언제나 사람을 먼저 생각하는 공간을 만들어 가겠습니다'}</p>
+                        </div>
+                        <div class="ending-thankyou" style="color:${accentColor};">${es.thankYouText || 'THANK YOU'}</div>
+                        <div class="ending-closing">${es.closingText || '고객이 신뢰할 수 있는 관리를 수행하겠습니다'}</div>
+                        <div class="ending-logo-area">
+                            ${cs.logoImage ? `<img src="${cs.logoImage}" alt="Logo" class="ending-logo">` : '<div class="ending-logo-placeholder">S&I Corp.</div>'}
+                        </div>
+                        <div class="ending-slogan-text">${es.slogan || '공간에 가치를 더하는 <span style="color:' + accentColor + ';">공/간/관/리/전/문/가</span>'}</div>
+                    </div>
+                    <div class="ending-right">
+                        <div class="ending-image-grid">
+                            ${[0,1,2,3,4,5,6,7,8,9].map(i => {
+                                const img = images[i];
+                                return `
+                                    <div class="ending-img-cell">
+                                        ${img ? `<img src="${img}" alt="이미지${i+1}">` : '<div class="ending-img-empty"></div>'}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // ★ 간지 페이지 HTML 생성
+        function renderDividerPage(dividerItem, index, prevBuilding, prevItem) {
+            // 앞 페이지 빌딩 정보 (상단 타이틀용)
+            const buildingName = prevBuilding?.name || '';
+            // ★ 권역은 prevItem.region 사용 (드래그앤드랍으로 변경된 값)
+            const region = (prevItem?.region || prevBuilding?.region || 'ETC').toUpperCase();
+            // ★ 별칭 적용된 권역명 사용
+            const regionName = getRegionDisplayName(region, guideData);
+            
+            // ★ content 처리 - 텍스트와 이미지 분리
+            let rawContent = dividerItem.content || '';
+            
+            // 이미지 추출
+            const imgRegex = /<img[^>]+>/gi;
+            const images = rawContent.match(imgRegex) || [];
+            
+            let finalContent = rawContent;
+            
+            // 이미지가 2개 이상이면 그리드로 변환
+            if (images.length >= 2) {
+                // 텍스트만 추출 (이미지 제거)
+                let textContent = rawContent;
+                images.forEach(img => {
+                    textContent = textContent.replace(img, '');
+                });
+                // 빈 p 태그 정리
+                textContent = textContent
+                    .replace(/<p>\s*<\/p>/gi, '')
+                    .replace(/<p><br><\/p>/gi, '')
+                    .trim();
+                
+                // ★ 최적 그리드 계산 (정사각형에 가깝게)
+                const count = images.length;
+                const sqrt = Math.sqrt(count);
+                const cols = Math.ceil(sqrt);
+                const rows = Math.ceil(count / cols);
+                
+                // 텍스트 영역 + 이미지 그리드
+                finalContent = `
+                    ${textContent ? `<div class="text-area">${textContent}</div>` : ''}
+                    <div class="image-grid" style="grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, 1fr);">
+                        ${images.join('')}
+                    </div>
+                `;
+            } else if (images.length === 1) {
+                // 이미지 1개 - 전체 너비로
+                let textContent = rawContent.replace(images[0], '').replace(/<p>\s*<\/p>/gi, '').trim();
+                
+                finalContent = `
+                    ${textContent ? `<div class="text-area">${textContent}</div>` : ''}
+                    <div class="image-grid" style="grid-template-columns: 1fr; grid-template-rows: 1fr;">
+                        ${images[0]}
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="print-page divider-page" data-name="간지: ${buildingName || dividerItem.title}">
+                    <!-- 상단 타이틀 (빌딩명 좌측, 권역 우측) -->
+                    ${buildingName ? `
+                    <div class="divider-header">
+                        <div class="divider-header-building">${buildingName}</div>
+                        <div class="divider-header-region">${region} · ${regionName}</div>
+                    </div>
+                    ` : ''}
+                    
+                    <!-- 본문 내용 -->
+                    <div class="divider-content">
+                        ${finalContent}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // ★ 전체 목차 페이지 렌더링
+        function renderTocFullPage(regionGroups, activeRegions, logoImage) {
+            return `
+                <div class="print-page toc-full-page" data-name="전체 목차">
+                    <div class="toc-header">
+                        <div class="toc-header-logo">
+                            ${logoImage ? `<img src="${logoImage}" alt="Logo">` : '<span style="color:#fff; font-size:16pt; font-weight:600;">S&I Corp.</span>'}
+                        </div>
+                        <div class="toc-header-title">
+                            <h1>CONTENTS</h1>
+                            <p>임 대 안 내 문 목 차</p>
+                        </div>
+                    </div>
+                    <div class="toc-body">
+                        ${activeRegions.map(region => {
+                            const buildings = regionGroups[region] || [];
+                            const regionName = getRegionDisplayName(region, guideData);
+                            return `
+                                <div class="toc-region-col">
+                                    <div class="toc-region-header">
+                                        <span class="toc-region-code">${region}</span>
+                                        <span class="toc-region-name">${regionName}</span>
+                                        <span class="toc-region-count">${buildings.length}건</span>
+                                    </div>
+                                    <ul class="toc-building-list">
+                                        ${buildings.map(b => `
+                                            <li class="toc-building-item">${b.name}</li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // ★ 권역별 목차 페이지 렌더링
+        function renderTocRegionPage(region, buildings, logoImage) {
+            const regionName = getRegionDisplayName(region, guideData);
+            
+            return `
+                <div class="print-page toc-region-page" data-name="${region} 목차">
+                    <div class="region-header">
+                        <div class="region-header-content">
+                            <span class="region-code">${region}</span>
+                            <span class="region-name">${regionName}</span>
+                            <span class="region-count">${buildings.length}건</span>
+                        </div>
+                    </div>
+                    <ul class="building-list">
+                        ${buildings.map((b, i) => `
+                            <li class="building-row">
+                                <span class="building-num">${String(i + 1).padStart(2, '0')}</span>
+                                <span class="building-name">${b.name}</span>
+                                <span class="building-addr">${b.address || ''}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        // 빌딩 페이지 HTML 생성
+        function renderBuildingPage(item, building, index) {
+            const region = (item.region || building.region || 'ETC').toUpperCase();
+            const exteriorImg = item.exteriorImages?.[item.mainImageIndex || 0] || getExteriorImage(building);
+            const floorPlanImg = item.floorPlanImages?.[0] || getFloorPlanImage(building);
+            const locationImg = getLocationImage(building, item);
+            
+            // ★ 층 번호 파싱 함수
+            const parseFloorNumber = (floor) => {
+                if (!floor || floor === '-') return 0;
+                const str = String(floor).trim().toUpperCase();
+                const basement = str.match(/^B(\d+)/);
+                if (basement) return -parseInt(basement[1]);
+                const above = str.match(/^(\d+)/);
+                if (above) return parseInt(above[1]);
+                return 0;
+            };
+            
+            // 공실 데이터 통합
+            const vacanciesRaw = [
+                ...(item.customVacancies || []),
+                ...(item.selectedExternalVacancies || []),
+                ...(item.leasingGuideVacancies || [])
+            ];
+            
+            // ★ 정렬 적용 (item.vacancySortOrder, 기본값: asc)
+            const sortOrder = item.vacancySortOrder || 'asc';
+            const vacancies = [...vacanciesRaw].sort((a, b) => {
+                const floorA = parseFloorNumber(a.floor);
+                const floorB = parseFloorNumber(b.floor);
+                return sortOrder === 'asc' ? floorA - floorB : floorB - floorA;
+            });
+            
+            // NOTE (메모)
+            const notes = (building.memos || []).filter(m => m.showInLeasingGuide);
+            
+            // 담당자 - 기본값 설정 (leasing-guide.html과 동일)
+            const DEFAULT_CONTACTS = [
+                { name: '안준희 파트너', phone: '010-3241-5337', email: 'helper08@sni.co.kr' },
+                { name: '소나무 파트너', phone: '010-7608-5142', email: 'pinetree@sni.co.kr' },
+                { name: '남민준 파트너', phone: '010-4938-4313', email: 'singsong@sni.co.kr' }
+            ];
+            const contacts = item.contactPoints && item.contactPoints.length > 0 
+                ? item.contactPoints 
+                : (guideData.defaultContactPoints && guideData.defaultContactPoints.length > 0 
+                    ? guideData.defaultContactPoints 
+                    : DEFAULT_CONTACTS);
+            
+            return `
+                <div class="print-page" data-index="${index}" data-name="${building.name || ''}">
+                    <!-- 헤더 -->
+                    <div class="page-header">
+                        <div class="building-title">
+                            <span class="icon">🏢</span>
+                            <span>${building.name || '빌딩명'}</span>
+                            ${item.exclusive ? '<span class="exclusive-badge">전속</span>' : ''}
+                        </div>
+                        <div class="region-info">Leasing Information (${region})</div>
+                    </div>
+                    
+                    <!-- 본문 3열 -->
+                    <div class="page-body">
+                        <!-- 좌측: 외관 + 위치 -->
+                        <div class="col">
+                            <div class="section section-photo">
+                                <div class="section-title">BUILDING PHOTO</div>
+                                <div class="image-box">
+                                    ${exteriorImg ? `<img src="${typeof exteriorImg === 'string' ? exteriorImg : exteriorImg.url}" alt="외관">` : '<div class="no-image">이미지 없음</div>'}
+                                </div>
+                            </div>
+                            <div class="section section-location">
+                                <div class="section-title">LOCATION</div>
+                                <div class="image-box">
+                                    ${locationImg ? `<img src="${locationImg}" alt="위치">` : '<div class="no-image">지도 없음</div>'}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 중앙: 정보 + 평면도 -->
+                        <div class="col">
+                            <div class="section section-info">
+                                <div class="section-title">GENERAL INFORMATION</div>
+                                <table class="info-table">
+                                    <tr><th>주소</th><td>${building.address || '-'}</td></tr>
+                                    <tr><th>위치</th><td>${building.nearbyStation || '-'}</td></tr>
+                                    <tr><th>연면적</th><td>${formatNumber(building.grossFloorPy || building.area?.grossFloorPy)} 평</td></tr>
+                                    <tr><th>규모</th><td>B${building.floorsBelow || building.floors?.below || 0} / ${building.floorsAbove || building.floors?.above || 0}F</td></tr>
+                                    <tr><th>준공년도</th><td>${building.completionYear || building.specs?.completionYear || '-'}년</td></tr>
+                                    <tr><th>기준층(전용)</th><td>${formatNumber(building.typicalFloorPy || building.area?.typicalFloorPy)} 평</td></tr>
+                                    <tr><th>전용률</th><td>${building.exclusiveRate || building.area?.exclusiveRate || '-'}%</td></tr>
+                                    <tr><th>E/V</th><td>총 ${getElevatorTotal(building)}대</td></tr>
+                                    <tr><th>주차</th><td>총 ${getParkingTotal(building)}대 ${getParkingNote(building)}</td></tr>
+                                </table>
+                            </div>
+                            <div class="section section-floorplan">
+                                <div class="section-title">TYPICAL FLOOR PLAN</div>
+                                <div class="image-box">
+                                    ${floorPlanImg ? `<img src="${typeof floorPlanImg === 'string' ? floorPlanImg : floorPlanImg.url}" alt="평면도">` : '<div class="no-image">평면도 없음</div>'}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 우측: 공실(상단) + 임대조건/노트/담당자(하단) -->
+                        <div class="col col-right">
+                            <!-- Space Availability (상단, 확장) -->
+                            <div class="section section-vacancy">
+                                <div class="section-title">SPACE AVAILABILITY <span style="font-weight:normal; font-size:7pt; color:#94a3b8;">(면적:평 | 금액:원/평)</span></div>
+                                <table class="vacancy-table">
+                                    <thead>
+                                        <tr>
+                                            <th>층</th>
+                                            <th>임대</th>
+                                            <th>전용</th>
+                                            <th>보증금</th>
+                                            <th>임대료</th>
+                                            <th>관리비</th>
+                                            <th>입주</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${vacancies.length > 0 ? vacancies.map(v => `
+                                            <tr>
+                                                <td class="floor">${formatFloor(v.floor)}</td>
+                                                <td>${v.rentArea || v.area || '-'}</td>
+                                                <td>${v.exclusiveArea || v.area || '-'}</td>
+                                                <td>${v.deposit || v.depositPy || '문의'}</td>
+                                                <td>${v.rent || v.rentPy || '문의'}</td>
+                                                <td>${v.maintenance || v.maintenancePy || '문의'}</td>
+                                                <td>${v.moveIn || v.moveInDate || '-'}</td>
+                                            </tr>
+                                        `).join('') : `<tr><td colspan="7" class="no-vacancy-cell">${
+                                            (item.customVacancies === null && item.selectedExternalVacancies === null && item.leasingGuideVacancies === null)
+                                            ? '공실 데이터 없음'
+                                            : '현재 공실 없음 (만실)'
+                                        }</td></tr>`}
+                                        ${vacancies.length > 0 ? `
+                                            <tr class="total-row">
+                                                <td>합계</td>
+                                                <td>${formatNumber(vacancies.reduce((s,v) => s + parseFloat(v.rentArea || v.area || 0), 0))}</td>
+                                                <td>${formatNumber(vacancies.reduce((s,v) => s + parseFloat(v.exclusiveArea || v.area || 0), 0))}</td>
+                                                <td colspan="4">-</td>
+                                            </tr>
+                                        ` : ''}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- 하단 영역 (RENT + NOTE + Contact) -->
+                            <div class="col-bottom">
+                                <!-- RENT -->
+                                <div class="section section-rent">
+                                    <div class="section-title">RENT <span style="font-weight:normal; font-size:7pt; color:#94a3b8;">(단위:원/임대평)</span></div>
+                                    <table class="rent-table">
+                                        <tr>
+                                            <th>구분</th>
+                                            <th>보증금</th>
+                                            <th>임대료</th>
+                                            <th>관리비</th>
+                                        </tr>
+                                        <tr>
+                                            <td>기준층</td>
+                                            <td>${formatPrice(building.depositPy || building.pricing?.depositPy)}</td>
+                                            <td>${formatPrice(building.rentPy || building.pricing?.rentPy)}</td>
+                                            <td>${formatPrice(building.maintenancePy || building.pricing?.maintenancePy)}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                                
+                                ${notes.length > 0 ? `
+                                <!-- NOTE (있는 경우만) -->
+                                <div class="section section-note">
+                                    <div class="section-title">NOTE</div>
+                                    <div class="note-box">
+                                        ${notes.map(n => `<div class="note-item">• ${n.content}</div>`).join('')}
+                                    </div>
+                                </div>
+                                ` : ''}
+                                
+                                <!-- Contact Point (맨 하단) -->
+                                <div class="section section-contact">
+                                    <div class="section-title">Contact Point</div>
+                                    <table class="contact-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Phone</th>
+                                                <th>Email</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${contacts.map(c => `
+                                                <tr>
+                                                    <td>${c.name || '-'}</td>
+                                                    <td>${c.phone || '-'}</td>
+                                                    <td>${c.email || '-'}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 페이지 필터 (드롭다운)
+        function filterPages() {
+            const select = document.getElementById('pageSelect');
+            const value = select.value;
+            const pages = document.querySelectorAll('.print-page');
+            
+            pages.forEach((page, idx) => {
+                if (value === 'all') {
+                    page.classList.remove('hidden-for-print');
+                    page.style.display = '';
+                } else if (value === String(idx)) {
+                    page.classList.remove('hidden-for-print');
+                    page.style.display = '';
+                } else {
+                    page.classList.add('hidden-for-print');
+                    page.style.display = 'none';
+                }
+            });
+        }
+        
+        // URL 공유하기 (클립보드 복사)
+        async function shareUrl() {
+            const currentUrl = window.location.href;
+            
+            try {
+                // 클립보드에 복사
+                await navigator.clipboard.writeText(currentUrl);
+                
+                // 성공 알림
+                showCopyToast('✅ 주소가 복사되었습니다!');
+            } catch (err) {
+                // fallback: 구형 브라우저
+                const textArea = document.createElement('textarea');
+                textArea.value = currentUrl;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                showCopyToast('✅ 주소가 복사되었습니다!');
+            }
+        }
+        
+        // 복사 완료 토스트 메시지
+        function showCopyToast(message) {
+            // 기존 토스트 제거
+            const existing = document.querySelector('.copy-toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'copy-toast';
+            toast.innerHTML = message;
+            toast.style.cssText = `
+                position: fixed;
+                top: 80px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #1e293b;
+                color: white;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 500;
+                z-index: 9999;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                animation: fadeInOut 2s ease-in-out forwards;
+            `;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 2000);
+        }
+        
+        // 페이지 닫기
+        function closePage() {
+            // window.close()는 JavaScript로 열린 탭만 닫을 수 있음
+            window.close();
+            
+            // 닫히지 않은 경우 (직접 URL 입력한 경우)
+            setTimeout(() => {
+                // 아직 열려 있으면 안내 메시지
+                if (!window.closed) {
+                    alert('이 탭은 직접 닫아주세요.\n(브라우저 보안 정책으로 자동 닫기가 제한됩니다)');
+                }
+            }, 100);
+        }
+        
+        // 데이터 로드 및 렌더링
+        async function loadAndRender() {
+            const container = document.getElementById('pagesContainer');
+            const pageSelect = document.getElementById('pageSelect');
+            
+            if (!guideId) {
+                container.innerHTML = '<div class="loading" style="color:#ef4444;">❌ 안내문 ID가 없습니다. URL에 ?id=xxx를 추가하세요.</div>';
+                return;
+            }
+            
+            try {
+                // 1. 가이드 데이터 로드
+                const guideSnapshot = await db.ref(`leasingGuides/${guideId}`).once('value');
+                if (!guideSnapshot.exists()) {
+                    container.innerHTML = '<div class="loading" style="color:#ef4444;">❌ 안내문을 찾을 수 없습니다.</div>';
+                    return;
+                }
+                guideData = guideSnapshot.val();
+                guideData.id = guideId;
+                
+                // 2. 빌딩 데이터 로드
+                // ★ items 또는 tocItems 둘 다 지원
+                const tocItems = guideData.tocItems || guideData.items || [];
+                const buildingIds = tocItems
+                    .filter(item => item.buildingId) // buildingId가 있으면 빌딩
+                    .map(item => item.buildingId);
+                
+                for (const bid of buildingIds) {
+                    const bSnapshot = await db.ref(`buildings/${bid}`).once('value');
+                    if (bSnapshot.exists()) {
+                        const bData = { id: bid, ...bSnapshot.val() };
+                        // ★ 데이터 정규화 (E/V, 주차, 층수 등)
+                        normalizeBuilding(bData);
+                        buildingsData[bid] = bData;
+                    }
+                }
+                
+                // 3. 페이지 렌더링 (표지 → 전체목차 → [권역목차→빌딩들+간지] → 엔딩)
+                let html = '';
+                let pageIdx = 0;
+                
+                // 로고 이미지 (목차에서 사용)
+                const logoImage = guideData.coverSettings?.logoImage || null;
+                
+                // ★ 표지 페이지 (맨 앞)
+                const showCover = guideData.showCover !== false; // 기본값 true
+                if (showCover) {
+                    html += renderCoverPage(guideData);
+                    pageIdx++;
+                }
+                
+                // ★ 권역별 빌딩 그룹핑 (순서 유지를 위해 tocItems 인덱스도 저장)
+                const regionGroups = {};
+                const REGION_ORDER = ['GBD', 'YBD', 'CBD', 'BBD', 'PAN', 'ETC'];
+                
+                tocItems.forEach((item, tocIdx) => {
+                    if (item.buildingId) {
+                        const building = buildingsData[item.buildingId];
+                        if (building) {
+                            const region = (item.region || building.region || 'ETC').toUpperCase();
+                            if (!regionGroups[region]) {
+                                regionGroups[region] = [];
+                            }
+                            regionGroups[region].push({
+                                item,
+                                building,
+                                tocIdx,
+                                name: building.name || '빌딩명',
+                                address: building.address || building.roadAddress || ''
+                            });
+                        }
+                    }
+                });
+                
+                // 활성 권역 (빌딩이 있는 권역만)
+                const activeRegions = REGION_ORDER.filter(r => regionGroups[r] && regionGroups[r].length > 0);
+                
+                // ★ 전체 목차 페이지
+                if (activeRegions.length > 0) {
+                    html += renderTocFullPage(regionGroups, activeRegions, logoImage);
+                    pageIdx++;
+                }
+                
+                // ★ 권역별 목차 + 빌딩 페이지들 + 간지 (tocItems 순서대로)
+                activeRegions.forEach(region => {
+                    const buildings = regionGroups[region];
+                    
+                    // 권역별 목차 페이지
+                    html += renderTocRegionPage(region, buildings, logoImage);
+                    pageIdx++;
+                    
+                    // 해당 권역의 빌딩들 (tocItems 순서 유지)
+                    buildings.forEach(bd => {
+                        // 빌딩 페이지
+                        html += renderBuildingPage(bd.item, bd.building, pageIdx);
+                        pageIdx++;
+                        
+                        // ★ 이 빌딩 바로 뒤에 간지가 있는지 확인
+                        const nextIdx = bd.tocIdx + 1;
+                        if (nextIdx < tocItems.length && tocItems[nextIdx].type === 'divider') {
+                            // 간지 페이지 (prevBuilding + prevItem 정보 전달)
+                            html += renderDividerPage(tocItems[nextIdx], pageIdx, bd.building, bd.item);
+                            pageIdx++;
+                        }
+                    });
+                });
+                
+                // ★ 엔딩 페이지 (맨 뒤)
+                const showEnding = guideData.showEnding !== false; // 기본값 true
+                if (showEnding) {
+                    html += renderEndingPage(guideData);
+                    pageIdx++;
+                }
+                
+                container.innerHTML = html || '<div class="loading" style="color:#f59e0b;">⚠️ 출력할 빌딩이 없습니다.</div>';
+                
+                // 4. 드롭다운 옵션 추가
+                document.querySelectorAll('.print-page').forEach((page, idx) => {
+                    const name = page.dataset.name || `페이지 ${idx + 1}`;
+                    const option = document.createElement('option');
+                    option.value = idx;
+                    option.textContent = `${idx + 1}. ${name}`;
+                    pageSelect.appendChild(option);
+                });
+                
+                // 5. URL에 특정 페이지 지정된 경우
+                if (pageIndex !== null) {
+                    pageSelect.value = pageIndex;
+                    filterPages();
+                }
+                
+            } catch (error) {
+                console.error('데이터 로드 오류:', error);
+                container.innerHTML = `<div class="loading" style="color:#ef4444;">❌ 오류: ${error.message}</div>`;
+            }
+        }
+        
+        // 초기화
+        loadAndRender();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1214 @@
+/* ========================================
+ * 임대안내문 미리보기 CSS (v4.6)
+ * 편집/미리보기 완전 통일 레이아웃
+ * 
+ * v4.6 수정사항 (2026-01-19):
+ * - ★ 3열 컬럼 모두 동일 높이 (align-items: stretch)
+ * - ★ CONTACT POINT 하단 고정 (margin-top: auto)
+ * - ★ LOCATION, FLOOR PLAN, CONTACT 하단 정렬
+ * ======================================== */
+
+/* ========== 미리보기 빌딩 페이지 ========== */
+.fullpreview-building {
+    width: 100%;
+    height: 100%;
+    background: white;
+    padding: 24px 28px;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.fullpreview-building-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 12px;
+    border-bottom: 3px solid #1e3a5f;
+    margin-bottom: 16px;
+    flex-shrink: 0;
+}
+
+.fullpreview-building-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1e3a5f;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.fullpreview-building-title .exclusive-badge {
+    background: #f59e0b;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.fullpreview-region {
+    font-size: 13px;
+    color: #ec4899;
+    font-weight: 600;
+}
+
+/* ★ v4.5: 3열 레이아웃 - 모든 컬럼 동일 높이 */
+.fullpreview-building-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.3fr;
+    gap: 16px;
+    min-height: 0;
+    align-items: stretch;  /* 모든 컬럼 동일 높이 */
+}
+
+/* 각 컬럼 - 전체 높이 차지 */
+.fullpreview-col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    height: 100%;
+}
+
+/* 섹션 공통 */
+.preview-section {
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #d1d5db;
+}
+
+.preview-section .section-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #1e3a5f;
+    padding: 6px 10px;
+    background: #e2e8f0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    border-bottom: 1px solid #d1d5db;
+}
+
+.preview-section .section-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ========== 좌측 컬럼 - 50:50 고정 비율 (v4.4: 편집 모드와 동일) ========== */
+.fullpreview-col-left {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    gap: 12px;
+    padding-right: 14px;
+    border-right: 1px solid #e5e7eb;
+    min-height: 0;
+}
+
+/* ★ v4.2: 빌딩 사진 */
+.building-photo-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.building-photo-section .photo-content {
+    background: white;
+    padding: 0;
+}
+
+.building-photo-section .building-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+.building-photo-section .photo-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: #94a3b8;
+    font-size: 40px;
+}
+
+/* ★ v4.2: 위치 지도 - 상하좌우 꽉 차게 */
+.location-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.location-section .section-content,
+.location-section .map-content {
+    padding: 0 !important;
+    margin: 0;
+    flex: 1;
+    min-height: 0;
+}
+
+.location-section .map-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+    display: block;
+    background: #1e3a5f;
+}
+
+/* 자동 모드 지도 컨테이너 */
+.location-section .map-auto-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.location-section .map-auto-container .map-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.location-section .map-address-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+    padding: 8px 10px;
+    color: white;
+    font-size: 9px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.location-section .map-address-overlay .map-coord {
+    font-size: 8px;
+    opacity: 0.8;
+    font-family: monospace;
+}
+
+/* 지도 placeholder - 꽉 차게 */
+.location-section .map-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: white;
+    gap: 8px;
+    background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+}
+
+.location-section .map-placeholder span:first-child {
+    font-size: 32px;
+}
+
+.location-section .map-placeholder .map-text {
+    font-size: 11px;
+    text-align: center;
+    max-width: 90%;
+    line-height: 1.4;
+}
+
+.location-section .map-placeholder.address {
+    background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+}
+
+.location-section .map-placeholder .map-coord {
+    font-size: 9px;
+    color: #94a3b8;
+    font-family: monospace;
+}
+
+/* ========== 중앙 컬럼 - 50:50 고정 비율 (v4.4: 편집 모드와 동일) ========== */
+.fullpreview-col-center {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    gap: 12px;
+    padding: 0 14px;
+    border-right: 1px solid #e5e7eb;
+    min-height: 0;
+}
+
+/* ★ v4.2: 빌딩 정보 */
+.info-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.info-section .section-content {
+    padding: 6px 8px;
+    align-items: flex-start;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.info-table {
+    width: 100%;
+    font-size: 10px;
+    border-collapse: collapse;
+    border: 1px solid #d1d5db;
+}
+
+.info-table tr {
+    border-bottom: 1px solid #d1d5db;
+}
+
+.info-table tr:last-child {
+    border-bottom: none;
+}
+
+.info-table th {
+    text-align: left;
+    padding: 5px 8px;
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 600;
+    width: 70px;
+    white-space: nowrap;
+    border-right: 1px solid #d1d5db;
+}
+
+.info-table td {
+    padding: 5px 8px;
+    color: #1e293b;
+    background: white;
+}
+
+/* ★ v4.2: 평면도 */
+.floorplan-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.floorplan-section .floorplan-content {
+    background: white;
+    padding: 0;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+}
+
+.floorplan-section .floorplan-img {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center;
+}
+
+.floorplan-section .floorplan-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: #94a3b8;
+    font-size: 36px;
+}
+
+/* ========== 우측 컬럼 - v4.5: 전체 높이, CONTACT 하단 고정 ========== */
+.fullpreview-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-left: 14px;
+    min-height: 0;
+    height: 100%;
+}
+
+/* 공실 정보 - SPACE AVAILABILITY (v4.4: 내용에 맞게 높이 조절) */
+.vacancy-section {
+    flex: none;  /* 내용에 맞게 */
+}
+
+.vacancy-section .section-content {
+    padding: 6px;
+    align-items: flex-start;
+}
+
+.vacancy-table {
+    width: 100%;
+    font-size: 10px;
+    border-collapse: collapse;
+    border: 1px solid #d1d5db;
+}
+
+.vacancy-table thead tr {
+    background: #1e3a5f;
+    color: white;
+}
+
+.vacancy-table th {
+    padding: 5px 3px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 9px;
+    border-right: 1px solid rgba(255,255,255,0.2);
+    white-space: nowrap;
+}
+
+.vacancy-table th:last-child {
+    border-right: none;
+}
+
+.vacancy-table td {
+    padding: 4px 3px;
+    text-align: center;
+    border-bottom: 1px solid #d1d5db;
+    border-right: 1px solid #e5e7eb;
+    font-size: 10px;
+    background: white;
+}
+
+.vacancy-table td:first-child {
+    font-weight: 700;
+    color: #1e3a5f;
+}
+
+.vacancy-table td:last-child {
+    border-right: none;
+}
+
+.vacancy-table tr:nth-child(even) {
+    background: #f8fafc;
+}
+
+.vacancy-table tr:nth-child(even) td {
+    background: #f8fafc;
+}
+
+.vacancy-table .empty-cell {
+    padding: 16px;
+    color: #94a3b8;
+    text-align: center;
+}
+
+/* v4.3: 공실 테이블 합계 행 */
+.vacancy-table tfoot td {
+    background: #f1f5f9;
+    padding: 5px;
+    text-align: center;
+    font-weight: 600;
+    border-top: 2px solid #1e3a5f;
+}
+
+/* v4.3: 섹션 타이틀 + 단위 */
+.section-title-row {
+    font-size: 11px;
+    font-weight: 700;
+    color: #1e3a5f;
+    padding: 6px 10px;
+    background: #e2e8f0;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #d1d5db;
+}
+
+.section-title-row .section-unit {
+    font-weight: 400;
+    font-size: 10px;
+    text-transform: none;
+}
+
+/* v4.3: RENT 섹션 */
+.rent-section {
+    flex: none;
+}
+
+.rent-section .section-content {
+    padding: 6px;
+    align-items: flex-start;
+}
+
+.rent-table {
+    width: 100%;
+    font-size: 11px;
+    border-collapse: collapse;
+    border: 1px solid #d1d5db;
+}
+
+.rent-table thead tr {
+    background: #1e3a5f;
+    color: white;
+}
+
+.rent-table th {
+    padding: 5px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 10px;
+    border-right: 1px solid rgba(255,255,255,0.2);
+}
+
+.rent-table th:last-child {
+    border-right: none;
+}
+
+.rent-table td {
+    padding: 5px;
+    text-align: center;
+    border-bottom: 1px solid #d1d5db;
+    border-right: 1px solid #e5e7eb;
+    font-size: 11px;
+    background: white;
+}
+
+.rent-table td:last-child {
+    border-right: none;
+}
+
+/* NOTE - v4.4: 편집 모드와 동일한 스타일 */
+.note-section {
+    flex: none;
+    background: #fef3c7;
+    border-radius: 4px;
+    border-left: 3px solid #f59e0b;
+    border: 1px solid #d1d5db;
+    border-left: 3px solid #f59e0b;
+}
+
+.note-section .section-title {
+    background: transparent;
+    color: #92400e;
+    border-bottom: none;
+    padding: 8px 10px 4px 10px;
+}
+
+.note-section .section-content,
+.note-section .note-content {
+    padding: 4px 10px 8px 10px;
+    align-items: flex-start;
+    justify-content: flex-start;
+    background: transparent;
+}
+
+.note-section .note-item {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #78350f;
+    margin-bottom: 3px;
+}
+
+.note-section .note-empty {
+    font-size: 12px;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* CONTACT - v4.3: 최대 4명 수용 */
+.contact-section {
+    flex: none;
+    margin-top: auto;
+}
+
+.contact-section .section-content {
+    padding: 6px;
+    align-items: flex-start;
+}
+
+.contact-table {
+    width: 100%;
+    font-size: 11px;
+    border-collapse: collapse;
+    border: 1px solid #d1d5db;
+}
+
+.contact-table thead tr {
+    background: #1e3a5f;
+    color: white;
+}
+
+.contact-table th {
+    padding: 5px 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 10px;
+    border-right: 1px solid rgba(255,255,255,0.2);
+}
+
+.contact-table th:last-child {
+    border-right: none;
+}
+
+.contact-table td {
+    padding: 5px 8px;
+    text-align: center;
+    border-bottom: 1px solid #d1d5db;
+    border-right: 1px solid #e5e7eb;
+    font-size: 11px;
+    background: white;
+}
+
+.contact-table td:last-child {
+    border-right: none;
+}
+
+.contact-table .empty-cell {
+    padding: 10px;
+    color: #94a3b8;
+}
+
+/* ========== 편집화면 스타일 ========== */
+
+/* 편집화면 지도 - 꽉 차게 */
+.preview-location-map {
+    position: relative;
+    background: #1e3a5f;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    flex: 1;
+}
+
+.preview-location-map .kakao-map-container {
+    width: 100%;
+    height: 100%;
+}
+
+/* 지도 도움말 오버레이 */
+.map-help-overlay {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    z-index: 10;
+}
+
+/* 로드뷰 버튼 */
+.roadview-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 14px;
+    z-index: 10;
+}
+
+.roadview-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+/* 지도 모드 토글 */
+.location-mode-toggle {
+    display: flex;
+    gap: 4px;
+}
+
+.location-mode-btn {
+    padding: 3px 8px;
+    font-size: 10px;
+    border: 1px solid #d1d5db;
+    background: white;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.location-mode-btn.active {
+    background: #1e3a5f;
+    color: white;
+    border-color: #1e3a5f;
+}
+
+/* 업로드 placeholder */
+.upload-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: #94a3b8;
+    gap: 4px;
+}
+
+.upload-placeholder .placeholder-icon {
+    font-size: 28px;
+}
+
+.upload-placeholder .placeholder-text {
+    font-size: 11px;
+}
+
+.upload-placeholder .placeholder-size {
+    font-size: 9px;
+    color: #cbd5e1;
+}
+
+/* ========== 미리보기 모달 ========== */
+.fullpreview-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.95);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.fullpreview-container {
+    width: 95%;
+    max-width: 1200px;
+    height: 80vh;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+}
+
+.fullpreview-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 16px;
+}
+
+.fullpreview-nav button {
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.fullpreview-nav .prev-btn,
+.fullpreview-nav .next-btn {
+    background: #475569;
+    color: white;
+    border: none;
+}
+
+.fullpreview-nav .prev-btn:hover,
+.fullpreview-nav .next-btn:hover {
+    background: #64748b;
+}
+
+.fullpreview-nav .close-btn {
+    background: #ef4444;
+    color: white;
+    border: none;
+}
+
+.fullpreview-nav .close-btn:hover {
+    background: #dc2626;
+}
+
+.fullpreview-nav .page-info {
+    color: white;
+    font-size: 14px;
+}
+
+.fullpreview-nav .page-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.fullpreview-nav .page-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #64748b;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.fullpreview-nav .page-dot.active {
+    background: #ec4899;
+}
+
+/* ========== PDF 인쇄 최적화 ========== */
+@media print {
+    * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    
+    body {
+        margin: 0;
+        padding: 0;
+    }
+    
+    .fullpreview-modal {
+        position: static;
+        background: none;
+    }
+    
+    .fullpreview-nav {
+        display: none !important;
+    }
+    
+    .fullpreview-container {
+        width: 100%;
+        max-width: none;
+        height: auto;
+        box-shadow: none;
+        border-radius: 0;
+    }
+    
+    .fullpreview-building {
+        width: 297mm;
+        height: 210mm;
+        page-break-after: always;
+        page-break-inside: avoid;
+    }
+    
+    .fullpreview-building:last-child {
+        page-break-after: auto;
+    }
+    
+    /* 엔딩 페이지 인쇄 */
+    .fullpreview-ending {
+        width: 297mm;
+        height: 210mm;
+        page-break-after: always;
+        page-break-inside: avoid;
+        background: linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%) !important;
+    }
+    
+    .ending-headline {
+        color: #fbbf24 !important;
+    }
+    
+    .ending-company {
+        color: #ffffff !important;
+    }
+    
+    .ending-thankyou {
+        color: #ec4899 !important;
+    }
+    
+    .ending-descriptions p,
+    .ending-closing {
+        color: rgba(255, 255, 255, 0.7) !important;
+    }
+    
+    .ending-logo {
+        filter: brightness(0) invert(1) !important;
+    }
+}
+
+/* ========== 표지 페이지 ========== */
+.fullpreview-cover {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px;
+    box-sizing: border-box;
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #334155 100%);
+    color: white;
+}
+
+.cover-logo {
+    width: 120px;
+    margin-bottom: 40px;
+}
+
+.cover-title {
+    font-size: 42px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    line-height: 1.2;
+}
+
+.cover-subtitle {
+    font-size: 20px;
+    color: #94a3b8;
+    margin-bottom: 40px;
+}
+
+.cover-info {
+    font-size: 14px;
+    color: #64748b;
+}
+
+/* ========== 목차 페이지 ========== */
+.fullpreview-toc {
+    width: 100%;
+    height: 100%;
+    padding: 40px;
+    box-sizing: border-box;
+    background: white;
+}
+
+.toc-header {
+    border-bottom: 3px solid #1e3a5f;
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+}
+
+.toc-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1e3a5f;
+}
+
+.toc-subtitle {
+    font-size: 14px;
+    color: #64748b;
+    margin-top: 8px;
+}
+
+.toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.toc-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.toc-item:hover {
+    background: #e2e8f0;
+    transform: translateX(4px);
+}
+
+.toc-item .toc-number {
+    width: 28px;
+    height: 28px;
+    background: #1e3a5f;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 12px;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.toc-item .toc-name {
+    flex: 1;
+    font-weight: 500;
+    color: #1e293b;
+}
+
+.toc-item .toc-region {
+    font-size: 11px;
+    color: #ec4899;
+    font-weight: 500;
+}
+
+/* ========== 권역별 목차 ========== */
+.toc-region-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.toc-region-badge {
+    background: linear-gradient(135deg, #ec4899, #8b5cf6);
+    color: white;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.toc-region-count {
+    color: #64748b;
+    font-size: 14px;
+}
+
+/* ========== 엔딩 페이지 (v4.0 - 편집/미리보기/인쇄 통일) ========== */
+.fullpreview-ending {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-columns: 50% 50%;
+    background: linear-gradient(135deg, #1a1f2e 0%, #2d3748 100%);
+    overflow: hidden;
+}
+
+.ending-left {
+    padding: 50px 40px 50px 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.ending-headlines {
+    margin-bottom: 20px;
+}
+
+.ending-headline {
+    font-size: 20px;
+    color: #fbbf24;
+    margin-bottom: 4px;
+    font-weight: 500;
+    line-height: 1.5;
+}
+
+.ending-company {
+    font-size: 26px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-top: 8px;
+}
+
+.ending-descriptions {
+    margin-bottom: 30px;
+}
+
+.ending-descriptions p {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 3px 0;
+    line-height: 1.6;
+}
+
+.ending-thankyou {
+    font-size: 42px;
+    font-weight: 700;
+    color: #ec4899;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+}
+
+.ending-closing {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 30px;
+}
+
+.ending-logo-area {
+    margin-bottom: 16px;
+}
+
+.ending-logo {
+    height: 36px;
+    filter: brightness(0) invert(1);
+}
+
+.ending-logo-placeholder {
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.ending-slogan {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+}
+
+.ending-right {
+    padding: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+}
+
+.ending-image-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 10px;
+    width: 100%;
+    max-width: 380px;
+    height: 90%;
+}
+
+.ending-img-cell {
+    overflow: hidden;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.ending-img-cell img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ending-img-empty {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+}
+
+/* ========== 편집화면 레이아웃 (미리보기와 통일) v4.2 ========== */
+
+/* 편집화면 3열 레이아웃 */
+.building-preview-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.3fr;
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+    padding: 16px;
+}
+
+/* 편집화면 좌측 컬럼 - 50:50 고정 비율 */
+.preview-col-left {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    gap: 12px;
+    min-height: 0;
+    height: 100%;
+}
+
+/* ★ v4.2: 외관 사진/지도 동일 높이 */
+.preview-col-left > div {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.preview-building-photo,
+.preview-location-map {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: #1e3a5f;
+}
+
+.preview-building-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.preview-location-map img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #1e3a5f;
+}
+
+/* 편집화면 중앙 컬럼 - 50:50 고정 비율 (좌측과 동일) */
+.preview-col-center {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    gap: 12px;
+    min-height: 0;
+    height: 100%;
+}
+
+/* ★ v4.2: General Info/평면도 동일 높이 */
+.preview-col-center > div {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.preview-info-table {
+    flex: 1;
+}
+
+.preview-floorplan {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.preview-floorplan img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* 편집화면 우측 컬럼 */
+.preview-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+}
+
+
+/* ★ v3.1: 지도 버튼 그룹 */
+.map-btn-group {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    z-index: 10;
+}
+
+.map-action-btn {
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.map-action-btn:hover {
+    background: rgba(0, 0, 0, 0.9);
+}
+
+.map-action-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.map-action-btn.capture-btn {
+    background: rgba(59, 130, 246, 0.9);
+}
+
+.map-action-btn.capture-btn:hover {
+    background: rgba(37, 99, 235, 1);
+}
+

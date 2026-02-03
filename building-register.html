@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRE Portal - 빌딩 등록 v9.5.3</title>
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --bg-card: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --border-color: #e2e8f0;
+            --accent-color: #2563eb;
+            --accent-light: #dbeafe;
+            --success-color: #16a34a;
+            --warning-color: #f59e0b;
+            --error-color: #dc2626;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg-secondary); color: var(--text-primary); min-height: 100vh; }
+        
+        /* 헤더 */
+        .header { height: 56px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; padding: 0 24px; gap: 16px; box-shadow: var(--shadow-sm); }
+        .header-logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; color: var(--accent-color); text-decoration: none; }
+        .header-title { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+        .header-version { font-size: 11px; color: var(--text-muted); background: var(--bg-tertiary); padding: 2px 8px; border-radius: 4px; }
+        .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; border: none; }
+        .btn-primary { background: var(--accent-color); color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: var(--bg-secondary); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: var(--bg-tertiary); }
+        .btn-success { background: var(--success-color); color: white; }
+        .btn-success:hover { background: #15803d; }
+        .btn-sm { padding: 8px 14px; font-size: 13px; }
+        
+        /* 메인 컨테이너 */
+        .main-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        
+        /* 스텝 인디케이터 */
+        .step-indicator { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 32px; }
+        .step { display: flex; align-items: center; gap: 8px; }
+        .step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-tertiary); color: var(--text-muted); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
+        .step.active .step-num { background: var(--accent-color); color: white; }
+        .step.completed .step-num { background: var(--success-color); color: white; }
+        .step-label { font-size: 14px; color: var(--text-muted); }
+        .step.active .step-label { color: var(--accent-color); font-weight: 600; }
+        .step.completed .step-label { color: var(--success-color); }
+        .step-divider { width: 60px; height: 2px; background: var(--border-color); }
+        .step.completed + .step-divider { background: var(--success-color); }
+        
+        /* 카드 */
+        .card { background: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); }
+        .card-header { padding: 20px 24px; border-bottom: 1px solid var(--border-color); }
+        .card-header h2 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .card-header .subtitle { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+        .card-body { padding: 24px; }
+        .card-footer { padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 12px; background: var(--bg-secondary); border-radius: 0 0 12px 12px; }
+        
+        /* 검색 박스 */
+        .search-section { margin-bottom: 24px; }
+        .search-box { display: flex; gap: 12px; }
+        .search-input { flex: 1; padding: 14px 18px; border: 2px solid var(--border-color); border-radius: 10px; font-size: 15px; transition: all 0.2s; }
+        .search-input:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px var(--accent-light); }
+        .search-input::placeholder { color: var(--text-muted); }
+        
+        /* 검색 결과 */
+        .search-results { margin-top: 16px; }
+        .search-results-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .search-results-header h3 { font-size: 14px; color: var(--text-secondary); }
+        .result-count { font-size: 13px; color: var(--text-muted); }
+        
+        .result-list { max-height: 400px; overflow-y: auto; }
+        .result-item { padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
+        .result-item:hover { border-color: var(--accent-color); background: var(--accent-light); }
+        .result-item.selected { border-color: var(--accent-color); background: var(--accent-light); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .result-item .building-name { font-weight: 600; font-size: 15px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+        .result-item .building-address { font-size: 13px; color: var(--text-muted); margin-bottom: 8px; }
+        .result-item .building-info { display: flex; flex-wrap: wrap; gap: 8px; }
+        .result-item .info-tag { padding: 4px 10px; background: var(--bg-secondary); border-radius: 4px; font-size: 12px; color: var(--text-secondary); }
+        .result-item .info-tag.highlight { background: #dcfce7; color: #16a34a; }
+        
+        .duplicate-warning { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px 16px; margin-top: 12px; display: flex; align-items: center; gap: 10px; }
+        .duplicate-warning .icon { font-size: 20px; }
+        .duplicate-warning .text { font-size: 13px; color: #92400e; }
+        
+        /* 빌딩 정보 폼 */
+        .form-section { margin-bottom: 24px; }
+        .form-section-title { font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px; }
+        .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .form-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group.full-width { grid-column: 1 / -1; }
+        .form-group label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+        .form-group label .required { color: var(--error-color); }
+        .form-group input, .form-group select, .form-group textarea { padding: 10px 14px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; transition: all 0.2s; background: var(--bg-primary); }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent-color); box-shadow: 0 0 0 3px var(--accent-light); }
+        .form-group input:disabled, .form-group select:disabled { background: var(--bg-tertiary); color: var(--text-muted); }
+        .form-group input.auto-filled { background: #f0fdf4; border-color: #86efac; }
+        .form-group .hint { font-size: 11px; color: var(--text-muted); }
+        
+        /* 면적 표시 (㎡ + 평) */
+        .area-display { display: flex; align-items: center; gap: 8px; }
+        .area-display input { flex: 1; }
+        .area-pyeong { font-size: 12px; color: var(--accent-color); font-weight: 500; white-space: nowrap; min-width: 70px; }
+        
+        /* 렌트롤 조회 버튼 */
+        .rentroll-action-box { padding: 20px; border: 2px solid var(--border-color); border-radius: 10px; margin-top: 24px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); }
+        .rentroll-action-box .action-title { font-weight: 600; font-size: 15px; margin-bottom: 8px; color: var(--text-primary); }
+        .rentroll-action-box .action-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+        .rentroll-action-box .action-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+        .rentroll-action-box .btn-action { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; border: none; }
+        .rentroll-action-box .btn-nps { background: #3b82f6; color: white; }
+        .rentroll-action-box .btn-nps:hover { background: #2563eb; }
+        .rentroll-action-box .btn-saramin { background: #10b981; color: white; }
+        .rentroll-action-box .btn-saramin:hover { background: #059669; }
+        .rentroll-action-box .btn-action:disabled { background: #d1d5db; cursor: not-allowed; }
+        
+        /* 렌트롤 미리보기 */
+        .rentroll-preview { margin-top: 24px; }
+        .rentroll-preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+        .rentroll-preview-header h3 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .rentroll-stats { display: flex; gap: 16px; }
+        .rentroll-stat { text-align: center; padding: 12px 20px; background: var(--bg-secondary); border-radius: 8px; }
+        .rentroll-stat .num { font-size: 24px; font-weight: 700; color: var(--accent-color); }
+        .rentroll-stat .label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+        
+        /* ★ v9.4.0: 기준연월 표시 ★ */
+        .target-date-box { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #fef3c7; border-radius: 8px; font-size: 13px; color: #92400e; }
+        .target-date-box input { padding: 4px 8px; border: 1px solid #f59e0b; border-radius: 4px; font-size: 13px; width: 120px; }
+        
+        /* ★ v9.4.0: 관리 버튼 그룹 ★ */
+        .rentroll-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: 8px; }
+        .rentroll-controls .btn { padding: 6px 12px; font-size: 12px; }
+        .rentroll-controls .selected-info { margin-left: auto; color: #64748b; font-size: 13px; font-weight: 500; }
+        
+        /* 렌트롤 테이블 */
+        .rentroll-table { width: 100%; border-collapse: collapse; margin-top: 12px; table-layout: fixed; }
+        .rentroll-table th { background: var(--bg-secondary); padding: 10px 6px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); border-bottom: 2px solid var(--border-color); white-space: nowrap; }
+        .rentroll-table td { padding: 10px 6px; border-bottom: 1px solid var(--border-color); font-size: 13px; vertical-align: middle; }
+        .rentroll-table tbody tr:hover { background: #f8fafc; }
+        .rentroll-table tbody tr.checked { background: #eff6ff; }
+        
+        /* 테이블 컬럼 너비 - v9.4.0 */
+        .rentroll-table th:nth-child(1), .rentroll-table td:nth-child(1) { width: 36px; text-align: center; }
+        .rentroll-table th:nth-child(2), .rentroll-table td:nth-child(2) { width: 140px; }
+        .rentroll-table th:nth-child(3), .rentroll-table td:nth-child(3) { width: 100px; }
+        .rentroll-table th:nth-child(4), .rentroll-table td:nth-child(4) { width: 70px; text-align: center; }
+        .rentroll-table th:nth-child(5), .rentroll-table td:nth-child(5) { width: auto; }
+        
+        .rentroll-table .company-name { font-weight: 600; color: var(--text-primary); display: block; word-break: keep-all; }
+        .rentroll-table .company-source { font-size: 10px; color: #94a3b8; display: block; margin-top: 2px; }
+        .rentroll-table .employee-count { color: var(--accent-color); font-weight: 600; }
+        
+        /* 층수 입력 스타일 */
+        .floor-input { width: 70px; text-align: center; border: 1px solid #ddd; border-radius: 4px; padding: 4px 6px; font-size: 12px; }
+        .floor-input:focus { border-color: var(--accent-color); outline: none; }
+        .floor-input::placeholder { color: #ccc; font-size: 11px; }
+        
+        /* 비고 입력 스타일 */
+        .note-input { width: 100%; border: 1px solid #ddd; border-radius: 4px; padding: 4px 8px; font-size: 12px; }
+        .note-input:focus { border-color: var(--accent-color); outline: none; }
+        
+        /* 완료 화면 */
+        .completion-section { text-align: center; padding: 60px 40px; }
+        .completion-icon { font-size: 80px; margin-bottom: 24px; }
+        .completion-title { font-size: 28px; font-weight: 700; margin-bottom: 12px; }
+        .completion-subtitle { font-size: 16px; color: var(--text-muted); margin-bottom: 32px; }
+        .completion-summary { display: inline-flex; flex-direction: column; gap: 12px; text-align: left; background: var(--bg-secondary); padding: 24px 32px; border-radius: 12px; margin-bottom: 32px; }
+        .completion-summary .item { display: flex; gap: 16px; font-size: 14px; }
+        .completion-summary .item .label { color: var(--text-muted); min-width: 100px; }
+        .completion-summary .item .value { font-weight: 600; }
+        
+        /* 로딩 */
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; }
+        .loading-overlay.hidden { display: none; }
+        .spinner { width: 48px; height: 48px; border: 4px solid var(--border-color); border-top-color: var(--accent-color); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-size: 15px; color: var(--text-secondary); }
+        
+        /* 토스트 */
+        .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 1001; display: flex; flex-direction: column; gap: 8px; }
+        .toast { padding: 14px 20px; background: var(--text-primary); color: white; border-radius: 8px; font-size: 14px; box-shadow: var(--shadow-lg); animation: slideIn 0.3s ease; }
+        .toast.success { background: var(--success-color); }
+        .toast.error { background: var(--error-color); }
+        .toast.warning { background: var(--warning-color); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        /* 빈 상태 */
+        .empty-state { text-align: center; padding: 60px 40px; color: var(--text-muted); }
+        .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+        .empty-state p { font-size: 14px; }
+        
+        /* NEW 뱃지 */
+        .new-badge { display: inline-block; padding: 2px 8px; background: #dc2626; color: white; font-size: 10px; font-weight: 700; border-radius: 4px; }
+        
+        /* 반응형 */
+        @media (max-width: 768px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .form-grid.cols-2 { grid-template-columns: 1fr; }
+            .rentroll-controls { flex-direction: column; align-items: stretch; }
+            .rentroll-controls .selected-info { margin-left: 0; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <a href="portal.html" class="header-logo">🏢 CRE PORTAL</a>
+        <span class="header-title">빌딩 등록</span>
+        <span class="header-version">v9.5.3</span>
+        <div class="header-right">
+            <a href="portal.html" class="btn btn-secondary btn-sm">← 포털로 돌아가기</a>
+            <button class="btn btn-secondary btn-sm" onclick="toggleTheme()" id="themeBtn">🌙</button>
+        </div>
+    </header>
+    
+    <main class="main-container">
+        <!-- 스텝 인디케이터 -->
+        <div class="step-indicator">
+            <div class="step active" id="step1">
+                <div class="step-num">1</div>
+                <span class="step-label">빌딩 검색</span>
+            </div>
+            <div class="step-divider"></div>
+            <div class="step" id="step2">
+                <div class="step-num">2</div>
+                <span class="step-label">정보 입력</span>
+            </div>
+            <div class="step-divider"></div>
+            <div class="step" id="step3">
+                <div class="step-num">3</div>
+                <span class="step-label">등록 완료</span>
+            </div>
+        </div>
+        
+        <!-- Step 1: 빌딩 검색 -->
+        <div class="card" id="searchCard">
+            <div class="card-header">
+                <h2>🔍 빌딩 검색</h2>
+                <p class="subtitle">건축물대장 API를 통해 등록할 빌딩을 검색합니다</p>
+            </div>
+            <div class="card-body">
+                <div class="search-section">
+                    <div class="search-box">
+                        <input type="text" class="search-input" id="addressInput" placeholder="도로명 또는 지번 주소를 입력하세요 (예: 테헤란로 152, 강남구 역삼동 123-45)">
+                        <button class="btn btn-primary" onclick="searchBuilding()">🔍 검색</button>
+                    </div>
+                </div>
+                
+                <div class="search-results" id="searchResults" style="display:none;">
+                    <div class="search-results-header">
+                        <h3>검색 결과</h3>
+                        <span class="result-count" id="resultCount">0건</span>
+                    </div>
+                    <div class="result-list" id="resultList"></div>
+                </div>
+                
+                <div class="empty-state" id="emptyState">
+                    <div class="icon">🏗️</div>
+                    <p>주소를 입력하고 검색 버튼을 클릭하세요</p>
+                </div>
+            </div>
+            <div class="card-footer">
+                <button class="btn btn-primary" id="selectBuildingBtn" onclick="goToStep2()" disabled>선택한 빌딩으로 진행 →</button>
+            </div>
+        </div>
+        
+        <!-- Step 2: 정보 입력 -->
+        <div class="card" id="infoCard" style="display:none;">
+            <div class="card-header">
+                <h2>📝 빌딩 정보 입력</h2>
+                <p class="subtitle">건축물대장에서 자동 추출된 정보와 추가 정보를 입력합니다</p>
+            </div>
+            <div class="card-body">
+                <!-- 기본 정보 -->
+                <div class="form-section">
+                    <div class="form-section-title">🏢 기본 정보 (자동 입력)</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>빌딩명 <span class="required">*</span></label>
+                            <input type="text" id="buildingName" class="auto-filled">
+                        </div>
+                        <div class="form-group">
+                            <label>도로명 주소</label>
+                            <input type="text" id="roadAddress" class="auto-filled" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>지번 주소</label>
+                            <input type="text" id="jibunAddress" class="auto-filled" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label>준공년도</label>
+                            <input type="text" id="completionYear" class="auto-filled">
+                        </div>
+                        <div class="form-group">
+                            <label>지상 층수</label>
+                            <input type="text" id="floorsAbove" class="auto-filled">
+                        </div>
+                        <div class="form-group">
+                            <label>지하 층수</label>
+                            <input type="text" id="floorsBelow" class="auto-filled">
+                        </div>
+                        <div class="form-group">
+                            <label>연면적</label>
+                            <div class="area-display">
+                                <input type="text" id="grossFloorSqm" class="auto-filled" placeholder="㎡">
+                                <span class="area-pyeong" id="grossFloorPy"></span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>대지면적</label>
+                            <div class="area-display">
+                                <input type="text" id="landArea" class="auto-filled" placeholder="㎡">
+                                <span class="area-pyeong" id="landAreaPy"></span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>건축면적</label>
+                            <div class="area-display">
+                                <input type="text" id="buildingArea" class="auto-filled" placeholder="㎡">
+                                <span class="area-pyeong" id="buildingAreaPy"></span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>승용 엘리베이터</label>
+                            <input type="number" id="passengerElevator" class="auto-filled">
+                        </div>
+                        <div class="form-group">
+                            <label>비상용 엘리베이터</label>
+                            <input type="number" id="freightElevator" class="auto-filled">
+                        </div>
+                        <div class="form-group">
+                            <label>주차대수</label>
+                            <input type="number" id="parkingTotal" class="auto-filled">
+                        </div>
+                        <div class="form-group">
+                            <label>구조</label>
+                            <input type="text" id="structure" class="auto-filled" disabled>
+                            <input type="hidden" id="structureHidden">
+                        </div>
+                        <div class="form-group">
+                            <label>건물용도</label>
+                            <input type="text" id="buildingUse" class="auto-filled" disabled>
+                            <input type="hidden" id="buildingUseHidden">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 추가 정보 -->
+                <div class="form-section">
+                    <div class="form-section-title">📋 추가 정보 (수동 입력)</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>권역</label>
+                            <select id="region">
+                                <option value="">선택하세요</option>
+                                <option value="GBD">GBD (강남)</option>
+                                <option value="YBD">YBD (여의도)</option>
+                                <option value="CBD">CBD (도심)</option>
+                                <option value="BBD">BBD (판교/분당)</option>
+                                <option value="ETC">기타</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>빌딩 등급</label>
+                            <select id="grade">
+                                <option value="">선택하세요</option>
+                                <option value="Prime">Prime</option>
+                                <option value="A">A급</option>
+                                <option value="B+">B+급</option>
+                                <option value="B">B급</option>
+                                <option value="C">C급</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>기준층 전용면적 (평)</label>
+                            <input type="number" id="typicalFloorPy" step="0.1" placeholder="예: 350">
+                        </div>
+                        <div class="form-group">
+                            <label>기준층 임대면적 (평)</label>
+                            <input type="number" id="typicalFloorLeasePy" step="0.1" placeholder="예: 420">
+                        </div>
+                        <div class="form-group">
+                            <label>전용률 (%)</label>
+                            <input type="number" id="exclusiveRate" step="0.1" placeholder="예: 55">
+                        </div>
+                        <div class="form-group">
+                            <label>보증금 (원/평)</label>
+                            <input type="text" id="depositPy" placeholder="예: 1,500,000">
+                        </div>
+                        <div class="form-group">
+                            <label>임대료 (원/평)</label>
+                            <input type="text" id="rentPy" placeholder="예: 150,000">
+                        </div>
+                        <div class="form-group">
+                            <label>관리비 (원/평)</label>
+                            <input type="text" id="maintenancePy" placeholder="예: 45,000">
+                        </div>
+                        <div class="form-group">
+                            <label>주차비율</label>
+                            <input type="text" id="parkingRatio" placeholder="예: 1대/80평">
+                        </div>
+                        <div class="form-group">
+                            <label>인근역</label>
+                            <input type="text" id="nearbyStation" placeholder="예: 강남역 2호선">
+                        </div>
+                        <div class="form-group">
+                            <label>역 거리</label>
+                            <input type="text" id="stationDistance" placeholder="예: 도보 5분">
+                        </div>
+                        <div class="form-group">
+                            <label>PM사</label>
+                            <input type="text" id="pm" placeholder="예: JLL">
+                        </div>
+                        <div class="form-group">
+                            <label>소유자</label>
+                            <input type="text" id="owner" placeholder="예: 삼성생명">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 렌트롤 조회 버튼 -->
+                <div class="rentroll-action-box">
+                    <div class="action-title">📊 예상 렌트롤 조회</div>
+                    <div class="action-desc">해당 빌딩 주소의 입주 업체 정보를 조회합니다</div>
+                    <div class="action-buttons">
+                        <button type="button" class="btn-action btn-saramin" onclick="fetchSaraminRentroll()">
+                            💼 사람인 기업정보 조회
+                        </button>
+                        <button type="button" class="btn-action" style="background:#6366f1; color:white;" onclick="fetchNearbyCompanies()">
+                            🏢 도로명 기반 사업장 조회
+                        </button>
+                    </div>
+                    <div style="margin-top:10px;">
+                        <span id="csvStatus" style="font-size:12px; color:#888;">⏳ 국민연금 데이터 로드 중...</span>
+                    </div>
+                </div>
+                
+                <!-- ★★★ v9.4.0: 렌트롤 미리보기 (개선) ★★★ -->
+                <div class="rentroll-preview" id="rentrollPreview" style="display:none;">
+                    <div class="rentroll-preview-header">
+                        <h3>📊 예상 렌트롤</h3>
+                        <div class="rentroll-stats">
+                            <div class="rentroll-stat">
+                                <div class="num" id="previewCompanyCount">0</div>
+                                <div class="label">입주 업체</div>
+                            </div>
+                            <div class="rentroll-stat">
+                                <div class="num" id="previewEmployeeCount">0</div>
+                                <div class="label">총 근로자</div>
+                            </div>
+                        </div>
+                        <div class="target-date-box">
+                            📅 기준연월: <input type="month" id="targetDate">
+                        </div>
+                    </div>
+                    
+                    <!-- ★★★ v9.4.5: 관리 버튼 (NPS 조회 버튼 복원) ★★★ -->
+                    <div class="rentroll-controls" id="rentrollControls">
+                        <button type="button" class="btn" style="background: #6366f1; color: white;" onclick="selectAllRentroll()">
+                            ☑️ 전체선택
+                        </button>
+                        <button type="button" class="btn" style="background: #94a3b8; color: white;" onclick="deselectAllRentroll()">
+                            ⬜ 전체해제
+                        </button>
+                        <button type="button" class="btn" style="background: #ef4444; color: white;" onclick="deleteSelectedRentroll()">
+                            🗑️ 선택삭제
+                        </button>
+                        <button type="button" class="btn" style="background: #10b981; color: white;" onclick="enrichSelectedWithNps()">
+                            🔍 선택항목 NPS 조회
+                        </button>
+                        <span class="selected-info" id="selectedCount">0개 선택</span>
+                    </div>
+                    
+                    <table class="rentroll-table">
+                        <thead>
+                            <tr>
+                                <th style="width:36px;">
+                                    <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)" title="전체선택">
+                                </th>
+                                <th style="width:140px;">입주사명</th>
+                                <th style="width:160px;">주소</th>
+                                <th style="width:90px;">층수</th>
+                                <th style="width:70px;">직원수</th>
+                                <th style="width:120px;">업종</th>
+                                <th>비고</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rentrollTableBody"></tbody>
+                    </table>
+                    <div class="floor-help" style="margin-top:8px; font-size:11px; color:#888;">
+                        💡 층수 입력 예시: 단일층 <b>3F</b> / 연속층 <b>5~7F</b> / 복수층 <b>3,5,7F</b> / 지하 <b>B1</b>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <button class="btn btn-secondary" onclick="goToStep1()">← 이전</button>
+                <button class="btn btn-success" onclick="registerBuilding()">✓ 빌딩 등록</button>
+            </div>
+        </div>
+        
+        <!-- Step 3: 등록 완료 -->
+        <div class="card" id="completionCard" style="display:none;">
+            <div class="card-body">
+                <div class="completion-section">
+                    <div class="completion-icon">🎉</div>
+                    <div class="completion-title">빌딩 등록 완료!</div>
+                    <div class="completion-subtitle">새로운 빌딩이 성공적으로 등록되었습니다</div>
+                    
+                    <div class="completion-summary">
+                        <div class="item">
+                            <span class="label">빌딩명</span>
+                            <span class="value" id="completedName">-</span>
+                        </div>
+                        <div class="item">
+                            <span class="label">주소</span>
+                            <span class="value" id="completedAddress">-</span>
+                        </div>
+                        <div class="item">
+                            <span class="label">권역</span>
+                            <span class="value" id="completedRegion">-</span>
+                        </div>
+                        <div class="item">
+                            <span class="label">렌트롤</span>
+                            <span class="value" id="completedRentroll">-</span>
+                        </div>
+                    </div>
+                    
+                    <div style="display:flex;gap:12px;justify-content:center;">
+                        <a href="portal.html" class="btn btn-primary">📍 포털에서 확인하기</a>
+                        <button class="btn btn-secondary" onclick="resetForm()">+ 다른 빌딩 등록</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 로딩 오버레이 -->
+    <div class="loading-overlay hidden" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">검색 중...</div>
+    </div>
+    
+    <!-- 토스트 컨테이너 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Firebase -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getDatabase, ref, get, set, push } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+        // ========== 로그인 체크 ==========
+        const savedUser = localStorage.getItem('crePortalUser');
+        if (!savedUser) {
+            window.location.href = 'index.html';
+        }
+        let currentUser = null;
+        try {
+            currentUser = JSON.parse(savedUser);
+        } catch(e) {
+            window.location.href = 'index.html';
+        }
+
+        // ========== 테마 로드 ==========
+        const theme = localStorage.getItem('crePortalTheme') || 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+        const themeBtn = document.getElementById('themeBtn');
+        if (themeBtn) themeBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
+
+        window.toggleTheme = function() {
+            const current = document.documentElement.getAttribute('data-theme') || 'light';
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('crePortalTheme', next);
+            const btn = document.getElementById('themeBtn');
+            if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
+        };
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTEJnDQzgY6FQABVBcvNsKvwDLJkmj26s",
+            authDomain: "cre-unified.firebaseapp.com",
+            databaseURL: "https://cre-unified-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "cre-unified",
+            storageBucket: "cre-unified.firebasestorage.app",
+            messagingSenderId: "161207314802",
+            appId: "1:161207314802:web:777e72ae0e190e73ebd5eb"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        
+        // 백엔드 API URL
+        const API_BASE_URL = 'https://portal-dsyl.onrender.com';
+        // const API_BASE_URL = 'http://localhost:5000'; // 로컬 테스트용
+        
+        let selectedBuilding = null;
+        let existingBuildings = [];
+        let rentrollData = [];
+        
+        // ★★★ v9.5.0: NPS CSV 데이터 ★★★
+        let npsCsvData = [];
+        let npsCsvLoaded = false;
+        let npsIndexByName = new Map();      // 회사명 인덱스
+        let npsIndexByRoad = new Map();      // 도로명 인덱스
+        let npsIndexByBCode = new Map();     // 법정동코드 인덱스
+        
+        // ★★★ v9.5.0: 현재 연월 설정 ★★★
+        function initTargetDate() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const el = document.getElementById('targetDate');
+            if (el) el.value = `${year}-${month}`;
+        }
+        initTargetDate();
+        
+        // ★★★ v9.5.1: NPS CSV 로드 (백그라운드, 로딩 오버레이 없음) ★★★
+        async function loadNpsCsvBackground() {
+            if (npsCsvLoaded) {
+                updateCsvStatus('loaded');
+                return true;
+            }
+            
+            updateCsvStatus('loading');
+            
+            try {
+                const response = await fetch('company.csv');
+                if (!response.ok) {
+                    console.warn('company.csv 파일을 찾을 수 없습니다');
+                    updateCsvStatus('error');
+                    return false;
+                }
+                
+                const csvText = await response.text();
+                console.log('CSV 파일 크기:', (csvText.length / 1024 / 1024).toFixed(2) + 'MB');
+                
+                // PapaParse로 파싱
+                const result = Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true,
+                    transformHeader: (header) => header.trim()
+                });
+                
+                console.log('파싱 완료:', result.data.length + '행');
+                
+                // 데이터 정제 및 인덱싱
+                npsCsvData = result.data
+                    .filter(row => row['사업장가입상태코드'] === '1')
+                    .map(row => ({
+                        companyName: (row['사업장명'] || '').trim(),
+                        roadAddress: (row['사업장도로명상세주소'] || '').trim(),
+                        jibunAddress: (row['사업장지번상세주소'] || '').trim(),
+                        bCode: (row['고객법정동주소코드'] || '').trim(),
+                        employeeCount: parseInt(row['가입자수']) || 0,
+                        industry: (row['사업장업종코드명'] || '').trim(),
+                        bizType: row['사업장형태구분코드'] === '1' ? '법인' : '개인',
+                        monthlyAmount: parseInt(row['당월고지금액']) || 0
+                    }))
+                    .filter(row => row.companyName && row.employeeCount > 0);
+                
+                console.log('유효 데이터:', npsCsvData.length + '건');
+                
+                // 인덱스 생성
+                buildNpsIndexes();
+                
+                npsCsvLoaded = true;
+                updateCsvStatus('loaded');
+                console.log(`NPS CSV 자동 로드 완료: ${npsCsvData.length.toLocaleString()}개 사업장`);
+                
+                return true;
+                
+            } catch (e) {
+                console.error('CSV 로드 오류:', e);
+                updateCsvStatus('error');
+                return false;
+            }
+        }
+        
+        // CSV 상태 표시 업데이트
+        function updateCsvStatus(status) {
+            const statusEl = document.getElementById('csvStatus');
+            if (!statusEl) return;
+            
+            switch(status) {
+                case 'loading':
+                    statusEl.innerHTML = '⏳ 국민연금 데이터 로드 중...';
+                    statusEl.style.color = '#f59e0b';
+                    break;
+                case 'loaded':
+                    statusEl.innerHTML = `✅ 국민연금 데이터 ${npsCsvData.length.toLocaleString()}건 로드됨`;
+                    statusEl.style.color = '#16a34a';
+                    break;
+                case 'error':
+                    statusEl.innerHTML = '⚠️ CSV 파일 없음 (company.csv)';
+                    statusEl.style.color = '#dc2626';
+                    break;
+            }
+        }
+        
+        // ★★★ v9.5.0: NPS CSV 로드 (기존 - 로딩 오버레이 있음) ★★★
+        window.loadNpsCsv = async function() {
+            if (npsCsvLoaded) {
+                console.log('NPS CSV 이미 로드됨:', npsCsvData.length + '건');
+                return true;
+            }
+            
+            showLoading('국민연금 CSV 데이터 로드 중... (약 60,000건)');
+            
+            try {
+                const response = await fetch('company.csv');
+                if (!response.ok) {
+                    throw new Error('CSV 파일을 찾을 수 없습니다');
+                }
+                
+                const csvText = await response.text();
+                console.log('CSV 파일 크기:', (csvText.length / 1024 / 1024).toFixed(2) + 'MB');
+                
+                // PapaParse로 파싱
+                const result = Papa.parse(csvText, {
+                    header: true,
+                    skipEmptyLines: true,
+                    transformHeader: (header) => header.trim()
+                });
+                
+                console.log('파싱 완료:', result.data.length + '행');
+                
+                // 데이터 정제 및 인덱싱
+                npsCsvData = result.data
+                    .filter(row => row['사업장가입상태코드'] === '1') // 등록 상태만
+                    .map(row => ({
+                        companyName: (row['사업장명'] || '').trim(),
+                        roadAddress: (row['사업장도로명상세주소'] || '').trim(),
+                        jibunAddress: (row['사업장지번상세주소'] || '').trim(),
+                        bCode: (row['고객법정동주소코드'] || '').trim(),
+                        employeeCount: parseInt(row['가입자수']) || 0,
+                        industry: (row['사업장업종코드명'] || '').trim(),
+                        bizType: row['사업장형태구분코드'] === '1' ? '법인' : '개인',
+                        monthlyAmount: parseInt(row['당월고지금액']) || 0
+                    }))
+                    .filter(row => row.companyName && row.employeeCount > 0);
+                
+                console.log('유효 데이터:', npsCsvData.length + '건');
+                
+                // 인덱스 생성
+                buildNpsIndexes();
+                
+                npsCsvLoaded = true;
+                updateCsvStatus('loaded');
+                showToast(`국민연금 CSV 로드 완료: ${npsCsvData.length.toLocaleString()}개 사업장`, 'success');
+                
+                return true;
+                
+            } catch (e) {
+                console.error('CSV 로드 오류:', e);
+                showToast('CSV 로드 실패: ' + e.message, 'error');
+                updateCsvStatus('error');
+                return false;
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        // ★★★ v9.5.0: 인덱스 생성 ★★★
+        function buildNpsIndexes() {
+            console.log('인덱스 생성 시작...');
+            const startTime = Date.now();
+            
+            npsIndexByName.clear();
+            npsIndexByRoad.clear();
+            npsIndexByBCode.clear();
+            
+            npsCsvData.forEach((row, idx) => {
+                // 회사명 인덱스 (정규화)
+                const normalizedName = normalizeCompanyName(row.companyName);
+                if (!npsIndexByName.has(normalizedName)) {
+                    npsIndexByName.set(normalizedName, []);
+                }
+                npsIndexByName.get(normalizedName).push(idx);
+                
+                // 도로명 인덱스 (도로명만 추출)
+                const roadName = extractRoadName(row.roadAddress);
+                if (roadName) {
+                    if (!npsIndexByRoad.has(roadName)) {
+                        npsIndexByRoad.set(roadName, []);
+                    }
+                    npsIndexByRoad.get(roadName).push(idx);
+                }
+                
+                // 법정동코드 인덱스
+                if (row.bCode) {
+                    if (!npsIndexByBCode.has(row.bCode)) {
+                        npsIndexByBCode.set(row.bCode, []);
+                    }
+                    npsIndexByBCode.get(row.bCode).push(idx);
+                }
+            });
+            
+            console.log(`인덱스 생성 완료: ${Date.now() - startTime}ms`);
+            console.log(`- 회사명: ${npsIndexByName.size}개`);
+            console.log(`- 도로명: ${npsIndexByRoad.size}개`);
+            console.log(`- 법정동: ${npsIndexByBCode.size}개`);
+        }
+        
+        // 회사명 정규화
+        function normalizeCompanyName(name) {
+            if (!name) return '';
+            return name
+                .replace(/\(주\)|\(유\)|주식회사|㈜|\(사\)|\(재\)/g, '')
+                .replace(/\s+/g, '')
+                .toLowerCase()
+                .trim();
+        }
+        
+        // 도로명 추출 (번지 제외)
+        function extractRoadName(address) {
+            if (!address) return '';
+            // "서울특별시 금천구 가산디지털2로" → "가산디지털2로"
+            const match = address.match(/([가-힣]+(?:로|길|대로)\d*(?:길)?)/);
+            return match ? match[1] : '';
+        }
+        
+        // 유틸리티
+        function showToast(msg, type = 'info') {
+            const t = document.createElement('div');
+            t.className = `toast ${type}`;
+            t.textContent = msg;
+            document.getElementById('toastContainer').appendChild(t);
+            setTimeout(() => t.remove(), 3000);
+        }
+        
+        function showLoading(text = '로딩 중...') {
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+        
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+        
+        function sqmToPy(sqm) {
+            return sqm ? Math.round(parseFloat(sqm) / 3.3058 * 10) / 10 : null;
+        }
+        
+        // 기존 빌딩 로드
+        async function loadExistingBuildings() {
+            try {
+                const snapshot = await get(ref(db, 'buildings'));
+                if (snapshot.exists()) {
+                    existingBuildings = Object.entries(snapshot.val())
+                        .filter(([k]) => k !== '_schema')
+                        .map(([id, b]) => ({
+                            id,
+                            name: b.name,
+                            address: b.address,
+                            addressJibun: b.addressJibun
+                        }));
+                    console.log('기존 빌딩 로드 완료:', existingBuildings.length + '개');
+                    console.log('빌딩 목록:', existingBuildings.map(b => `${b.name} (${b.address})`).join(', '));
+                } else {
+                    console.log('기존 빌딩 없음');
+                }
+            } catch (e) {
+                console.error('기존 빌딩 로드 실패:', e);
+            }
+        }
+        
+        // 중복 체크 (주소 또는 빌딩명으로)
+        function checkDuplicate(address, buildingName) {
+            console.log('=== 중복 체크 시작 ===');
+            console.log('검색 주소:', address);
+            console.log('검색 빌딩명:', buildingName);
+            console.log('기존 빌딩 수:', existingBuildings.length);
+            
+            if (!address && !buildingName) return null;
+            
+            // 도로명+번지 추출 (더 유연한 패턴)
+            const extractKey = (addr) => {
+                if (!addr) return '';
+                // "공항대로 165" 또는 "공항대로165" 모두 매칭
+                const match = addr.match(/([가-힣]+(?:로|길|대로)\d*)\s*(\d+(?:-\d+)?)/);
+                const key = match ? (match[1] + match[2]).replace(/\s/g, '') : '';
+                console.log(`  주소 키 추출: "${addr}" → "${key}"`);
+                return key;
+            };
+            
+            const searchKey = extractKey(address);
+            const normalizedName = buildingName?.trim().toLowerCase().replace(/\s+/g, '');
+            
+            console.log('검색 키:', searchKey);
+            console.log('정규화된 빌딩명:', normalizedName);
+            
+            for (const b of existingBuildings) {
+                const existingKey = extractKey(b.address) || extractKey(b.addressJibun);
+                const existingName = b.name?.trim().toLowerCase().replace(/\s+/g, '');
+                
+                // 주소 매칭
+                if (searchKey && existingKey && searchKey === existingKey) {
+                    console.log('✅ 주소 매칭 성공:', b.name, b.id);
+                    return b;
+                }
+                
+                // 빌딩명 매칭 (공백 제거 후 비교)
+                if (normalizedName && existingName && normalizedName === existingName) {
+                    console.log('✅ 빌딩명 매칭 성공:', b.name, b.id);
+                    return b;
+                }
+                
+                // 빌딩명 부분 매칭 (포함 관계)
+                if (normalizedName && existingName) {
+                    if (normalizedName.includes(existingName) || existingName.includes(normalizedName)) {
+                        console.log('✅ 빌딩명 부분 매칭:', b.name, b.id);
+                        return b;
+                    }
+                }
+            }
+            
+            console.log('❌ 매칭되는 빌딩 없음');
+            return null;
+        }
+        
+        // 빌딩 검색
+        window.searchBuilding = async function() {
+            const address = document.getElementById('addressInput').value.trim();
+            if (!address) {
+                showToast('주소를 입력해주세요', 'warning');
+                return;
+            }
+            
+            showLoading('건축물대장 검색 중...');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/building-register/search?address=${encodeURIComponent(address)}`);
+                const data = await response.json();
+                
+                console.log('건축물대장 API 응답:', data);
+                
+                if (data.success && data.results && data.results.length > 0) {
+                    displaySearchResults(data.results);
+                } else {
+                    document.getElementById('searchResults').style.display = 'none';
+                    document.getElementById('emptyState').style.display = 'block';
+                    document.getElementById('emptyState').innerHTML = `
+                        <div class="icon">🔍</div>
+                        <p>검색 결과가 없습니다</p>
+                        <p style="font-size:12px;color:#888;margin-top:8px;">주소를 다시 확인해주세요</p>
+                    `;
+                }
+            } catch (e) {
+                console.error('검색 오류:', e);
+                showToast('검색 중 오류가 발생했습니다', 'error');
+            } finally {
+                hideLoading();
+            }
+        };
+        
+        // 검색 결과 표시
+        function displaySearchResults(results) {
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('searchResults').style.display = 'block';
+            document.getElementById('resultCount').textContent = `${results.length}건`;
+            
+            const resultList = document.getElementById('resultList');
+            resultList.innerHTML = results.map((r, idx) => {
+                const info = r.buildingInfo || {};
+                const roadAddr = r.roadAddress || '';
+                const buildingName = r.buildingName || info.buildingName || '(빌딩명 없음)';
+                
+                const duplicate = checkDuplicate(roadAddr, buildingName);
+                
+                return `
+                <div class="result-item ${duplicate ? 'duplicate' : ''}" data-idx="${idx}" onclick="selectResult(${idx})">
+                    <div class="building-name">
+                        ${buildingName}
+                        ${duplicate ? '<span class="new-badge" style="background:#f59e0b;">중복</span>' : ''}
+                    </div>
+                    <div class="building-address">${roadAddr}</div>
+                    <div class="building-info">
+                        ${info.mainPurpsCdNm ? `<span class="info-tag">${info.mainPurpsCdNm}</span>` : ''}
+                        ${info.grndFlrCnt ? `<span class="info-tag">지상 ${info.grndFlrCnt}층</span>` : ''}
+                        ${info.totArea ? `<span class="info-tag highlight">${Math.round(info.totArea).toLocaleString()}㎡</span>` : ''}
+                        ${info.useAprDay ? `<span class="info-tag">${info.useAprDay.substring(0,4)}년</span>` : ''}
+                    </div>
+                    ${duplicate ? `<div class="duplicate-warning"><span class="icon">⚠️</span><span class="text">이미 등록된 빌딩입니다: ${duplicate.name}</span></div>` : ''}
+                </div>
+                `;
+            }).join('');
+            
+            window.searchResults = results;
+        }
+        
+        // 결과 선택
+        window.selectResult = function(idx) {
+            document.querySelectorAll('.result-item').forEach(el => el.classList.remove('selected'));
+            document.querySelector(`.result-item[data-idx="${idx}"]`).classList.add('selected');
+            
+            selectedBuilding = window.searchResults[idx];
+            document.getElementById('selectBuildingBtn').disabled = false;
+        };
+        
+        // Step 2로 이동
+        window.goToStep2 = function() {
+            if (!selectedBuilding) {
+                showToast('빌딩을 선택해주세요', 'warning');
+                return;
+            }
+            
+            document.getElementById('searchCard').style.display = 'none';
+            document.getElementById('infoCard').style.display = 'block';
+            document.getElementById('step1').classList.remove('active');
+            document.getElementById('step1').classList.add('completed');
+            document.getElementById('step2').classList.add('active');
+            
+            fillBuildingInfo(selectedBuilding);
+        };
+        
+        // Step 1로 돌아가기
+        window.goToStep1 = function() {
+            document.getElementById('infoCard').style.display = 'none';
+            document.getElementById('searchCard').style.display = 'block';
+            document.getElementById('step2').classList.remove('active');
+            document.getElementById('step1').classList.remove('completed');
+            document.getElementById('step1').classList.add('active');
+            
+            rentrollData = [];
+            document.getElementById('rentrollPreview').style.display = 'none';
+        };
+        
+        // 빌딩 정보 채우기
+        function fillBuildingInfo(building) {
+            const roadAddr = building.roadAddress || '';
+            const jibunAddr = building.jibunAddress || '';
+            
+            let buildingName = building.buildingName || '';
+            if (!buildingName && building.buildingInfo?.buildingName) {
+                buildingName = building.buildingInfo.buildingName;
+            }
+            if (!buildingName) buildingName = '신규 빌딩';
+            
+            document.getElementById('buildingName').value = buildingName;
+            document.getElementById('roadAddress').value = roadAddr;
+            document.getElementById('jibunAddress').value = jibunAddr;
+            
+            selectedBuilding.lat = parseFloat(building.lat || building.y);
+            selectedBuilding.lng = parseFloat(building.lng || building.x);
+            selectedBuilding.bCode = building.bCode || '';
+            
+            const region = detectRegion(roadAddr);
+            document.getElementById('region').value = region;
+            
+            const info = building.buildingInfo;
+            if (info) {
+                if (info.useAprDay) document.getElementById('completionYear').value = info.useAprDay.substring(0, 4);
+                if (info.grndFlrCnt) document.getElementById('floorsAbove').value = info.grndFlrCnt;
+                if (info.ugrndFlrCnt) document.getElementById('floorsBelow').value = info.ugrndFlrCnt;
+                
+                if (info.totArea) {
+                    const sqm = Math.round(info.totArea);
+                    document.getElementById('grossFloorSqm').value = sqm.toLocaleString();
+                    document.getElementById('grossFloorPy').textContent = `(${Math.round(sqm / 3.3058).toLocaleString()}평)`;
+                }
+                if (info.platArea) {
+                    const sqm = Math.round(info.platArea);
+                    document.getElementById('landArea').value = sqm.toLocaleString();
+                    document.getElementById('landAreaPy').textContent = `(${Math.round(sqm / 3.3058).toLocaleString()}평)`;
+                }
+                if (info.archArea) {
+                    const sqm = Math.round(info.archArea);
+                    document.getElementById('buildingArea').value = sqm.toLocaleString();
+                    document.getElementById('buildingAreaPy').textContent = `(${Math.round(sqm / 3.3058).toLocaleString()}평)`;
+                }
+                if (info.rideUseElvtCnt) document.getElementById('passengerElevator').value = info.rideUseElvtCnt;
+                if (info.emgenUseElvtCnt) document.getElementById('freightElevator').value = info.emgenUseElvtCnt;
+                if (info.totPkngCnt) document.getElementById('parkingTotal').value = info.totPkngCnt;
+                
+                // ★★★ v9.5.3: 구조 필드 - 여러 필드명 대응 + hidden에 저장 ★★★
+                const structureValue = info.strctCdNm || info.strctCd || info.structure || info.structureName || '';
+                if (structureValue) {
+                    document.getElementById('structure').value = structureValue;
+                    document.getElementById('structureHidden').value = structureValue;
+                    console.log('구조 저장:', structureValue);
+                }
+                
+                // ★★★ v9.5.3: 건물용도 필드 - 여러 필드명 대응 + hidden에 저장 ★★★
+                const buildingUseValue = info.mainPurpsCdNm || info.mainPurpsCd || info.mainPurpose || 
+                                         info.etcPurps || info.purpose || info.buildingUse || info.usage || '';
+                if (buildingUseValue) {
+                    document.getElementById('buildingUse').value = buildingUseValue;
+                    document.getElementById('buildingUseHidden').value = buildingUseValue;
+                    console.log('건물용도 저장:', buildingUseValue);
+                }
+                
+                // ★★★ v9.5.3: selectedBuilding에도 저장 (백업) ★★★
+                selectedBuilding.structureFromLedger = structureValue;
+                selectedBuilding.buildingUseFromLedger = buildingUseValue;
+                
+                showToast('건축물대장 정보가 자동 입력되었습니다', 'success');
+            }
+        }
+        
+        // 권역 자동 감지
+        function detectRegion(addr) {
+            if (!addr) return '';
+            if (addr.includes('강남') || addr.includes('서초') || addr.includes('테헤란')) return 'GBD';
+            if (addr.includes('여의도') || addr.includes('영등포')) return 'YBD';
+            if (addr.includes('종로') || addr.includes('중구') || addr.includes('을지로')) return 'CBD';
+            if (addr.includes('판교') || addr.includes('분당')) return 'BBD';
+            return 'ETC';
+        }
+        
+        // ★★★ v9.4.0: 국민연금 사업장 조회 ★★★
+        window.fetchNpsRentroll = async function() {
+            showLoading('국민연금 사업장 정보 조회 중...');
+            
+            try {
+                const address = document.getElementById('roadAddress').value || document.getElementById('jibunAddress').value;
+                if (!address) {
+                    hideLoading();
+                    showToast('주소 정보가 없습니다', 'error');
+                    return;
+                }
+                
+                const bCode = selectedBuilding.bCode || '';
+                let url = `${API_BASE_URL}/api/nps/search?address=${encodeURIComponent(address)}`;
+                if (bCode) url += `&bCode=${encodeURIComponent(bCode)}`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                console.log('NPS API 응답:', data);
+                
+                if (data.success && data.results && data.results.length > 0) {
+                    rentrollData = data.results.map(item => ({
+                        companyName: item.companyName || '',
+                        industry: item.industry || '',
+                        employeeCount: parseInt(item.employeeCount) || 0,
+                        floor: '',
+                        note: item.industry || '',
+                        source: 'NPS'
+                    })).filter(item => item.companyName);
+                    
+                    displayRentrollTable();
+                    showToast(`국민연금에서 ${rentrollData.length}개 업체를 찾았습니다`, 'success');
+                } else {
+                    displayEmptyRentroll('국민연금에서 입주사 정보를 찾을 수 없습니다');
+                }
+                
+            } catch (e) {
+                console.error('NPS 조회 오류:', e);
+                showToast('국민연금 조회 실패', 'error');
+            } finally {
+                hideLoading();
+            }
+        };
+        
+        // ★★★ v9.5.0: NPS CSV에서 회사명으로 검색 ★★★
+        function findNpsByCompanyName(companyName) {
+            if (!npsCsvLoaded || !companyName) return null;
+            
+            const normalized = normalizeCompanyName(companyName);
+            const indexes = npsIndexByName.get(normalized);
+            
+            if (indexes && indexes.length > 0) {
+                // 가장 직원수가 많은 것 반환 (여러 지점이 있을 수 있음)
+                let best = null;
+                indexes.forEach(idx => {
+                    const row = npsCsvData[idx];
+                    if (!best || row.employeeCount > best.employeeCount) {
+                        best = row;
+                    }
+                });
+                return best;
+            }
+            
+            // 부분 매칭 시도
+            for (const [key, idxList] of npsIndexByName) {
+                if (key.includes(normalized) || normalized.includes(key)) {
+                    if (idxList.length > 0) {
+                        return npsCsvData[idxList[0]];
+                    }
+                }
+            }
+            
+            return null;
+        }
+        
+        // ★★★ v9.5.0: 도로명 + 법정동코드로 사업장 목록 조회 ★★★
+        function findNpsByRoadAndBCode(roadAddress, bCode) {
+            if (!npsCsvLoaded) return [];
+            
+            const roadName = extractRoadName(roadAddress);
+            if (!roadName) return [];
+            
+            console.log(`도로명 검색: ${roadName}, 법정동: ${bCode}`);
+            
+            let results = [];
+            
+            // 법정동코드가 있으면 먼저 필터
+            if (bCode) {
+                const bCodeIndexes = npsIndexByBCode.get(bCode) || [];
+                bCodeIndexes.forEach(idx => {
+                    const row = npsCsvData[idx];
+                    if (row.roadAddress && row.roadAddress.includes(roadName)) {
+                        results.push(row);
+                    }
+                });
+            }
+            
+            // 법정동 필터 결과가 적으면 도로명만으로 검색
+            if (results.length < 5) {
+                const roadIndexes = npsIndexByRoad.get(roadName) || [];
+                roadIndexes.forEach(idx => {
+                    const row = npsCsvData[idx];
+                    // 중복 방지
+                    if (!results.find(r => r.companyName === row.companyName)) {
+                        results.push(row);
+                    }
+                });
+            }
+            
+            // 직원수 기준 정렬
+            results.sort((a, b) => b.employeeCount - a.employeeCount);
+            
+            console.log(`도로명 검색 결과: ${results.length}건`);
+            return results.slice(0, 50); // 최대 50개
+        }
+        
+        // ★★★ v9.5.0: 도로명 기반 사업장 조회 (방안 2) ★★★
+        window.fetchNearbyCompanies = async function() {
+            if (!npsCsvLoaded) {
+                const loaded = await loadNpsCsv();
+                if (!loaded) return;
+            }
+            
+            const roadAddress = document.getElementById('roadAddress').value || '';
+            const bCode = selectedBuilding?.bCode || '';
+            
+            if (!roadAddress) {
+                showToast('주소 정보가 없습니다', 'warning');
+                return;
+            }
+            
+            showLoading('도로명 기반 사업장 검색 중...');
+            
+            try {
+                const results = findNpsByRoadAndBCode(roadAddress, bCode);
+                
+                if (results.length === 0) {
+                    displayEmptyRentroll('해당 도로에서 사업장을 찾지 못했습니다');
+                    showToast('검색 결과 없음', 'warning');
+                    return;
+                }
+                
+                rentrollData = results.map(row => ({
+                    companyName: row.companyName,
+                    address: row.roadAddress || row.jibunAddress,
+                    floor: '',
+                    employeeCount: row.employeeCount,
+                    industry: row.industry,
+                    note: row.bizType === '법인' ? '법인' : '',
+                    source: 'NPS CSV'
+                }));
+                
+                displayRentrollTable();
+                showToast(`${rentrollData.length}개 사업장을 찾았습니다 (CSV 기반)`, 'success');
+                
+            } catch (e) {
+                console.error('도로명 검색 오류:', e);
+                showToast('검색 실패', 'error');
+            } finally {
+                hideLoading();
+            }
+        };
+        
+        // ★★★ v9.5.0: 사람인 결과에 NPS 데이터 자동 매칭 (방안 3) ★★★
+        async function enrichSaraminWithNpsCsv() {
+            if (!npsCsvLoaded || rentrollData.length === 0) return;
+            
+            console.log('NPS CSV 매칭 시작...');
+            let matchCount = 0;
+            
+            rentrollData.forEach((item, idx) => {
+                const npsMatch = findNpsByCompanyName(item.companyName);
+                if (npsMatch) {
+                    // 직원수가 없거나 NPS가 더 정확하면 업데이트
+                    if (!item.employeeCount || item.employeeCount === 0) {
+                        rentrollData[idx].employeeCount = npsMatch.employeeCount;
+                    }
+                    // 업종이 없으면 업데이트
+                    if (!item.industry) {
+                        rentrollData[idx].industry = npsMatch.industry;
+                    }
+                    rentrollData[idx].npsMatched = true;
+                    matchCount++;
+                    console.log(`매칭: ${item.companyName} → ${npsMatch.employeeCount}명`);
+                }
+            });
+            
+            if (matchCount > 0) {
+                displayRentrollTable();
+                showToast(`${matchCount}개 업체 NPS 정보 매칭됨`, 'info');
+            }
+        }
+        window.fetchSaraminRentroll = async function() {
+            showLoading('사람인 기업정보 조회 중...');
+            
+            try {
+                const buildingName = document.getElementById('buildingName').value || '';
+                const roadAddress = document.getElementById('roadAddress').value || '';
+                
+                if (!buildingName && !roadAddress) {
+                    hideLoading();
+                    showToast('빌딩명 또는 주소 정보가 없습니다', 'error');
+                    return;
+                }
+                
+                const response = await fetch(`${API_BASE_URL}/api/saramin/search?building=${encodeURIComponent(buildingName)}&address=${encodeURIComponent(roadAddress)}`);
+                const data = await response.json();
+                
+                console.log('사람인 API 응답:', data);
+                
+                if (data.success && data.results && data.results.length > 0) {
+                    // ★ v9.4.3: 주소 정확히 일치하는 것만 필터링 ★
+                    const filteredResults = data.results.filter(item => {
+                        if (!item.address) return false;
+                        return isAddressMatch(roadAddress, item.address);
+                    });
+                    
+                    console.log(`사람인 필터링: ${data.results.length}개 → ${filteredResults.length}개`);
+                    
+                    if (filteredResults.length === 0) {
+                        displayEmptyRentroll('사람인에서 해당 빌딩 입주사를 찾지 못했습니다');
+                        showToast(`검색 결과 ${data.results.length}개 중 주소 일치 항목 없음`, 'warning');
+                        return;
+                    }
+                    
+                    rentrollData = filteredResults.map(item => {
+                        // 층수 추출
+                        let floor = item.floor || '';
+                        if (!floor && item.address) {
+                            const floorMatch = item.address.match(/(\d+)\s*층/);
+                            if (floorMatch) floor = floorMatch[1] + 'F';
+                            const basementMatch = item.address.match(/지하\s*(\d+)|B(\d+)/i);
+                            if (basementMatch) floor = 'B' + (basementMatch[1] || basementMatch[2]);
+                        }
+                        
+                        // 비고: 매출 + 기업규모 (업종은 별도 컬럼)
+                        const notes = [];
+                        if (item.revenue) notes.push(`매출:${item.revenue}`);
+                        if (item.companySize) notes.push(item.companySize);
+                        
+                        return {
+                            companyName: item.companyName || '',
+                            employeeCount: parseInt(item.employeeCount) || 0,
+                            floor: floor,
+                            industry: item.industry || '',  // 업종 별도 저장
+                            note: notes.join(' / '),
+                            address: (item.address || '').replace(/지도보기/g, '').trim(),
+                            source: 'Saramin'
+                        };
+                    }).filter(item => item.companyName);
+                    
+                    displayRentrollTable();
+                    showToast(`사람인에서 ${rentrollData.length}개 업체를 찾았습니다`, 'success');
+                    
+                    // ★ v9.5.0: CSV 로드되어 있으면 자동 매칭 ★
+                    if (npsCsvLoaded) {
+                        await enrichSaraminWithNpsCsv();
+                    }
+                } else {
+                    displayEmptyRentroll('사람인에서 입주사 정보를 찾을 수 없습니다');
+                }
+                
+            } catch (e) {
+                console.error('사람인 조회 오류:', e);
+                showToast('사람인 조회 실패', 'error');
+            } finally {
+                hideLoading();
+            }
+        };
+        
+        // ★★★ v9.4.4: 주소 매칭 확인 함수 ★★★
+        function isAddressMatch(searchedAddr, resultAddr) {
+            if (!searchedAddr || !resultAddr) return false;
+            
+            const extractRoadNumber = (addr) => {
+                const match = addr.match(/([가-힣]+(?:로|길|대로)\d*(?:길)?)\s*(\d+(?:-\d+)?)/);
+                if (match) {
+                    return (match[1] + match[2]).replace(/\s/g, '');
+                }
+                return null;
+            };
+            
+            const searched = extractRoadNumber(searchedAddr);
+            const result = extractRoadNumber(resultAddr);
+            
+            if (!searched || !result) return false;
+            return searched === result;
+        }
+        
+        // ★★★ v9.4.4: 렌트롤 테이블 표시 (새로운 컬럼 구조) ★★★
+        function displayRentrollTable() {
+            if (!rentrollData || rentrollData.length === 0) {
+                displayEmptyRentroll('입주사 정보가 없습니다');
+                return;
+            }
+            
+            document.getElementById('rentrollPreview').style.display = 'block';
+            document.getElementById('rentrollControls').style.display = 'flex';
+            document.getElementById('previewCompanyCount').textContent = rentrollData.length;
+            document.getElementById('previewEmployeeCount').textContent = rentrollData.reduce((sum, r) => sum + (r.employeeCount || 0), 0).toLocaleString();
+            
+            const tbody = document.getElementById('rentrollTableBody');
+            tbody.innerHTML = rentrollData.map((r, idx) => {
+                // 주소 간략화 (시/도 제거)
+                let shortAddr = r.address || '-';
+                shortAddr = shortAddr.replace(/서울특별시\s*/g, '');
+                shortAddr = shortAddr.replace(/서울시\s*/g, '');
+                shortAddr = shortAddr.replace(/경기도\s*/g, '경기 ');
+                shortAddr = shortAddr.replace(/인천광역시\s*/g, '인천 ');
+                
+                return `
+                <tr data-idx="${idx}">
+                    <td style="text-align:center;">
+                        <input type="checkbox" class="row-checkbox" data-idx="${idx}" onchange="updateSelectedCount(); toggleRowHighlight(this);">
+                    </td>
+                    <td>
+                        <span class="company-name">${r.companyName}</span>
+                        <span class="company-source">${r.source || ''}</span>
+                    </td>
+                    <td style="font-size:11px; color:#666;" title="${r.address || ''}">
+                        ${shortAddr}
+                    </td>
+                    <td>
+                        <input type="text" class="floor-input" value="${r.floor || ''}" 
+                               placeholder="3F"
+                               onchange="updateField(${idx}, 'floor', this.value)">
+                    </td>
+                    <td>
+                        <input type="number" class="emp-input" value="${r.employeeCount || ''}" 
+                               placeholder="-"
+                               style="width:60px; text-align:center; border:1px solid #ddd; border-radius:4px; padding:4px;"
+                               onchange="updateField(${idx}, 'employeeCount', parseInt(this.value) || 0)">
+                    </td>
+                    <td>
+                        <input type="text" class="industry-input" value="${r.industry || ''}" 
+                               placeholder="업종"
+                               style="width:100%; border:1px solid #ddd; border-radius:4px; padding:4px 6px; font-size:12px;"
+                               onchange="updateField(${idx}, 'industry', this.value)">
+                    </td>
+                    <td>
+                        <input type="text" class="note-input" value="${r.note || ''}" 
+                               placeholder="기타 메모"
+                               onchange="updateField(${idx}, 'note', this.value)">
+                    </td>
+                </tr>
+            `}).join('');
+            
+            // 선택 카운트 초기화
+            document.getElementById('selectedCount').textContent = '0개 선택';
+            document.getElementById('selectAllCheckbox').checked = false;
+        }
+        
+        // ★★★ v9.4.4: 필드 업데이트 통합 함수 ★★★
+        window.updateField = function(idx, field, value) {
+            if (rentrollData[idx]) {
+                rentrollData[idx][field] = value;
+                console.log(`업데이트: ${rentrollData[idx].companyName} - ${field} = ${value}`);
+                
+                // 직원수 변경 시 총 근로자 수 갱신
+                if (field === 'employeeCount') {
+                    const total = rentrollData.reduce((sum, r) => sum + (r.employeeCount || 0), 0);
+                    document.getElementById('previewEmployeeCount').textContent = total.toLocaleString();
+                }
+            }
+        };
+        
+        // 기존 개별 업데이트 함수들 (하위 호환)
+        window.updateFloor = function(idx, value) { updateField(idx, 'floor', value); };
+        window.updateNote = function(idx, value) { updateField(idx, 'note', value); };
+        
+        // 빈 결과 표시
+        function displayEmptyRentroll(message) {
+            document.getElementById('rentrollPreview').style.display = 'block';
+            document.getElementById('rentrollControls').style.display = 'none';
+            document.getElementById('previewCompanyCount').textContent = '0';
+            document.getElementById('previewEmployeeCount').textContent = '0';
+            
+            const tbody = document.getElementById('rentrollTableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align:center; padding:40px; color:#888;">
+                        <div style="margin-bottom:15px;">📭 ${message}</div>
+                        <div style="font-size:12px; color:#aaa;">다른 조회 방법을 시도하거나, 수동으로 입력해주세요</div>
+                    </td>
+                </tr>
+            `;
+        }
+        
+        // ★★★ v9.4.0: 체크박스 관리 함수들 ★★★
+        window.toggleSelectAll = function(checkbox) {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = checkbox.checked;
+                toggleRowHighlight(cb);
+            });
+            updateSelectedCount();
+        };
+        
+        window.selectAllRentroll = function() {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = true;
+                toggleRowHighlight(cb);
+            });
+            document.getElementById('selectAllCheckbox').checked = true;
+            updateSelectedCount();
+        };
+        
+        window.deselectAllRentroll = function() {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = false;
+                toggleRowHighlight(cb);
+            });
+            document.getElementById('selectAllCheckbox').checked = false;
+            updateSelectedCount();
+        };
+        
+        window.toggleRowHighlight = function(checkbox) {
+            const row = checkbox.closest('tr');
+            if (checkbox.checked) {
+                row.classList.add('checked');
+            } else {
+                row.classList.remove('checked');
+            }
+        };
+        
+        window.updateSelectedCount = function() {
+            const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            document.getElementById('selectedCount').textContent = `${checkboxes.length}개 선택`;
+            
+            const allCheckboxes = document.querySelectorAll('.row-checkbox');
+            document.getElementById('selectAllCheckbox').checked = 
+                allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+        };
+        
+        window.deleteSelectedRentroll = function() {
+            const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            if (checkboxes.length === 0) {
+                showToast('삭제할 항목을 선택해주세요', 'warning');
+                return;
+            }
+            
+            if (!confirm(`선택한 ${checkboxes.length}개 항목을 삭제하시겠습니까?`)) return;
+            
+            const selectedIdxs = Array.from(checkboxes)
+                .map(cb => parseInt(cb.dataset.idx))
+                .sort((a, b) => b - a);
+            
+            selectedIdxs.forEach(idx => rentrollData.splice(idx, 1));
+            
+            displayRentrollTable();
+            showToast(`${selectedIdxs.length}개 항목이 삭제되었습니다`, 'success');
+        };
+        
+        // ★★★ v9.4.5: 선택 항목 국민연금 조회 (직원수 input 업데이트) ★★★
+        window.enrichSelectedWithNps = async function() {
+            const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            
+            let targetIdxs = [];
+            if (checkboxes.length === 0) {
+                targetIdxs = rentrollData.map((_, idx) => idx);
+                if (!confirm(`선택된 항목이 없습니다. 전체 ${targetIdxs.length}개 항목을 조회하시겠습니까?`)) return;
+            } else {
+                targetIdxs = Array.from(checkboxes).map(cb => parseInt(cb.dataset.idx));
+            }
+            
+            if (targetIdxs.length === 0) {
+                showToast('조회할 항목이 없습니다', 'warning');
+                return;
+            }
+            
+            const bCode = selectedBuilding.bCode || '';
+            showLoading(`국민연금 정보 조회 중... (${targetIdxs.length}개)`);
+            
+            let updatedCount = 0;
+            let notFoundCount = 0;
+            
+            try {
+                for (const idx of targetIdxs) {
+                    const company = rentrollData[idx];
+                    if (!company || !company.companyName) continue;
+                    
+                    try {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        
+                        const response = await fetch(`${API_BASE_URL}/api/nps/company?companyName=${encodeURIComponent(company.companyName)}&bCode=${bCode}`);
+                        const data = await response.json();
+                        
+                        console.log(`NPS 조회: ${company.companyName}`, data);
+                        
+                        if (data.success && data.found) {
+                            const prevCount = rentrollData[idx].employeeCount || 0;
+                            const newCount = data.employeeCount || 0;
+                            
+                            rentrollData[idx].employeeCount = newCount;
+                            
+                            // 업종 정보도 업데이트
+                            if (data.industry && !rentrollData[idx].industry) {
+                                rentrollData[idx].industry = data.industry;
+                            }
+                            
+                            // 테이블 행 업데이트 (input 필드)
+                            const row = document.querySelector(`tr[data-idx="${idx}"]`);
+                            if (row) {
+                                const empInput = row.querySelector('.emp-input');
+                                if (empInput) {
+                                    empInput.value = newCount || '';
+                                    empInput.style.backgroundColor = '#dcfce7';
+                                }
+                                
+                                const industryInput = row.querySelector('.industry-input');
+                                if (industryInput && data.industry && !industryInput.value) {
+                                    industryInput.value = data.industry;
+                                    industryInput.style.backgroundColor = '#dcfce7';
+                                }
+                            }
+                            
+                            updatedCount++;
+                            console.log(`NPS 갱신: ${company.companyName} ${prevCount}명 → ${newCount}명`);
+                        } else {
+                            notFoundCount++;
+                            console.log(`NPS 미발견: ${company.companyName}`);
+                        }
+                    } catch (e) {
+                        console.log(`NPS 조회 실패: ${company.companyName}`, e);
+                        notFoundCount++;
+                    }
+                }
+                
+                // 총 근로자 수 업데이트
+                const allEmployees = rentrollData.reduce((sum, r) => sum + (r.employeeCount || 0), 0);
+                document.getElementById('previewEmployeeCount').textContent = allEmployees.toLocaleString();
+                
+                if (updatedCount > 0) {
+                    showToast(`${updatedCount}개 업체 정보를 NPS로 갱신했습니다`, 'success');
+                } else if (notFoundCount > 0) {
+                    showToast(`${notFoundCount}개 업체를 국민연금에서 찾지 못했습니다`, 'warning');
+                } else {
+                    showToast('조회 결과가 없습니다', 'info');
+                }
+                
+            } catch (e) {
+                console.error('NPS 보완 오류:', e);
+                showToast('국민연금 정보 보완 실패', 'error');
+            } finally {
+                hideLoading();
+            }
+        };
+        
+        // 층수 업데이트
+        window.updateFloor = function(idx, value) {
+            if (rentrollData[idx]) {
+                rentrollData[idx].floor = value;
+            }
+        };
+        
+        // 비고 업데이트
+        window.updateNote = function(idx, value) {
+            if (rentrollData[idx]) {
+                rentrollData[idx].note = value;
+            }
+        };
+        
+        // ★★★ v9.5.2: 빌딩 등록 (기존 빌딩 체크 추가) ★★★
+        window.registerBuilding = async function() {
+            const buildingName = document.getElementById('buildingName').value.trim();
+            if (!buildingName) {
+                showToast('빌딩명을 입력해주세요', 'warning');
+                return;
+            }
+            
+            showLoading('빌딩 등록 중...');
+            
+            try {
+                const now = new Date();
+                const targetDate = document.getElementById('targetDate').value; // YYYY-MM
+                const roadAddress = document.getElementById('roadAddress').value;
+                
+                // ★★★ 기존 빌딩 체크 ★★★
+                console.log('=== 빌딩 등록 시작 ===');
+                console.log('빌딩명:', buildingName);
+                console.log('주소:', roadAddress);
+                console.log('기존 빌딩 배열 크기:', existingBuildings.length);
+                
+                const existingBuilding = checkDuplicate(roadAddress, buildingName);
+                let buildingId = null;
+                let isUpdate = false;
+                
+                if (existingBuilding) {
+                    // 기존 빌딩이 있으면 렌트롤만 추가할지 확인
+                    const confirmUpdate = confirm(
+                        `"${existingBuilding.name}" 빌딩이 이미 등록되어 있습니다.\n\n` +
+                        `기존 빌딩에 렌트롤만 추가하시겠습니까?\n\n` +
+                        `[확인] → 기존 빌딩에 렌트롤 추가\n` +
+                        `[취소] → 새 빌딩으로 등록`
+                    );
+                    
+                    if (confirmUpdate) {
+                        buildingId = existingBuilding.id;
+                        isUpdate = true;
+                        console.log('기존 빌딩에 렌트롤 추가:', buildingId);
+                    }
+                }
+                
+                // 새 빌딩 등록 (기존 빌딩 선택 안했을 때만)
+                if (!buildingId) {
+                    const grossFloorSqm = parseFloat(document.getElementById('grossFloorSqm').value.replace(/,/g, '')) || 0;
+                    
+                    const buildingData = {
+                        name: buildingName,
+                        address: roadAddress,
+                        addressJibun: document.getElementById('jibunAddress').value,
+                        coordinates: {
+                            lat: selectedBuilding.lat,
+                            lng: selectedBuilding.lng
+                        },
+                        regionId: document.getElementById('region').value,
+                        grade: document.getElementById('grade').value,
+                        completionYear: document.getElementById('completionYear').value,
+                        floors: {
+                            above: parseInt(document.getElementById('floorsAbove').value) || 0,
+                            below: parseInt(document.getElementById('floorsBelow').value) || 0,
+                            display: `지하${document.getElementById('floorsBelow').value || 0}층/지상${document.getElementById('floorsAbove').value || 0}층`
+                        },
+                        area: {
+                            grossFloorSqm: grossFloorSqm,
+                            grossFloorPy: sqmToPy(grossFloorSqm),
+                            landArea: parseFloat(document.getElementById('landArea').value.replace(/,/g, '')) || 0,
+                            buildingArea: parseFloat(document.getElementById('buildingArea').value.replace(/,/g, '')) || 0,
+                            typicalFloorPy: parseFloat(document.getElementById('typicalFloorPy').value) || 0,
+                            typicalFloorLeasePy: parseFloat(document.getElementById('typicalFloorLeasePy').value) || 0,
+                            exclusiveRate: parseFloat(document.getElementById('exclusiveRate').value) || 0
+                        },
+                        pricing: {
+                            depositPy: document.getElementById('depositPy').value,
+                            rentPy: document.getElementById('rentPy').value,
+                            maintenancePy: document.getElementById('maintenancePy').value
+                        },
+                        specs: {
+                            passengerElevator: parseInt(document.getElementById('passengerElevator').value) || 0,
+                            freightElevator: parseInt(document.getElementById('freightElevator').value) || 0,
+                            // ★★★ v9.5.3: hidden input에서 값 가져오기 (fallback으로 selectedBuilding 사용) ★★★
+                            structure: document.getElementById('structureHidden').value || 
+                                       document.getElementById('structure').value || 
+                                       selectedBuilding?.structureFromLedger || '',
+                            buildingUse: document.getElementById('buildingUseHidden').value || 
+                                         document.getElementById('buildingUse').value || 
+                                         selectedBuilding?.buildingUseFromLedger || ''
+                        },
+                        parking: {
+                            total: parseInt(document.getElementById('parkingTotal').value) || 0,
+                            ratio: document.getElementById('parkingRatio').value
+                        },
+                        nearbyStation: document.getElementById('nearbyStation').value,
+                        stationDistance: document.getElementById('stationDistance').value,
+                        pm: document.getElementById('pm').value,
+                        owner: document.getElementById('owner').value,
+                        isNew: true,
+                        registeredAt: now.toISOString(),
+                        newUntil: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                    };
+                    
+                    // Firebase에 빌딩 저장
+                    const buildingRef = push(ref(db, 'buildings'));
+                    await set(buildingRef, buildingData);
+                    buildingId = buildingRef.key;
+                    console.log('새 빌딩 등록:', buildingId);
+                }
+                
+                // ★★★ v9.5.3: 렌트롤 저장 (체크된 것만, 빈 데이터 제외) ★★★
+                let rentrollCount = 0;
+                const checkedBoxes = document.querySelectorAll('.row-checkbox:checked');
+                const saveAll = checkedBoxes.length === 0;
+                
+                for (let i = 0; i < rentrollData.length; i++) {
+                    const r = rentrollData[i];
+                    
+                    // ★ 회사명이 없거나 하이픈이면 건너뛰기 ★
+                    const tenantName = (r.companyName || '').trim();
+                    if (!tenantName || tenantName === '-' || tenantName === '') {
+                        console.log(`스킵: 인덱스 ${i} - 회사명 없음`);
+                        continue;
+                    }
+                    
+                    // 체크박스가 있으면 체크된 것만, 없으면 전체
+                    if (!saveAll) {
+                        const checkbox = document.querySelector(`.row-checkbox[data-idx="${i}"]`);
+                        if (!checkbox || !checkbox.checked) continue;
+                    }
+                    
+                    // ★ 비고 통합: 직원수 + 업종 + 기타비고 ★
+                    const noteParts = [];
+                    if (r.employeeCount) noteParts.push(`${r.employeeCount}명`);
+                    if (r.industry) noteParts.push(r.industry);
+                    if (r.note) noteParts.push(r.note);
+                    const combinedNote = noteParts.join(' / ');
+                    
+                    const rentrollRef = push(ref(db, 'rentrolls'));
+                    await set(rentrollRef, {
+                        buildingId: buildingId,
+                        buildingName: buildingName,
+                        tenant: r.companyName,
+                        floor: r.floor || '',
+                        targetDate: targetDate,
+                        note: combinedNote,
+                        source: r.source || 'manual',
+                        isEstimate: true,
+                        createdAt: now.toISOString(),
+                        author: 'system'
+                    });
+                    rentrollCount++;
+                }
+                
+                // 완료 화면으로 이동
+                document.getElementById('infoCard').style.display = 'none';
+                document.getElementById('completionCard').style.display = 'block';
+                document.getElementById('step2').classList.remove('active');
+                document.getElementById('step2').classList.add('completed');
+                document.getElementById('step3').classList.add('active');
+                
+                document.getElementById('completedName').textContent = buildingName;
+                document.getElementById('completedAddress').textContent = document.getElementById('roadAddress').value;
+                document.getElementById('completedRegion').textContent = document.getElementById('region').value || '-';
+                document.getElementById('completedRentroll').textContent = rentrollCount > 0 ? `${rentrollCount}개 업체` : '미등록';
+                
+                // ★★★ v9.5.2: 기존 빌딩 업데이트 vs 새 빌딩 등록 구분 ★★★
+                if (isUpdate) {
+                    showToast(`기존 빌딩에 렌트롤 ${rentrollCount}건이 추가되었습니다!`, 'success');
+                    document.querySelector('.completion-title').textContent = '렌트롤 추가 완료!';
+                    document.querySelector('.completion-subtitle').textContent = '기존 빌딩에 렌트롤이 추가되었습니다';
+                } else {
+                    showToast('빌딩이 성공적으로 등록되었습니다!', 'success');
+                    document.querySelector('.completion-title').textContent = '빌딩 등록 완료!';
+                    document.querySelector('.completion-subtitle').textContent = '새로운 빌딩이 성공적으로 등록되었습니다';
+                }
+                
+                // 기존 빌딩 목록 갱신 (중복 체크용)
+                loadExistingBuildings();
+                
+            } catch (e) {
+                console.error('등록 오류:', e);
+                showToast('등록 중 오류가 발생했습니다', 'error');
+            } finally {
+                hideLoading();
+            }
+        };
+        
+        // 폼 리셋
+        window.resetForm = function() {
+            selectedBuilding = null;
+            rentrollData = [];
+            
+            document.getElementById('addressInput').value = '';
+            document.getElementById('searchResults').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'block';
+            document.getElementById('selectBuildingBtn').disabled = true;
+            document.getElementById('rentrollPreview').style.display = 'none';
+            
+            document.getElementById('completionCard').style.display = 'none';
+            document.getElementById('searchCard').style.display = 'block';
+            
+            ['step1', 'step2', 'step3'].forEach(id => {
+                document.getElementById(id).classList.remove('active', 'completed');
+            });
+            document.getElementById('step1').classList.add('active');
+            
+            document.querySelectorAll('#infoCard input, #infoCard select').forEach(el => {
+                if (el.type === 'checkbox') el.checked = true;
+                else if (el.type !== 'month') el.value = '';
+            });
+            
+            initTargetDate();
+        };
+        
+        // 초기화
+        loadExistingBuildings();
+        
+        // ★★★ v9.5.3: CSV 로딩을 requestIdleCallback으로 완전 비동기화 ★★★
+        // 브라우저가 유휴 상태일 때만 실행되어 UI 블로킹 방지
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => {
+                loadNpsCsvBackground();
+            }, { timeout: 5000 });
+        } else {
+            setTimeout(() => {
+                loadNpsCsvBackground();
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
