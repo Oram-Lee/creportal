@@ -202,6 +202,33 @@ async function loadBuildings() {
     }
 }
 
+// ★ 외관 이미지 URL 추출 헬퍼 (모든 경로를 통합 확인)
+function getExteriorUrl(bd) {
+    // 1순위: exteriorImage (단일 문자열 - complist에서 저장)
+    if (bd.exteriorImage) return bd.exteriorImage;
+    // 2순위: mainImage
+    if (bd.mainImage) return bd.mainImage;
+    // 3순위: images.exterior 배열 (portal.html에서 저장)
+    const ext = bd.images?.exterior;
+    if (ext) {
+        if (Array.isArray(ext)) {
+            const first = ext[0];
+            if (!first) return '';
+            if (typeof first === 'string') return first;
+            if (first.url) return first.url;
+        } else if (typeof ext === 'string') return ext;
+        else if (ext.url) return ext.url;
+    }
+    // 4순위: exteriorImages 배열 (일부 빌딩에서 사용)
+    const extImgs = bd.exteriorImages;
+    if (extImgs && Array.isArray(extImgs) && extImgs.length > 0) {
+        const first = extImgs[0];
+        if (typeof first === 'string') return first;
+        if (first?.url) return first.url;
+    }
+    return '';
+}
+
 // Firebase 빌딩 데이터 평탄화
 function flattenBuildingData(id, b) {
     // ※ 엘리베이터: specs.passengerElevator + specs.freightElevator → "승객12/화물4대" 형식
@@ -298,8 +325,8 @@ function flattenBuildingData(id, b) {
         // 기준가 정보
         floorPricing: b.floorPricing || [],
         
-        // 이미지
-        exteriorImage: b.exteriorImage || b.mainImage || '',
+        // 이미지 (★ 모든 경로 통합)
+        exteriorImage: getExteriorUrl(b),
         mainImage: b.mainImage || '',
         
         // 설명
@@ -798,7 +825,7 @@ function renderGeneralSpreadsheet() {
             <td class="col-label">빌딩 이미지</td>
             ${entries.map((e) => {
                 const bd = e.building.buildingData || {};
-                const imageUrl = bd.exteriorImage || bd.mainImage || '';
+                const imageUrl = getExteriorUrl(bd);
                 return `
                     <td class="col-building image-cell">
                         ${imageUrl ? 
@@ -1357,7 +1384,7 @@ function renderLGSpreadsheet() {
             <td class="col-label">이미지</td>
             ${buildings.map(b => {
                 const bd = b.buildingData || {};
-                const imageUrl = bd.exteriorImage || bd.mainImage || '';
+                const imageUrl = getExteriorUrl(bd);
                 return `
                     <td colspan="3" class="image-cell">
                         ${imageUrl ? 
@@ -3387,7 +3414,7 @@ window.openImageModal = function(buildingId) {
     if (!building) return;
     
     const bd = building.buildingData || {};
-    const imageUrl = bd.exteriorImage || bd.mainImage || '';
+    const imageUrl = getExteriorUrl(bd);
     
     document.getElementById('img_buildingId').value = buildingId;
     document.getElementById('imageModalTitle').textContent = `${building.buildingName} 외관사진`;
@@ -3423,6 +3450,10 @@ window.deleteImage = async function() {
     if (building && building.buildingData) {
         delete building.buildingData.exteriorImage;
         delete building.buildingData.mainImage;
+        // ★ images.exterior 배열도 삭제 (portal.html 호환)
+        if (building.buildingData.images) {
+            delete building.buildingData.images.exterior;
+        }
     }
     
     // Firebase에서도 삭제
@@ -3431,6 +3462,10 @@ window.deleteImage = async function() {
             exteriorImage: null,
             mainImage: null,
             updatedAt: new Date().toISOString()
+        });
+        // ★ images/exterior도 삭제 (portal.html 호환)
+        await update(ref(db, `buildings/${buildingId}/images`), {
+            exterior: null
         });
         
         showToast('이미지가 삭제되었습니다', 'success');
@@ -3459,6 +3494,9 @@ window.handleImageUpload = async function(input) {
         if (building) {
             if (!building.buildingData) building.buildingData = {};
             building.buildingData.exteriorImage = imageData;
+            // ★ images.exterior 배열에도 반영 (portal.html 호환)
+            if (!building.buildingData.images) building.buildingData.images = {};
+            building.buildingData.images.exterior = [{ url: imageData, name: 'exterior_complist.jpg' }];
         }
         
         // Firebase에도 저장 (빌딩 정보 업데이트)
@@ -3466,6 +3504,10 @@ window.handleImageUpload = async function(input) {
             await update(ref(db, `buildings/${buildingId}`), {
                 exteriorImage: imageData,
                 updatedAt: new Date().toISOString()
+            });
+            // ★ images/exterior에도 저장 (portal.html 호환)
+            await update(ref(db, `buildings/${buildingId}/images`), {
+                exterior: [{ url: imageData, name: 'exterior_complist.jpg' }]
             });
             
             showToast('이미지 업로드 완료', 'success');
@@ -4221,7 +4263,7 @@ async function downloadExcelGeneral(data) {
         const e = entries[i];
         const col = getCol(3 + i);  // ★ C열부터 시작
         const bd = e.building.buildingData || {};
-        const imageUrl = bd.exteriorImage || bd.mainImage || '';
+        const imageUrl = getExteriorUrl(bd);
         
         // 셀 병합 (행 5-6)
         sheet.mergeCells(`${col}5:${col}6`);
@@ -4507,7 +4549,7 @@ async function downloadExcelLG(data) {
         const bd = b.buildingData || {};
         
         sheet.mergeCells(`${col1}9:${col3}17`);
-        const imageUrl = bd.exteriorImage || bd.mainImage || '';
+        const imageUrl = getExteriorUrl(bd);
         
         if (imageUrl && imageUrl.startsWith('data:image')) {
             try {
