@@ -19,7 +19,7 @@ import { applyFilter, clearFilter, quickFilter, toggleVacancyFilter, toggleLeasi
 import { renderBuildingList, renderTableView, selectBuildingFromList, loadStarredBuildings, toggleBuildingExpand, setViewMode, setListTab, toggleTheme, updateSelectedCount, renderVacancyBadge, renderRentrollBadge, renderMemoBadge, renderIncentiveBadge, renderDocumentSelect, renderVacancyTable, toggleStar, setupUIListeners } from './portal-ui.js';
 import { registerDetailGlobals } from './portal-detail.js?v=3.9';
 import { registerPopupGlobals } from './portal-popup.js';
-import { registerCrudGlobals, isAdmin, canDeleteBuilding } from './portal-crud.js?v=3.5';
+import { registerCrudGlobals, isAdmin, canDeleteBuilding } from './portal-crud.js?v=4.0';
 import { registerPreviewGlobals } from './portal-preview.js';
 import { registerMiscGlobals } from './portal-misc.js?v=3.5';
 // 🆕 다각형 검색 모듈

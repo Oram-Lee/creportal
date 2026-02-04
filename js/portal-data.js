@@ -443,6 +443,16 @@ export function processBuildings() {
         });
     
     state.filteredBuildings = [...state.allBuildings];
+    
+    // ★ v4.0: processBuildings 후 selectedBuilding 자동 재연결
+    // CRUD 후 processBuildings()가 새 객체 배열을 생성하면
+    // selectedBuilding이 이전 객체를 가리키는 문제를 해결
+    if (state.selectedBuilding) {
+        const updatedBuilding = state.allBuildings.find(b => b.id === state.selectedBuilding.id);
+        if (updatedBuilding) {
+            state.selectedBuilding = updatedBuilding;
+        }
+    }
 }
 
 // 문서 그룹핑 헬퍼

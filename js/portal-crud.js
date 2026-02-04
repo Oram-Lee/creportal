@@ -18,6 +18,49 @@ import {
     openDetail
 } from './portal-detail.js';
 
+// ============================================================
+// ★ v4.0: CRUD 후 UI 갱신 헬퍼
+// processBuildings() 호출 후 selectedBuilding 재연결 + 목록 갱신
+// ============================================================
+
+/**
+ * CRUD 작업 후 전체 UI를 갱신하는 통합 헬퍼
+ * @param {Function|Function[]} renderFns - 추가로 호출할 렌더 함수(들)
+ */
+function refreshAfterCrud(renderFns) {
+    // 1. allBuildings 재구축 (processBuildings 내부에서 selectedBuilding도 자동 재연결됨)
+    processBuildings();
+    
+    // 2. 빌딩 목록 갱신
+    renderBuildingList();
+    if (state.currentViewMode === 'list') {
+        renderTableView();
+    }
+    
+    // 3. 지도 마커 갱신
+    if (state.kakaoMap && state.clusterer && window.updateMapMarkers) {
+        window.updateMapMarkers();
+    }
+    
+    // 4. 추가 렌더 함수 실행
+    if (renderFns) {
+        const fns = Array.isArray(renderFns) ? renderFns : [renderFns];
+        fns.forEach(fn => { if (typeof fn === 'function') fn(); });
+    }
+}
+
+/**
+ * buildings 문서를 직접 수정한 경우, dataCache도 동기화
+ * (processBuildings는 dataCache에서 빌딩 정보를 읽으므로 반드시 필요)
+ * @param {string} buildingId 
+ * @param {Object} updates - 변경된 필드들
+ */
+function syncBuildingCache(buildingId, updates) {
+    if (state.dataCache.buildings[buildingId]) {
+        Object.assign(state.dataCache.buildings[buildingId], updates);
+    }
+}
+
 // ===== 모달 열기/닫기 =====
 
 export function openModal(id) {
@@ -60,8 +103,7 @@ export async function deleteRentroll(id) {
     try { 
         await remove(ref(db, `rentrolls/${id}`)); 
         delete state.dataCache.rentrolls[id]; 
-        processBuildings(); 
-        renderRentrollSection(); 
+        refreshAfterCrud(renderRentrollSection); 
         showToast('삭제되었습니다', 'success'); 
     } catch (e) { 
         console.error(e);
@@ -97,9 +139,7 @@ export async function saveRentroll(formData) {
             state.dataCache.rentrolls[nr.key] = data;
         }
         closeModal('rentrollModal');
-        processBuildings();
-        renderRentrollSection();
-        renderBuildingList();
+        refreshAfterCrud(renderRentrollSection);
         showToast('저장되었습니다', 'success');
     } catch (e) {
         showToast('저장 실패', 'error');
@@ -131,8 +171,7 @@ export async function deleteMemo(id) {
     try {
         await remove(ref(db, `memos/${id}`));
         delete state.dataCache.memos[id];
-        processBuildings();
-        renderMemoSection();
+        refreshAfterCrud(renderMemoSection);
         showToast('삭제되었습니다', 'success');
     } catch (e) {
         showToast('삭제 실패', 'error');
@@ -163,9 +202,7 @@ export async function saveMemo(formData) {
             state.dataCache.memos[nr.key] = data;
         }
         closeModal('memoModal');
-        processBuildings();
-        renderMemoSection();
-        renderBuildingList();
+        refreshAfterCrud(renderMemoSection);
         showToast('저장되었습니다', 'success');
     } catch (e) {
         showToast('저장 실패', 'error');
@@ -272,15 +309,10 @@ export async function saveIncentive(formData) {
         
         // 로컬 상태 업데이트
         state.selectedBuilding.incentives = incentives;
-        
-        // 인센티브 개수 배지 업데이트
-        const countEl = document.getElementById('incentiveCount');
-        if (countEl) {
-            countEl.textContent = incentives.length;
-        }
+        syncBuildingCache(buildingId, { incentives });
         
         closeModal('incentiveModal');
-        renderIncentiveSection();
+        refreshAfterCrud(() => window.renderIncentiveSection?.());
         showToast('인센티브가 저장되었습니다', 'success');
         
     } catch (error) {
@@ -303,14 +335,9 @@ export async function deleteIncentive(id) {
         await update(ref(db, `buildings/${buildingId}`), { incentives });
         
         state.selectedBuilding.incentives = incentives;
+        syncBuildingCache(buildingId, { incentives });
         
-        // 인센티브 개수 배지 업데이트
-        const countEl = document.getElementById('incentiveCount');
-        if (countEl) {
-            countEl.textContent = incentives.length;
-        }
-        
-        renderIncentiveSection();
+        refreshAfterCrud(() => window.renderIncentiveSection?.());
         showToast('삭제되었습니다', 'success');
         
     } catch (error) {
@@ -370,6 +397,9 @@ export async function saveVacancyEdit() {
         await update(ref(db, `vacancies/${buildingId}/${vacancyKey}`), updatedData);
         
         // 로컬 데이터 업데이트
+        if (state.dataCache.vacancies?.[buildingId]?.[vacancyKey]) {
+            Object.assign(state.dataCache.vacancies[buildingId][vacancyKey], updatedData);
+        }
         const building = state.allBuildings.find(b => b.id === buildingId);
         if (building) {
             const vacancy = building.vacancies.find(v => v._key === vacancyKey);
@@ -378,7 +408,7 @@ export async function saveVacancyEdit() {
             }
         }
         
-        renderTableView();
+        refreshAfterCrud();
         showToast('공실 정보가 수정되었습니다.', 'success');
         closeVacancyModal();
         
@@ -396,14 +426,16 @@ export async function deleteVacancy(buildingId, vacancyKey) {
         await remove(ref(db, `vacancies/${buildingId}/${vacancyKey}`));
         
         // 로컬 데이터에서 제거
+        if (state.dataCache.vacancies?.[buildingId]) {
+            delete state.dataCache.vacancies[buildingId][vacancyKey];
+        }
         const building = state.allBuildings.find(b => b.id === buildingId);
         if (building && building.vacancies) {
             building.vacancies = building.vacancies.filter(v => v._key !== vacancyKey);
             building.vacancyCount = building.vacancies.length;
         }
         
-        processBuildings();
-        renderTableView();
+        refreshAfterCrud();
         showToast('공실 정보가 삭제되었습니다.', 'success');
         
     } catch (error) {
@@ -548,8 +580,7 @@ export async function executeTransferVacancy() {
         targetBuilding.vacancyCount = targetBuilding.vacancies.length;
         
         closeTransferVacancyModal();
-        processBuildings();
-        renderTableView();
+        refreshAfterCrud();
         
         showToast(`공실 정보가 "${targetBuilding.name}"으로 이관되었습니다.`, 'success');
         
@@ -1466,9 +1497,9 @@ export async function deletePricing(id) {
         if (state.selectedBuilding.floorPricing) {
             state.selectedBuilding.floorPricing = state.selectedBuilding.floorPricing.filter(p => p.id !== id);
         }
+        syncBuildingCache(state.selectedBuilding.id, { floorPricing: state.selectedBuilding.floorPricing });
         
-        renderPricingSection();
-        renderInfoSection();
+        refreshAfterCrud([renderPricingSection, renderInfoSection]);
         showToast('기준가가 삭제되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1510,8 +1541,8 @@ export async function savePricing(formData) {
         }
         
         closeModal('pricingModal');
-        renderPricingSection();
-        renderInfoSection();
+        syncBuildingCache(state.selectedBuilding.id, { floorPricing: state.selectedBuilding.floorPricing });
+        refreshAfterCrud([renderPricingSection, renderInfoSection]);
         showToast('기준가가 저장되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1563,8 +1594,9 @@ export async function deleteContact(id) {
         if (state.selectedBuilding.contactPoints) {
             state.selectedBuilding.contactPoints = state.selectedBuilding.contactPoints.filter(c => c.id !== id);
         }
+        syncBuildingCache(state.selectedBuilding.id, { contactPoints: state.selectedBuilding.contactPoints });
         
-        renderContactSection();
+        refreshAfterCrud(renderContactSection);
         showToast('담당자가 삭제되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1607,7 +1639,8 @@ export async function saveContact(formData) {
         }
         
         closeModal('contactModal');
-        renderContactSection();
+        syncBuildingCache(state.selectedBuilding.id, { contactPoints: state.selectedBuilding.contactPoints });
+        refreshAfterCrud(renderContactSection);
         showToast('담당자가 저장되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1814,8 +1847,9 @@ export async function saveBuildingNote(noteText) {
         });
         
         state.selectedBuilding.notes = noteText;
+        syncBuildingCache(state.selectedBuilding.id, { notes: noteText });
         closeModal('buildingNoteModal');
-        renderInfoSection();
+        refreshAfterCrud(renderInfoSection);
         showToast('빌딩 노트가 저장되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1836,8 +1870,9 @@ export async function saveAutoDetectedRegion(region) {
         
         state.selectedBuilding._raw = state.selectedBuilding._raw || {};
         state.selectedBuilding._raw.region = region;
+        syncBuildingCache(state.selectedBuilding.id, { region });
         
-        renderInfoSection();
+        refreshAfterCrud(renderInfoSection);
         showToast('권역이 저장되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -2148,9 +2183,7 @@ function setupFormListeners() {
                     state.dataCache.rentrolls[nr.key] = data;
                 }
                 closeModal('rentrollModal');
-                processBuildings();
-                renderRentrollSection();
-                renderBuildingList();
+                refreshAfterCrud(renderRentrollSection);
                 showToast('저장되었습니다', 'success');
             } catch (e) {
                 showToast('저장 실패', 'error');
@@ -2221,7 +2254,7 @@ function setupFormListeners() {
                 }
                 
                 closeModal('memoModal');
-                renderMemoSection();
+                refreshAfterCrud(renderMemoSection);
                 showToast('저장되었습니다', 'success');
             } catch (err) {
                 console.error('메모 저장 오류:', err);
@@ -2301,9 +2334,9 @@ function setupFormListeners() {
                 
                 await update(ref(db, `buildings/${state.selectedBuilding.id}`), { floorPricing });
                 state.selectedBuilding.floorPricing = floorPricing;
+                syncBuildingCache(state.selectedBuilding.id, { floorPricing });
                 closeModal('pricingModal');
-                renderPricingSection();
-                renderInfoSection();
+                refreshAfterCrud([renderPricingSection, renderInfoSection]);
                 showToast('저장되었습니다', 'success');
             } catch (err) {
                 console.error(err);
@@ -2359,8 +2392,9 @@ function setupFormListeners() {
                 
                 await update(ref(db, `buildings/${state.selectedBuilding.id}`), { contactPoints });
                 state.selectedBuilding.contactPoints = contactPoints;
+                syncBuildingCache(state.selectedBuilding.id, { contactPoints });
                 closeModal('contactModal');
-                renderContactSection();
+                refreshAfterCrud(renderContactSection);
                 showToast('저장되었습니다', 'success');
             } catch (err) {
                 console.error(err);
@@ -2380,8 +2414,9 @@ function setupFormListeners() {
             try {
                 await update(ref(db, `buildings/${state.selectedBuilding.id}`), { notes });
                 state.selectedBuilding.notes = notes;
+                syncBuildingCache(state.selectedBuilding.id, { notes });
                 closeModal('buildingNoteModal');
-                renderInfoSection();
+                refreshAfterCrud(renderInfoSection);
                 showToast('저장되었습니다', 'success');
             } catch (err) {
                 console.error(err);
@@ -2450,9 +2485,10 @@ function setupFormListeners() {
                 
                 await update(ref(db, `buildings/${state.selectedBuilding.id}`), updates);
                 Object.assign(state.selectedBuilding, updates);
+                syncBuildingCache(state.selectedBuilding.id, updates);
                 
                 closeModal('buildingEditModal');
-                renderInfoSection();
+                refreshAfterCrud(renderInfoSection);
                 showToast('빌딩 정보가 저장되었습니다', 'success');
             } catch (err) {
                 console.error(err);
