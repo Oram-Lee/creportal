@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRE PORTAL — Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ============================================================
+           CSS Variables (portal.css 호환)
+           ============================================================ */
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-hover: #f1f5f9;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --border-color: #e2e8f0;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --accent-light: #eff6ff;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-lg: 0 10px 40px rgba(0,0,0,0.12);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #1e293b;
+            --bg-hover: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border-color: #334155;
+            --accent-light: #1e3a5f;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+            --shadow-lg: 0 10px 40px rgba(0,0,0,0.4);
+        }
+
+        /* ============================================================
+           Base
+           ============================================================ */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Noto Sans KR', -apple-system, sans-serif;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* ============================================================
+           Login Screen
+           ============================================================ */
+        .login-container {
+            position: fixed; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+            z-index: 9999;
+        }
+        .login-card {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            width: 400px;
+            box-shadow: var(--shadow-lg);
+        }
+        .login-logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .login-logo .icon { font-size: 48px; margin-bottom: 12px; }
+        .login-logo h1 {
+            font-size: 24px; font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .login-logo p {
+            color: var(--text-muted); font-size: 14px; margin-top: 4px;
+        }
+        .login-logo .admin-badge {
+            display: inline-block;
+            background: var(--error-color);
+            color: #fff;
+            font-size: 11px; font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 20px;
+            margin-top: 8px;
+            letter-spacing: 1px;
+        }
+        .login-error {
+            background: #fef2f2;
+            color: var(--error-color);
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            margin-bottom: 16px;
+            display: none;
+        }
+        .login-error.show { display: block; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 13px; font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-family: inherit;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+
+        /* ============================================================
+           Buttons
+           ============================================================ */
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 14px; font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary {
+            background: var(--accent-color);
+            color: #fff;
+            width: 100%;
+            justify-content: center;
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover { background: var(--bg-hover); }
+        .btn-success { background: var(--success-color); color: #fff; }
+        .btn-success:hover { filter: brightness(0.9); }
+        .btn-danger { background: var(--error-color); color: #fff; }
+        .btn-danger:hover { filter: brightness(0.9); }
+        .btn-warning { background: var(--warning-color); color: #fff; }
+        .btn-warning:hover { filter: brightness(0.9); }
+        .btn-sm { padding: 6px 14px; font-size: 13px; }
+        .btn-icon {
+            width: 32px; height: 32px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            background: transparent;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            color: var(--text-secondary);
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+        .btn-icon:hover { background: var(--bg-hover); }
+
+        /* ============================================================
+           Header
+           ============================================================ */
+        .header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 24px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky; top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-sm);
+        }
+        .header-left {
+            display: flex; align-items: center; gap: 20px;
+        }
+        .header-logo {
+            font-size: 18px; font-weight: 700;
+            display: flex; align-items: center; gap: 8px;
+            letter-spacing: -0.5px;
+        }
+        .header-logo .icon { font-size: 22px; }
+        .header-nav {
+            display: flex; gap: 2px;
+        }
+        .nav-item {
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 13px; font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+            text-decoration: none;
+            display: flex; align-items: center; gap: 4px;
+        }
+        .nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .nav-item.active {
+            background: var(--accent-light);
+            color: var(--accent-color);
+        }
+        .header-right {
+            display: flex; align-items: center; gap: 12px;
+        }
+        .user-info {
+            display: flex; flex-direction: column; align-items: flex-end;
+            font-size: 12px; line-height: 1.3;
+        }
+        .user-email { font-weight: 600; color: var(--text-primary); }
+        .user-role {
+            color: var(--accent-color); font-weight: 500;
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .logout-btn {
+            padding: 6px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 13px; font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .logout-btn:hover { background: #fef2f2; color: var(--error-color); border-color: var(--error-color); }
+        .theme-btn {
+            width: 36px; height: 36px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: transparent;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .theme-btn:hover { background: var(--bg-hover); }
+
+        /* ============================================================
+           Main Content
+           ============================================================ */
+        .main-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 28px 24px;
+        }
+
+        /* ============================================================
+           Stats Cards
+           ============================================================ */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: var(--shadow-sm);
+        }
+        .stat-icon {
+            width: 48px; height: 48px;
+            border-radius: var(--radius-md);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+        }
+        .stat-icon.blue { background: #eff6ff; }
+        .stat-icon.green { background: #ecfdf5; }
+        .stat-icon.amber { background: #fffbeb; }
+        .stat-icon.red { background: #fef2f2; }
+        .stat-icon.purple { background: #faf5ff; }
+        .stat-value { font-size: 28px; font-weight: 700; line-height: 1; }
+        .stat-label { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+        /* ============================================================
+           Table Card
+           ============================================================ */
+        .table-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+        .table-header {
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .table-header h2 {
+            font-size: 18px; font-weight: 600;
+        }
+        .table-actions {
+            display: flex; gap: 8px; align-items: center;
+        }
+        .search-input {
+            padding: 8px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 13px;
+            font-family: inherit;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            width: 240px;
+        }
+        .search-input:focus { outline: none; border-color: var(--accent-color); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        thead th {
+            padding: 12px 16px;
+            font-size: 12px; font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            text-align: left;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+        }
+        tbody td {
+            padding: 14px 16px;
+            font-size: 14px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+        tbody tr:hover { background: var(--bg-hover); }
+        tbody tr:last-child td { border-bottom: none; }
+
+        /* ============================================================
+           Badges
+           ============================================================ */
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px; font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        .badge-admin { background: #fef2f2; color: #dc2626; }
+        .badge-superadmin { background: #faf5ff; color: #7c3aed; }
+        .badge-manager { background: #eff6ff; color: #2563eb; }
+        .badge-user { background: #ecfdf5; color: #059669; }
+        .badge-viewer { background: #f8fafc; color: #64748b; }
+        .badge-active { background: #ecfdf5; color: #059669; }
+        .badge-disabled { background: #fef2f2; color: #dc2626; }
+        .badge-pending { background: #fffbeb; color: #d97706; }
+
+        /* ============================================================
+           Modal
+           ============================================================ */
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 32px;
+            width: 520px;
+            max-width: 95vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            animation: modalIn 0.2s ease;
+        }
+        @keyframes modalIn {
+            from { opacity: 0; transform: translateY(10px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .modal-title {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .modal-title h3 { font-size: 20px; font-weight: 600; }
+        .modal-close {
+            width: 32px; height: 32px;
+            border: none; background: transparent;
+            font-size: 22px; cursor: pointer;
+            color: var(--text-muted);
+            border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-close:hover { background: var(--bg-hover); }
+        .modal-form { display: grid; gap: 16px; }
+        .modal-form .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .modal-footer {
+            display: flex; gap: 10px; justify-content: flex-end;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        /* ============================================================
+           Toast
+           ============================================================ */
+        .toast-container {
+            position: fixed;
+            top: 72px; right: 24px;
+            z-index: 9999;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .toast {
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
+            font-size: 14px; font-weight: 500;
+            box-shadow: var(--shadow-md);
+            animation: toastIn 0.3s ease, toastOut 0.3s ease 2.5s forwards;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .toast-success { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+        .toast-error { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .toast-warning { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(40px); } }
+        @keyframes toastOut { to { opacity: 0; transform: translateX(40px); } }
+
+        /* ============================================================
+           Confirm Dialog
+           ============================================================ */
+        .confirm-dialog {
+            text-align: center;
+            padding: 8px;
+        }
+        .confirm-dialog .confirm-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+        .confirm-dialog h3 {
+            font-size: 18px; margin-bottom: 8px;
+        }
+        .confirm-dialog p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+        .confirm-actions {
+            display: flex; gap: 10px; justify-content: center;
+        }
+
+        /* ============================================================
+           Empty State
+           ============================================================ */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+        .empty-state p { font-size: 14px; }
+
+        /* ============================================================
+           Responsive
+           ============================================================ */
+        @media (max-width: 768px) {
+            .header { padding: 0 12px; }
+            .header-nav { display: none; }
+            .main-content { padding: 16px 12px; }
+            .stats-row { grid-template-columns: 1fr 1fr; }
+            .modal { padding: 20px; width: 95vw; }
+            .table-header { flex-direction: column; gap: 12px; align-items: flex-start; }
+            .search-input { width: 100%; }
+        }
+
+        /* Password visibility toggle */
+        .password-wrapper {
+            position: relative;
+        }
+        .password-wrapper input { padding-right: 40px; }
+        .password-toggle {
+            position: absolute;
+            right: 10px; top: 50%; transform: translateY(-50%);
+            background: none; border: none;
+            cursor: pointer; font-size: 16px;
+            color: var(--text-muted);
+        }
+
+        /* Table action buttons */
+        .action-cell {
+            display: flex; gap: 4px;
+        }
+
+        /* Loading */
+        .loading-spinner {
+            display: inline-block;
+            width: 16px; height: 16px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <!-- ============================================================
+         로그인 화면
+         ============================================================ -->
+    <div class="login-container" id="loginScreen">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="icon">🛡️</div>
+                <h1>CRE PORTAL</h1>
+                <p>관리자 콘솔</p>
+                <div class="admin-badge">ADMIN ONLY</div>
+            </div>
+            <div class="login-error" id="loginError"></div>
+            <div class="form-group">
+                <label>이메일</label>
+                <input type="email" id="loginEmail" placeholder="admin@company.com"
+                       onkeypress="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+            </div>
+            <div class="form-group">
+                <label>비밀번호</label>
+                <input type="password" id="loginPassword" placeholder="••••••"
+                       onkeypress="if(event.key==='Enter')handleLogin()">
+            </div>
+            <button class="btn btn-primary" onclick="handleLogin()">관리자 로그인</button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         메인 앱
+         ============================================================ -->
+    <div id="appContainer" style="display:none;">
+        <header class="header">
+            <div class="header-left">
+                <div class="header-logo"><span class="icon">🛡️</span> CRE PORTAL <span style="color:var(--error-color); font-size:12px; font-weight:600; margin-left:4px;">ADMIN</span></div>
+                <nav class="header-nav">
+                    <div class="nav-item active" data-tab="users" onclick="switchTab('users')">👥 사용자 관리</div>
+                    <div class="nav-item" data-tab="logs" onclick="switchTab('logs')">📋 활동 로그</div>
+                    <a href="portal.html" class="nav-item">🏢 포탈로 이동</a>
+                </nav>
+            </div>
+            <div class="header-right">
+                <button class="theme-btn" onclick="toggleTheme()" title="다크모드">🌙</button>
+                <div class="user-info">
+                    <span class="user-email" id="adminName">관리자</span>
+                    <span class="user-role" id="adminRole">admin</span>
+                </div>
+                <button class="logout-btn" onclick="handleLogout()">로그아웃</button>
+            </div>
+        </header>
+
+        <!-- 사용자 관리 탭 -->
+        <div class="main-content" id="tabUsers">
+            <!-- 통계 카드 -->
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-icon blue">👥</div>
+                    <div>
+                        <div class="stat-value" id="statTotal">0</div>
+                        <div class="stat-label">전체 계정</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">✅</div>
+                    <div>
+                        <div class="stat-value" id="statActive">0</div>
+                        <div class="stat-label">활성 계정</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon red">🚫</div>
+                    <div>
+                        <div class="stat-value" id="statDisabled">0</div>
+                        <div class="stat-label">비활성 계정</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon amber">⏳</div>
+                    <div>
+                        <div class="stat-value" id="statPending">0</div>
+                        <div class="stat-label">초기 로그인 대기</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">🛡️</div>
+                    <div>
+                        <div class="stat-value" id="statAdmin">0</div>
+                        <div class="stat-label">관리자</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 사용자 테이블 -->
+            <div class="table-card">
+                <div class="table-header">
+                    <h2>사용자 목록</h2>
+                    <div class="table-actions">
+                        <input type="text" class="search-input" id="userSearch" 
+                               placeholder="이름, 이메일 검색..." oninput="filterUsers()">
+                        <select id="roleFilter" onchange="filterUsers()" 
+                                style="padding:8px 12px; border:1px solid var(--border-color); border-radius:var(--radius-sm); font-size:13px; font-family:inherit; background:var(--bg-primary); color:var(--text-primary);">
+                            <option value="">전체 역할</option>
+                            <option value="superadmin">Super Admin</option>
+                            <option value="admin">Admin</option>
+                            <option value="manager">Manager</option>
+                            <option value="user">User</option>
+                            <option value="viewer">Viewer</option>
+                        </select>
+                        <button class="btn btn-success btn-sm" onclick="openCreateModal()">➕ 계정 생성</button>
+                        <button class="btn btn-secondary btn-sm" onclick="loadUsers()">🔄 새로고침</button>
+                    </div>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:40px;">#</th>
+                                <th>이메일</th>
+                                <th>이름</th>
+                                <th>직급</th>
+                                <th>연락처</th>
+                                <th>역할</th>
+                                <th>상태</th>
+                                <th>생성일</th>
+                                <th>최근 비밀번호 변경</th>
+                                <th style="width:140px;">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr>
+                                <td colspan="10">
+                                    <div class="empty-state">
+                                        <div class="loading-spinner" style="width:32px;height:32px;border-width:3px;margin:0 auto 12px;"></div>
+                                        <p>사용자 목록을 불러오는 중...</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 활동 로그 탭 -->
+        <div class="main-content" id="tabLogs" style="display:none;">
+            <div class="table-card">
+                <div class="table-header">
+                    <h2>관리자 활동 로그</h2>
+                    <button class="btn btn-secondary btn-sm" onclick="loadLogs()">🔄 새로고침</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>시간</th>
+                                <th>관리자</th>
+                                <th>동작</th>
+                                <th>대상</th>
+                                <th>상세</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <tr><td colspan="5"><div class="empty-state"><p>로그를 불러오는 중...</p></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         계정 생성/편집 모달
+         ============================================================ -->
+    <div class="modal-overlay" id="userModal">
+        <div class="modal">
+            <div class="modal-title">
+                <h3 id="modalTitle">계정 생성</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-form">
+                <div class="form-group">
+                    <label>이메일 (아이디) <span style="color:var(--error-color);">*</span></label>
+                    <input type="email" id="modalEmail" placeholder="user@company.com">
+                </div>
+                <div class="form-group">
+                    <label>비밀번호 (숫자 6자리) <span style="color:var(--error-color);">*</span></label>
+                    <div class="password-wrapper">
+                        <input type="password" id="modalPassword" placeholder="000000" maxlength="6" 
+                               oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                        <button class="password-toggle" onclick="togglePasswordVisibility('modalPassword', this)">👁️</button>
+                    </div>
+                </div>
+                <div class="row2">
+                    <div class="form-group">
+                        <label>이름 <span style="color:var(--error-color);">*</span></label>
+                        <input type="text" id="modalName" placeholder="홍길동">
+                    </div>
+                    <div class="form-group">
+                        <label>직급</label>
+                        <input type="text" id="modalPosition" placeholder="과장">
+                    </div>
+                </div>
+                <div class="row2">
+                    <div class="form-group">
+                        <label>연락처</label>
+                        <input type="tel" id="modalPhone" placeholder="010-0000-0000">
+                    </div>
+                    <div class="form-group">
+                        <label>역할 <span style="color:var(--error-color);">*</span></label>
+                        <select id="modalRole">
+                            <option value="user">User (일반 사용자)</option>
+                            <option value="viewer">Viewer (읽기 전용)</option>
+                            <option value="manager">Manager (매니저)</option>
+                            <option value="admin">Admin (관리자)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row2">
+                    <div class="form-group">
+                        <label>소속 회사</label>
+                        <input type="text" id="modalCompany" placeholder="S&I Corporation">
+                    </div>
+                    <div class="form-group">
+                        <label>부서</label>
+                        <input type="text" id="modalDepartment" placeholder="CRE팀">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">취소</button>
+                <button class="btn btn-primary" id="modalSubmitBtn" onclick="submitUser()" style="width:auto;">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         확인 모달 (삭제/중지 등)
+         ============================================================ -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal" style="width:400px;">
+            <div class="confirm-dialog">
+                <div class="confirm-icon" id="confirmIcon">⚠️</div>
+                <h3 id="confirmTitle">확인</h3>
+                <p id="confirmMessage">정말 진행하시겠습니까?</p>
+                <div class="confirm-actions">
+                    <button class="btn btn-secondary" onclick="closeConfirm()">취소</button>
+                    <button class="btn btn-danger" id="confirmBtn" onclick="executeConfirm()">확인</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 컨테이너 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ============================================================
+         JavaScript
+         ============================================================ -->
+    <script type="module">
+        // ============================================================
+        // Firebase 초기화
+        // ============================================================
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getDatabase, ref, get, set, push, update, remove, onValue } 
+            from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTEJnDQzgY6FQABVBcvNsKvwDLJkmj26s",
+            authDomain: "cre-unified.firebaseapp.com",
+            databaseURL: "https://cre-unified-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "cre-unified",
+            storageBucket: "cre-unified.firebasestorage.app",
+            messagingSenderId: "161207314802",
+            appId: "1:161207314802:web:777e72ae0e190e73ebd5eb"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // ============================================================
+        // 상태 관리
+        // ============================================================
+        let currentAdmin = null;
+        let allUsers = [];
+        let editingUserId = null;
+        let confirmCallback = null;
+
+        // ============================================================
+        // 유틸리티
+        // ============================================================
+        const emailToKey = (email) => email.replace(/[@.]/g, '_');
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            const icons = { success: '✅', error: '❌', warning: '⚠️' };
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `${icons[type] || ''} ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function formatDate(timestamp) {
+            if (!timestamp) return '-';
+            const d = new Date(timestamp);
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        }
+
+        function formatDateTime(timestamp) {
+            if (!timestamp) return '-';
+            const d = new Date(timestamp);
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
+
+        // ============================================================
+        // 테마 토글
+        // ============================================================
+        function toggleTheme() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            document.documentElement.setAttribute('data-theme', isDark ? '' : 'dark');
+            localStorage.setItem('admin-theme', isDark ? 'light' : 'dark');
+        }
+        // 저장된 테마 적용
+        if (localStorage.getItem('admin-theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+
+        // ============================================================
+        // 로그인 처리
+        // ============================================================
+        async function handleLogin() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            const errorEl = document.getElementById('loginError');
+
+            if (!email || !password) {
+                errorEl.textContent = '이메일과 비밀번호를 모두 입력하세요.';
+                errorEl.classList.add('show');
+                return;
+            }
+
+            try {
+                const key = emailToKey(email);
+                const snapshot = await get(ref(db, `users/${key}`));
+                
+                if (!snapshot.exists()) {
+                    errorEl.textContent = '등록되지 않은 계정입니다.';
+                    errorEl.classList.add('show');
+                    return;
+                }
+
+                const user = snapshot.val();
+
+                if (user.password !== password) {
+                    errorEl.textContent = '비밀번호가 일치하지 않습니다.';
+                    errorEl.classList.add('show');
+                    return;
+                }
+
+                if (user.disabled) {
+                    errorEl.textContent = '비활성화된 계정입니다. 관리자에게 문의하세요.';
+                    errorEl.classList.add('show');
+                    return;
+                }
+
+                if (user.role !== 'admin' && user.role !== 'superadmin') {
+                    errorEl.textContent = '관리자 권한이 없습니다. admin 또는 superadmin 역할이 필요합니다.';
+                    errorEl.classList.add('show');
+                    return;
+                }
+
+                // 로그인 성공
+                currentAdmin = user;
+                localStorage.setItem('adminSession', JSON.stringify({
+                    email: user.email,
+                    role: user.role,
+                    name: user.name || user.email,
+                    loginAt: Date.now()
+                }));
+
+                showApp();
+                loadUsers();
+                loadLogs();
+                
+                // 로그 기록
+                writeLog('login', user.email, '관리자 로그인');
+
+            } catch (err) {
+                console.error('Login error:', err);
+                errorEl.textContent = '로그인 중 오류가 발생했습니다.';
+                errorEl.classList.add('show');
+            }
+        }
+
+        function handleLogout() {
+            currentAdmin = null;
+            localStorage.removeItem('adminSession');
+            document.getElementById('loginScreen').style.display = '';
+            document.getElementById('appContainer').style.display = 'none';
+        }
+
+        function showApp() {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('appContainer').style.display = '';
+            document.getElementById('adminName').textContent = currentAdmin.name || currentAdmin.email;
+            document.getElementById('adminRole').textContent = currentAdmin.role;
+        }
+
+        // 세션 복원
+        async function restoreSession() {
+            const session = localStorage.getItem('adminSession');
+            if (!session) return;
+            
+            try {
+                const data = JSON.parse(session);
+                // 24시간 초과 시 로그아웃
+                if (Date.now() - data.loginAt > 24 * 60 * 60 * 1000) {
+                    localStorage.removeItem('adminSession');
+                    return;
+                }
+
+                const key = emailToKey(data.email);
+                const snapshot = await get(ref(db, `users/${key}`));
+                if (snapshot.exists()) {
+                    const user = snapshot.val();
+                    if ((user.role === 'admin' || user.role === 'superadmin') && !user.disabled) {
+                        currentAdmin = user;
+                        showApp();
+                        loadUsers();
+                        loadLogs();
+                    }
+                }
+            } catch (e) {
+                console.error('Session restore error:', e);
+            }
+        }
+
+        // ============================================================
+        // 탭 전환
+        // ============================================================
+        function switchTab(tabName) {
+            document.querySelectorAll('.nav-item[data-tab]').forEach(el => {
+                el.classList.toggle('active', el.dataset.tab === tabName);
+            });
+            document.getElementById('tabUsers').style.display = tabName === 'users' ? '' : 'none';
+            document.getElementById('tabLogs').style.display = tabName === 'logs' ? '' : 'none';
+            
+            if (tabName === 'logs') loadLogs();
+        }
+
+        // ============================================================
+        // 사용자 목록 로드
+        // ============================================================
+        async function loadUsers() {
+            try {
+                const snapshot = await get(ref(db, 'users'));
+                allUsers = [];
+                
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    Object.entries(data).forEach(([key, user]) => {
+                        if (key === '_schema') return; // 스키마 제외
+                        allUsers.push({ ...user, _key: key });
+                    });
+                }
+
+                // 생성일 내림차순 정렬
+                allUsers.sort((a, b) => (b.created || 0) - (a.created || 0));
+                
+                updateStats();
+                renderUsers(allUsers);
+            } catch (err) {
+                console.error('Load users error:', err);
+                showToast('사용자 목록 로드 실패', 'error');
+            }
+        }
+
+        function updateStats() {
+            const total = allUsers.length;
+            const active = allUsers.filter(u => !u.disabled).length;
+            const disabled = allUsers.filter(u => u.disabled).length;
+            const pending = allUsers.filter(u => u.firstLogin && !u.disabled).length;
+            const admins = allUsers.filter(u => u.role === 'admin' || u.role === 'superadmin').length;
+
+            document.getElementById('statTotal').textContent = total;
+            document.getElementById('statActive').textContent = active;
+            document.getElementById('statDisabled').textContent = disabled;
+            document.getElementById('statPending').textContent = pending;
+            document.getElementById('statAdmin').textContent = admins;
+        }
+
+        function renderUsers(users) {
+            const tbody = document.getElementById('usersTableBody');
+            
+            if (users.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="10"><div class="empty-state"><div class="icon">👥</div><p>등록된 사용자가 없습니다</p></div></td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = users.map((u, i) => {
+                const roleBadge = `<span class="badge badge-${u.role}">${u.role}</span>`;
+                const statusBadge = u.disabled 
+                    ? '<span class="badge badge-disabled">비활성</span>'
+                    : (u.firstLogin ? '<span class="badge badge-pending">대기중</span>' : '<span class="badge badge-active">활성</span>');
+                
+                const isSelf = currentAdmin && u.email === currentAdmin.email;
+                
+                return `<tr style="${u.disabled ? 'opacity:0.55;' : ''}">
+                    <td style="color:var(--text-muted);font-size:12px;">${i + 1}</td>
+                    <td style="font-weight:500;">${u.email || '-'}${isSelf ? ' <span style="color:var(--accent-color);font-size:11px;">(나)</span>' : ''}</td>
+                    <td>${u.name || '-'}</td>
+                    <td>${u.position || u.department || '-'}</td>
+                    <td>${u.phone || '-'}</td>
+                    <td>${roleBadge}</td>
+                    <td>${statusBadge}</td>
+                    <td style="font-size:12px;color:var(--text-muted);">${formatDate(u.created)}</td>
+                    <td style="font-size:12px;color:var(--text-muted);">${formatDate(u.lastPasswordChange)}</td>
+                    <td>
+                        <div class="action-cell">
+                            <button class="btn-icon" onclick="openEditModal('${u._key}')" title="편집">✏️</button>
+                            <button class="btn-icon" onclick="toggleUserStatus('${u._key}')" title="${u.disabled ? '활성화' : '비활성화'}">${u.disabled ? '✅' : '🚫'}</button>
+                            <button class="btn-icon" onclick="resetPassword('${u._key}')" title="비밀번호 초기화">🔑</button>
+                            ${isSelf ? '' : `<button class="btn-icon" onclick="deleteUser('${u._key}')" title="삭제" style="color:var(--error-color);">🗑️</button>`}
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function filterUsers() {
+            const search = document.getElementById('userSearch').value.toLowerCase();
+            const role = document.getElementById('roleFilter').value;
+            
+            let filtered = allUsers;
+            if (search) {
+                filtered = filtered.filter(u => 
+                    (u.email || '').toLowerCase().includes(search) ||
+                    (u.name || '').toLowerCase().includes(search) ||
+                    (u.phone || '').includes(search)
+                );
+            }
+            if (role) {
+                filtered = filtered.filter(u => u.role === role);
+            }
+            renderUsers(filtered);
+        }
+
+        // ============================================================
+        // 계정 생성 모달
+        // ============================================================
+        function openCreateModal() {
+            editingUserId = null;
+            document.getElementById('modalTitle').textContent = '새 계정 생성';
+            document.getElementById('modalEmail').value = '';
+            document.getElementById('modalEmail').disabled = false;
+            document.getElementById('modalPassword').value = '';
+            document.getElementById('modalName').value = '';
+            document.getElementById('modalPosition').value = '';
+            document.getElementById('modalPhone').value = '';
+            document.getElementById('modalRole').value = 'user';
+            document.getElementById('modalCompany').value = '';
+            document.getElementById('modalDepartment').value = '';
+            document.getElementById('modalSubmitBtn').textContent = '생성';
+            document.getElementById('userModal').classList.add('show');
+        }
+
+        function openEditModal(key) {
+            const user = allUsers.find(u => u._key === key);
+            if (!user) return;
+            
+            editingUserId = key;
+            document.getElementById('modalTitle').textContent = '계정 편집';
+            document.getElementById('modalEmail').value = user.email || '';
+            document.getElementById('modalEmail').disabled = true; // 이메일 변경 불가
+            document.getElementById('modalPassword').value = user.password || '';
+            document.getElementById('modalName').value = user.name || '';
+            document.getElementById('modalPosition').value = user.position || '';
+            document.getElementById('modalPhone').value = user.phone || '';
+            document.getElementById('modalRole').value = user.role || 'user';
+            document.getElementById('modalCompany').value = user.company || '';
+            document.getElementById('modalDepartment').value = user.department || '';
+            document.getElementById('modalSubmitBtn').textContent = '저장';
+            document.getElementById('userModal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('userModal').classList.remove('show');
+            editingUserId = null;
+        }
+
+        async function submitUser() {
+            const email = document.getElementById('modalEmail').value.trim();
+            const password = document.getElementById('modalPassword').value.trim();
+            const name = document.getElementById('modalName').value.trim();
+            const position = document.getElementById('modalPosition').value.trim();
+            const phone = document.getElementById('modalPhone').value.trim();
+            const role = document.getElementById('modalRole').value;
+            const company = document.getElementById('modalCompany').value.trim();
+            const department = document.getElementById('modalDepartment').value.trim();
+
+            // 유효성 검사
+            if (!email) { showToast('이메일을 입력하세요', 'error'); return; }
+            if (!password || password.length !== 6 || !/^\d{6}$/.test(password)) {
+                showToast('비밀번호는 숫자 6자리여야 합니다', 'error'); return;
+            }
+            if (!name) { showToast('이름을 입력하세요', 'error'); return; }
+
+            const key = emailToKey(email);
+
+            try {
+                if (editingUserId) {
+                    // 편집 모드
+                    const updates = {
+                        name, position, phone, role, company, department
+                    };
+                    // 비밀번호 변경 여부 체크
+                    const existing = allUsers.find(u => u._key === editingUserId);
+                    if (existing && existing.password !== password) {
+                        updates.password = password;
+                        updates.lastPasswordChange = Date.now();
+                    }
+                    
+                    await update(ref(db, `users/${editingUserId}`), updates);
+                    writeLog('edit', email, `계정 정보 수정 (역할: ${role})`);
+                    showToast(`${name} (${email}) 계정이 수정되었습니다`, 'success');
+                } else {
+                    // 생성 모드 - 중복 확인
+                    const existing = await get(ref(db, `users/${key}`));
+                    if (existing.exists()) {
+                        showToast('이미 등록된 이메일입니다', 'error');
+                        return;
+                    }
+
+                    const newUser = {
+                        id: key,
+                        email,
+                        password,
+                        name,
+                        position,
+                        phone,
+                        role,
+                        company,
+                        department,
+                        created: Date.now(),
+                        firstLogin: true,
+                        _meta: { source: 'admin-console', createdAt: new Date().toISOString(), createdBy: currentAdmin.email }
+                    };
+
+                    await set(ref(db, `users/${key}`), newUser);
+                    writeLog('create', email, `새 계정 생성 (역할: ${role})`);
+                    showToast(`${name} (${email}) 계정이 생성되었습니다`, 'success');
+                }
+
+                closeModal();
+                loadUsers();
+            } catch (err) {
+                console.error('Submit error:', err);
+                showToast('저장 중 오류가 발생했습니다: ' + err.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // 계정 상태 변경 (활성/비활성)
+        // ============================================================
+        function toggleUserStatus(key) {
+            const user = allUsers.find(u => u._key === key);
+            if (!user) return;
+
+            const isDisabling = !user.disabled;
+            const action = isDisabling ? '비활성화' : '활성화';
+
+            openConfirm(
+                isDisabling ? '🚫' : '✅',
+                `계정 ${action}`,
+                `<strong>${user.name || user.email}</strong> 계정을 ${action}하시겠습니까?${isDisabling ? '<br><br>비활성화된 계정은 로그인할 수 없습니다.' : ''}`,
+                isDisabling ? 'btn-danger' : 'btn-success',
+                action,
+                async () => {
+                    try {
+                        await update(ref(db, `users/${key}`), { disabled: isDisabling });
+                        writeLog(isDisabling ? 'disable' : 'enable', user.email, `계정 ${action}`);
+                        showToast(`${user.name || user.email} 계정이 ${action}되었습니다`, 'success');
+                        loadUsers();
+                    } catch (err) {
+                        showToast(`${action} 실패: ${err.message}`, 'error');
+                    }
+                }
+            );
+        }
+
+        // ============================================================
+        // 비밀번호 초기화
+        // ============================================================
+        function resetPassword(key) {
+            const user = allUsers.find(u => u._key === key);
+            if (!user) return;
+
+            openConfirm(
+                '🔑',
+                '비밀번호 초기화',
+                `<strong>${user.name || user.email}</strong> 계정의 비밀번호를 <strong>123456</strong>으로 초기화하시겠습니까?`,
+                'btn-warning',
+                '초기화',
+                async () => {
+                    try {
+                        await update(ref(db, `users/${key}`), {
+                            password: '123456',
+                            firstLogin: true,
+                            lastPasswordChange: Date.now()
+                        });
+                        writeLog('reset_password', user.email, '비밀번호 초기화 (123456)');
+                        showToast(`${user.name || user.email} 비밀번호가 123456으로 초기화되었습니다`, 'success');
+                        loadUsers();
+                    } catch (err) {
+                        showToast('비밀번호 초기화 실패: ' + err.message, 'error');
+                    }
+                }
+            );
+        }
+
+        // ============================================================
+        // 계정 삭제
+        // ============================================================
+        function deleteUser(key) {
+            const user = allUsers.find(u => u._key === key);
+            if (!user) return;
+
+            // 자기 자신 삭제 방지
+            if (currentAdmin && user.email === currentAdmin.email) {
+                showToast('자기 자신의 계정은 삭제할 수 없습니다', 'error');
+                return;
+            }
+
+            openConfirm(
+                '🗑️',
+                '계정 삭제',
+                `<strong>${user.name || user.email}</strong> 계정을 영구 삭제하시겠습니까?<br><br><span style="color:var(--error-color);font-weight:600;">이 작업은 되돌릴 수 없습니다.</span>`,
+                'btn-danger',
+                '영구 삭제',
+                async () => {
+                    try {
+                        await remove(ref(db, `users/${key}`));
+                        writeLog('delete', user.email, `계정 영구 삭제 (역할: ${user.role})`);
+                        showToast(`${user.name || user.email} 계정이 삭제되었습니다`, 'success');
+                        loadUsers();
+                    } catch (err) {
+                        showToast('삭제 실패: ' + err.message, 'error');
+                    }
+                }
+            );
+        }
+
+        // ============================================================
+        // 확인 모달
+        // ============================================================
+        function openConfirm(icon, title, message, btnClass, btnText, callback) {
+            document.getElementById('confirmIcon').textContent = icon;
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').innerHTML = message;
+            const btn = document.getElementById('confirmBtn');
+            btn.className = `btn ${btnClass}`;
+            btn.textContent = btnText;
+            confirmCallback = callback;
+            document.getElementById('confirmModal').classList.add('show');
+        }
+
+        function closeConfirm() {
+            document.getElementById('confirmModal').classList.remove('show');
+            confirmCallback = null;
+        }
+
+        async function executeConfirm() {
+            if (confirmCallback) {
+                await confirmCallback();
+            }
+            closeConfirm();
+        }
+
+        // ============================================================
+        // 비밀번호 표시 토글
+        // ============================================================
+        function togglePasswordVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                btn.textContent = '🙈';
+            } else {
+                input.type = 'password';
+                btn.textContent = '👁️';
+            }
+        }
+
+        // ============================================================
+        // 활동 로그
+        // ============================================================
+        async function writeLog(action, target, detail) {
+            try {
+                const logRef = push(ref(db, 'adminLogs'));
+                await set(logRef, {
+                    timestamp: Date.now(),
+                    admin: currentAdmin?.email || 'unknown',
+                    action,
+                    target,
+                    detail
+                });
+            } catch (e) {
+                console.error('Log write error:', e);
+            }
+        }
+
+        async function loadLogs() {
+            try {
+                const snapshot = await get(ref(db, 'adminLogs'));
+                const tbody = document.getElementById('logsTableBody');
+                
+                if (!snapshot.exists()) {
+                    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="icon">📋</div><p>활동 로그가 없습니다</p></div></td></tr>';
+                    return;
+                }
+
+                const logs = [];
+                snapshot.forEach(child => {
+                    logs.push({ id: child.key, ...child.val() });
+                });
+                
+                // 최신순 정렬
+                logs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+                const actionLabels = {
+                    login: '🔐 로그인',
+                    create: '➕ 생성',
+                    edit: '✏️ 수정',
+                    delete: '🗑️ 삭제',
+                    disable: '🚫 비활성화',
+                    enable: '✅ 활성화',
+                    reset_password: '🔑 비밀번호 초기화'
+                };
+
+                tbody.innerHTML = logs.slice(0, 100).map(log => `
+                    <tr>
+                        <td style="font-size:12px;color:var(--text-muted);white-space:nowrap;">${formatDateTime(log.timestamp)}</td>
+                        <td style="font-weight:500;">${log.admin || '-'}</td>
+                        <td>${actionLabels[log.action] || log.action}</td>
+                        <td>${log.target || '-'}</td>
+                        <td style="font-size:13px;color:var(--text-secondary);">${log.detail || '-'}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Load logs error:', err);
+            }
+        }
+
+        // ============================================================
+        // 전역 함수 등록
+        // ============================================================
+        window.handleLogin = handleLogin;
+        window.handleLogout = handleLogout;
+        window.toggleTheme = toggleTheme;
+        window.switchTab = switchTab;
+        window.openCreateModal = openCreateModal;
+        window.openEditModal = openEditModal;
+        window.closeModal = closeModal;
+        window.submitUser = submitUser;
+        window.toggleUserStatus = toggleUserStatus;
+        window.resetPassword = resetPassword;
+        window.deleteUser = deleteUser;
+        window.filterUsers = filterUsers;
+        window.loadUsers = loadUsers;
+        window.loadLogs = loadLogs;
+        window.closeConfirm = closeConfirm;
+        window.executeConfirm = executeConfirm;
+        window.togglePasswordVisibility = togglePasswordVisibility;
+
+        // ============================================================
+        // 초기화
+        // ============================================================
+        restoreSession();
+    </script>
+</body>
+</html>
