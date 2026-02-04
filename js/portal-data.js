@@ -4,6 +4,13 @@
  * v2.1 수정사항 (2026-01-14):
  * - ★ 이미지 로드 경로 수정: b.exteriorImages || b.images?.exterior 모두 확인
  * - leasing-guide.html에서 저장한 이미지도 portal.html에서 표시 가능
+ * 
+ * v4.0 성능 최적화 (2026-02-04):
+ * - ★ processBuildings() 인덱싱 최적화: O(n×m) → O(n+m)
+ *   - 전체 컬렉션 반복 순회 제거, 사전 인덱스 기반 O(1) 룩업
+ *   - 빌딩 300개 + 렌트롤 1000개 기준: 65만회 반복 → ~3000회로 축소
+ * - ★ leasingGuides 인덱싱: 빌딩별 가이드 정보 사전 매핑
+ * - ★ 성능 타이머 추가 (console에서 병목 확인 가능)
  */
 
 import { state } from './portal-state.js';
@@ -13,6 +20,8 @@ import { showToast, detectRegion } from './portal-utils.js';
 // 데이터 로드
 export async function loadData() {
     try {
+        const t0 = performance.now();
+        
         // ★ 마이그레이션 후: vacancies 독립 컬렉션 추가 로드
         const [b, r, m, i, mg, docs, u, lg, vac] = await Promise.all([
             get(ref(db, 'buildings')),
@@ -25,6 +34,9 @@ export async function loadData() {
             get(ref(db, 'leasingGuides')),
             get(ref(db, 'vacancies'))  // ★ 독립 컬렉션
         ]);
+        
+        const t1 = performance.now();
+        console.log(`  📡 Firebase 9개 컬렉션 다운로드: ${Math.round(t1 - t0)}ms`);
         
         state.dataCache = {
             buildings: b.val() || {},
@@ -40,7 +52,11 @@ export async function loadData() {
         
         console.log(`vacancies 컬렉션: ${Object.keys(state.dataCache.vacancies).length}개 빌딩`);
         
+        const t2 = performance.now();
         processBuildings();
+        const t3 = performance.now();
+        console.log(`  ⚙️ processBuildings(): ${Math.round(t3 - t2)}ms (${state.allBuildings.length}개 빌딩)`);
+        
         processLeasingGuideBuildings();
         
         // 렌더링 함수들은 별도 모듈에서 import해서 호출
@@ -59,6 +75,10 @@ export async function loadData() {
                 }
             }, 500);
         }
+        
+        const t4 = performance.now();
+        console.log(`  🎨 렌더링 완료: ${Math.round(t4 - t3)}ms`);
+        console.log(`  📊 총 loadData(): ${Math.round(t4 - t0)}ms`);
         
         showToast(`${state.allBuildings.length}개 빌딩 로드 완료`, 'success');
     } catch (e) {
@@ -109,60 +129,164 @@ export function processLeasingGuideBuildings() {
     console.log(`임대안내문 포함 빌딩: ${state.leasingGuideBuildings.size}개 (leasingGuides 기반)`);
 }
 
-// 빌딩 데이터 처리
+// ============================================================
+// ★ v4.0: 인덱스 빌더 — 컬렉션을 키별로 사전 인덱싱
+// buildingId / buildingName 두 키로 모두 인덱싱하여 O(1) 룩업 지원
+// ============================================================
+
+/**
+ * 컬렉션 항목들을 buildingId와 buildingName 기준으로 인덱싱
+ * @param {Object} collection - Firebase에서 가져온 raw 컬렉션 { key: item, ... }
+ * @returns {{ byId: Map, byName: Map }}
+ *   byId: buildingId → [{ ...item, id: key }, ...]
+ *   byName: buildingName → [{ ...item, id: key }, ...]
+ */
+function buildIndex(collection) {
+    const byId = new Map();
+    const byName = new Map();
+    
+    Object.entries(collection).forEach(([key, item]) => {
+        if (key === '_schema') return;
+        const entry = { ...item, id: key };
+        
+        // buildingId 기준 인덱싱
+        if (item.buildingId) {
+            const bid = String(item.buildingId);
+            if (!byId.has(bid)) byId.set(bid, []);
+            byId.get(bid).push(entry);
+        }
+        
+        // buildingName 기준 인덱싱 (buildingId와 다른 경우만)
+        if (item.buildingName && item.buildingName !== item.buildingId) {
+            const bname = item.buildingName;
+            if (!byName.has(bname)) byName.set(bname, []);
+            byName.get(bname).push(entry);
+        }
+    });
+    
+    return { byId, byName };
+}
+
+/**
+ * 인덱스에서 특정 빌딩에 해당하는 항목들을 조회
+ * 중복 제거를 위해 id 기준 Set 사용
+ * @param {{ byId: Map, byName: Map }} index
+ * @param {string} id - 빌딩 ID
+ * @param {string} name - 빌딩 이름
+ * @param {string} [originalId] - 원본 ID (렌트롤 매칭용)
+ * @returns {Array}
+ */
+function lookupIndex(index, id, name, originalId) {
+    const seen = new Set();
+    const results = [];
+    
+    // 조회 키 목록: id, name, originalId (존재하는 경우)
+    const keys = [id, name];
+    if (originalId && String(originalId) !== id) {
+        keys.push(String(originalId));
+    }
+    
+    for (const key of keys) {
+        if (!key) continue;
+        
+        // byId에서 검색
+        const byIdItems = index.byId.get(key);
+        if (byIdItems) {
+            for (const item of byIdItems) {
+                if (!seen.has(item.id)) {
+                    seen.add(item.id);
+                    results.push(item);
+                }
+            }
+        }
+        
+        // byName에서 검색
+        const byNameItems = index.byName.get(key);
+        if (byNameItems) {
+            for (const item of byNameItems) {
+                if (!seen.has(item.id)) {
+                    seen.add(item.id);
+                    results.push(item);
+                }
+            }
+        }
+    }
+    
+    return results;
+}
+
+/**
+ * 인덱스에서 첫 번째 매칭 항목 조회 (managements용 - find 패턴)
+ */
+function lookupFirst(index, id, name) {
+    const keys = [id, name];
+    for (const key of keys) {
+        if (!key) continue;
+        const byIdItems = index.byId.get(key);
+        if (byIdItems && byIdItems.length > 0) return byIdItems[0];
+        const byNameItems = index.byName.get(key);
+        if (byNameItems && byNameItems.length > 0) return byNameItems[0];
+    }
+    return undefined;
+}
+
+// ============================================================
+// ★ v4.0: leasingGuides 빌딩별 인덱스 빌드
+// ============================================================
+function buildLeasingGuideIndex(leasingGuides) {
+    // buildingId → { guideId, guideName, item, vacancies }
+    const index = new Map();
+    
+    Object.entries(leasingGuides || {}).forEach(([guideId, guide]) => {
+        const items = guide.items || guide.tocItems || [];
+        items.forEach(item => {
+            if (item.buildingId && item.type === 'building') {
+                // 마지막 매칭이 우선 (기존 로직과 동일 — forEach 마지막 값이 남음)
+                const info = {
+                    guideId,
+                    guideName: guide.name || guide.title,
+                    ...item
+                };
+                let vacancies = [];
+                if (item.selectedExternalVacancies && Array.isArray(item.selectedExternalVacancies)) {
+                    vacancies = item.selectedExternalVacancies;
+                }
+                index.set(item.buildingId, { info, vacancies });
+            }
+        });
+    });
+    
+    return index;
+}
+
+// ============================================================
+// 빌딩 데이터 처리 (★ v4.0 인덱싱 최적화 버전)
+// ============================================================
 export function processBuildings() {
     const { dataCache, currentUser } = state;
+    
+    // ★ v4.0: 사전 인덱스 구축 (1회, O(m))
+    const rentrollIdx = buildIndex(dataCache.rentrolls);
+    const memoIdx = buildIndex(dataCache.memos);
+    const incentiveIdx = buildIndex(dataCache.incentives);
+    const mgmtIdx = buildIndex(dataCache.managements);
+    const docIdx = buildIndex(dataCache.documents);
+    const lgIdx = buildLeasingGuideIndex(dataCache.leasingGuides);
     
     state.allBuildings = Object.entries(dataCache.buildings)
         .filter(([k]) => k !== '_schema')
         .map(([id, b]) => {
-            // 렌트롤 매칭
-            const rentrolls = Object.entries(dataCache.rentrolls)
-                .map(([key, r]) => ({ ...r, id: key }))
-                .filter(r => r.buildingId === id || r.buildingId === b.name || 
-                            r.buildingName === b.name || String(r.buildingId) === String(b.originalId));
+            // ★ v4.0: 인덱스 기반 O(1) 룩업 — 기존 O(m) 전체 순회 제거
+            const rentrolls = lookupIndex(rentrollIdx, id, b.name, b.originalId);
+            const memos = lookupIndex(memoIdx, id, b.name);
+            const incentives = lookupIndex(incentiveIdx, id, b.name);
+            const mgmt = lookupFirst(mgmtIdx, id, b.name);
+            const docs = lookupIndex(docIdx, id, b.name);
             
-            // 메모 매칭
-            const memos = Object.entries(dataCache.memos)
-                .map(([key, m]) => ({ ...m, id: key }))
-                .filter(m => m.buildingId === id || m.buildingId === b.name || m.buildingName === b.name);
-            
-            // 인센티브 매칭
-            const incentives = Object.entries(dataCache.incentives)
-                .map(([key, i]) => ({ ...i, id: key }))
-                .filter(i => i.buildingId === id || i.buildingId === b.name || i.buildingName === b.name);
-            
-            // 관리사무소
-            const mgmt = Object.values(dataCache.managements).find(m =>
-                m.buildingId === id || m.buildingId === b.name || m.buildingName === b.name
-            );
-            
-            // 임대안내문 - documents 컬렉션
-            const docs = Object.values(dataCache.documents).filter(d =>
-                d.buildingId === id || d.buildingId === b.name || d.buildingName === b.name
-            );
-            
-            // ★ v3.7: leasingGuides 컬렉션에서 임대안내문 공실 데이터 매핑
-            let leasingGuideVacancies = [];
-            let leasingGuideInfo = null;
-            Object.entries(dataCache.leasingGuides || {}).forEach(([guideId, guide]) => {
-                // items 배열 또는 tocItems 배열에서 검색
-                const items = guide.items || guide.tocItems || [];
-                items.forEach(item => {
-                    if (item.buildingId === id && item.type === 'building') {
-                        // 해당 빌딩의 임대안내문 아이템 발견
-                        leasingGuideInfo = {
-                            guideId,
-                            guideName: guide.name || guide.title,
-                            ...item
-                        };
-                        // selectedExternalVacancies 추출
-                        if (item.selectedExternalVacancies && Array.isArray(item.selectedExternalVacancies)) {
-                            leasingGuideVacancies = item.selectedExternalVacancies;
-                        }
-                    }
-                });
-            });
+            // ★ v4.0: leasingGuides 인덱스 기반 룩업
+            const lgData = lgIdx.get(id);
+            const leasingGuideVacancies = lgData ? lgData.vacancies : [];
+            const leasingGuideInfo = lgData ? lgData.info : null;
 
             // ★ 공실 목록 - 마이그레이션 후 변경
             // 우선순위 1: 독립 vacancies 컬렉션 (vacancies/{buildingId}/{vacancyId})

@@ -1,6 +1,11 @@
 /**
  * CRE Portal - 메인 초기화
  * 모든 모듈을 로드하고 전역 변수를 설정
+ * 
+ * v4.0 성능 최적화 (2026-02-04):
+ * - ★ initApp() 순서 변경: 지도 먼저 → 데이터 비동기 로드
+ * - ★ 로딩 인디케이터 추가 (데이터 로드 중 사용자 피드백)
+ * - ★ 성능 타이머 추가 (console에서 병목 확인 가능)
  */
 
 // 모듈 import
@@ -8,7 +13,7 @@ import { state, API_BASE_URL } from './portal-state.js';
 import { db, ref, get, set, push, update, remove } from './portal-firebase.js';
 import { showToast, formatNumber, formatPyPrice, debounce, detectRegion, autoSetRegion, formatFloors, formatStation, isRecentlyUpdated } from './portal-utils.js';
 import { handleLogin, handleLogout, showApp, checkAuth, hasPermission } from './portal-auth.js';
-import { loadData, processBuildings } from './portal-data.js?v=3.7';
+import { loadData, processBuildings } from './portal-data.js?v=4.0';
 import { initKakaoMap, updateMapMarkers, updateViewportBuildings, zoomIn, zoomOut, resetMap, panToBuilding, openKakaoMap } from './portal-map.js';
 import { applyFilter, clearFilter, quickFilter, toggleVacancyFilter, toggleLeasingGuideFilter, resetAllFilters, applyFilters, setupSearchListener } from './portal-filter.js';
 import { renderBuildingList, renderTableView, selectBuildingFromList, loadStarredBuildings, toggleBuildingExpand, setViewMode, setListTab, toggleTheme, updateSelectedCount, renderVacancyBadge, renderRentrollBadge, renderMemoBadge, renderIncentiveBadge, renderDocumentSelect, renderVacancyTable, toggleStar, setupUIListeners } from './portal-ui.js';
@@ -144,9 +149,43 @@ Object.defineProperties(window, {
     }
 });
 
+// ★ v4.0: 로딩 인디케이터 표시/숨기기
+function showLoadingOverlay() {
+    let overlay = document.getElementById('dataLoadingOverlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'dataLoadingOverlay';
+        overlay.innerHTML = `
+            <div style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:9999;
+                        background:rgba(30,41,59,0.9); color:#fff; padding:12px 28px; border-radius:30px;
+                        font-size:14px; font-weight:500; display:flex; align-items:center; gap:10px;
+                        box-shadow:0 4px 20px rgba(0,0,0,0.3); backdrop-filter:blur(8px);
+                        font-family:'Noto Sans KR',sans-serif;">
+                <div style="width:18px;height:18px;border:2px solid rgba(255,255,255,0.3);
+                            border-top-color:#fff;border-radius:50%;
+                            animation:spin 0.7s linear infinite;"></div>
+                <span id="loadingText">데이터를 불러오는 중...</span>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    }
+    overlay.style.display = '';
+}
+
+function hideLoadingOverlay() {
+    const overlay = document.getElementById('dataLoadingOverlay');
+    if (overlay) overlay.style.display = 'none';
+}
+
+function updateLoadingText(text) {
+    const el = document.getElementById('loadingText');
+    if (el) el.textContent = text;
+}
+
 // 앱 초기화
 export async function initApp() {
-    console.log('CRE Portal 초기화 시작...');
+    const t0 = performance.now();
+    console.log('🚀 CRE Portal 초기화 시작...');
     
     // 전역 함수 등록
     registerDetailGlobals();
@@ -170,31 +209,37 @@ export async function initApp() {
         return;
     }
     
-    // 로그인 성공
+    // 로그인 성공 → 즉시 앱 화면 표시
     showApp();
     
-    // 즐겨찾기 로드
+    console.log(`  ✅ 앱 표시 완료 (+${Math.round(performance.now() - t0)}ms)`);
+    
+    // ★ v4.0: 즐겨찾기, 검색, UI 이벤트 — 비차단 즉시 실행
     loadStarredBuildings();
-    
-    // 검색 이벤트 설정
     setupSearchListener();
-    
-    // UI 이벤트 설정
     setupUIListeners();
     
-    // 데이터 로드
-    await loadData();
-    
-    // 카카오맵 초기화
+    // ★ v4.0: 카카오맵 먼저 초기화 (빈 지도라도 즉시 표시)
     initKakaoMap();
+    console.log(`  ✅ 카카오맵 초기화 완료 (+${Math.round(performance.now() - t0)}ms)`);
     
-    // 🆕 다각형 검색 초기화
+    // ★ v4.0: Drawing / CompList도 미리 초기화 (지도 위 컨트롤)
     initDrawing();
-    
-    // 🆕 Comp List 초기화
     initCompList();
     
-    console.log('CRE Portal 초기화 완료');
+    // ★ v4.0: 데이터 로드 (로딩 인디케이터와 함께 비동기 실행)
+    showLoadingOverlay();
+    
+    try {
+        await loadData();
+        console.log(`  ✅ 데이터 로드 + 처리 완료 (+${Math.round(performance.now() - t0)}ms)`);
+    } catch (err) {
+        console.error('데이터 로드 실패:', err);
+    } finally {
+        hideLoadingOverlay();
+    }
+    
+    console.log(`🏁 CRE Portal 초기화 완료 — 총 ${Math.round(performance.now() - t0)}ms`);
 }
 
 // DOMContentLoaded 이벤트 리스너
