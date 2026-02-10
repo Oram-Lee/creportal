@@ -414,7 +414,8 @@ export function renderBuildingCheckboxes() {
 
 function saveCurrentListToStorage() {
     try {
-        localStorage.setItem('cre_complist_current', JSON.stringify(compListState.currentList));
+        const safeReplacer = (key, value) => key === '_raw' ? undefined : value;
+        localStorage.setItem('cre_complist_current', JSON.stringify(compListState.currentList, safeReplacer));
     } catch (e) { console.warn('저장 실패:', e); }
 }
 
@@ -574,7 +575,7 @@ export function openCompListWizard() {
     compListState.draft = {
         title: '',
         type: 'general',
-        buildings: JSON.parse(JSON.stringify(compListState.currentList.buildings))
+        buildings: JSON.parse(JSON.stringify(compListState.currentList.buildings, (key, value) => key === '_raw' ? undefined : value))
     };
     compListState.searchQuery = '';
     compListState.searchResults = [];
