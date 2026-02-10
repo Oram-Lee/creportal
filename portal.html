@@ -46,6 +46,7 @@
                 <a href="leasing-guide.html" class="nav-item"><span class="nav-icon">📄</span> 임대안내문</a>
                 <div class="nav-item"><span class="nav-icon">📊</span> 시계열</div>
                 <a href="admin-leasing.html" class="nav-item"><span class="nav-icon">⚙️</span> OCR관리</a>
+                <div class="nav-item" onclick="openDuplicateManager()" title="동일주소 빌딩 통합 관리"><span class="nav-icon">🔗</span> 중복관리</div>
             </nav>
             <div class="header-right">
                 <button class="theme-btn" onclick="toggleTheme()" title="다크모드">🌙</button>
@@ -622,6 +623,15 @@
                             <option value="C">C</option>
                         </select>
                     </div>
+                </div>
+            </div>
+            
+            <!-- ★ #13: 별칭(aliases) 관리 -->
+            <div class="form-row">
+                <div>
+                    <small style="color: var(--text-muted);">🏷️ 빌딩 별칭 (콤마로 구분, OCR 매칭에 활용)</small>
+                    <input type="text" id="editAliases" placeholder="삼성타워, Samsung Tower, 삼성B/D">
+                    <small style="color: #94a3b8; font-size: 10px;">동일 빌딩의 다른 이름을 입력하면 OCR 매칭 정확도가 향상됩니다</small>
                 </div>
             </div>
             
@@ -1955,6 +1965,9 @@
                     name: document.getElementById('editBuildingName')?.value || '',
                     grade: document.getElementById('editGrade')?.value || '',
                     
+                    // ★ #13: 별칭
+                    aliases: (document.getElementById('editAliases')?.value || '').split(',').map(a => a.trim()).filter(Boolean),
+                    
                     // 기준층 정보
                     typicalFloorPy: document.getElementById('editTypicalFloorPy')?.value || '',
                     typicalFloorLeasePy: document.getElementById('editTypicalFloorLeasePy')?.value || '',
@@ -2030,6 +2043,9 @@
         // 기본 정보
         setVal('editBuildingName', building.name);
         setVal('editGrade', building.grade);
+        
+        // ★ #13: 별칭
+        setVal('editAliases', (building.aliases || []).join(', '));
         
         // 기준층 정보
         setVal('editTypicalFloorPy', building.area?.typicalFloorPy || building.typicalFloorPy);
@@ -2129,6 +2145,9 @@
             // 기본 정보
             if (formData.name) updates.name = formData.name;  // 빌딩명은 빈값 방지
             updates.grade = formData.grade || '';
+            
+            // ★ #13: 별칭
+            updates.aliases = formData.aliases || [];
             
             // 기준층 정보 - area 객체에 저장
             updates['area/typicalFloorPy'] = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
@@ -3514,5 +3533,22 @@
     </button>
     
     <!-- Comp List는 별도 페이지(complist.html)로 이동 -->
+    
+    <!-- ★ #13: 중복 빌딩 관리 오버레이 -->
+    <div id="duplicateManagerOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:9998; justify-content:center; align-items:center;">
+        <div style="background:white; border-radius:14px; width:95%; max-width:900px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="padding:18px 24px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <div>
+                    <h3 style="font-size:18px; font-weight:700; color:#1e293b; margin:0;">🔗 중복 빌딩 관리</h3>
+                    <div style="font-size:12px; color:#64748b; margin-top:4px;">동일 주소/유사 빌딩명을 탐지하여 통합합니다</div>
+                </div>
+                <button onclick="closeDuplicateManager()" style="width:36px; height:36px; border:none; background:#f1f5f9; border-radius:50%; cursor:pointer; font-size:18px; color:#64748b; display:flex; align-items:center; justify-content:center;">×</button>
+            </div>
+            <div id="dupManagerContent" style="padding:20px 24px; overflow-y:auto; flex:1;"></div>
+        </div>
+    </div>
+    
+    <!-- ★ #13: 중복 빌딩 관리 스크립트 -->
+    <script src="js/portal-merge.js?v=1.0"></script>
 </body>
 </html>

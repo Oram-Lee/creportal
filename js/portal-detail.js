@@ -464,6 +464,16 @@ export function renderInfoSection() {
             ` : ''}
         </div>
         
+        <!-- ★ #13: 빌딩 별칭 표시 -->
+        ${typeof renderAliasesSection === 'function' ? renderAliasesSection(b) : ((b.aliases && b.aliases.length > 0) ? `
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; padding: 8px 12px; background: #faf5ff; border: 1px solid #e9d5ff; border-radius: 8px;">
+            <span style="font-size: 11px; color: #7c3aed; font-weight: 600; white-space: nowrap;">🏷️ 별칭:</span>
+            <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                ${b.aliases.map(al => '<span style="padding: 2px 8px; background: #ede9fe; color: #6d28d9; border-radius: 4px; font-size: 11px;">' + al + '</span>').join('')}
+            </div>
+        </div>
+        ` : '')}
+        
         <!-- 빌딩 설명 (있을 경우만 표시) -->
         ${b.description ? `
         <div style="margin-bottom: 16px; padding: 14px 16px; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 10px; border: 1px solid #e2e8f0;">

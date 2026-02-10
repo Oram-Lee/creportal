@@ -2173,6 +2173,10 @@ export function openBuildingEditModal() {
     if (nameEl) nameEl.value = b.name || '';
     if (gradeEl) gradeEl.value = b.grade || '';
     
+    // ★ #13: 별칭
+    const aliasesEl = document.getElementById('editAliases');
+    if (aliasesEl) aliasesEl.value = (b.aliases || []).join(', ');
+    
     // 기준층 정보
     const typicalFloorPyEl = document.getElementById('editTypicalFloorPy');
     const typicalFloorLeasePyEl = document.getElementById('editTypicalFloorLeasePy');

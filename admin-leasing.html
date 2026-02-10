@@ -1666,7 +1666,18 @@
                 const bestAddrSim = Math.max(addrSim, addrJibunSim);
                 
                 // 이름 유사도
-                const nameSim = stringSimilarity(inputNameNorm, bldgName);
+                let nameSim = stringSimilarity(inputNameNorm, bldgName);
+                
+                // ★ #13: aliases 비교 — 별칭 중 가장 높은 유사도 적용
+                const aliases = bldg.aliases || [];
+                if (aliases.length > 0) {
+                    const aliasSims = aliases.map(al => {
+                        const aliasNorm = (al || '').replace(/빌딩|타워|센터|오피스/g, '').trim().toLowerCase();
+                        return stringSimilarity(inputNameNorm, aliasNorm);
+                    });
+                    const bestAliasSim = Math.max(...aliasSims);
+                    nameSim = Math.max(nameSim, bestAliasSim);
+                }
                 
                 // 종합 점수 (주소 70% + 이름 30%)
                 const totalScore = bestAddrSim * 0.7 + nameSim * 0.3;
@@ -3796,6 +3807,7 @@
                             addressJibun: buildingData.address || '',
                             addressRoad: buildingData.addressRoad || '',
                             region: detectRegion(buildingData.address),
+                            aliases: [],  // ★ #13: 별칭 배열 초기화
                             createdAt: new Date().toISOString(),
                             createdBy: 'admin',
                             source: 'OCR'
@@ -3889,6 +3901,18 @@
                             if (Object.keys(autoUpdates).length > 0) {
                                 await db.ref(`buildings/${buildingId}`).update(autoUpdates);
                                 console.log(`빌딩 ${buildingId} 자동 업데이트:`, Object.keys(autoUpdates));
+                            }
+                            
+                            // ★ #13: OCR 빌딩명이 기존 빌딩명과 다르면 aliases에 자동 누적
+                            const ocrName = (buildingData.buildingName || '').trim();
+                            const existName = (existingData.name || '').trim();
+                            if (ocrName && existName && ocrName !== existName) {
+                                const currentAliases = existingData.aliases || [];
+                                if (!currentAliases.includes(ocrName)) {
+                                    currentAliases.push(ocrName);
+                                    await db.ref(`buildings/${buildingId}/aliases`).set(currentAliases);
+                                    console.log(`🏷️ 별칭 자동 추가: ${existName} ← "${ocrName}"`);
+                                }
                             }
                             
                             // 충돌 항목 수집 (나중에 한꺼번에 표시)
