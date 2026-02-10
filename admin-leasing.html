@@ -3635,6 +3635,8 @@
                         
                         // 기준층/전용률 정보
                         if (buildingData.typicalFloorArea) newBuildingData.typicalFloorArea = buildingData.typicalFloorArea;
+                        if (buildingData.typicalFloorExclusive) newBuildingData.typicalFloorExclusive = buildingData.typicalFloorExclusive;
+                        if (buildingData.typicalFloorRent) newBuildingData.typicalFloorRent = buildingData.typicalFloorRent;
                         if (buildingData.exclusiveRate) newBuildingData.exclusiveRate = buildingData.exclusiveRate;
                         
                         // 준공연도
@@ -3642,6 +3644,12 @@
                         
                         // 교통편
                         if (buildingData.nearbyStation) newBuildingData.nearbyStation = buildingData.nearbyStation;
+                        
+                        // ★ 주차정보
+                        if (buildingData.parkingTotal) newBuildingData.parkingTotal = buildingData.parkingTotal;
+                        if (buildingData.parkingFree) newBuildingData.parkingFree = buildingData.parkingFree;
+                        if (buildingData.parkingPaid) newBuildingData.parkingPaid = buildingData.parkingPaid;
+                        if (buildingData.parkingNote) newBuildingData.parkingNote = buildingData.parkingNote;
                         
                         // 담당자 정보
                         if (buildingData.contactInfo) newBuildingData.contactInfo = buildingData.contactInfo;
@@ -3651,6 +3659,68 @@
                         console.log('신규 빌딩 생성:', buildingId, buildingData.buildingName, newBuildingData);
                     } else if (r.result.bestMatch) {
                         buildingId = r.result.bestMatch.buildingId;
+                        
+                        // ★ Sprint3-NEW2: 기존 빌딩 정보와 OCR 추출 정보 비교
+                        const compareFields = [
+                            { key: 'nearbyStation', label: '인근역', ocrVal: buildingData.nearbyStation },
+                            { key: 'exclusiveRate', label: '전용률', ocrVal: buildingData.exclusiveRate },
+                            { key: 'typicalFloorArea', label: '기준층 면적', ocrVal: buildingData.typicalFloorArea },
+                            { key: 'typicalFloorExclusive', label: '기준층 전용면적', ocrVal: buildingData.typicalFloorExclusive },
+                            { key: 'typicalFloorRent', label: '기준층 임대면적', ocrVal: buildingData.typicalFloorRent },
+                            { key: 'parkingTotal', label: '총 주차대수', ocrVal: buildingData.parkingTotal },
+                            { key: 'parkingFree', label: '무료주차', ocrVal: buildingData.parkingFree },
+                            { key: 'parkingPaid', label: '유료주차', ocrVal: buildingData.parkingPaid },
+                            { key: 'parkingNote', label: '주차 비고', ocrVal: buildingData.parkingNote },
+                            { key: 'completionYear', label: '준공연도', ocrVal: buildingData.completionYear },
+                            { key: 'totalFloors', label: '지상 층수', ocrVal: buildingData.totalFloors },
+                            { key: 'basementFloors', label: '지하 층수', ocrVal: buildingData.basementFloors },
+                            { key: 'grossFloorArea', label: '연면적', ocrVal: buildingData.grossFloorArea },
+                        ];
+                        
+                        try {
+                            const existingSnap = await db.ref(`buildings/${buildingId}`).once('value');
+                            const existingData = existingSnap.val() || {};
+                            
+                            const conflicts = [];
+                            const autoUpdates = {};
+                            
+                            for (const f of compareFields) {
+                                const ocrVal = f.ocrVal ? String(f.ocrVal).trim() : '';
+                                const existVal = existingData[f.key] ? String(existingData[f.key]).trim() : '';
+                                
+                                if (!ocrVal) continue; // OCR에서 추출 못한 필드는 스킵
+                                
+                                if (!existVal) {
+                                    // 기존 값 없음 → 자동 업데이트
+                                    autoUpdates[f.key] = ocrVal;
+                                } else if (ocrVal !== existVal) {
+                                    // 값이 다름 → 사용자 확인 필요
+                                    conflicts.push({
+                                        key: f.key,
+                                        label: f.label,
+                                        existing: existVal,
+                                        ocr: ocrVal,
+                                        buildingId: buildingId,
+                                        buildingName: existingData.name || buildingData.buildingName
+                                    });
+                                }
+                                // 같으면 → 스킵 (유지)
+                            }
+                            
+                            // 자동 업데이트 (기존 값이 없던 필드)
+                            if (Object.keys(autoUpdates).length > 0) {
+                                await db.ref(`buildings/${buildingId}`).update(autoUpdates);
+                                console.log(`빌딩 ${buildingId} 자동 업데이트:`, Object.keys(autoUpdates));
+                            }
+                            
+                            // 충돌 항목 수집 (나중에 한꺼번에 표시)
+                            if (conflicts.length > 0) {
+                                if (!window._pendingBuildingConflicts) window._pendingBuildingConflicts = [];
+                                window._pendingBuildingConflicts.push(...conflicts);
+                            }
+                        } catch (err) {
+                            console.warn('빌딩 정보 비교 오류:', err);
+                        }
                     } else {
                         skipCount++;
                         continue;
@@ -3719,6 +3789,13 @@
             }
             
             showToast(`저장 완료! 성공 ${savedCount}건, 건너뜀 ${skipCount}건, 오류 ${errorCount}건`, 'success');
+            
+            // ★ Sprint3-NEW2: 빌딩 정보 충돌이 있으면 먼저 해결
+            if (window._pendingBuildingConflicts && window._pendingBuildingConflicts.length > 0) {
+                showBuildingConflictModal(window._pendingBuildingConflicts);
+                window._pendingBuildingConflicts = null;
+                return; // 충돌 해결 후 이동 안내는 충돌 모달에서 처리
+            }
             
             // 완료 후 처리
             if (confirm(`저장이 완료되었습니다.\n\n성공: ${savedCount}건\n건너뜀: ${skipCount}건\n오류: ${errorCount}건\n\n사용자 페이지로 이동하시겠습니까?`)) {
@@ -4468,6 +4545,129 @@
             const progressEl = document.getElementById('thumbnailProgress');
             if (progressEl) {
                 progressEl.textContent = `${current} / ${total} 페이지`;
+            }
+        }
+
+        // ★ Sprint3-NEW2: 빌딩 정보 충돌 해결 모달
+        function showBuildingConflictModal(conflicts) {
+            // 빌딩별로 그룹핑
+            const byBuilding = {};
+            conflicts.forEach(c => {
+                if (!byBuilding[c.buildingId]) {
+                    byBuilding[c.buildingId] = { name: c.buildingName, items: [] };
+                }
+                byBuilding[c.buildingId].items.push(c);
+            });
+            
+            let html = `
+                <div style="position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:9999; display:flex; align-items:center; justify-content:center;" id="conflictModalOverlay">
+                    <div style="background:white; border-radius:12px; padding:24px; width:95%; max-width:800px; max-height:85vh; overflow-y:auto; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                            <h3 style="font-size:18px; font-weight:600;">⚠️ OCR 추출 정보 vs 기존 빌딩 정보 비교</h3>
+                            <span style="font-size:13px; color:#666;">${conflicts.length}건 차이 발견</span>
+                        </div>
+                        <div style="margin-bottom:16px; padding:12px; background:#fef3c7; border-radius:8px; font-size:12px; color:#92400e;">
+                            OCR로 추출한 정보가 기존 빌딩 정보와 다릅니다. 각 항목별로 사용할 값을 선택해주세요.
+                        </div>
+            `;
+            
+            Object.entries(byBuilding).forEach(([bldgId, bldg]) => {
+                html += `
+                    <div style="margin-bottom:16px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+                        <div style="padding:10px 14px; background:#f1f5f9; font-weight:600; font-size:14px;">🏢 ${bldg.name}</div>
+                        <div style="padding:12px;">
+                `;
+                
+                bldg.items.forEach((item, idx) => {
+                    const uniqueId = `conflict_${bldgId}_${idx}`;
+                    html += `
+                        <div style="margin-bottom:10px; padding:10px; background:#fafafa; border-radius:6px;">
+                            <div style="font-size:12px; font-weight:600; color:#334155; margin-bottom:8px;">${item.label}</div>
+                            <div style="display:flex; gap:8px; align-items:stretch;">
+                                <label style="flex:1; cursor:pointer;">
+                                    <input type="radio" name="${uniqueId}" value="existing" checked 
+                                           data-building-id="${bldgId}" data-field="${item.key}">
+                                    <div style="margin-top:4px; padding:8px; background:white; border:2px solid #3b82f6; border-radius:6px; font-size:12px;">
+                                        <div style="color:#3b82f6; font-weight:600; font-size:10px; margin-bottom:2px;">기존값 (유지)</div>
+                                        <div>${item.existing || '<em style="color:#aaa">없음</em>'}</div>
+                                    </div>
+                                </label>
+                                <label style="flex:1; cursor:pointer;">
+                                    <input type="radio" name="${uniqueId}" value="ocr"
+                                           data-building-id="${bldgId}" data-field="${item.key}" data-ocr-val="${item.ocr}">
+                                    <div style="margin-top:4px; padding:8px; background:white; border:2px solid #f59e0b; border-radius:6px; font-size:12px;">
+                                        <div style="color:#f59e0b; font-weight:600; font-size:10px; margin-bottom:2px;">OCR 추출값 (변경)</div>
+                                        <div>${item.ocr}</div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `</div></div>`;
+            });
+            
+            html += `
+                        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; padding-top:16px; border-top:1px solid #e2e8f0;">
+                            <button onclick="applyConflictResolution()" 
+                                    style="padding:10px 24px; background:linear-gradient(135deg, #3b82f6, #2563eb); color:white; border:none; border-radius:8px; font-weight:600; cursor:pointer;">
+                                ✅ 선택 적용
+                            </button>
+                            <button onclick="skipConflictResolution()" 
+                                    style="padding:10px 24px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; border-radius:8px; cursor:pointer;">
+                                건너뛰기 (기존값 유지)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            document.body.appendChild(tempDiv);
+        }
+        
+        async function applyConflictResolution() {
+            const updates = {};
+            
+            document.querySelectorAll('#conflictModalOverlay input[type="radio"]:checked').forEach(radio => {
+                if (radio.value === 'ocr') {
+                    const bldgId = radio.dataset.buildingId;
+                    const field = radio.dataset.field;
+                    const val = radio.dataset.ocrVal;
+                    
+                    if (!updates[bldgId]) updates[bldgId] = {};
+                    updates[bldgId][field] = val;
+                }
+            });
+            
+            try {
+                for (const [bldgId, fields] of Object.entries(updates)) {
+                    await db.ref(`buildings/${bldgId}`).update(fields);
+                    console.log(`빌딩 ${bldgId} 업데이트:`, fields);
+                }
+                
+                const count = Object.values(updates).reduce((sum, f) => sum + Object.keys(f).length, 0);
+                showToast(`${count}개 항목 업데이트 완료`, 'success');
+            } catch (err) {
+                console.error('충돌 해결 저장 오류:', err);
+                showToast('저장 중 오류 발생', 'error');
+            }
+            
+            document.getElementById('conflictModalOverlay')?.parentElement?.remove();
+            
+            if (confirm('저장이 완료되었습니다.\n사용자 페이지로 이동하시겠습니까?')) {
+                window.open('portal.html', '_blank');
+            }
+        }
+        
+        function skipConflictResolution() {
+            document.getElementById('conflictModalOverlay')?.parentElement?.remove();
+            showToast('기존값을 유지합니다', 'info');
+            
+            if (confirm('저장이 완료되었습니다.\n사용자 페이지로 이동하시겠습니까?')) {
+                window.open('portal.html', '_blank');
             }
         }
 

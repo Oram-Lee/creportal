@@ -67,6 +67,33 @@ if (typeof state.vacancySortOrder === 'undefined') {
  * @returns {string} - 포맷된 문자열
  */
 function formatArea(value, forceDecimal = false) {
+
+// ★ Sprint3-NEW2: 주차정보 포맷 함수
+function formatParkingDisplay(b) {
+    // 건축물대장 데이터 우선
+    if (b.parking?.total) {
+        let display = b.parking.total + '대';
+        if (b.parking.ratio) display += ` (${b.parking.ratio})`;
+        return display;
+    }
+    // OCR 추출 데이터
+    if (b.parkingTotal) {
+        let parts = [b.parkingTotal + '대'];
+        if (b.parkingFree) parts.push(`무료 ${b.parkingFree}`);
+        if (b.parkingPaid) parts.push(`유료 ${b.parkingPaid}`);
+        if (b.parkingNote) parts.push(b.parkingNote);
+        return parts.length > 1 ? `${b.parkingTotal}대 (${parts.slice(1).join(', ')})` : parts[0];
+    }
+    if (b.parking?.display) return b.parking.display;
+    // 무료/유료만 있는 경우
+    if (b.parkingFree || b.parkingPaid) {
+        const parts = [];
+        if (b.parkingFree) parts.push(`무료 ${b.parkingFree}`);
+        if (b.parkingPaid) parts.push(`유료 ${b.parkingPaid}`);
+        return parts.join(', ');
+    }
+    return '-';
+}
     if (!value && value !== 0) return '-';
     const num = parseFloat(value);
     if (isNaN(num)) return '-';
@@ -470,8 +497,8 @@ export function renderInfoSection() {
         
         <!-- 기준층/전용률 정보 -->
         <div class="info-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 8px;">
-            <div class="info-card"><div class="label">기준층</div><div class="value">${formatNumber(b.area?.typicalFloorPy || b.typicalFloorPy)}<span class="unit">평</span></div></div>
-            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${formatNumber(b.area?.typicalFloorLeasePy || b.typicalFloorLeasePy) || '-'}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${formatNumber(b.area?.typicalFloorPy || b.typicalFloorPy || b.typicalFloorExclusive || b.typicalFloorArea)}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${formatNumber(b.area?.typicalFloorLeasePy || b.typicalFloorLeasePy || b.typicalFloorRent) || '-'}<span class="unit">평</span></div></div>
             <div class="info-card"><div class="label">전용률</div><div class="value">${b.area?.exclusiveRate || b.exclusiveRate || '-'}<span class="unit">%</span></div></div>
         </div>
         
@@ -548,7 +575,7 @@ export function renderInfoSection() {
         <div class="spec-list">
             <div class="spec-item"><span class="label">층수</span><span class="value">${typeof b.floors === 'object' ? (b.floors?.display || `지하${b.floors?.below || 0}층/지상${b.floors?.above || 0}층`) : (b.floors || '-')}</span></div>
             <div class="spec-item"><span class="label">인근역</span><span class="value">${b.nearbyStation || b.nearestStation || '-'}</span></div>
-            <div class="spec-item"><span class="label">주차</span><span class="value">${b.parking?.total ? (b.parking.total + '대' + (b.parking.ratio ? ' (' + b.parking.ratio + ')' : '')) : (b.parkingTotal ? b.parkingTotal + '대' : (b.parking?.display || '-'))}</span></div>
+            <div class="spec-item"><span class="label">주차</span><span class="value">${formatParkingDisplay(b)}</span></div>
             <div class="spec-item"><span class="label">구조</span><span class="value">${b.specs?.structure || b.structure || '-'}</span></div>
             <div class="spec-item"><span class="label">건물용도</span><span class="value">${b.specs?.buildingUse || b.buildingUse || b.usage || '-'}</span></div>
             <div class="spec-item"><span class="label">냉난방</span><span class="value">${b.hvac || '-'}</span></div>

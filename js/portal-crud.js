@@ -1040,10 +1040,17 @@ export function openOcrManageModal() {
                                 <span style="font-size: 13px; font-weight: 500;">📅 ${period}</span>
                                 <span style="font-size: 11px; color: #666;">(${periodData.total}건 / ${buildingCount}개 빌딩)</span>
                             </div>
-                            <button onclick="event.stopPropagation(); deleteOcrBySourcePeriod('${source}', '${period}')" 
-                                    style="padding: 3px 8px; background: #fee2e2; color: #dc2626; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;">
-                                삭제
-                            </button>
+                            <div style="display: flex; gap: 4px;">
+                                <button onclick="event.stopPropagation(); openBatchEditModal('${source}', '${period}')" 
+                                        style="padding: 3px 8px; background: #dbeafe; color: #2563eb; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;"
+                                        title="기업명/발행연월 일괄 수정">
+                                    ✏️ 수정
+                                </button>
+                                <button onclick="event.stopPropagation(); deleteOcrBySourcePeriod('${source}', '${period}')" 
+                                        style="padding: 3px 8px; background: #fee2e2; color: #dc2626; border: none; border-radius: 4px; cursor: pointer; font-size: 10px;">
+                                    삭제
+                                </button>
+                            </div>
                         </div>
                         <div class="ocr-buildings" style="display: none; padding: 8px; background: white;">
                 `;
@@ -1284,6 +1291,187 @@ export function closeOcrManageModal() {
     document.getElementById('ocrManageModal').classList.remove('show');
     document.getElementById('modalOverlay').classList.remove('show');
 }
+
+// ★ Sprint3-NEW1: 기업명/발행연월 일괄 수정 모달
+window.openBatchEditModal = function(oldSource, oldPeriod) {
+    // 기존 회사 목록 수집 (중복 제거)
+    const allSources = new Set();
+    state.allBuildings.forEach(b => {
+        if (b.vacancies) b.vacancies.forEach(v => { if (v.source) allSources.add(v.source); });
+    });
+    
+    // 현재 연도 기준 옵션 생성
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    let yearOptions = '';
+    for (let y = currentYear + 1; y >= currentYear - 3; y--) {
+        const yy = String(y).slice(2);
+        for (let m = 12; m >= 1; m--) {
+            const mm = String(m).padStart(2, '0');
+            const val = `${yy}.${mm}`;
+            const sel = val === oldPeriod ? 'selected' : '';
+            yearOptions += `<option value="${val}" ${sel}>${val}</option>`;
+        }
+    }
+    
+    let sourceOptions = '';
+    [...allSources].sort().forEach(s => {
+        const sel = s === oldSource ? 'selected' : '';
+        sourceOptions += `<option value="${s}" ${sel}>${s}</option>`;
+    });
+    
+    // 해당 그룹의 영향받는 공실 수 계산
+    let affectedCount = 0;
+    let affectedBuildings = new Set();
+    state.allBuildings.forEach(b => {
+        if (b.vacancies) b.vacancies.forEach(v => {
+            if (v.source === oldSource && v.publishDate === oldPeriod && v._key) {
+                affectedCount++;
+                affectedBuildings.add(b.id);
+            }
+        });
+    });
+    
+    const modal = document.createElement('div');
+    modal.id = 'batchEditOverlay';
+    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1010;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+        <div style="background:var(--bg-card,white);border-radius:12px;padding:24px;width:95%;max-width:500px;box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+            <h3 style="font-size:16px;font-weight:600;margin-bottom:16px;">✏️ 기업명/발행연월 일괄 수정</h3>
+            
+            <div style="margin-bottom:16px;padding:12px;background:#f1f5f9;border-radius:8px;font-size:12px;">
+                <div><strong>현재:</strong> 🏢 ${oldSource} / 📅 ${oldPeriod}</div>
+                <div style="margin-top:4px;color:#666;">영향: ${affectedCount}건 공실 (${affectedBuildings.size}개 빌딩)</div>
+            </div>
+            
+            <div style="margin-bottom:14px;">
+                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">변경할 기업명</label>
+                <select id="batchEditSource" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
+                    ${sourceOptions}
+                </select>
+                <input type="text" id="batchEditSourceCustom" placeholder="새 기업명 직접 입력 (비워두면 위 선택값 사용)" 
+                       style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;margin-top:6px;box-sizing:border-box;">
+            </div>
+            
+            <div style="margin-bottom:20px;">
+                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;">변경할 발행연월</label>
+                <select id="batchEditPeriod" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;">
+                    ${yearOptions}
+                </select>
+            </div>
+            
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+                <button onclick="executeBatchEdit('${oldSource}','${oldPeriod}')" 
+                        style="padding:10px 20px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
+                    ✅ 일괄 수정
+                </button>
+                <button onclick="document.getElementById('batchEditOverlay')?.remove()" 
+                        style="padding:10px 20px;background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;">
+                    취소
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+};
+
+// ★ Sprint3-NEW1: 일괄 수정 실행
+window.executeBatchEdit = async function(oldSource, oldPeriod) {
+    const customSource = document.getElementById('batchEditSourceCustom').value.trim();
+    const newSource = customSource || document.getElementById('batchEditSource').value;
+    const newPeriod = document.getElementById('batchEditPeriod').value;
+    
+    // 변경사항 없으면 종료
+    if (newSource === oldSource && newPeriod === oldPeriod) {
+        showToast('변경사항이 없습니다', 'warning');
+        return;
+    }
+    
+    // 영향받는 공실 수집
+    const targets = [];
+    state.allBuildings.forEach(b => {
+        if (b.vacancies) b.vacancies.forEach(v => {
+            if (v.source === oldSource && v.publishDate === oldPeriod && v._key) {
+                targets.push({ buildingId: b.id, vacancyKey: v._key, vacancy: v, building: b });
+            }
+        });
+    });
+    
+    if (targets.length === 0) {
+        showToast('수정할 데이터가 없습니다', 'warning');
+        return;
+    }
+    
+    const changeDesc = [];
+    if (newSource !== oldSource) changeDesc.push(`기업명: ${oldSource} → ${newSource}`);
+    if (newPeriod !== oldPeriod) changeDesc.push(`발행연월: ${oldPeriod} → ${newPeriod}`);
+    
+    if (!confirm(`⚠️ 일괄 수정 확인\n\n${changeDesc.join('\n')}\n\n총 ${targets.length}건의 공실이 수정됩니다.\n계속하시겠습니까?`)) {
+        return;
+    }
+    
+    try {
+        let successCount = 0;
+        
+        for (const item of targets) {
+            const updates = {};
+            if (newSource !== oldSource) updates.source = newSource;
+            if (newPeriod !== oldPeriod) updates.publishDate = newPeriod;
+            updates.updatedAt = new Date().toISOString();
+            
+            // Firebase vacancyKey 변경이 필요하면 (source나 period가 key에 포함되어 있으므로)
+            // 기존 키: {source}_{period}_{floor}
+            // 새 키 생성이 필요
+            const oldKey = item.vacancyKey;
+            const floor = (item.vacancy.floor || 'UNK').replace(/[\/\s]/g, '_');
+            const newKey = `${newSource}_${newPeriod.replace('.', '_')}_${floor}`;
+            
+            if (oldKey !== newKey) {
+                // 키가 변경되면: 새 키로 데이터 복사 후 기존 키 삭제
+                const existingData = { ...item.vacancy };
+                delete existingData._key;
+                Object.assign(existingData, updates);
+                
+                await set(ref(db, `vacancies/${item.buildingId}/${newKey}`), existingData);
+                await remove(ref(db, `vacancies/${item.buildingId}/${oldKey}`));
+                
+                // 로컬 캐시 업데이트
+                if (state.dataCache.vacancies?.[item.buildingId]) {
+                    delete state.dataCache.vacancies[item.buildingId][oldKey];
+                    state.dataCache.vacancies[item.buildingId][newKey] = existingData;
+                }
+            } else {
+                // 키 변경 불필요 시 update만
+                await update(ref(db, `vacancies/${item.buildingId}/${oldKey}`), updates);
+            }
+            
+            successCount++;
+        }
+        
+        // 로컬 데이터 동기화
+        state.allBuildings.forEach(b => {
+            if (b.vacancies) {
+                b.vacancies.forEach(v => {
+                    if (v.source === oldSource && v.publishDate === oldPeriod) {
+                        if (newSource !== oldSource) v.source = newSource;
+                        if (newPeriod !== oldPeriod) v.publishDate = newPeriod;
+                    }
+                });
+            }
+        });
+        
+        // 모달 닫고 새로고침
+        document.getElementById('batchEditOverlay')?.remove();
+        openOcrManageModal();
+        
+        showToast(`${successCount}건 일괄 수정 완료`, 'success');
+        
+    } catch (error) {
+        console.error('일괄 수정 오류:', error);
+        showToast('일괄 수정 중 오류가 발생했습니다: ' + error.message, 'error');
+    }
+};
 
 // ★ 주소 수정 모달 열기
 export function openAddressEditModal() {
