@@ -4212,10 +4212,10 @@ async function downloadExcelGeneral(data) {
         return;
     }
     
-    // ★ 수정: 열 구조 변경 (C열 제거 - A: 여백, B: 항목명, C부터 빌딩)
+    // ★ 수정: 열 구조 변경 — A: 대항목, B: 항목명, C부터 빌딩
     const colWidth = entries.length <= 5 ? 26 : (entries.length <= 10 ? 22 : 18);
     sheet.columns = [
-        { width: 3 },   // A열 (여백)
+        { width: 10 },  // A열 (대항목)
         { width: 18 },  // B열 (항목명)
         ...entries.map(() => ({ width: colWidth }))  // C열부터 빌딩 데이터
     ];
@@ -4309,12 +4309,21 @@ async function downloadExcelGeneral(data) {
         { row: 46, label: '예상비용', fill: 'FFFBCF3A', rowspan: 5 }
     ];
     
-    // ★ B열 항목명 (기존 C열 라벨을 B열로 이동)
+    // ★ v10.2: A열 대항목 카테고리 렌더링
+    setCell('A6', '빌딩개요/일반', { fill: 'FFFFFFFF', font: { bold: true } });
+    categories.forEach(cat => {
+        if (cat.rowspan > 1) {
+            sheet.mergeCells(`A${cat.row}:A${cat.row + cat.rowspan - 1}`);
+        }
+        setCell(`A${cat.row}`, cat.label, { fill: cat.fill, font: { bold: true } });
+    });
+    
+    // ★ B열 항목명 (기존 C열 라벨을 B열로 이동) — "주차 대수"→"무료주차"
     const bLabels = {
         7: '주소 지번', 8: '도로명 주소', 9: '위치', 10: '빌딩 규모', 11: '준공연도',
         12: '전용률 (%)', 13: '기준층 임대면적 (m²)', 14: '기준층 임대면적 (평)',
         15: '기준층 전용면적 (m²)', 16: '기준층 전용면적 (평)', 17: '엘레베이터', 18: '냉난방 방식',
-        19: '건물용도', 20: '구조', 21: '주차 대수 정보', 22: '주차비', 23: '주차 대수',
+        19: '건물용도', 20: '구조', 21: '주차 대수 정보', 22: '주차비', 23: '무료주차',
         25: '최적 임차 층수', 26: '입주 가능 시기', 27: '거래유형',
         28: '임대면적 (m²)', 29: '전용면적 (m²)', 30: '임대면적 (평)', 31: '전용면적 (평)',
         32: '월 평당 보증금', 33: '월 평당 임대료', 34: '월 평당 관리비', 35: '월 평당 지출비용',
@@ -4357,7 +4366,17 @@ async function downloadExcelGeneral(data) {
         setCell(`${col}20`, bd.structure || '');
         setCell(`${col}21`, bd.parkingInfo || bd.parking || '');
         setCell(`${col}22`, bd.parkingFee || '');
-        setCell(`${col}23`, bd.parkingTotal || bd.parkingSpaces || '');
+        // ★ v10.2: 무료주차 = freeParkingCondition 기반 계산
+        const freeParkingCondition = parseFloat(bd.freeParkingCondition) || 0;
+        const rentAreaForParking = parseFloat(v.rentArea) || 0;
+        if (freeParkingCondition > 0 && rentAreaForParking > 0) {
+            const freeCount = Math.floor(rentAreaForParking / freeParkingCondition);
+            setCell(`${col}23`, `${freeCount}대 (${freeParkingCondition}평당 1대)`);
+        } else if (freeParkingCondition > 0) {
+            setCell(`${col}23`, `${freeParkingCondition}평당 1대`);
+        } else {
+            setCell(`${col}23`, '-');
+        }
         
         // 임차 제안
         setCell(`${col}25`, v.floor || '-');

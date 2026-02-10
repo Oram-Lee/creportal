@@ -1283,13 +1283,12 @@ export async function downloadCompListExcel(data) {
     const entryCount = flattenedEntries.length; // 무제한
     
     // ============================================================
-    // 1. 열 너비 설정 (무제한)
+    // 1. 열 너비 설정 — ★ v10.2: A(대항목)/B(세부항목)/C~(데이터) 레이아웃 통일
     // ============================================================
     const buildingColWidth = entryCount <= 5 ? 26 : (entryCount <= 10 ? 22 : (entryCount <= 15 ? 18 : 15));
     const columns = [
-        { width: 2.67 },    // A
-        { width: 13.22 },   // B
-        { width: 24.56 },   // C
+        { width: 10 },     // A: 대항목
+        { width: 18 },     // B: 세부항목
     ];
     for (let i = 0; i < entryCount; i++) {
         columns.push({ width: buildingColWidth });
@@ -1303,29 +1302,28 @@ export async function downloadCompListExcel(data) {
     sheet.getRow(2).height = 50;
     sheet.getRow(3).height = 17;
     sheet.getRow(4).height = 17;
-    sheet.getRow(5).height = 115;  // ★ v10.1: complist.html 기준 통일 (기존 190)
-    sheet.getRow(6).height = 80;
+    sheet.getRow(5).height = 15;
+    sheet.getRow(6).height = 100;
     sheet.getRow(9).height = 60;
     for (let i = 7; i <= 55; i++) {
         if (i !== 9) sheet.getRow(i).height = 17;
     }
     
     // ============================================================
-    // 3. 셀 병합
+    // 3. 셀 병합 — ★ A열 대항목 병합
     // ============================================================
-    sheet.mergeCells('B3:C4');
-    sheet.mergeCells('B5:C5');
-    sheet.mergeCells('B6:C6');
-    sheet.mergeCells('B7:B18');
-    sheet.mergeCells('B19:B20');
-    sheet.mergeCells('B21:B23');
-    sheet.mergeCells('B25:B31');
-    sheet.mergeCells('B32:B39');
-    sheet.mergeCells('B40:B44');
-    sheet.mergeCells('B46:B50');
+    sheet.mergeCells('B3:B4');
+    sheet.mergeCells('B5:B6');
+    sheet.mergeCells('A7:A18');
+    sheet.mergeCells('A19:A20');
+    sheet.mergeCells('A21:A23');
+    sheet.mergeCells('A25:A31');
+    sheet.mergeCells('A32:A39');
+    sheet.mergeCells('A40:A44');
+    sheet.mergeCells('A46:A50');
     
     // ============================================================
-    // 4. B열 카테고리 설정
+    // 4. 카테고리 + 헤더 + 외관사진 — ★ v10.2: A열 대항목, B열 세부항목
     // ============================================================
     const setCategoryCell = (cellRef, value, bgColor) => {
         const cell = sheet.getCell(cellRef);
@@ -1336,7 +1334,7 @@ export async function downloadCompListExcel(data) {
         cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
     };
     
-    // PRESENT TO
+    // PRESENT TO (B3:B4)
     const b3 = sheet.getCell('B3');
     b3.value = 'PRESENT TO :';
     b3.font = { name: 'Noto Sans KR', size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
@@ -1344,7 +1342,7 @@ export async function downloadCompListExcel(data) {
     b3.alignment = { horizontal: 'center', vertical: 'middle' };
     b3.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
     
-    // ★ 외관사진 영역 (행5, 로고 대신)
+    // 외관사진 (B5:B6 병합)
     const b5 = sheet.getCell('B5');
     b5.value = '외관사진';
     b5.font = { name: 'Noto Sans KR', size: 9, bold: true };
@@ -1352,11 +1350,14 @@ export async function downloadCompListExcel(data) {
     b5.alignment = { horizontal: 'center', vertical: 'middle' };
     b5.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
     
-    // ★ 외관사진 이미지 삽입 (D열~)
+    // 외관사진 이미지 삽입 (C열~)
     flattenedEntries.forEach((entry, idx) => {
-        const col = getColumnLetter(4 + idx);
+        const col = getColumnLetter(3 + idx);  // ★ C=3부터
         const bd = entry.building.buildingData || {};
         const imageUrl = getExteriorUrl(bd);
+        
+        // 셀 병합 (행 5-6)
+        sheet.mergeCells(`${col}5:${col}6`);
         
         const imgCell = sheet.getCell(`${col}5`);
         imgCell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
@@ -1367,8 +1368,8 @@ export async function downloadCompListExcel(data) {
                 const extension = imageUrl.includes('png') ? 'png' : 'jpeg';
                 const imageId = workbook.addImage({ base64: base64Data, extension });
                 sheet.addImage(imageId, {
-                    tl: { col: 3 + idx, row: 4 },  // 0-indexed: D=col3, 행5=row4
-                    br: { col: 4 + idx, row: 5 },
+                    tl: { col: 2 + idx, row: 4 },  // ★ 0-indexed: C=col2, 행5=row4
+                    br: { col: 3 + idx, row: 6 },   // 행6까지
                     editAs: 'oneCell'
                 });
             } catch (e) {
@@ -1382,24 +1383,24 @@ export async function downloadCompListExcel(data) {
         }
     });
     
-    // 카테고리들
-    setCategoryCell('B6', '빌딩개요/일반', 'FFFFFFFF');
-    setCategoryCell('B7', '빌딩 현황', 'FFFFFFFF');
-    setCategoryCell('B19', '빌딩 세부현황', 'FFFFFFFF');
-    setCategoryCell('B21', '주차 관련', 'FFFFFFFF');
-    setCategoryCell('B25', '임차 제안', 'FFF9D6AE');
-    setCategoryCell('B32', '임대 기준', 'FFD9ECF2');
-    setCategoryCell('B40', '임대기준 조정', 'FFD9ECF2');
-    setCategoryCell('B46', '예상비용', 'FFFBCF3A');
+    // ★ A열 대항목 카테고리
+    setCategoryCell('A6', '빌딩개요/일반', 'FFFFFFFF');
+    setCategoryCell('A7', '빌딩 현황', 'FFFFFFFF');
+    setCategoryCell('A19', '빌딩 세부현황', 'FFFFFFFF');
+    setCategoryCell('A21', '주차 관련', 'FFFFFFFF');
+    setCategoryCell('A25', '임차 제안', 'FFF9D6AE');
+    setCategoryCell('A32', '임대 기준', 'FFD9ECF2');
+    setCategoryCell('A40', '임대기준 조정', 'FFD9ECF2');
+    setCategoryCell('A46', '예상비용', 'FFFBCF3A');
     
     // ============================================================
-    // 5. C열 항목명 설정
+    // 5. B열 세부항목명 설정 — ★ v10.2: "주차 대수"→"무료주차"
     // ============================================================
-    const cColumnLabels = {
+    const bColumnLabels = {
         7: '주소 지번', 8: '도로명 주소', 9: '위치', 10: '빌딩 규모', 11: '준공연도',
         12: '전용률 (%)', 13: '기준층 임대면적 (m²)', 14: '기준층 임대면적 (평)',
         15: '기준층 전용면적 (m²)', 16: '기준층 전용면적 (평)', 17: '엘레베이터', 18: '냉난방 방식',
-        19: '건물용도', 20: '구조', 21: '주차 대수 정보', 22: '주차비', 23: '주차 대수',
+        19: '건물용도', 20: '구조', 21: '주차 대수 정보', 22: '주차비', 23: '무료주차',
         25: '최적 임차 층수', 26: '입주 가능 시기', 27: '거래유형',
         28: '임대면적 (m²)', 29: '전용면적 (m²)', 30: '임대면적 (평)', 31: '전용면적 (평)',
         32: '월 평당 보증금', 33: '월 평당 임대료', 34: '월 평당 관리비', 35: '월 평당 지출비용',
@@ -1408,8 +1409,8 @@ export async function downloadCompListExcel(data) {
         46: '보증금', 47: '평균 월 임대료', 48: '평균 월 관리비', 49: '월 (임대료 + 관리비)', 50: '연 실제 부담 고정금액'
     };
     
-    Object.entries(cColumnLabels).forEach(([row, label]) => {
-        const cell = sheet.getCell(`C${row}`);
+    Object.entries(bColumnLabels).forEach(([row, label]) => {
+        const cell = sheet.getCell(`B${row}`);
         cell.value = label;
         cell.font = { name: 'Noto Sans KR', size: 9 };
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -1499,7 +1500,7 @@ export async function downloadCompListExcel(data) {
     };
     
     // ============================================================
-    // 6. 빌딩+공실 데이터 입력 (D열~, 무제한)
+    // 6. 빌딩+공실 데이터 입력 — ★ v10.2: C열부터 시작
     // ============================================================
     const setDataCell = (cellRef, value, numFmt = null, align = 'center') => {
         const cell = sheet.getCell(cellRef);
@@ -1520,12 +1521,12 @@ export async function downloadCompListExcel(data) {
     };
     
     flattenedEntries.forEach((entry, idx) => {
-        const col = getColumnLetter(4 + idx); // D=4, E=5, ...
+        const col = getColumnLetter(3 + idx); // ★ C=3부터 시작
         const b = entry.building;
         const bd = b.buildingData || {};
-        const v = entry.vacancy || {}; // 공실 정보 (없으면 빈 객체)
+        const v = entry.vacancy || {};
         
-        // 빌딩명 헤더 (4행) - 공실층 정보 포함
+        // 빌딩명 헤더 (4행)
         const headerCell = sheet.getCell(`${col}4`);
         const floorInfo = v.floor ? ` (${v.floor})` : '';
         headerCell.value = b.buildingName + floorInfo;
@@ -1544,11 +1545,9 @@ export async function downloadCompListExcel(data) {
         setDataCell(`${col}10`, formatBuildingScale(bd));
         setDataCell(`${col}11`, bd.completionYear || '');
         
-        // 전용률 (12행)
         const dedicatedRate = bd.dedicatedRate || bd.exclusiveRate || 0;
         setDataCell(`${col}12`, dedicatedRate ? dedicatedRate / 100 : '', dedicatedRate ? '0.00%' : null);
         
-        // 면적 정보 (13-16행)
         const baseFloorAreaM2 = bd.typicalFloorM2 || (bd.typicalFloorPy ? bd.typicalFloorPy * 3.305785 : 0);
         const baseFloorAreaPy = bd.typicalFloorPy || bd.baseFloorAreaPy || 0;
         const exclusiveAreaM2 = bd.exclusiveAreaM2 || (baseFloorAreaPy * (dedicatedRate / 100) * 3.305785);
@@ -1559,24 +1558,31 @@ export async function downloadCompListExcel(data) {
         setDataCell(`${col}15`, exclusiveAreaM2 || '', exclusiveAreaM2 ? '#,##0.000' : null);
         setDataCell(`${col}16`, exclusiveAreaPy || '', exclusiveAreaPy ? '#,##0.000' : null);
         
-        // 빌딩 세부현황 (17-20행)
         setDataCell(`${col}17`, formatElevator(bd));
         setDataCell(`${col}18`, bd.hvac || bd.heatingCooling || '');
         setDataCell(`${col}19`, bd.buildingUse || bd.usage || '');
         setDataCell(`${col}20`, bd.structure || '');
         
-        // 주차 관련 (21-23행)
+        // 주차 관련 (21-23행) — ★ 23행: 무료주차 계산
         setDataCell(`${col}21`, formatParkingInfo(bd));
         setDataCell(`${col}22`, bd.parkingFee || bd.parking?.fee || '');
-        setDataCell(`${col}23`, formatParkingTotal(bd));
+        // ★ v10.2: 무료주차 = freeParkingCondition 기반 계산
+        const freeParkingCondition = parseFloat(bd.freeParkingCondition) || 0;
+        const rentAreaForParking = parseFloat(v.rentArea) || 0;
+        if (freeParkingCondition > 0 && rentAreaForParking > 0) {
+            const freeCount = Math.floor(rentAreaForParking / freeParkingCondition);
+            setDataCell(`${col}23`, `${freeCount}대 (${freeParkingCondition}평당 1대)`);
+        } else if (freeParkingCondition > 0) {
+            setDataCell(`${col}23`, `${freeParkingCondition}평당 1대`);
+        } else {
+            setDataCell(`${col}23`, '-');
+        }
         
-        // 임차 제안 (25-31행) - 공실 정보 활용
+        // 임차 제안 (25-31행)
         setDataCell(`${col}25`, v.floor || '-');
         setDataCell(`${col}26`, v.moveInDate || v.moveIn || '-');
         setDataCell(`${col}27`, '-');
         
-        // 면적 입력 (평 기준, m²는 수식으로)
-        // 공실 없으면 기본값 100/50, 수식은 항상 유지
         const rentAreaPy = parseFloat(v.rentArea) || 100;
         const exclusiveAreaPyVacancy = parseFloat(v.exclusiveArea) || 50;
         
@@ -1586,7 +1592,6 @@ export async function downloadCompListExcel(data) {
         setDataCell(`${col}31`, exclusiveAreaPyVacancy, '#,##0.000');
         
         // 임대 기준 (32-39행)
-        // ★ 마이그레이션 호환: toWon()으로 원 단위 정규화
         const depositPy = toWon(v.depositPy);
         const rentPy = toWon(v.rentPy);
         const maintenancePy = toWon(v.maintenancePy);
@@ -1600,14 +1605,14 @@ export async function downloadCompListExcel(data) {
         setFormulaCell(`${col}38`, `${col}34*${col}30`, '₩#,##0');
         setFormulaCell(`${col}39`, `IFERROR((${col}37+${col}38)/${col}31,0)`, '₩#,##0');
         
-        // 임대기준 조정 (40-44행) - 수식 항상 유지
+        // 임대기준 조정 (40-44행)
         setFormulaCell(`${col}40`, `${col}32`, '₩#,##0');
-        setDataCell(`${col}41`, 0); // RF 개월 (사용자 입력용)
+        setDataCell(`${col}41`, 0);
         setFormulaCell(`${col}42`, `${col}33-((${col}33*${col}41)/12)`, '₩#,##0');
         setFormulaCell(`${col}43`, `${col}34`, '₩#,##0');
         setFormulaCell(`${col}44`, `IFERROR(((${col}42+${col}43)*(${col}30/${col}31)),0)`, '₩#,##0');
         
-        // 예상비용 (46-50행) - 수식 항상 유지
+        // 예상비용 (46-50행)
         setFormulaCell(`${col}46`, `${col}40*${col}30`, '₩#,##0');
         setFormulaCell(`${col}47`, `${col}42*${col}30`, '₩#,##0');
         setFormulaCell(`${col}48`, `${col}43*${col}30`, '₩#,##0');
@@ -2024,7 +2029,7 @@ async function downloadCompListExcelLG(data) {
                 const imageId = workbook.addImage({ base64: base64Data, extension });
                 sheet.addImage(imageId, {
                     tl: { col: 4 + bIdx * 3, row: 62 },  // 0-indexed
-                    br: { col: 7 + bIdx * 3, row: 71 },   // ★ v10.1: complist.html 기준 통일 (기존 72→71, row72 기타 라벨과 겹침 방지)
+                    br: { col: 7 + bIdx * 3, row: 71 },  // ★ v10.2: complist.html 기준 통일
                     editAs: 'oneCell'
                 });
             } catch (e) {
