@@ -674,22 +674,10 @@ export function renderBuildingEditor(item, building) {
                             <!-- 우측: 선택된 공실 (장바구니) -->
                             <div class="external-vacancy-cart">
                                 <div class="external-vacancy-cart-header">
-                                    <span>✓ 적용됨 (${item.selectedExternalVacancies.length})${(item.pendingExternalVacancies?.length || 0) > 0 ? ` / 대기 (${item.pendingExternalVacancies.length})` : ''}</span>
+                                    <span>✓ 선택한 공실 (${item.selectedExternalVacancies.length})</span>
                                     <div style="display:flex; gap:4px;">
                                         <button class="btn btn-sm btn-secondary" onclick="clearExternalCart(${idx})">초기화</button>
                                     </div>
-                                </div>
-                                <!-- ★ v3.8: pending 반영 바 -->
-                                <div id="extPendingBar" style="display:${(item.pendingExternalVacancies?.length || 0) > 0 ? 'flex' : 'none'}; align-items:center; justify-content:space-between; padding:8px 12px; background:#fffbeb; border-bottom:1px solid #fde68a;">
-                                    ${(item.pendingExternalVacancies?.length || 0) > 0 ? `
-                                        <span style="font-size:12px; color:#d97706; font-weight:600;">⏳ ${item.pendingExternalVacancies.length}건 대기 중</span>
-                                        <div style="display:flex; gap:4px;">
-                                            <button class="btn btn-sm" onclick="cancelPendingExternal(${idx})" 
-                                                style="background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; font-size:11px; padding:3px 8px;">취소</button>
-                                            <button class="btn btn-sm btn-primary" onclick="applyPendingExternalVacancies(${idx})" 
-                                                style="background:#2563eb; color:white; font-size:11px; padding:3px 10px; font-weight:600;">✓ 반영</button>
-                                        </div>
-                                    ` : ''}
                                 </div>
                                 <div class="external-vacancy-cart-body" id="extCartBody">
                                     ${renderExternalCartItems(item.selectedExternalVacancies, idx)}
@@ -697,7 +685,7 @@ export function renderBuildingEditor(item, building) {
                             </div>
                             
                             <div class="external-vacancy-notice">
-                                💡 공실을 체크한 후 <strong>[✓ 반영]</strong> 버튼을 클릭해야 공실 현황에 적용됩니다.
+                                💡 선택한 공실 정보는 <strong>현재 임대안내문의 공실 현황</strong>에 자동으로 포함됩니다.
                             </div>
                         </div>
                     </div>

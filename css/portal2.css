@@ -565,7 +565,7 @@
         .overlay.show { opacity: 1; visibility: visible; }
 
         /* 토스트 */
-        .toast-container { position: fixed; bottom: 80px; right: 30px; z-index: 9999; }
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 400; }
         .toast { background: #333; color: white; padding: 12px 20px; border-radius: 8px; margin-top: 8px; font-size: 14px; animation: slideIn 0.3s ease; }
         .toast.success { background: var(--success-color); }
         .toast.error { background: var(--danger-color); }

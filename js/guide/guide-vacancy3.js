@@ -65,10 +65,6 @@ export function renderExternalVacancyGroups(vacancies, selectedVacancies, idx) {
         return '<div class="external-vacancy-empty">타사 공실 정보가 없습니다</div>';
     }
     
-    // ★ v3.8: pending 상태도 확인
-    const item = state.tocItems[idx];
-    const pendingIds = (item?.pendingExternalVacancies || []).map(v => v.id);
-    
     // 출처+날짜별 그룹핑
     const groups = {};
     vacancies.forEach(v => {
@@ -88,7 +84,8 @@ export function renderExternalVacancyGroups(vacancies, selectedVacancies, idx) {
     
     return sortedGroups.map(group => {
         const selectedIds = (selectedVacancies || []).map(v => v.id);
-        const allAppliedOrPending = group.items.every(v => selectedIds.includes(v.id) || pendingIds.includes(v.id));
+        const allSelected = group.items.every(v => selectedIds.includes(v.id));
+        const someSelected = group.items.some(v => selectedIds.includes(v.id));
         
         return `
             <div class="external-vacancy-group">
@@ -97,28 +94,25 @@ export function renderExternalVacancyGroups(vacancies, selectedVacancies, idx) {
                     <span class="group-source">${group.source}</span>
                     <span class="group-date">${group.date}</span>
                     <span class="group-count">${group.items.length}건</span>
-                    <button class="btn btn-xs ${allAppliedOrPending ? 'btn-secondary' : 'btn-primary'}" 
+                    <button class="btn btn-xs ${allSelected ? 'btn-secondary' : 'btn-primary'}" 
                             onclick="event.stopPropagation(); selectAllFromSource(${idx}, '${group.source}', '${group.date}')">
-                        ${allAppliedOrPending ? '전체해제' : '전체선택'}
+                        ${allSelected ? '전체해제' : '전체선택'}
                     </button>
                 </div>
                 <div class="external-vacancy-group-body">
                     ${group.items.map(v => {
-                        const isApplied = selectedIds.includes(v.id);
-                        const isPending = pendingIds.includes(v.id);
+                        const isSelected = selectedIds.includes(v.id);
                         // ★ 금액 포맷팅 적용
                         const priceDisplay = formatPrice(v.rentPy || v.rent || '문의');
                         const depositDisplay = formatPrice(v.depositPy || v.deposit || '');
                         return `
-                            <div class="external-vacancy-item ${isApplied ? 'selected' : ''} ${isPending ? 'pending' : ''}" 
+                            <div class="external-vacancy-item ${isSelected ? 'selected' : ''}" 
                                  onclick="toggleExternalVacancyItem(${idx}, '${v.id}', this)">
-                                <input type="checkbox" class="vacancy-checkbox" ${(isApplied || isPending) ? 'checked' : ''} onclick="event.stopPropagation();">
+                                <input type="checkbox" class="vacancy-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation();">
                                 <div class="vacancy-floor">${formatFloorDisplay(v.floor)}</div>
                                 <div class="vacancy-area">${formatPrice(v.rentArea || v.area || '-')}/${formatPrice(v.exclusiveArea || v.area || '-')}평</div>
                                 <div class="vacancy-deposit">${depositDisplay}</div>
                                 <div class="vacancy-price">${priceDisplay}</div>
-                                ${isApplied ? '<span style="font-size:9px; color:#16a34a; margin-left:auto;">✓적용</span>' : ''}
-                                ${isPending ? '<span style="font-size:9px; color:#d97706; margin-left:auto;">⏳대기</span>' : ''}
                             </div>
                         `;
                     }).join('')}
@@ -159,18 +153,12 @@ export function toggleSourceGroup(header) {
     }
 }
 
-// ★ v3.8: pending 배열 관리 (반영 버튼 확인 단계)
-function ensurePendingArray(item) {
-    if (!item.pendingExternalVacancies) item.pendingExternalVacancies = [];
-}
-
-// 개별 공실 선택/해제 (체크박스 연동 → pending에만 저장)
+// 개별 공실 선택/해제 (체크박스 연동)
 export function toggleExternalVacancyItem(idx, vacancyId, element) {
     const item = state.tocItems[idx];
     if (!item) return;
     
     if (!item.selectedExternalVacancies) item.selectedExternalVacancies = [];
-    ensurePendingArray(item);
     
     const building = state.allBuildings.find(b => b.id === item.buildingId);
     if (!building || !building.vacancies) return;
@@ -178,39 +166,28 @@ export function toggleExternalVacancyItem(idx, vacancyId, element) {
     const vacancy = building.vacancies.find(v => v.id === vacancyId);
     if (!vacancy) return;
     
-    // ★ 이미 적용된 건 즉시 해제 허용 (기존 동작 유지)
-    const appliedIdx = item.selectedExternalVacancies.findIndex(v => v.id === vacancyId);
-    if (appliedIdx >= 0) {
-        item.selectedExternalVacancies.splice(appliedIdx, 1);
-        if (element) {
-            element.classList.remove('selected', 'pending');
-            const cb = element.querySelector('.vacancy-checkbox');
-            if (cb) cb.checked = false;
-        }
-        updateExternalCart(idx);
-        return;
-    }
+    const existingIdx = item.selectedExternalVacancies.findIndex(v => v.id === vacancyId);
+    const checkbox = element.querySelector('.vacancy-checkbox');
     
-    // ★ pending에서 토글
-    const pendingIdx = item.pendingExternalVacancies.findIndex(v => v.id === vacancyId);
-    const checkbox = element?.querySelector('.vacancy-checkbox');
-    
-    if (pendingIdx >= 0) {
-        // pending에서 제거
-        item.pendingExternalVacancies.splice(pendingIdx, 1);
-        if (element) element.classList.remove('pending');
+    if (existingIdx >= 0) {
+        // 이미 선택됨 → 해제
+        item.selectedExternalVacancies.splice(existingIdx, 1);
+        element.classList.remove('selected');
         if (checkbox) checkbox.checked = false;
     } else {
-        // pending에 추가
-        item.pendingExternalVacancies.push({ ...vacancy, type: 'external' });
-        if (element) element.classList.add('pending');
+        // 선택 안됨 → 추가
+        item.selectedExternalVacancies.push({
+            ...vacancy,
+            type: 'external'
+        });
+        element.classList.add('selected');
         if (checkbox) checkbox.checked = true;
     }
     
-    updatePendingUI(idx);
+    updateExternalCart(idx);
 }
 
-// 출처별 전체 선택/해제 (pending에 저장)
+// 출처별 전체 선택/해제
 export function selectAllFromSource(idx, source, date) {
     const item = state.tocItems[idx];
     if (!item) return;
@@ -219,7 +196,6 @@ export function selectAllFromSource(idx, source, date) {
     if (!building || !building.vacancies) return;
     
     if (!item.selectedExternalVacancies) item.selectedExternalVacancies = [];
-    ensurePendingArray(item);
     
     // 해당 출처+날짜의 공실들
     const sourceVacancies = building.vacancies.filter(v => 
@@ -227,23 +203,22 @@ export function selectAllFromSource(idx, source, date) {
         (v.publishDate || v.date || '미정') === date
     );
     
-    // 이미 적용된 건 제외
-    const appliedIds = item.selectedExternalVacancies.map(v => v.id);
-    const pendingIds = item.pendingExternalVacancies.map(v => v.id);
-    const targetVacancies = sourceVacancies.filter(v => !appliedIds.includes(v.id));
+    const selectedIds = item.selectedExternalVacancies.map(v => v.id);
+    const allSelected = sourceVacancies.every(v => selectedIds.includes(v.id));
     
-    const allInPending = targetVacancies.every(v => pendingIds.includes(v.id));
-    
-    if (allInPending) {
-        // 전체 해제 (pending에서)
-        item.pendingExternalVacancies = item.pendingExternalVacancies.filter(v => 
-            !targetVacancies.find(tv => tv.id === v.id)
+    if (allSelected) {
+        // 전체 해제
+        item.selectedExternalVacancies = item.selectedExternalVacancies.filter(v => 
+            !sourceVacancies.find(sv => sv.id === v.id)
         );
     } else {
-        // 전체 선택 (pending에)
-        targetVacancies.forEach(v => {
-            if (!pendingIds.includes(v.id)) {
-                item.pendingExternalVacancies.push({ ...v, type: 'external' });
+        // 전체 선택
+        sourceVacancies.forEach(v => {
+            if (!selectedIds.includes(v.id)) {
+                item.selectedExternalVacancies.push({
+                    ...v,
+                    type: 'external'
+                });
             }
         });
     }
@@ -252,91 +227,22 @@ export function selectAllFromSource(idx, source, date) {
     window.renderBuildingEditor(item, building);
 }
 
-// ★ v3.8: pending UI만 업데이트 (전체 리렌더 없이 장바구니 영역만)
-export function updatePendingUI(idx) {
-    const item = state.tocItems[idx];
-    if (!item) return;
-    
-    const pendingCount = item.pendingExternalVacancies?.length || 0;
-    const appliedCount = item.selectedExternalVacancies?.length || 0;
-    
-    // 장바구니 헤더 업데이트
-    const cartHeader = document.querySelector('.external-vacancy-cart-header span');
-    if (cartHeader) {
-        cartHeader.textContent = `✓ 적용됨 (${appliedCount})${pendingCount > 0 ? ` / 대기 (${pendingCount})` : ''}`;
-    }
-    
-    // pending 반영 버튼 영역
-    const pendingBar = document.getElementById('extPendingBar');
-    if (pendingBar) {
-        if (pendingCount > 0) {
-            pendingBar.style.display = 'flex';
-            pendingBar.innerHTML = `
-                <span style="font-size:12px; color:#d97706; font-weight:600;">⏳ ${pendingCount}건 대기 중</span>
-                <div style="display:flex; gap:4px;">
-                    <button class="btn btn-sm" onclick="cancelPendingExternal(${idx})" 
-                        style="background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; font-size:11px; padding:3px 8px;">취소</button>
-                    <button class="btn btn-sm btn-primary" onclick="applyPendingExternalVacancies(${idx})" 
-                        style="background:#2563eb; color:white; font-size:11px; padding:3px 10px; font-weight:600;">✓ 반영</button>
-                </div>
-            `;
-        } else {
-            pendingBar.style.display = 'none';
-        }
-    }
-}
-
-// ★ v3.8: pending → selected 실제 반영
-export function applyPendingExternalVacancies(idx) {
-    const item = state.tocItems[idx];
-    if (!item) return;
-    
-    if (!item.pendingExternalVacancies || item.pendingExternalVacancies.length === 0) {
-        showToast('반영할 공실이 없습니다', 'warning');
-        return;
-    }
-    
-    if (!item.selectedExternalVacancies) item.selectedExternalVacancies = [];
-    
-    // pending → selected로 이동 (중복 방지)
-    const existingIds = item.selectedExternalVacancies.map(v => v.id);
-    item.pendingExternalVacancies.forEach(v => {
-        if (!existingIds.includes(v.id)) {
-            item.selectedExternalVacancies.push(v);
-        }
-    });
-    
-    const appliedCount = item.pendingExternalVacancies.length;
-    item.pendingExternalVacancies = [];
-    
-    // 전체 UI 갱신 (공실 테이블 포함)
-    const building = state.allBuildings.find(b => b.id === item.buildingId);
-    if (building) {
-        window.renderBuildingEditor(item, building);
-    }
-    
-    showToast(`${appliedCount}건 공실이 반영되었습니다`, 'success');
-}
-
-// ★ v3.8: pending 취소
-export function cancelPendingExternal(idx) {
-    const item = state.tocItems[idx];
-    if (!item) return;
-    
-    item.pendingExternalVacancies = [];
-    
-    const building = state.allBuildings.find(b => b.id === item.buildingId);
-    if (building) {
-        window.renderBuildingEditor(item, building);
-    }
-}
-
-// 장바구니 업데이트 (applied만 표시, pending은 updatePendingUI에서)
+// 장바구니 업데이트
 export function updateExternalCart(idx) {
     const item = state.tocItems[idx];
     if (!item) return;
     
-    // ★ 적용된 공실 → 전체 리렌더 (공실 테이블 반영)
+    const cartBody = document.getElementById('extCartBody');
+    const cartHeader = document.querySelector('.external-vacancy-cart-header span');
+    
+    if (cartBody) {
+        cartBody.innerHTML = renderExternalCartItems(item.selectedExternalVacancies, idx);
+    }
+    if (cartHeader) {
+        cartHeader.textContent = `선택한 공실 (${item.selectedExternalVacancies?.length || 0})`;
+    }
+    
+    // 프리뷰 테이블도 갱신
     const building = state.allBuildings.find(b => b.id === item.buildingId);
     if (building) {
         window.renderBuildingEditor(item, building);
@@ -356,13 +262,12 @@ export function removeFromExternalCart(idx, vacancyId) {
     }
 }
 
-// 장바구니 초기화 (적용됨 + 대기 모두)
+// 장바구니 초기화
 export function clearExternalCart(idx) {
     const item = state.tocItems[idx];
     if (!item) return;
     
     item.selectedExternalVacancies = [];
-    item.pendingExternalVacancies = [];
     
     const building = state.allBuildings.find(b => b.id === item.buildingId);
     if (building) {
@@ -601,24 +506,4 @@ export function registerVacancyFunctions() {
     window.addDirectVacancy = addDirectVacancy;
     window.editVacancyItem = editVacancyItem;
     window.removeSelectedVacancy = removeSelectedVacancy;
-    // ★ v3.8: pending 관련
-    window.applyPendingExternalVacancies = applyPendingExternalVacancies;
-    window.cancelPendingExternal = cancelPendingExternal;
-    window.updatePendingUI = updatePendingUI;
-    
-    // ★ v3.8: pending 상태 CSS 주입
-    if (!document.getElementById('pendingVacancyCSS')) {
-        const style = document.createElement('style');
-        style.id = 'pendingVacancyCSS';
-        style.textContent = `
-            .external-vacancy-item.pending {
-                background: #fffbeb !important;
-                border-left: 3px solid #f59e0b !important;
-            }
-            .external-vacancy-item.pending .vacancy-checkbox {
-                accent-color: #f59e0b;
-            }
-        `;
-        document.head.appendChild(style);
-    }
 }

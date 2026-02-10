@@ -1303,7 +1303,7 @@ export async function downloadCompListExcel(data) {
     sheet.getRow(2).height = 50;
     sheet.getRow(3).height = 17;
     sheet.getRow(4).height = 17;
-    sheet.getRow(5).height = 115;  // ★ v10.1: complist.html 기준 통일 (기존 190)
+    sheet.getRow(5).height = 190;
     sheet.getRow(6).height = 80;
     sheet.getRow(9).height = 60;
     for (let i = 7; i <= 55; i++) {
@@ -2024,7 +2024,7 @@ async function downloadCompListExcelLG(data) {
                 const imageId = workbook.addImage({ base64: base64Data, extension });
                 sheet.addImage(imageId, {
                     tl: { col: 4 + bIdx * 3, row: 62 },  // 0-indexed
-                    br: { col: 7 + bIdx * 3, row: 71 },   // ★ v10.1: complist.html 기준 통일 (기존 72→71, row72 기타 라벨과 겹침 방지)
+                    br: { col: 7 + bIdx * 3, row: 72 },
                     editAs: 'oneCell'
                 });
             } catch (e) {
