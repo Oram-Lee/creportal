@@ -567,7 +567,16 @@ export async function executeTransferVacancy() {
         // 2. 원본 삭제
         await remove(ref(db, `vacancies/${fromBuildingId}/${vacancyKey}`));
         
-        // 3. 로컬 상태 업데이트
+        // 3. ★ dataCache.vacancies 동기화 (processBuildings가 여기서 읽으므로 필수)
+        if (state.dataCache.vacancies?.[fromBuildingId]) {
+            delete state.dataCache.vacancies[fromBuildingId][vacancyKey];
+        }
+        if (!state.dataCache.vacancies[targetBuilding.id]) {
+            state.dataCache.vacancies[targetBuilding.id] = {};
+        }
+        state.dataCache.vacancies[targetBuilding.id][newVacancyKey] = newVacancyData;
+        
+        // 4. allBuildings 로컬 상태 업데이트
         const fromBuilding = state.allBuildings.find(b => b.id === fromBuildingId);
         if (fromBuilding && fromBuilding.vacancies) {
             fromBuilding.vacancies = fromBuilding.vacancies.filter(v => v._key !== vacancyKey);
@@ -2142,6 +2151,9 @@ export function registerCrudGlobals() {
     
     // ★ 빌딩 정보 편집 모달
     window.openBuildingEditModal = openBuildingEditModal;
+
+    // ★ refreshAfterCrud를 window에 노출 (portal.html 인라인 스크립트에서 사용)
+    window.refreshAfterCrud = refreshAfterCrud;
     
     // 권한
     window.isAdmin = isAdmin;

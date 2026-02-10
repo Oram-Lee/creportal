@@ -2196,6 +2196,21 @@
                 }
             });
             
+            // ★ dataCache.buildings 동기화 (processBuildings가 여기서 읽으므로 필수)
+            if (window.state.dataCache?.buildings?.[building.id]) {
+                Object.keys(updates).forEach(key => {
+                    if (!key.includes('/')) {
+                        window.state.dataCache.buildings[building.id][key] = updates[key];
+                    } else {
+                        const [parent, child] = key.split('/');
+                        if (!window.state.dataCache.buildings[building.id][parent]) {
+                            window.state.dataCache.buildings[building.id][parent] = {};
+                        }
+                        window.state.dataCache.buildings[building.id][parent][child] = updates[key];
+                    }
+                });
+            }
+            
             // allBuildings에서도 업데이트
             const idx = window.state.allBuildings.findIndex(b => b.id === building.id);
             if (idx >= 0) {
@@ -2210,11 +2225,22 @@
                 document.getElementById('modalOverlay').classList.remove('show');
             }
             
-            // 상세 패널 새로고침
-            if (typeof renderInfoSection === 'function') {
-                renderInfoSection();
-            } else if (window.renderInfoSection) {
-                window.renderInfoSection();
+            // ★ refreshAfterCrud로 빌딩목록/지도 전체 갱신
+            if (typeof refreshAfterCrud === 'function') {
+                refreshAfterCrud(() => {
+                    if (typeof renderInfoSection === 'function') renderInfoSection();
+                    else if (window.renderInfoSection) window.renderInfoSection();
+                });
+            } else {
+                // fallback: 상세 패널만 새로고침
+                if (typeof renderInfoSection === 'function') {
+                    renderInfoSection();
+                } else if (window.renderInfoSection) {
+                    window.renderInfoSection();
+                }
+                // 빌딩 목록도 갱신 시도
+                if (typeof renderBuildingList === 'function') renderBuildingList();
+                if (typeof renderTableView === 'function' && window.state?.currentViewMode === 'list') renderTableView();
             }
             
             if (typeof showToast === 'function') {
