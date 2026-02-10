@@ -1179,6 +1179,83 @@
             </div>
         </div>
         
+        <!-- ★ 기업명/발행연월 일괄 수정 섹션 (NEW-1) -->
+        <div style="margin-bottom: 16px; padding: 16px; background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border-radius: 10px; border: 2px solid #8b5cf6;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #5b21b6; display: flex; align-items: center; gap: 8px;">
+                        📋 기업명/발행연월 일괄 수정
+                        <span id="batchEditStatus" style="font-size: 11px; font-weight: normal; color: #7c3aed;"></span>
+                    </div>
+                    <div style="font-size: 12px; color: #6d28d9; margin-top: 4px;">
+                        vacancies의 source(기업명)와 publishDate(발행연월)를 일괄 변경합니다
+                    </div>
+                </div>
+                <button onclick="toggleBatchEditPanel()" 
+                        style="padding: 8px 16px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
+                    📋 수정 패널 열기
+                </button>
+            </div>
+            
+            <!-- 토글 패널 -->
+            <div id="batchEditPanel" style="display: none; margin-top: 16px; padding: 16px; background: white; border-radius: 8px; border: 1px solid #c4b5fd;">
+                
+                <!-- Step 1: 기존 값 선택 -->
+                <div style="margin-bottom: 16px;">
+                    <div style="font-size: 13px; font-weight: 600; color: #5b21b6; margin-bottom: 8px;">Step 1. 변경할 기존 값 선택</div>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">기업명 (source)</label>
+                            <select id="batchEditSourceSelect" onchange="updateBatchEditCount()" 
+                                    style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                <option value="">-- 전체 (필터 없음) --</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">발행연월 (publishDate)</label>
+                            <select id="batchEditDateSelect" onchange="updateBatchEditCount()" 
+                                    style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                <option value="">-- 전체 (필터 없음) --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="batchEditMatchCount" style="font-size: 12px; color: #7c3aed; margin-top: 8px; font-weight: 600;"></div>
+                </div>
+                
+                <!-- Step 2: 새 값 입력 -->
+                <div style="margin-bottom: 16px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                    <div style="font-size: 13px; font-weight: 600; color: #5b21b6; margin-bottom: 8px;">Step 2. 새로운 값 입력 (빈칸이면 변경 안함)</div>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">새 기업명</label>
+                            <input type="text" id="batchEditNewSource" placeholder="예: 교보리얼코"
+                                   style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px;">새 발행연월</label>
+                            <input type="month" id="batchEditNewDate" 
+                                   style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 액션 버튼 -->
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button onclick="previewBatchEdit()" 
+                            style="padding: 8px 16px; background: white; color: #5b21b6; border: 1px solid #8b5cf6; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                        🔍 미리보기
+                    </button>
+                    <button onclick="executeBatchEdit()" 
+                            style="padding: 8px 16px; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
+                        ✏️ 일괄 수정 실행
+                    </button>
+                </div>
+                
+                <!-- 결과 영역 -->
+                <div id="batchEditResult" style="display: none; margin-top: 12px; padding: 12px; background: #f5f3ff; border-radius: 6px; font-size: 12px; max-height: 200px; overflow-y: auto;"></div>
+            </div>
+        </div>
+        
         <div style="margin-bottom: 12px; padding: 10px; background: #fef3c7; border-radius: 8px; font-size: 12px; color: #92400e;">
             ⚠️ 삭제된 데이터는 복구할 수 없습니다. 신중하게 선택해주세요.
         </div>
@@ -2498,6 +2575,283 @@
     // 전역 등록
     window.checkMigrationStatus = checkMigrationStatus;
     window.runFloorPricingMigration = runFloorPricingMigration;
+    
+    // ============================================================
+    // ★ 기업명/발행연월 일괄 수정 함수들 (NEW-1)
+    // ============================================================
+    
+    // 내부 캐시: loadBatchEditSources에서 채워짐
+    let _batchVacancyData = {}; // { buildingId: { vacId: { source, publishDate, floor, buildingName } } }
+    
+    function toggleBatchEditPanel() {
+        const panel = document.getElementById('batchEditPanel');
+        const icon = document.getElementById('batchEditToggleIcon');
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            icon.textContent = '▼';
+            loadBatchEditSources();
+        } else {
+            panel.style.display = 'none';
+            icon.textContent = '▶';
+        }
+    }
+    
+    async function loadBatchEditSources() {
+        const sourceSelect = document.getElementById('batchEditSourceSelect');
+        const dateSelect = document.getElementById('batchEditDateSelect');
+        const statusEl = document.getElementById('batchEditStatus');
+        
+        sourceSelect.innerHTML = '<option value="">로딩 중...</option>';
+        dateSelect.innerHTML = '<option value="">로딩 중...</option>';
+        statusEl.textContent = '데이터 조회 중...';
+        
+        try {
+            const { db, ref, get } = await import('./js/portal-firebase.js');
+            
+            const [vacSnap, buildSnap] = await Promise.all([
+                get(ref(db, 'vacancies')),
+                get(ref(db, 'buildings'))
+            ]);
+            
+            const vacancies = vacSnap.val() || {};
+            const buildings = buildSnap.val() || {};
+            
+            const sources = new Set();
+            const dates = new Set();
+            let totalCount = 0;
+            _batchVacancyData = {};
+            
+            Object.entries(vacancies).forEach(([buildingId, vacMap]) => {
+                if (!vacMap || typeof vacMap !== 'object') return;
+                const bName = buildings[buildingId]?.buildingName || buildings[buildingId]?.name || buildingId;
+                _batchVacancyData[buildingId] = {};
+                
+                Object.entries(vacMap).forEach(([vacId, vac]) => {
+                    totalCount++;
+                    if (vac.source) sources.add(vac.source);
+                    if (vac.publishDate) dates.add(vac.publishDate);
+                    _batchVacancyData[buildingId][vacId] = {
+                        source: vac.source || '',
+                        publishDate: vac.publishDate || '',
+                        floor: vac.floor || '',
+                        buildingName: bName
+                    };
+                });
+            });
+            
+            // 드롭다운 채우기
+            const sortedSources = [...sources].sort();
+            const sortedDates = [...dates].sort().reverse();
+            
+            sourceSelect.innerHTML = '<option value="">(전체 - 필터 안 함)</option>' +
+                sortedSources.map(s => `<option value="${s}">${s}</option>`).join('');
+            
+            dateSelect.innerHTML = '<option value="">(전체 - 필터 안 함)</option>' +
+                sortedDates.map(d => `<option value="${d}">${d}</option>`).join('');
+            
+            statusEl.textContent = `총 ${totalCount}건 로드됨`;
+            updateBatchEditCount();
+            
+        } catch (error) {
+            console.error('일괄수정 데이터 로드 오류:', error);
+            statusEl.textContent = '오류 발생';
+            sourceSelect.innerHTML = '<option value="">로드 실패</option>';
+            dateSelect.innerHTML = '<option value="">로드 실패</option>';
+        }
+    }
+    
+    function _getMatchingVacancies() {
+        const filterSource = document.getElementById('batchEditSourceSelect').value;
+        const filterDate = document.getElementById('batchEditDateSelect').value;
+        
+        const matches = [];
+        Object.entries(_batchVacancyData).forEach(([buildingId, vacMap]) => {
+            Object.entries(vacMap).forEach(([vacId, vac]) => {
+                let match = true;
+                if (filterSource && vac.source !== filterSource) match = false;
+                if (filterDate && vac.publishDate !== filterDate) match = false;
+                if (match) {
+                    matches.push({ buildingId, vacId, ...vac });
+                }
+            });
+        });
+        return matches;
+    }
+    
+    function updateBatchEditCount() {
+        const countEl = document.getElementById('batchEditMatchCount');
+        const matches = _getMatchingVacancies();
+        
+        const filterSource = document.getElementById('batchEditSourceSelect').value;
+        const filterDate = document.getElementById('batchEditDateSelect').value;
+        
+        if (!filterSource && !filterDate) {
+            const total = Object.values(_batchVacancyData).reduce((sum, m) => sum + Object.keys(m).length, 0);
+            countEl.textContent = `전체 ${total}건 (필터를 선택하세요)`;
+            countEl.style.color = '#6b7280';
+        } else {
+            countEl.textContent = `매칭: ${matches.length}건`;
+            countEl.style.color = matches.length > 0 ? '#7c3aed' : '#dc2626';
+        }
+        
+        // 결과 영역 리셋
+        document.getElementById('batchEditResult').style.display = 'none';
+    }
+    
+    function previewBatchEdit() {
+        const matches = _getMatchingVacancies();
+        const resultEl = document.getElementById('batchEditResult');
+        
+        if (matches.length === 0) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<div style="color: #dc2626; text-align: center;">매칭되는 vacancy가 없습니다. 필터를 확인해주세요.</div>';
+            return;
+        }
+        
+        const newSource = document.getElementById('batchEditNewSource').value.trim();
+        const newDate = document.getElementById('batchEditNewDate').value.trim();
+        
+        if (!newSource && !newDate) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<div style="color: #dc2626; text-align: center;">새 기업명 또는 새 발행연월을 하나 이상 입력해주세요.</div>';
+            return;
+        }
+        
+        // 빌딩별 그룹핑
+        const grouped = {};
+        matches.forEach(m => {
+            if (!grouped[m.buildingName]) grouped[m.buildingName] = [];
+            grouped[m.buildingName].push(m);
+        });
+        
+        let html = `<div style="font-weight:600; margin-bottom:8px; color:#5b21b6;">📋 변경 미리보기 (${matches.length}건)</div>`;
+        html += '<table style="width:100%; border-collapse:collapse; font-size:11px;">';
+        html += '<tr style="background:#f5f3ff;"><th style="padding:4px 6px; text-align:left; border-bottom:1px solid #ddd6fe;">빌딩</th><th style="padding:4px 6px; text-align:left; border-bottom:1px solid #ddd6fe;">층</th>';
+        if (newSource) html += '<th style="padding:4px 6px; text-align:left; border-bottom:1px solid #ddd6fe;">기업명 변경</th>';
+        if (newDate) html += '<th style="padding:4px 6px; text-align:left; border-bottom:1px solid #ddd6fe;">발행연월 변경</th>';
+        html += '</tr>';
+        
+        Object.entries(grouped).forEach(([bName, vacs]) => {
+            vacs.forEach((v, i) => {
+                html += '<tr style="border-bottom:1px solid #ede9fe;">';
+                html += `<td style="padding:3px 6px;">${i === 0 ? bName : ''}</td>`;
+                html += `<td style="padding:3px 6px;">${v.floor || '-'}</td>`;
+                if (newSource) html += `<td style="padding:3px 6px;"><span style="color:#999;text-decoration:line-through;">${v.source || '(없음)'}</span> → <span style="color:#7c3aed;font-weight:600;">${newSource}</span></td>`;
+                if (newDate) html += `<td style="padding:3px 6px;"><span style="color:#999;text-decoration:line-through;">${v.publishDate || '(없음)'}</span> → <span style="color:#7c3aed;font-weight:600;">${newDate}</span></td>`;
+                html += '</tr>';
+            });
+        });
+        
+        html += '</table>';
+        resultEl.style.display = 'block';
+        resultEl.innerHTML = html;
+    }
+    
+    async function executeBatchEdit() {
+        const matches = _getMatchingVacancies();
+        
+        if (matches.length === 0) {
+            if (typeof showToast === 'function') showToast('매칭되는 vacancy가 없습니다', 'error');
+            return;
+        }
+        
+        const newSource = document.getElementById('batchEditNewSource').value.trim();
+        const newDate = document.getElementById('batchEditNewDate').value.trim();
+        
+        if (!newSource && !newDate) {
+            if (typeof showToast === 'function') showToast('새 기업명 또는 발행연월을 입력해주세요', 'error');
+            return;
+        }
+        
+        // 변경 내용 요약
+        let changeDesc = [];
+        if (newSource) changeDesc.push(`기업명→${newSource}`);
+        if (newDate) changeDesc.push(`발행연월→${newDate}`);
+        
+        if (!confirm(`${matches.length}건의 vacancy를 일괄 수정합니다.\n\n변경: ${changeDesc.join(', ')}\n\n계속하시겠습니까?`)) {
+            return;
+        }
+        
+        try {
+            const { db, ref, update } = await import('./js/portal-firebase.js');
+            
+            const updates = {};
+            matches.forEach(m => {
+                if (newSource) updates[`vacancies/${m.buildingId}/${m.vacId}/source`] = newSource;
+                if (newDate) updates[`vacancies/${m.buildingId}/${m.vacId}/publishDate`] = newDate;
+            });
+            
+            await update(ref(db), updates);
+            
+            // 로그 기록
+            const { push } = await import('./js/portal-firebase.js');
+            const logEntry = {
+                type: 'batchEdit',
+                action: 'vacancy_bulk_update',
+                count: matches.length,
+                changes: { newSource: newSource || null, newDate: newDate || null },
+                filterSource: document.getElementById('batchEditSourceSelect').value || null,
+                filterDate: document.getElementById('batchEditDateSelect').value || null,
+                user: window.state?.currentUser?.displayName || 'unknown',
+                timestamp: new Date().toISOString()
+            };
+            
+            try {
+                await push(ref(db, 'buildingEditLogs'), logEntry);
+            } catch (logErr) {
+                console.warn('로그 기록 실패 (무시):', logErr);
+            }
+            
+            // ★ 내부 캐시도 동기화
+            matches.forEach(m => {
+                if (_batchVacancyData[m.buildingId]?.[m.vacId]) {
+                    if (newSource) _batchVacancyData[m.buildingId][m.vacId].source = newSource;
+                    if (newDate) _batchVacancyData[m.buildingId][m.vacId].publishDate = newDate;
+                }
+            });
+            
+            // ★ NEW-1 UX 개선: 토스트 + 모달 닫기 + 리프레시
+            if (typeof showToast === 'function') {
+                showToast(`${matches.length}건 일괄 수정 완료 (${changeDesc.join(', ')})`, 'success');
+            }
+            
+            // 모달 닫기
+            const modal = document.getElementById('ocrManageModal');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+            }
+            // 오버레이도 정리
+            const overlay = document.getElementById('modalOverlay');
+            if (overlay) overlay.classList.remove('show');
+            
+            // 선택된 빌딩 상세 패널 리프레시
+            if (typeof refreshAfterCrud === 'function') {
+                refreshAfterCrud(() => {
+                    if (typeof renderInfoSection === 'function') renderInfoSection();
+                    else if (window.renderInfoSection) window.renderInfoSection();
+                });
+            } else {
+                // fallback: 전체 데이터 리로드
+                if (window.loadData) {
+                    setTimeout(() => window.loadData(), 500);
+                }
+            }
+            
+        } catch (error) {
+            console.error('일괄 수정 오류:', error);
+            if (typeof showToast === 'function') {
+                showToast('일괄 수정 실패: ' + error.message, 'error');
+            }
+        }
+    }
+    
+    // 전역 등록
+    window.toggleBatchEditPanel = toggleBatchEditPanel;
+    window.loadBatchEditSources = loadBatchEditSources;
+    window.updateBatchEditCount = updateBatchEditCount;
+    window.previewBatchEdit = previewBatchEdit;
+    window.executeBatchEdit = executeBatchEdit;
     </script>
     
     <!-- Comp List 스타일 -->
