@@ -5,7 +5,26 @@
  * 1. 중복 빌딩 탐지 (주소 기반 + 이름 유사도)
  * 2. 통합(병합) UI — 필드별 선택, 데이터 이관
  * 3. aliases 관리 — OCR 매칭 정확도 향상
+ * 
+ * v1.1 수정사항 (2026-02-10):
+ * - ★ Firebase Modular SDK 호환: firebase.database() → portal-firebase.js 동적 import
  */
+
+// ============================================================
+// Firebase 참조 헬퍼 (Modular SDK 대응)
+// ============================================================
+async function getMergeFirebaseRefs() {
+    const mod = await import('./js/portal-firebase.js');
+    return {
+        db: mod.db,
+        ref: mod.ref,
+        get: mod.get,
+        set: mod.set,
+        update: mod.update,
+        remove: mod.remove,
+        push: mod.push
+    };
+}
 
 // ============================================================
 // 주소 정규화 유틸 (admin-leasing.html과 동일 로직 공유)
@@ -74,8 +93,8 @@ function normalizeBuildingName(name) {
  * @returns {Array<{groupId, buildings: [{id, name, address, ...}], matchType, similarity}>}
  */
 async function detectDuplicateBuildings() {
-    const db = firebase.database();
-    const snap = await db.ref('buildings').once('value');
+    const { db, ref, get } = await getMergeFirebaseRefs();
+    const snap = await get(ref(db, 'buildings'));
     const buildings = snap.val() || {};
     
     const entries = Object.entries(buildings)
@@ -379,10 +398,10 @@ async function openMergeView(groupIdx) {
     const container = document.getElementById('dupManagerContent');
     
     // Firebase에서 최신 데이터 로드
-    const db = firebase.database();
+    const { db, ref, get } = await getMergeFirebaseRefs();
     const freshBuildings = [];
     for (const b of group.buildings) {
-        const snap = await db.ref(`buildings/${b.id}`).once('value');
+        const snap = await get(ref(db, `buildings/${b.id}`));
         const data = snap.val();
         if (data) freshBuildings.push({ id: b.id, ...data });
     }
@@ -591,7 +610,7 @@ async function executeMerge() {
         return;
     }
     
-    const db = firebase.database();
+    const { db, ref, get, set, update, remove, push } = await getMergeFirebaseRefs();
     
     try {
         // 1. 필드별 선택값 수집
@@ -637,7 +656,7 @@ async function executeMerge() {
             }
         ];
         
-        await db.ref(`buildings/${masterId}`).update(mergedFields);
+        await update(ref(db, `buildings/${masterId}`), mergedFields);
         console.log(`✅ Master ${masterId} 업데이트 완료`, mergedFields);
         
         // 4. 하위 데이터 이관
@@ -646,16 +665,16 @@ async function executeMerge() {
         for (const ab of absorbedBuildings) {
             for (const col of collections) {
                 try {
-                    const colSnap = await db.ref(`${col}/${ab.id}`).once('value');
+                    const colSnap = await get(ref(db, `${col}/${ab.id}`));
                     const colData = colSnap.val();
                     if (colData && typeof colData === 'object') {
                         // Master에 데이터 복사 (기존 키와 충돌 방지)
                         for (const [key, val] of Object.entries(colData)) {
                             const newKey = key.startsWith(`${ab.id}_`) ? key : `merged_${ab.id}_${key}`;
                             // Master에 같은 키가 있으면 merged_ 접두사
-                            const existSnap = await db.ref(`${col}/${masterId}/${key}`).once('value');
+                            const existSnap = await get(ref(db, `${col}/${masterId}/${key}`));
                             const targetKey = existSnap.exists() ? newKey : key;
-                            await db.ref(`${col}/${masterId}/${targetKey}`).set(val);
+                            await set(ref(db, `${col}/${masterId}/${targetKey}`), val);
                         }
                         console.log(`📦 ${col}/${ab.id} → ${masterId} 이관 완료`);
                     }
@@ -665,15 +684,15 @@ async function executeMerge() {
             }
             
             // 5. 흡수 빌딩 삭제
-            await db.ref(`buildings/${ab.id}`).remove();
+            await remove(ref(db, `buildings/${ab.id}`));
             // 흡수 빌딩의 원본 하위 데이터도 삭제
             for (const col of collections) {
-                await db.ref(`${col}/${ab.id}`).remove();
+                await remove(ref(db, `${col}/${ab.id}`));
             }
             console.log(`🗑️ 흡수 빌딩 ${ab.id} (${ab.name}) 삭제 완료`);
             
             // 6. buildingEditLogs에 병합 기록
-            await db.ref(`buildingEditLogs/${masterId}`).push({
+            await push(ref(db, `buildingEditLogs/${masterId}`), {
                 action: 'merge',
                 absorbed: { id: ab.id, name: ab.name },
                 timestamp: new Date().toISOString(),

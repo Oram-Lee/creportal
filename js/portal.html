@@ -1,0 +1,3900 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRE PORTAL</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+    <!-- 로그인 -->
+    <div class="login-container" id="loginScreen">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="icon">🏢</div>
+                <h1>CRE PORTAL</h1>
+                <p>상업용 부동산 통합 관리 시스템</p>
+            </div>
+            <div class="login-error" id="loginError"></div>
+            <div class="form-group">
+                <label>이메일</label>
+                <input type="email" id="loginEmail" placeholder="example@company.com" onkeypress="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+            </div>
+            <div class="form-group">
+                <label>비밀번호</label>
+                <input type="password" id="loginPassword" placeholder="••••••••" onkeypress="if(event.key==='Enter')window.handleLogin()">
+            </div>
+            <div class="form-group" style="display:flex; flex-direction:row; align-items:center; gap:8px;">
+                <input type="checkbox" id="saveEmail" style="width:16px; height:16px; accent-color:var(--accent-color);">
+                <label for="saveEmail" style="margin:0; font-size:13px; cursor:pointer;">이메일 저장</label>
+            </div>
+            <button class="btn btn-primary" onclick="window.handleLogin()">로그인</button>
+        </div>
+    </div>
+
+    <!-- 메인 앱 -->
+    <div class="app-container" id="appContainer">
+        <header class="header">
+            <div class="header-logo"><span class="icon">🏢</span> CRE PORTAL</div>
+            <nav class="header-nav">
+                <div class="nav-item active" data-view="map" onclick="setViewMode('map')"><span class="nav-icon">🗺️</span> 지도</div>
+                <div class="nav-item" data-view="list" onclick="setViewMode('list')"><span class="nav-icon">🔍</span> 검색</div>
+                <a href="building-register.html" class="nav-item nav-highlight"><span class="nav-icon">➕</span> 빌딩추가</a>
+                <a href="complist.html" class="nav-item"><span class="nav-icon">📋</span> Comp List</a>
+                <a href="leasing-guide.html" class="nav-item"><span class="nav-icon">📄</span> 임대안내문</a>
+                <div class="nav-item"><span class="nav-icon">📊</span> 시계열</div>
+                <a href="admin-leasing.html" class="nav-item"><span class="nav-icon">⚙️</span> OCR관리</a>
+                <div class="nav-item" onclick="openDuplicateManager()" title="동일주소 빌딩 통합 관리"><span class="nav-icon">🔗</span> 중복관리</div>
+            </nav>
+            <div class="header-right">
+                <button class="theme-btn" onclick="toggleTheme()" title="다크모드">🌙</button>
+                <div class="user-info">
+                    <span class="user-email" id="userName">사용자</span>
+                    <span class="user-role">admin</span>
+                </div>
+                <button class="logout-btn" onclick="handleLogout()">로그아웃</button>
+            </div>
+        </header>
+
+        <div class="filter-bar">
+            <div class="search-box">
+                <span class="icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="빌딩명, 주소, 인근역 검색...">
+            </div>
+            <div class="filter-chip" data-filter="region">
+                <span class="chip-icon">📍</span> 권역 <span class="arrow">▾</span>
+                <div class="filter-dropdown" id="filterRegion">
+                    <h4>권역 선택 (복수 선택)</h4>
+                    <div class="filter-options">
+                        <div class="filter-option" data-value="GBD">GBD</div>
+                        <div class="filter-option" data-value="YBD">YBD</div>
+                        <div class="filter-option" data-value="CBD">CBD</div>
+                        <div class="filter-option" data-value="BBD">BBD</div>
+                        <div class="filter-option" data-value="ETC">기타</div>
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="clearFilter('region')">초기화</button>
+                        <button class="btn btn-primary btn-sm" onclick="applyFilter('region')">적용</button>
+                    </div>
+                </div>
+            </div>
+            <div class="filter-chip" data-filter="area">
+                <span class="chip-icon">📐</span> 면적 <span class="arrow">▾</span>
+                <div class="filter-dropdown" id="filterArea">
+                    <h4>연면적 (평)</h4>
+                    <div class="filter-range">
+                        <input type="number" id="areaMin" placeholder="최소">
+                        <span>~</span>
+                        <input type="number" id="areaMax" placeholder="최대">
+                    </div>
+                    <h4 style="margin-top:12px;">공실 전용면적 (평)</h4>
+                    <div class="filter-range">
+                        <input type="number" id="vacancyAreaMin" placeholder="최소">
+                        <span>~</span>
+                        <input type="number" id="vacancyAreaMax" placeholder="최대">
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="clearFilter('area')">초기화</button>
+                        <button class="btn btn-primary btn-sm" onclick="applyFilter('area')">적용</button>
+                    </div>
+                </div>
+            </div>
+            <div class="filter-chip" data-filter="rent">
+                <span class="chip-icon">💰</span> 임대료 <span class="arrow">▾</span>
+                <div class="filter-dropdown" id="filterRent">
+                    <h4>임대료 (만원/평)</h4>
+                    <div class="filter-range">
+                        <input type="number" id="rentMin" placeholder="최소">
+                        <span>~</span>
+                        <input type="number" id="rentMax" placeholder="최대">
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="clearFilter('rent')">초기화</button>
+                        <button class="btn btn-primary btn-sm" onclick="applyFilter('rent')">적용</button>
+                    </div>
+                </div>
+            </div>
+            <div class="filter-chip" data-filter="efficiency">
+                <span class="chip-icon">📏</span> 전용률 <span class="arrow">▾</span>
+                <div class="filter-dropdown" id="filterEfficiency">
+                    <h4>전용률 (%)</h4>
+                    <div class="filter-range">
+                        <input type="number" id="effMin" placeholder="최소">
+                        <span>~</span>
+                        <input type="number" id="effMax" placeholder="최대">
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="clearFilter('efficiency')">초기화</button>
+                        <button class="btn btn-primary btn-sm" onclick="applyFilter('efficiency')">적용</button>
+                    </div>
+                </div>
+            </div>
+            <div class="filter-chip" data-filter="incentive">
+                <span class="chip-icon">🎁</span> 인센티브 <span class="arrow">▾</span>
+                <div class="filter-dropdown" id="filterIncentive">
+                    <h4>인센티브 조건</h4>
+                    <div class="filter-options">
+                        <div class="filter-option" data-value="hasIncentive">인센티브 有</div>
+                        <div class="filter-option" data-value="noIncentive">인센티브 無</div>
+                    </div>
+                    <div class="filter-actions">
+                        <button class="btn btn-secondary btn-sm" onclick="clearFilter('incentive')">초기화</button>
+                        <button class="btn btn-primary btn-sm" onclick="applyFilter('incentive')">적용</button>
+                    </div>
+                </div>
+            </div>
+            <label class="vacancy-filter-check" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border:none;">
+                <input type="checkbox" id="leasingGuideCheck" onchange="toggleLeasingGuideFilter(this.checked)" style="accent-color:#f59e0b;">
+                <span>📄 우리 안내문 물건</span>
+            </label>
+            <button class="detail-filter-btn" onclick="openDetailFilter()">+ 상세필터</button>
+            <label class="vacancy-filter-check">
+                <input type="checkbox" id="hasVacancyCheck" checked onchange="toggleVacancyFilter(this.checked)">
+                <span>공실 있는 빌딩만</span>
+            </label>
+            <span class="filter-reset" onclick="resetAllFilters()">필터 초기화</span>
+        </div>
+
+        <div class="main-content">
+            <!-- 지도 뷰 -->
+            <div class="map-view" id="mapView">
+                <div class="map-container">
+                    <div id="kakaoMap"></div>
+                    <div class="map-placeholder" id="mapPlaceholder">
+                        <div class="icon">🗺️</div>
+                        <p>카카오맵 로딩 중...</p>
+                    </div>
+                    <div class="map-controls">
+                        <button class="map-btn" onclick="zoomIn()">+</button>
+                        <button class="map-btn" onclick="zoomOut()">−</button>
+                        <button class="map-btn" onclick="resetMap()">⌂</button>
+                    </div>
+                </div>
+                <div class="list-panel">
+                    <div class="list-header">
+                        <h3>빌딩 목록</h3>
+                        <span class="list-count" id="buildingCount">0개</span>
+                    </div>
+                    <div class="list-tabs">
+                        <div class="list-tab active" data-tab="all">전체</div>
+                        <div class="list-tab" data-tab="viewport">지도영역</div>
+                        <div class="list-tab" data-tab="starred">관심 ⭐</div>
+                    </div>
+                    <div class="list-content" id="buildingList">
+                        <div class="loading"><div class="spinner"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 리스트 뷰 -->
+            <div class="table-view" id="tableView">
+                <div class="table-container">
+                    <!-- 헤더 -->
+                    <div class="building-header-row">
+                        <div>No.</div>
+                        <div style="text-align:left;">빌딩명</div>
+                        <div>빌딩 정보</div>
+                        <div>공실</div>
+                        <div>렌트롤</div>
+                        <div>메모</div>
+                        <div>인센티브</div>
+                        <div>안내문</div>
+                        <div></div>
+                    </div>
+                    <!-- 빌딩 목록 -->
+                    <div id="buildingListView"></div>
+                </div>
+                <div class="table-footer">
+                    <div class="info">총 <strong id="tableCount">0</strong>개 빌딩 | 선택: <strong id="selectedCount">0</strong>개</div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-secondary btn-sm" onclick="exportSelected()">📥 선택 내보내기</button>
+                        <button class="btn btn-primary btn-sm" onclick="createLeasingGuide()">📄 임대안내문 만들기</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 상세 패널 -->
+    <div class="overlay" id="detailOverlay" onclick="closeDetail()"></div>
+    <div class="detail-panel" id="detailPanel">
+        <div class="detail-header" style="position: relative;">
+            <button class="close-btn" onclick="closeDetail()" style="position: absolute; top: 0; right: 0; background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted, #888); z-index: 10;">×</button>
+            <div style="display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 8px; padding-right: 30px;">
+                <!-- ★ 숨기기 버튼 (isHidden 처리) -->
+                <button id="detailHideBtn" class="detail-action-btn" onclick="handleBuildingHide()" title="숨기기" style="display:none; padding: 4px 10px; border: 1px solid #f59e0b; border-radius: 4px; background: transparent; color: #f59e0b; font-size: 12px; cursor: pointer;">🚫 숨기기</button>
+                <!-- ★ 완전삭제 버튼 (Firebase에서 삭제) -->
+                <button id="detailDeleteBtn" class="detail-action-btn" onclick="handleBuildingPermanentDelete()" title="완전삭제" style="display:none; padding: 4px 10px; border: 1px solid #dc2626; border-radius: 4px; background: transparent; color: #dc2626; font-size: 12px; cursor: pointer;">🗑️ 완전삭제</button>
+                <!-- 복원 버튼 -->
+                <button id="detailRestoreBtn" class="detail-action-btn" onclick="handleBuildingRestore()" title="복원" style="display:none; padding: 4px 10px; border: 1px solid #16a34a; border-radius: 4px; background: transparent; color: #16a34a; font-size: 12px; cursor: pointer;">♻️ 복원</button>
+            </div>
+            <div class="detail-title-row">
+                <h2 id="detailTitle">빌딩명</h2>
+                <button class="detail-star-btn" id="detailStarBtn" onclick="toggleDetailStar()" title="즐겨찾기">☆</button>
+                <!-- ★ v2.0: 빌딩 정보 편집 버튼 -->
+                <button onclick="openBuildingEditModal()" 
+                        style="padding: 4px 10px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 4px; cursor: pointer; font-size: 11px; color: #2563eb; margin-left: 8px;"
+                        title="빌딩 기본정보 편집">
+                    🏢 빌딩정보
+                </button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <p class="sub" id="detailSubtitle" style="margin: 0;">주소</p>
+                <button onclick="openAddressEditModal()" 
+                        style="padding: 2px 8px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; font-size: 11px; color: #64748b;"
+                        title="OCR로 잘못 매핑된 주소를 수정합니다">
+                    ✏️ 수정
+                </button>
+            </div>
+            <!-- 빌딩 상태 표시 (히든/삭제 시) -->
+            <div id="buildingStatusBanner" style="display:none; margin-top: 8px; padding: 8px 12px; border-radius: 6px; font-size: 12px;"></div>
+        </div>
+        <div class="detail-tabs">
+            <div class="detail-tab active" data-section="info">기본정보</div>
+            <div class="detail-tab" data-section="pricing">💰기준가 <span class="count" id="pricingCount">0</span></div>
+            <div class="detail-tab" data-section="rentroll">렌트롤 <span class="count" id="rentrollCount">0</span></div>
+            <div class="detail-tab" data-section="memo">메모 <span class="count" id="memoCount">0</span></div>
+            <div class="detail-tab" data-section="incentive">인센티브</div>
+            <div class="detail-tab" data-section="document">📄안내문 <span class="count" id="documentCount">0</span></div>
+            <div class="detail-tab" data-section="contact">👤담당자 <span class="count" id="contactCount">0</span></div>
+        </div>
+        <div class="detail-content">
+            <div class="detail-section active" id="sectionInfo"></div>
+            <div class="detail-section" id="sectionPricing"></div>
+            <div class="detail-section" id="sectionRentroll"></div>
+            <div class="detail-section" id="sectionMemo"></div>
+            <div class="detail-section" id="sectionIncentive"></div>
+            <div class="detail-section" id="sectionDocument"></div>
+            <div class="detail-section" id="sectionContact"></div>
+        </div>
+    </div>
+
+    <!-- 모달 -->
+    <div class="modal" id="rentrollModal">
+        <div class="modal-header"><h3 class="modal-title" id="rentrollModalTitle">렌트롤 추가</h3><button class="close-btn" onclick="closeModal('rentrollModal')">×</button></div>
+        <form id="rentrollForm">
+            <input type="hidden" id="rentrollId">
+            <div class="form-row"><label>층수</label><input type="text" id="rentrollFloor" required></div>
+            <div class="form-row"><label>입주사</label><input type="text" id="rentrollTenant" required></div>
+            <div class="form-row"><label>계약 시작</label><input type="text" id="rentrollStart" placeholder="2024.01"></div>
+            <div class="form-row"><label>계약 종료</label><input type="text" id="rentrollEnd" placeholder="2029.01"></div>
+            <div class="form-row"><label>비고</label><textarea id="rentrollNote"></textarea></div>
+            <div class="form-actions"><button type="button" class="btn btn-secondary" onclick="closeModal('rentrollModal')">취소</button><button type="submit" class="btn btn-primary">저장</button></div>
+        </form>
+    </div>
+    <div class="modal" id="memoModal">
+        <div class="modal-header"><h3 class="modal-title">메모 추가</h3><button class="close-btn" onclick="closeModal('memoModal')">×</button></div>
+        <form id="memoForm">
+            <input type="hidden" id="memoId">
+            <div class="form-row"><label>내용</label><textarea id="memoText" required></textarea></div>
+            <div class="form-row" style="display:flex; gap:24px; align-items: center;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; white-space:nowrap;">
+                    <input type="checkbox" id="memoPinned" style="width:16px; height:16px; accent-color:#2563eb;">
+                    <span>📌 고정</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; white-space:nowrap;">
+                    <input type="checkbox" id="memoShowInGuide" style="width:16px; height:16px; accent-color:#f59e0b;">
+                    <span>📄 임대안내문에 표기</span>
+                </label>
+            </div>
+            <div class="form-actions" style="display:flex; gap:12px; margin-top:16px;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('memoModal')" style="flex:1;">취소</button>
+                <button type="submit" class="btn btn-primary" style="flex:1;">저장</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- 기준가 모달 -->
+    <div class="modal" id="pricingModal" style="max-width: 500px;">
+        <div class="modal-header"><h3 class="modal-title" id="pricingModalTitle">기준가 추가</h3><button class="close-btn" onclick="closeModal('pricingModal')">×</button></div>
+        <form id="pricingForm">
+            <input type="hidden" id="pricingId">
+            <div class="form-row">
+                <label>구분 선택 <span style="color:#dc2626">*</span></label>
+                <select id="pricingPreset" onchange="handleFloorPresetChange()" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary); margin-bottom: 10px;">
+                    <option value="">-- 구분 선택 --</option>
+                    <option value="typical">📊 기준층 (전체 또는 대표층)</option>
+                    <option value="low">⬇️ 저층부 (B1~5F)</option>
+                    <option value="midlow">↘️ 중저층부 (6~10F)</option>
+                    <option value="mid">↔️ 중층부 (11~15F)</option>
+                    <option value="midhigh">↗️ 중고층부 (16~20F)</option>
+                    <option value="high">⬆️ 고층부 (21F~)</option>
+                    <option value="custom">✏️ 직접입력</option>
+                </select>
+                <input type="text" id="pricingLabel" placeholder="예: 저층부, 고층부, 기준층" required>
+            </div>
+            <div class="form-row">
+                <label>층 범위 <span style="color:#dc2626">*</span></label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <input type="text" id="pricingFloorStart" placeholder="시작층 (B1, 1)" style="flex:1;" required>
+                    <span style="color: var(--text-muted);">~</span>
+                    <input type="text" id="pricingFloorEnd" placeholder="종료층 (10, 20)" style="flex:1;" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <label>면적 정보</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">임대면적 (평)</small>
+                        <input type="number" id="pricingRentArea" placeholder="1,500" step="0.01">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">전용면적 (평)</small>
+                        <input type="number" id="pricingExclusiveArea" placeholder="850" step="0.01">
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <label>임대조건 (평당, 만원 단위)</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">보증금</small>
+                        <input type="number" id="pricingDeposit" placeholder="80" step="0.1">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">임대료</small>
+                        <input type="number" id="pricingRent" placeholder="8.5" step="0.1">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">관리비</small>
+                        <input type="number" id="pricingMaintenance" placeholder="3.5" step="0.1">
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <label>적용일</label>
+                <input type="date" id="pricingEffectiveDate">
+            </div>
+            <div class="form-row">
+                <label>비고</label>
+                <input type="text" id="pricingNotes" placeholder="예: 전망 프리미엄, 협의 가능">
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('pricingModal')">취소</button>
+                <button type="submit" class="btn btn-primary">저장</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- 인센티브 모달 -->
+    <div class="modal" id="incentiveModal" style="max-width: 500px;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white;">
+            <h3 class="modal-title" id="incentiveModalTitle">🎁 인센티브 추가</h3>
+            <button class="close-btn" onclick="closeModal('incentiveModal')" style="color: white;">×</button>
+        </div>
+        <form id="incentiveForm" style="padding: 20px;">
+            <input type="hidden" id="incentiveId">
+            
+            <div style="padding: 16px; background: #f5f3ff; border-radius: 8px; margin-bottom: 16px; font-size: 12px; color: #6d28d9;">
+                💡 임차인에게 제공하는 인센티브 조건을 입력하세요
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px;">
+                <div class="form-row" style="margin-bottom: 0;">
+                    <label>Rent Free (개월)</label>
+                    <input type="number" id="incentiveRentFree" step="0.5" min="0" placeholder="0" style="text-align: center;">
+                </div>
+                <div class="form-row" style="margin-bottom: 0;">
+                    <label>Fit-Out (원/평)</label>
+                    <input type="number" id="incentiveFitOut" step="1" min="0" placeholder="0" style="text-align: center;">
+                </div>
+                <div class="form-row" style="margin-bottom: 0;">
+                    <label>TI (원/평)</label>
+                    <input type="number" id="incentiveTI" step="1" min="0" placeholder="0" style="text-align: center;">
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <label>적용 조건</label>
+                <input type="text" id="incentiveCondition" placeholder="예: 5년 이상 계약 시, 1,000평 이상 임차 시">
+            </div>
+            
+            <div class="form-row">
+                <label>유효 기간</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <input type="date" id="incentiveStartDate" placeholder="시작일">
+                    <input type="date" id="incentiveEndDate" placeholder="종료일">
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <label>비고</label>
+                <textarea id="incentiveNote" rows="2" placeholder="추가 조건이나 참고사항"></textarea>
+            </div>
+            
+            <div class="form-actions" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('incentiveModal')">취소</button>
+                <button type="submit" class="btn btn-primary" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);">저장</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- 담당자 모달 -->
+    <div class="modal" id="contactModal" style="max-width: 500px;">
+        <div class="modal-header"><h3 class="modal-title" id="contactModalTitle">담당자 추가</h3><button class="close-btn" onclick="closeModal('contactModal')">×</button></div>
+        <form id="contactForm">
+            <input type="hidden" id="contactId">
+            <input type="hidden" id="contactUserId">
+            
+            <!-- 우리 담당자 체크박스 (맨 위로) -->
+            <div class="form-row" style="margin-bottom: 16px; padding: 12px 16px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 8px; border: 1px solid #86efac;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin: 0;">
+                    <input type="checkbox" id="contactIsOurManager" onchange="toggleOurManagerSelection()" style="width: 18px; height: 18px; accent-color: #16a34a;"> 
+                    <span style="font-weight: 600; font-size: 14px; color: #166534;">🏷️ 우리 담당자 (S&I 직원)</span>
+                </label>
+            </div>
+            
+            <!-- 우리 담당자 선택 영역 (체크 시 표시) -->
+            <div id="ourManagerSelectionArea" style="display: none; margin-bottom: 16px; padding: 16px; background: var(--bg-secondary); border-radius: 10px; border: 1px solid var(--border-color);">
+                <div style="font-size: 12px; font-weight: 600; color: #166534; margin-bottom: 10px;">👥 S&I 직원 선택</div>
+                <div id="ourManagerList" style="max-height: 200px; overflow-y: auto;">
+                    <div style="color: var(--text-muted); font-size: 13px;">로딩 중...</div>
+                </div>
+                <div id="selectedManagersPreview" style="margin-top: 12px; display: none;">
+                    <div style="font-size: 11px; color: #166534; margin-bottom: 6px;">선택된 담당자:</div>
+                    <div id="selectedManagersList" style="display: flex; flex-wrap: wrap; gap: 6px;"></div>
+                </div>
+            </div>
+            
+            <!-- 일반 입력 영역 (우리 담당자 아닐 때) -->
+            <div id="manualInputArea">
+                <div class="form-row">
+                    <label>담당자명 <span style="color:#dc2626">*</span></label>
+                    <input type="text" id="contactName" placeholder="홍길동" required>
+                </div>
+                <div class="form-row">
+                    <label>연락처 <span style="color:#dc2626">*</span></label>
+                    <input type="tel" id="contactPhone" placeholder="010-1234-5678" required>
+                </div>
+                <div class="form-row">
+                    <label>이메일</label>
+                    <input type="email" id="contactEmail" placeholder="example@company.com">
+                </div>
+                <div class="form-row">
+                    <label>소속</label>
+                    <input type="text" id="contactCompany" placeholder="한화생명 (임대팀)">
+                </div>
+                <div class="form-row">
+                    <label>구분</label>
+                    <select id="contactType" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary);">
+                        <option value="owner">빌딩주/임대팀</option>
+                        <option value="manager">관리사무소</option>
+                        <option value="broker">중개사</option>
+                        <option value="other">기타</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-row" style="margin-bottom: 12px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                    <input type="checkbox" id="contactPrimary" style="width: 16px; height: 16px; accent-color: var(--accent-color);"> 
+                    <span>⭐ 주 담당자로 설정</span>
+                </label>
+            </div>
+            <div class="form-row">
+                <label style="display: block; margin-bottom: 6px;">메모</label>
+                <input type="text" id="contactNotes" placeholder="담당자 관련 메모">
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('contactModal')">취소</button>
+                <button type="submit" class="btn btn-primary">저장</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- 임대안내문 담당자 지정 모달 -->
+    <div class="modal" id="assignManagerModal" style="max-width: 550px;">
+        <div class="modal-header">
+            <h3 class="modal-title">📋 임대안내문 담당자 지정</h3>
+            <button class="close-btn" onclick="closeModal('assignManagerModal')">×</button>
+        </div>
+        <div style="padding: 0 0 20px 0;">
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                이 빌딩의 임대안내문 담당자를 지정합니다. 담당자 이력이 기록됩니다.
+            </p>
+            
+            <!-- 현재 담당자 -->
+            <div style="margin-bottom: 16px;">
+                <label style="display:block; font-size: 13px; font-weight: 600; margin-bottom: 8px;">현재 담당자</label>
+                <div id="currentAssignedManager" style="padding: 12px; background: var(--bg-secondary); border-radius: 8px; font-size: 14px;">
+                    지정된 담당자 없음
+                </div>
+            </div>
+            
+            <!-- 담당자 선택 -->
+            <div style="margin-bottom: 16px;">
+                <label style="display:block; font-size: 13px; font-weight: 600; margin-bottom: 8px;">담당자 지정</label>
+                <select id="assignManagerSelect" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary);">
+                    <option value="">-- 담당자 선택 --</option>
+                </select>
+            </div>
+            
+            <!-- 임대안내문 선택 -->
+            <div style="margin-bottom: 16px;">
+                <label style="display:block; font-size: 13px; font-weight: 600; margin-bottom: 8px;">적용할 임대안내문 (선택)</label>
+                <select id="assignGuideSelect" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary);">
+                    <option value="">-- 전체 적용 (빌딩 기본 담당자) --</option>
+                </select>
+            </div>
+            
+            <!-- 담당자 이력 -->
+            <div>
+                <label style="display:block; font-size: 13px; font-weight: 600; margin-bottom: 8px;">📜 담당자 변경 이력</label>
+                <div id="managerHistory" style="max-height: 150px; overflow-y: auto; background: var(--bg-secondary); border-radius: 8px; padding: 12px;">
+                    <div style="color: var(--text-muted); font-size: 13px;">이력이 없습니다</div>
+                </div>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('assignManagerModal')">취소</button>
+            <button type="button" class="btn btn-primary" onclick="saveAssignedManager()">저장</button>
+        </div>
+    </div>
+    
+    <!-- 빌딩 삭제 확인 모달 -->
+    <div class="modal" id="deleteConfirmModal" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3 class="modal-title" style="color: #dc2626;">⚠️ 빌딩 삭제</h3>
+            <button class="close-btn" onclick="closeModal('deleteConfirmModal')">×</button>
+        </div>
+        <div style="padding: 0 0 20px 0;">
+            <p id="deleteConfirmMessage" style="font-size: 14px; line-height: 1.6; margin-bottom: 16px;"></p>
+            <div id="deleteConfirmDetails" style="padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; font-size: 13px; color: #991b1b;"></div>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('deleteConfirmModal')">취소</button>
+            <button type="button" id="deleteConfirmBtn" class="btn" style="background: #dc2626; color: white;" onclick="confirmBuildingDelete()">삭제</button>
+        </div>
+    </div>
+    
+    <!-- 빌딩 노트 모달 -->
+    <div class="modal" id="buildingNoteModal" style="max-width: 500px;">
+        <div class="modal-header"><h3 class="modal-title">📝 빌딩 노트 편집</h3><button class="close-btn" onclick="closeModal('buildingNoteModal')">×</button></div>
+        <form id="buildingNoteForm">
+            <div class="form-row">
+                <label>빌딩 관련 메모/노트</label>
+                <textarea id="buildingNoteText" rows="6" placeholder="리모델링 일정, 특이사항, 주의사항 등을 기록하세요..."></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('buildingNoteModal')">취소</button>
+                <button type="submit" class="btn btn-primary">저장</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- 빌딩 정보 편집 모달 -->
+    <div class="modal" id="buildingEditModal" style="max-width: 620px; max-height: 85vh; overflow-y: auto;">
+        <div class="modal-header">
+            <h3 class="modal-title">✏️ 빌딩 정보 편집</h3>
+            <button class="close-btn" onclick="closeModal('buildingEditModal')">×</button>
+        </div>
+        <form id="buildingEditForm">
+            <!-- 건축물대장 정보 (읽기전용) -->
+            <div style="padding: 14px 16px; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border-radius: 10px; margin-bottom: 20px; border: 1px solid #cbd5e1;">
+                <div style="font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        📋 건축물대장 정보 <span style="font-size: 10px; padding: 2px 6px; background: #94a3b8; color: white; border-radius: 4px;">자동입력</span>
+                    </div>
+                    <button type="button" onclick="refreshBuildingLedger()" style="padding: 4px 10px; font-size: 11px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                        🔄 건축물대장 갱신
+                    </button>
+                </div>
+                <div id="buildingReadonlyInfo" style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;"></div>
+            </div>
+            
+            <!-- 빌딩명 (편집 가능) -->
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">🏢 기본 정보</div>
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">빌딩명 (건축물대장에 없는 경우 입력)</small>
+                        <input type="text" id="editBuildingName" placeholder="삼성타워">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">등급</small>
+                        <select id="editGrade" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary);">
+                            <option value="">선택</option>
+                            <option value="Prime">Prime</option>
+                            <option value="A">A</option>
+                            <option value="B+">B+</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ★ #13: 별칭(aliases) 관리 -->
+            <div class="form-row">
+                <div>
+                    <small style="color: var(--text-muted);">🏷️ 빌딩 별칭 (콤마로 구분, OCR 매칭에 활용)</small>
+                    <input type="text" id="editAliases" placeholder="삼성타워, Samsung Tower, 삼성B/D">
+                    <small style="color: #94a3b8; font-size: 10px;">동일 빌딩의 다른 이름을 입력하면 OCR 매칭 정확도가 향상됩니다</small>
+                </div>
+            </div>
+            
+            <!-- 기준층 정보 (편집 가능) -->
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">📐 기준층 정보</div>
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">기준층 면적 (평)</small>
+                        <input type="number" id="editTypicalFloorPy" placeholder="500" step="0.01">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">기준층 임대면적 (평)</small>
+                        <input type="number" id="editTypicalFloorLeasePy" placeholder="450" step="0.01">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">전용률 (%)</small>
+                        <input type="number" id="editExclusiveRate" placeholder="55" step="0.1">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 임대조건 -->
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">💰 임대조건 (평당, 만원)</div>
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">보증금</small>
+                        <input type="number" id="editDepositPy" placeholder="80" step="0.1">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">임대료</small>
+                        <input type="number" id="editRentPy" placeholder="8.5" step="0.1">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">관리비</small>
+                        <input type="number" id="editMaintenancePy" placeholder="3.5" step="0.1">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 시설 정보 (건축물대장에 없는 것만) -->
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">🏗️ 시설 정보</div>
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">냉난방</small>
+                        <select id="editHvac" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary);">
+                            <option value="">선택</option>
+                            <option value="개별냉난방">개별냉난방</option>
+                            <option value="중앙냉난방">중앙냉난방</option>
+                            <option value="지역난방">지역난방</option>
+                            <option value="복합">복합</option>
+                        </select>
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">천장고 (mm)</small>
+                        <input type="number" id="editCeilingHeight" placeholder="2700">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">바닥하중 (kg/㎡)</small>
+                        <input type="number" id="editFloorLoad" placeholder="500">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 주차/승강기 정보 (건축물대장에 없으면 수동 입력) -->
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">🚗 주차 (수동입력)</small>
+                        <input type="text" id="editParkingDisplay" placeholder="총 93대(자주식 93대)">
+                        <small style="color: #94a3b8; font-size: 10px;">건축물대장 갱신 시 자동 업데이트</small>
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">🛗 승강기 (수동입력)</small>
+                        <input type="text" id="editElevator" placeholder="총 3대(승용 2대 비상 1대)">
+                        <small style="color: #94a3b8; font-size: 10px;">건축물대장 갱신 시 자동 업데이트</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">주차 비율</small>
+                        <input type="text" id="editParkingRatio" placeholder="1대/80평">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">인근역</small>
+                        <input type="text" id="editNearbyStation" placeholder="강남역 5분">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 관리 정보 -->
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">🏢 관리 정보</div>
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">PM/관리회사</small>
+                        <input type="text" id="editPm" placeholder="CBRE, JLL 등">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">소유자/시행사</small>
+                        <input type="text" id="editOwner" placeholder="삼성생명, 한화생명 등">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ★ 채권분석 정보 (Comp List LG그룹용 연동) -->
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">📊 채권분석 정보 <span style="font-size: 10px; padding: 2px 6px; background: #fce7f3; color: #be185d; border-radius: 4px; margin-left: 6px;">LG그룹용</span></div>
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">채권담보 설정여부</small>
+                        <input type="text" id="editBondStatus" placeholder="예: 설정, 미설정, 일부설정">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">공동담보 총 대지지분</small>
+                        <input type="text" id="editJointCollateral" placeholder="예: 1,234.56㎡">
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">선순위 담보 총액</small>
+                        <input type="text" id="editSeniorLien" placeholder="예: 500억원">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">공시지가 대비 담보율</small>
+                        <input type="text" id="editCollateralRatio" placeholder="예: 45%">
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">개별공시지가 (25년 1월 기준)</small>
+                        <input type="text" id="editOfficialLandPrice" placeholder="예: 12,500,000원/㎡">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">토지가격 적용</small>
+                        <input type="text" id="editLandPriceApplied" placeholder="예: 15,000,000원/㎡">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 기타 -->
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">📝 기타 정보</div>
+            <div class="form-row">
+                <small style="color: var(--text-muted);">빌딩 설명</small>
+                <textarea id="editDescription" rows="2" placeholder="빌딩 특징, 장단점 등"></textarea>
+            </div>
+            <div class="form-row">
+                <small style="color: var(--text-muted);">홈페이지 URL</small>
+                <input type="url" id="editUrl" placeholder="https://...">
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('buildingEditModal')">취소</button>
+                <button type="submit" class="btn btn-primary">저장</button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- 건축물대장 갱신 비교 모달 -->
+    <div class="modal" id="ledgerCompareModal" style="max-width: 700px; max-height: 85vh; overflow-y: auto; z-index: 1002;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white;">
+            <h3 class="modal-title" style="color: white;">🔄 건축물대장 정보 갱신</h3>
+            <button class="close-btn" onclick="closeModal('ledgerCompareModal')" style="color: white;">×</button>
+        </div>
+        <div style="padding: 20px;">
+            <div id="ledgerCompareLoading" style="text-align: center; padding: 40px;">
+                <div style="font-size: 32px; margin-bottom: 16px;">⏳</div>
+                <div style="color: var(--text-muted);">건축물대장 정보를 조회하고 있습니다...</div>
+            </div>
+            
+            <div id="ledgerCompareContent" style="display: none;">
+                <div style="padding: 12px 16px; background: #dbeafe; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: #1e40af;">
+                    💡 기존값과 새로운 건축물대장 값이 다른 항목입니다. 적용할 값을 선택해주세요.
+                </div>
+                
+                <div id="ledgerCompareList"></div>
+                
+                <div id="ledgerNoChanges" style="display: none; text-align: center; padding: 40px;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">✅</div>
+                    <div style="font-size: 16px; font-weight: 600; color: var(--success-color); margin-bottom: 8px;">모든 정보가 최신 상태입니다</div>
+                    <div style="font-size: 13px; color: var(--text-muted);">건축물대장과 현재 저장된 정보가 동일합니다.</div>
+                </div>
+            </div>
+            
+            <div id="ledgerCompareError" style="display: none; text-align: center; padding: 40px;">
+                <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+                <div style="font-size: 14px; color: var(--error-color); margin-bottom: 8px;" id="ledgerErrorMessage">오류가 발생했습니다</div>
+                <button class="btn btn-secondary" onclick="closeModal('ledgerCompareModal')">닫기</button>
+            </div>
+            
+            <div id="ledgerCompareActions" style="display: none; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllLedgerValues('old')">기존값 전체선택</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllLedgerValues('new')">새값 전체선택</button>
+                    </div>
+                    <div style="display: flex; gap: 12px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('ledgerCompareModal')">취소</button>
+                        <button type="button" class="btn btn-primary" onclick="applyLedgerChanges()">선택한 값 적용</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- PDF 페이지 이미지 수동 등록 모달 -->
+    <div id="pdfUploadModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card, #fff); border-radius:12px; width:90%; max-width:700px; max-height:90vh; overflow:hidden; z-index:1001; box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+        <div style="padding: 16px 20px; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; display: flex; justify-content: space-between; align-items: center;">
+            <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: white;">📄 페이지 이미지 수동 등록</h3>
+            <button onclick="closePdfUploadModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; line-height: 1;">×</button>
+        </div>
+        <div style="padding: 20px; overflow-y: auto; max-height: calc(90vh - 140px);">
+            <!-- 안내 메시지 -->
+            <div style="padding: 12px 16px; background: #eff6ff; border-radius: 8px; margin-bottom: 16px; font-size: 12px; color: #1e40af;">
+                💡 임대안내문 PDF를 업로드하면 해당 페이지를 이미지로 변환하여 저장합니다.
+            </div>
+            
+            <!-- 파일 정보 표시 -->
+            <div id="pdfUploadInfo" style="display: none; padding: 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 16px;">
+                <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);" id="pdfUploadBuildingName"></div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+                    출처: <span id="pdfUploadSource"></span> | 발행일: <span id="pdfUploadPeriod"></span> | 페이지: <span id="pdfUploadPageNum"></span>
+                </div>
+            </div>
+            
+            <!-- PDF 파일 선택 -->
+            <div class="form-row">
+                <label>임대안내문 PDF 파일</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="file" id="pdfFileInput" accept=".pdf" 
+                           onchange="handlePdfFileSelect(event)"
+                           style="flex: 1; padding: 10px; border: 2px dashed var(--border-color); border-radius: 8px; cursor: pointer;">
+                </div>
+            </div>
+            
+            <!-- PDF 로딩 상태 -->
+            <div id="pdfLoadingState" style="display: none; text-align: center; padding: 40px;">
+                <div style="font-size: 24px; margin-bottom: 12px;">⏳</div>
+                <div style="color: var(--text-muted);">PDF 로딩 중...</div>
+            </div>
+            
+            <!-- 페이지 선택 영역 -->
+            <div id="pdfPageSelector" style="display: none; margin-top: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <label style="font-size: 13px; font-weight: 600;">페이지 선택</label>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button onclick="pdfPrevPage()" class="btn btn-secondary btn-sm" style="padding: 4px 10px;">◀ 이전</button>
+                        <span style="font-size: 13px;">
+                            <span id="pdfCurrentPage">1</span> / <span id="pdfTotalPages">1</span>
+                        </span>
+                        <button onclick="pdfNextPage()" class="btn btn-secondary btn-sm" style="padding: 4px 10px;">다음 ▶</button>
+                    </div>
+                </div>
+                
+                <!-- 페이지 직접 입력 -->
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                    <label style="font-size: 12px; color: var(--text-muted);">페이지 번호 직접 입력:</label>
+                    <input type="number" id="pdfPageInput" min="1" value="1" 
+                           onchange="goToPdfPage(this.value)"
+                           style="width: 70px; padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 6px; text-align: center;">
+                </div>
+                
+                <!-- 캔버스 미리보기 -->
+                <div style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: #f8fafc;">
+                    <canvas id="pdfPreviewCanvas" style="width: 100%; height: auto; display: block;"></canvas>
+                </div>
+            </div>
+            
+            <!-- 업로드 진행 상태 -->
+            <div id="pdfUploadProgress" style="display: none; margin-top: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 16px; background: #fef3c7; border-radius: 8px;">
+                    <div style="font-size: 20px;">📤</div>
+                    <div style="flex: 1;">
+                        <div style="font-size: 13px; font-weight: 600; color: #92400e;">업로드 중...</div>
+                        <div style="height: 6px; background: #fde68a; border-radius: 3px; margin-top: 6px; overflow: hidden;">
+                            <div id="pdfUploadProgressBar" style="height: 100%; background: #f59e0b; width: 0%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="padding: 16px 20px; border-top: 1px solid var(--border-color, #e5e7eb); display: flex; justify-content: flex-end; gap: 8px;">
+            <button type="button" onclick="closePdfUploadModal()" style="padding: 10px 20px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font-size: 14px;">취소</button>
+            <button type="button" id="pdfUploadBtn" onclick="uploadPdfPageImage()" disabled
+                    style="padding: 10px 20px; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; opacity: 0.5;">
+                📤 이 페이지 업로드
+            </button>
+        </div>
+    </div>
+
+    <!-- PDF.js 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // PDF.js 워커 설정
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+        
+        // Firebase Storage 업로드 전역 함수 (portal-detail.js에서 사용)
+        window.uploadImageToStorage = async function(blob, storagePath) {
+            // Firebase 모듈에서 storage 가져오기
+            const { getStorage, ref: storageRef, uploadBytes, getDownloadURL } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js');
+            const { getApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+            
+            const app = getApp();
+            const storage = getStorage(app);
+            const imageRef = storageRef(storage, storagePath);
+            
+            await uploadBytes(imageRef, blob);
+            const downloadUrl = await getDownloadURL(imageRef);
+            
+            return downloadUrl;
+        };
+    </script>
+
+    <!-- 카카오맵 SDK -->
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=1ac6eee9b1e4c2e0cc6f1d1ca1a6a559&libraries=clusterer,services,drawing&autoload=false"></script>
+
+    <script type="module" src="js/portal-main.js?v=3.9"></script>
+
+    
+    <!-- 공통 모달 오버레이 -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeVacancyModal(); closeDetailFilter(); closeDataPopup();" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000;"></div>
+    <style>
+        #modalOverlay.show { display: flex !important; align-items: center; justify-content: center; }
+        
+        /* ★ v3.5: 메모 섹션 완전 좌측 정렬 및 여백 조정 */
+        #sectionMemo { text-align: left !important; }
+        #sectionMemo .memo-item {
+            text-align: left !important;
+            padding: 12px 14px !important;
+            display: block !important;
+        }
+        #sectionMemo .memo-content {
+            text-align: left !important;
+            padding: 0 !important;
+            margin: 0 0 8px 0 !important;
+            display: block !important;
+        }
+        #sectionMemo .memo-meta {
+            text-align: left !important;
+        }
+        #sectionMemo .empty-state { text-align: center !important; }
+        
+        /* 모달 폼 액션 버튼 스타일 */
+        .form-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            margin-top: 16px;
+        }
+        .form-actions .btn {
+            padding: 8px 20px;
+            min-width: 70px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        /* 섹션 타이틀 버튼 스타일 */
+        .section-title .btn-sm {
+            padding: 6px 16px !important;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        /* btn-sm 기본 스타일 */
+        .btn-sm {
+            padding: 6px 14px;
+            font-size: 13px;
+        }
+    </style>
+    
+    <!-- 공실 편집 모달 -->
+    <div id="vacancyEditModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:24px; width:90%; max-width:500px; z-index:1001; box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:18px; font-weight:600;">공실 정보 수정</h3>
+            <button onclick="closeVacancyModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted);">×</button>
+        </div>
+        
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">출처</label>
+                <input type="text" id="editVacancySource" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">발행일</label>
+                <input type="text" id="editVacancyPublishDate" placeholder="25.03" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">공실층</label>
+                <input type="text" id="editVacancyFloor" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">임대면적(평)</label>
+                <input type="text" id="editVacancyRentArea" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">전용면적(평)</label>
+                <input type="text" id="editVacancyExclusiveArea" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">보증금/평</label>
+                <input type="text" id="editVacancyDepositPy" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">임대료/평</label>
+                <input type="text" id="editVacancyRentPy" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">관리비/평</label>
+                <input type="text" id="editVacancyMaintenancePy" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div style="grid-column: span 2;">
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">입주시기</label>
+                <input type="text" id="editVacancyMoveInDate" placeholder="즉시, 25.04 등" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+        </div>
+        
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px; padding-top:16px; border-top:1px solid var(--border-color);">
+            <button onclick="closeVacancyModal()" style="padding:10px 20px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); cursor:pointer;">취소</button>
+            <button onclick="saveVacancyEdit()" style="padding:10px 20px; border:none; border-radius:6px; background:var(--accent-color); color:white; cursor:pointer; font-weight:600;">저장</button>
+        </div>
+    </div>
+    <style>
+        #vacancyEditModal.show { display: block !important; }
+        #detailFilterModal.show { display: block !important; }
+        #pagePreviewModal.show { display: flex !important; }
+        #vacancyTransferModal.show { display: block !important; }
+    </style>
+    
+    <!-- ★ 페이지 매핑 변경 모달 -->
+    <div id="pageMappingModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:24px; width:90%; max-width:650px; z-index:1001; box-shadow:0 10px 40px rgba(0,0,0,0.2); max-height:85vh; overflow:hidden;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:18px; font-weight:600;">🔄 페이지 매핑 변경</h3>
+            <button onclick="closePageMappingModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted);">×</button>
+        </div>
+        
+        <div style="margin-bottom: 16px; padding: 12px; background: #fef3c7; border-radius: 8px; font-size: 13px; color: #92400e;">
+            ⚠️ 공실 정보와 원본 이미지가 일치하지 않을 경우, 올바른 페이지로 매핑을 변경합니다.
+        </div>
+        
+        <!-- 현재 정보 -->
+        <div style="margin-bottom: 16px;">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">📋 현재 정보</div>
+            <div id="pageMappingCurrentInfo" style="padding: 12px; background: #f1f5f9; border-radius: 8px;"></div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+            <!-- 현재 이미지 -->
+            <div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">현재 매핑된 이미지:</div>
+                <div id="pageMappingCurrentImage" style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; min-height: 150px; display: flex; align-items: center; justify-content: center; background: #f8fafc;"></div>
+            </div>
+            
+            <!-- 새 이미지 미리보기 -->
+            <div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">새 페이지 미리보기:</div>
+                <div id="pageMappingPreview" style="border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; min-height: 150px; display: flex; align-items: center; justify-content: center; background: #f8fafc;"></div>
+            </div>
+        </div>
+        
+        <!-- 새 페이지 번호 입력 -->
+        <div style="margin-bottom: 12px;">
+            <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">새 페이지 번호</label>
+            <div style="display:flex; gap:8px;">
+                <input type="number" id="newPageNum" 
+                       placeholder="예: 5" 
+                       min="1"
+                       style="flex:1; padding:10px 14px; border:1px solid var(--border-color); border-radius:8px; font-size:14px;">
+                <button onclick="previewNewPage()" style="padding:10px 16px; background:var(--accent-color); color:white; border:none; border-radius:8px; cursor:pointer;">미리보기</button>
+            </div>
+            <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                같은 발간회사/발간일의 다른 페이지 번호를 입력하세요.
+            </div>
+        </div>
+        
+        <!-- 또는 직접 URL 입력 -->
+        <div style="margin-bottom: 16px;">
+            <label style="display:block; font-size:13px; font-weight:500; margin-bottom:6px;">또는 이미지 URL 직접 입력</label>
+            <div style="display:flex; gap:8px;">
+                <input type="text" id="newPageImageUrl" 
+                       placeholder="https://firebasestorage.googleapis.com/..." 
+                       style="flex:1; padding:10px 14px; border:1px solid var(--border-color); border-radius:8px; font-size:13px;">
+                <button onclick="previewCustomUrl()" style="padding:10px 12px; background:#6b7280; color:white; border:none; border-radius:8px; cursor:pointer; font-size: 12px;">확인</button>
+            </div>
+        </div>
+        
+        <div style="display:flex; gap:10px; justify-content:flex-end; padding-top:16px; border-top:1px solid var(--border-color);">
+            <button onclick="closePageMappingModal()" style="padding:10px 20px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); cursor:pointer;">취소</button>
+            <button onclick="executePageMappingChange()" style="padding:10px 20px; border:none; border-radius:6px; background:var(--accent-color); color:white; cursor:pointer; font-weight:600;">변경 적용</button>
+        </div>
+    </div>
+    <style>
+        #pageMappingModal.show { display: block !important; }
+        #ocrManageModal.show { display: block !important; }
+    </style>
+    
+    <!-- ★ OCR 데이터 관리 모달 -->
+    <div id="ocrManageModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:24px; width:95%; max-width:900px; z-index:1001; box-shadow:0 10px 40px rgba(0,0,0,0.2); max-height:90vh; overflow:hidden;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:18px; font-weight:600;">⚙️ 전체 OCR 데이터 관리</h3>
+            <button onclick="closeOcrManageModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted);">×</button>
+        </div>
+        
+        <!-- ★ 기준가 마이그레이션 섹션 -->
+        <div style="margin-bottom: 16px; padding: 16px; background: linear-gradient(135deg, #fef9c3 0%, #fde68a 100%); border-radius: 10px; border: 2px solid #eab308;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #854d0e; display: flex; align-items: center; gap: 8px;">
+                        💰 기준가 일괄 생성
+                        <span id="migrationStatus" style="font-size: 11px; font-weight: normal; color: #a16207;"></span>
+                    </div>
+                    <div style="font-size: 12px; color: #92400e; margin-top: 4px;">
+                        vacancies 데이터에서 floorPricing을 자동 생성합니다
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="checkMigrationStatus()" 
+                            style="padding: 8px 16px; background: white; color: #854d0e; border: 1px solid #fbbf24; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                        📊 현황 확인
+                    </button>
+                    <button onclick="runFloorPricingMigration()" 
+                            style="padding: 8px 16px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
+                        🚀 일괄 생성 실행
+                    </button>
+                </div>
+            </div>
+            <div id="migrationProgress" style="display: none; margin-top: 12px;">
+                <div style="height: 6px; background: #fde68a; border-radius: 3px; overflow: hidden;">
+                    <div id="migrationProgressBar" style="height: 100%; background: #f59e0b; width: 0%; transition: width 0.3s;"></div>
+                </div>
+                <div id="migrationProgressText" style="font-size: 11px; color: #92400e; margin-top: 4px; text-align: center;"></div>
+            </div>
+        </div>
+        
+        <!-- ★ 기업명/발행연월 일괄 수정 섹션 -->
+        <div style="margin-bottom: 16px; padding: 16px; background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border-radius: 10px; border: 2px solid #8b5cf6;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <div style="font-size: 14px; font-weight: 600; color: #5b21b6; display: flex; align-items: center; gap: 8px;">
+                        ✏️ 기업명/발행연월 일괄 수정
+                        <span id="batchEditStatus" style="font-size: 11px; font-weight: normal; color: #7c3aed;"></span>
+                    </div>
+                    <div style="font-size: 12px; color: #6d28d9; margin-top: 4px;">
+                        잘못 저장된 OCR 소스(기업명)와 발행연월을 일괄 변경합니다
+                    </div>
+                </div>
+                <button onclick="toggleBatchEditPanel()" 
+                        style="padding: 8px 16px; background: white; color: #5b21b6; border: 1px solid #a78bfa; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                    📋 수정 패널 열기
+                </button>
+            </div>
+            
+            <div id="batchEditPanel" style="display: none; margin-top: 14px; padding: 14px; background: white; border-radius: 8px; border: 1px solid #c4b5fd;">
+                <!-- Step 1: 현재 저장된 기업명/연월 목록 로드 -->
+                <div style="margin-bottom: 12px;">
+                    <div style="font-size: 12px; font-weight: 600; color: #5b21b6; margin-bottom: 8px;">1️⃣ 변경할 기존 소스 선택</div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="font-size: 11px; color: #6b7280;">기업명 (source)</label>
+                            <select id="batchEditOldSource" onchange="updateBatchEditCount()" 
+                                    style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                <option value="">-- 로드 필요 --</option>
+                            </select>
+                        </div>
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="font-size: 11px; color: #6b7280;">발행연월 (publishDate)</label>
+                            <select id="batchEditOldDate" onchange="updateBatchEditCount()"
+                                    style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                                <option value="">-- 로드 필요 --</option>
+                            </select>
+                        </div>
+                        <button onclick="loadBatchEditSources()" 
+                                style="padding: 8px 14px; background: #7c3aed; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;">
+                            🔄 목록 로드
+                        </button>
+                    </div>
+                    <div id="batchEditMatchCount" style="font-size: 11px; color: #7c3aed; margin-top: 6px;"></div>
+                </div>
+                
+                <!-- Step 2: 새 값 입력 -->
+                <div style="margin-bottom: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                    <div style="font-size: 12px; font-weight: 600; color: #5b21b6; margin-bottom: 8px;">2️⃣ 변경할 새 값 입력</div>
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label style="font-size: 11px; color: #6b7280;">새 기업명</label>
+                            <input type="text" id="batchEditNewSource" placeholder="예: JLL, CBRE, Cushman..."
+                                   style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                        </div>
+                        <div style="flex: 1; min-width: 150px;">
+                            <label style="font-size: 11px; color: #6b7280;">새 발행연월</label>
+                            <input type="month" id="batchEditNewDate"
+                                   style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+                        </div>
+                    </div>
+                    <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">
+                        💡 기업명만 변경, 발행연월만 변경, 또는 둘 다 변경 가능합니다. 빈칸으로 두면 해당 항목은 변경하지 않습니다.
+                    </div>
+                </div>
+                
+                <!-- 실행 버튼 -->
+                <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                    <button onclick="previewBatchEdit()" 
+                            style="padding: 8px 16px; background: #f5f3ff; color: #7c3aed; border: 1px solid #c4b5fd; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                        👁️ 미리보기
+                    </button>
+                    <button onclick="executeBatchEdit()" 
+                            style="padding: 8px 16px; background: linear-gradient(135deg, #7c3aed, #6d28d9); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
+                        ✏️ 일괄 수정 실행
+                    </button>
+                </div>
+                
+                <!-- 결과 영역 -->
+                <div id="batchEditResult" style="display: none; margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 6px; max-height: 200px; overflow-y: auto; font-size: 12px;">
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 12px; padding: 10px; background: #fef3c7; border-radius: 8px; font-size: 12px; color: #92400e;">
+            ⚠️ 삭제된 데이터는 복구할 수 없습니다. 신중하게 선택해주세요.
+        </div>
+        
+        <div id="ocrManageContent" style="max-height: calc(90vh - 180px); overflow-y: auto;">
+            <!-- 동적으로 생성됨 -->
+        </div>
+        
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px; padding-top:16px; border-top:1px solid var(--border-color);">
+            <button onclick="closeOcrManageModal()" style="padding:10px 20px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); cursor:pointer;">닫기</button>
+        </div>
+    </div>
+    
+    <!-- ★ 주소 수정 모달 -->
+    <div id="addressEditModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:24px; width:90%; max-width:550px; z-index:1001; box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:18px; font-weight:600;">✏️ 빌딩 주소 수정</h3>
+            <button onclick="closeAddressEditModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted);">×</button>
+        </div>
+        
+        <div style="margin-bottom: 16px; padding: 12px; background: #fef3c7; border-radius: 8px; font-size: 12px; color: #92400e;">
+            ⚠️ OCR로 잘못 매핑된 빌딩 주소를 수정합니다.<br>
+            건축물대장 데이터는 보호되며, 임대안내문 매핑용 주소만 수정됩니다.
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:8px;">🏢 빌딩명</label>
+            <input type="text" id="addressEditBuildingName" readonly
+                   style="width:100%; padding:10px 14px; border:1px solid var(--border-color); border-radius:8px; font-size:14px; background: #f1f5f9; color: #64748b;">
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:8px;">📍 현재 주소</label>
+            <input type="text" id="addressEditCurrent" readonly
+                   style="width:100%; padding:10px 14px; border:1px solid var(--border-color); border-radius:8px; font-size:14px; background: #f1f5f9; color: #64748b;">
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:8px;">✏️ 새 주소 (도로명 또는 지번)</label>
+            <input type="text" id="addressEditNew" placeholder="예: 서울특별시 강남구 테헤란로 123"
+                   style="width:100%; padding:10px 14px; border:1px solid var(--border-color); border-radius:8px; font-size:14px;">
+            <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                임대안내문에 기재된 올바른 주소를 입력하세요.
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 16px;">
+            <label style="display:block; font-size:13px; font-weight:600; margin-bottom:8px;">📝 수정 사유 (선택)</label>
+            <input type="text" id="addressEditReason" placeholder="예: OCR 오인식, 임대안내문 오타 등"
+                   style="width:100%; padding:10px 14px; border:1px solid var(--border-color); border-radius:8px; font-size:14px;">
+        </div>
+        
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px; padding-top:16px; border-top:1px solid var(--border-color);">
+            <button onclick="closeAddressEditModal()" style="padding:10px 20px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); cursor:pointer;">취소</button>
+            <button onclick="saveAddressEdit()" style="padding:10px 20px; border:none; border-radius:6px; background:var(--accent-color); color:white; cursor:pointer; font-weight:600;">저장</button>
+        </div>
+    </div>
+    <style>
+        #addressEditModal.show { display: block !important; }
+    </style>
+    
+    <!-- 상세 필터 모달 -->
+    <div id="detailFilterModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:24px; width:90%; max-width:500px; z-index:1001; box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:18px; font-weight:600;">🔍 상세 필터</h3>
+            <button onclick="closeDetailFilter()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted);">×</button>
+        </div>
+        
+        <!-- 준공연도 -->
+        <div style="margin-bottom:20px;">
+            <label style="display:block; font-size:13px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;">🏗️ 준공연도</label>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <input type="number" id="dfCompletionMin" placeholder="시작 (예: 2000)" style="flex:1; padding:10px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                <span style="color:var(--text-muted);">~</span>
+                <input type="number" id="dfCompletionMax" placeholder="종료 (예: 2024)" style="flex:1; padding:10px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+        </div>
+        
+        <!-- 데이터 보유 필터 -->
+        <div style="margin-bottom:20px;">
+            <label style="display:block; font-size:13px; font-weight:600; color:var(--text-secondary); margin-bottom:12px;">📊 데이터 보유 조건</label>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--bg-secondary); border-radius:6px; cursor:pointer;">
+                    <input type="checkbox" id="dfHasVacancy" style="width:18px; height:18px; accent-color:var(--accent-color);">
+                    <span style="font-size:13px;">공실 정보 有</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--bg-secondary); border-radius:6px; cursor:pointer;">
+                    <input type="checkbox" id="dfHasRentroll" style="width:18px; height:18px; accent-color:var(--accent-color);">
+                    <span style="font-size:13px;">렌트롤 有</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--bg-secondary); border-radius:6px; cursor:pointer;">
+                    <input type="checkbox" id="dfHasMemo" style="width:18px; height:18px; accent-color:var(--accent-color);">
+                    <span style="font-size:13px;">메모 有</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--bg-secondary); border-radius:6px; cursor:pointer;">
+                    <input type="checkbox" id="dfHasIncentive" style="width:18px; height:18px; accent-color:var(--accent-color);">
+                    <span style="font-size:13px;">인센티브 有</span>
+                </label>
+            </div>
+        </div>
+        
+        <!-- 버튼 -->
+        <div style="display:flex; gap:10px; justify-content:flex-end; padding-top:16px; border-top:1px solid var(--border-color);">
+            <button onclick="resetDetailFilter()" style="padding:10px 20px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); cursor:pointer; color:var(--text-secondary);">초기화</button>
+            <button onclick="applyDetailFilter()" style="padding:10px 20px; border:none; border-radius:6px; background:var(--accent-color); color:white; cursor:pointer; font-weight:600;">적용</button>
+        </div>
+    </div>
+    
+    <!-- 데이터 팝업 모달 (렌트롤/메모/인센티브/안내문) -->
+    <div id="dataPopupModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:0; width:90%; max-width:700px; max-height:80vh; z-index:1001; box-shadow:0 10px 40px rgba(0,0,0,0.3); overflow:hidden;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--border-color); background:var(--bg-secondary);">
+            <h3 id="dataPopupTitle" style="font-size:16px; font-weight:600; margin:0;">데이터</h3>
+            <button onclick="closeDataPopup()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted); line-height:1;">×</button>
+        </div>
+        <div id="dataPopupContent" style="padding:16px 20px; max-height:60vh; overflow-y:auto;">
+        </div>
+    </div>
+    <style>
+        #dataPopupModal.show { display: block !important; }
+        .clickable { cursor: pointer; transition: all 0.2s; }
+        .clickable:hover { transform: scale(1.1); filter: brightness(1.1); }
+        .popup-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .popup-table th { background:var(--bg-secondary); padding:10px 12px; text-align:left; font-weight:600; color:var(--text-muted); font-size:12px; border-bottom:1px solid var(--border-color); }
+        .popup-table td { padding:10px 12px; border-bottom:1px solid var(--border-color); }
+        .popup-table tr:hover { background:var(--bg-secondary); }
+        .popup-empty { text-align:center; padding:40px 20px; color:var(--text-muted); }
+        .popup-memo-item { padding:12px; background:var(--bg-secondary); border-radius:8px; margin-bottom:10px; }
+        .popup-memo-item:last-child { margin-bottom:0; }
+        .memo-header { display:flex; justify-content:space-between; margin-bottom:8px; }
+        .memo-author { font-weight:600; font-size:13px; }
+        .memo-date { font-size:12px; color:var(--text-muted); }
+        .memo-content { font-size:14px; line-height:1.6; white-space:pre-wrap; text-align:left !important; }
+        /* ★ v3.3: 메모 아이템 좌측 정렬 */
+        .memo-item { text-align:left !important; }
+    </style>
+    
+    <!-- 도형 검색 스타일 -->
+    <style>
+        /* 도형 그리기 도구 패널 */
+        .drawing-tools-panel {
+            position: absolute;
+            top: 70px;
+            left: 10px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+            flex-direction: column;
+            gap: 6px;
+            z-index: 100;
+        }
+        
+        .drawing-tools-panel.visible {
+            display: flex !important;
+        }
+        
+        .drawing-btn {
+            width: 40px;
+            height: 40px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-primary);
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        
+        .drawing-btn:hover {
+            background: var(--bg-secondary);
+            border-color: var(--accent-color);
+        }
+        
+        .drawing-btn.active {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+        
+        .drawing-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .drawing-divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 4px 0;
+        }
+        
+        /* 결과 패널 */
+        .drawing-results-panel {
+            position: fixed;
+            top: 130px;
+            right: 420px;
+            width: 280px;
+            max-height: calc(100vh - 200px);
+            background: var(--bg-card);
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            overflow: hidden;
+            z-index: 100;
+        }
+        
+        .drawing-results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .drawing-results-header h4 {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .drawing-close-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: var(--text-muted);
+            line-height: 1;
+        }
+        
+        .drawing-results-stats {
+            display: flex;
+            gap: 16px;
+            padding: 10px 16px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .drawing-results-stats strong {
+            color: var(--accent-color);
+        }
+        
+        .drawing-results-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .drawing-result-item {
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .drawing-result-item:hover {
+            background: var(--bg-secondary);
+        }
+        
+        .drawing-result-name {
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 2px;
+        }
+        
+        .drawing-result-info {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+        
+        .drawing-no-results {
+            padding: 30px 16px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        
+        .drawing-more {
+            padding: 10px 16px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-style: italic;
+        }
+        
+        .drawing-results-actions {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .drawing-results-actions .btn {
+            flex: 1;
+            font-size: 12px;
+        }
+    </style>
+    
+    <!-- 이미지 뷰어 모달 -->
+    <div id="imageViewerModal"></div>
+    
+    <!-- 페이지 이미지 미리보기 모달 -->
+    <div id="pagePreviewModal" onclick="if(event.target===this)closePagePreview()" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.9); z-index:1002; align-items:center; justify-content:center; flex-direction:column;">
+        <!-- 상단 컨트롤 -->
+        <div style="display:flex; align-items:center; justify-content:space-between; width:100%; max-width:90vw; padding:0 0 16px 0;">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <button onclick="prevPagePreview()" id="prevPageBtn" style="padding:8px 16px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); border-radius:6px; color:white; cursor:pointer; font-size:14px;">◀ 이전</button>
+                <span id="pagePreviewInfo" style="color:white; font-size:14px; min-width:200px; text-align:center;">페이지 10 / 127</span>
+                <button onclick="nextPagePreview()" id="nextPageBtn" style="padding:8px 16px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); border-radius:6px; color:white; cursor:pointer; font-size:14px;">다음 ▶</button>
+                <div style="display:flex; align-items:center; gap:6px; margin-left:12px;">
+                    <input type="number" id="pageJumpInput" min="1" placeholder="페이지" style="width:70px; padding:6px 10px; border:1px solid rgba(255,255,255,0.3); border-radius:6px; background:rgba(255,255,255,0.1); color:white; font-size:13px; text-align:center;" onkeypress="if(event.key==='Enter')goToPage(this.value)">
+                    <button onclick="goToPage(document.getElementById('pageJumpInput').value)" style="padding:6px 12px; background:rgba(37,99,235,0.6); border:none; border-radius:6px; color:white; cursor:pointer; font-size:12px;">이동</button>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <button onclick="zoomPreview(-0.2)" style="padding:8px 12px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); border-radius:6px; color:white; cursor:pointer; font-size:16px;" title="축소">➖</button>
+                <span id="zoomLevel" style="color:white; font-size:12px; min-width:50px; text-align:center;">100%</span>
+                <button onclick="zoomPreview(0.2)" style="padding:8px 12px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); border-radius:6px; color:white; cursor:pointer; font-size:16px;" title="확대">➕</button>
+                <button onclick="downloadPreviewImage()" style="padding:8px 16px; background:rgba(37,99,235,0.8); border:none; border-radius:6px; color:white; cursor:pointer; font-size:14px;" title="다운로드">📥 다운로드</button>
+                <button onclick="closePagePreview()" style="padding:8px 16px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.3); border-radius:6px; color:white; cursor:pointer; font-size:14px;">✕ 닫기</button>
+            </div>
+        </div>
+        
+        <!-- 이미지 -->
+        <div id="imageContainer" style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; width:100%; overflow:auto;">
+            <img id="pagePreviewImage" src="" alt="페이지 미리보기" style="max-width:90vw; max-height:80vh; border-radius:8px; box-shadow:0 10px 40px rgba(0,0,0,0.5); transition: transform 0.2s;">
+            <div id="pagePreviewLoading" style="display:none; position:absolute; color:white; font-size:16px;">로딩 중...</div>
+        </div>
+        
+        <!-- 하단 안내 -->
+        <div style="padding:16px 0 0 0; color:rgba(255,255,255,0.6); font-size:12px;">
+            ← → 페이지 이동 | +/- 확대/축소 | 숫자 입력 후 Enter로 직접 이동 | ESC 닫기
+        </div>
+    </div>
+    
+    <!-- 도형 검색 토글 버튼 (fixed) -->
+    <button id="drawingToggleBtn" style="position:fixed; top:160px; left:20px; width:44px; height:44px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center; z-index:9998; box-shadow:0 2px 8px rgba(0,0,0,0.15);" title="도형 검색">✏️</button>
+    
+    <!-- 도형 그리기 도구 패널 (fixed position) -->
+    <div id="drawingToolsPanel" style="display:none; position:fixed; top:160px; left:75px; background:#fff; border-radius:10px; padding:10px; box-shadow:0 4px 20px rgba(0,0,0,0.25); flex-direction:column; gap:8px; z-index:9999;">
+        <button id="drawRectBtn" style="width:44px; height:44px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;" title="사각형">🔲</button>
+        <button id="drawCircleBtn" style="width:44px; height:44px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;" title="원">⭕</button>
+        <button id="drawPolygonBtn" style="width:44px; height:44px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center;" title="다각형">🔷</button>
+        <div style="height:1px; background:#e5e7eb; margin:4px 0;"></div>
+        <button id="drawClearBtn" style="width:44px; height:44px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; font-size:20px; display:flex; align-items:center; justify-content:center; opacity:0.5;" title="지우기" disabled>🗑️</button>
+    </div>
+    
+    <!-- ============================================================ -->
+    <!-- Comp List UI -->
+    <!-- ============================================================ -->
+    
+    <!-- 플로팅 버튼 -->
+    <button id="compListFloatingBtn" onclick="toggleCompListPanel()" style="position:fixed; bottom:30px; right:30px; padding:12px 20px; background:#fff; color:#333; border:2px solid #e5e7eb; border-radius:30px; cursor:pointer; font-size:14px; font-weight:600; display:flex; align-items:center; gap:8px; z-index:9997; box-shadow:0 4px 15px rgba(0,0,0,0.15); transition:all 0.2s;">
+        📋 나의 Comp List
+    </button>
+    
+    <!-- 플로팅 패널 -->
+    <div id="compListFloatingPanel" style="display:none; position:fixed; bottom:90px; right:30px; width:320px; max-height:500px; background:#fff; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.2); z-index:9998; overflow:hidden;">
+        <!-- 내용은 JS에서 렌더링 -->
+    </div>
+    
+    <!-- 전체화면 마법사 모달 -->
+    <div id="compListWizardModal" onclick="if(event.target===this)closeCompListWizard()" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:10000; align-items:center; justify-content:center;">
+        <div class="wizard-modal-container">
+            <div class="wizard-modal-header">
+                <h3>📋 Comp List 만들기</h3>
+                <button onclick="closeCompListWizard()" class="wizard-close-btn">×</button>
+            </div>
+            <div id="compListWizardContent" class="wizard-modal-body">
+                <!-- 내용은 JS에서 렌더링 -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- 전체화면 마법사 CSS -->
+    <style>
+        /* 마법사 모달 컨테이너 */
+        .wizard-modal-container {
+            background: #fff;
+            width: 95vw;
+            height: 95vh;
+            max-width: 1600px;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+        }
+        .wizard-modal-header {
+            padding: 16px 24px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8fafc;
+        }
+        .wizard-modal-header h3 { margin: 0; font-size: 18px; font-weight: 600; }
+        .wizard-close-btn {
+            background: none; border: none; font-size: 28px;
+            cursor: pointer; color: #888; padding: 4px 8px;
+        }
+        .wizard-modal-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+        
+        /* 마법사 전체화면 레이아웃 */
+        .wizard-fullscreen { display: flex; flex-direction: column; height: 100%; }
+        
+        /* 상단 바 */
+        .wizard-top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .wizard-title-input {
+            font-size: 20px;
+            font-weight: 600;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 8px 0;
+            width: 300px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .wizard-title-input:focus { border-bottom-color: #2563eb; }
+        .wizard-title-input::placeholder { color: #bbb; }
+        
+        .wizard-type-buttons { display: flex; gap: 8px; }
+        .type-btn {
+            padding: 8px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .type-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+        .type-btn:hover:not(.active) { background: #f3f4f6; }
+        
+        .building-count-badge {
+            background: #e0e7ff;
+            color: #3730a3;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        /* 검색 영역 */
+        .wizard-search-area { padding: 12px 24px; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
+        .search-input-container { position: relative; max-width: 500px; }
+        .wizard-search-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            box-sizing: border-box;
+        }
+        .wizard-search-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .search-results-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            margin-top: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 100;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+        .search-result-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .search-result-item:hover { background: #f0f9ff; }
+        .search-result-item:last-child { border-bottom: none; }
+        .result-name { font-weight: 500; color: #111; }
+        .result-addr { font-size: 12px; color: #666; }
+        .search-no-result { padding: 16px; text-align: center; color: #888; }
+        
+        /* 엑셀 스타일 테이블 */
+        .wizard-table-wrapper {
+            flex: 1;
+            overflow: auto;
+            padding: 0;
+            background: #fff;
+        }
+        .wizard-excel-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .wizard-excel-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .wizard-excel-table th {
+            background: #1e3a5f;
+            color: #fff;
+            padding: 8px 6px;
+            text-align: center;
+            font-weight: 500;
+            border: 1px solid #2d4a6f;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+        .wizard-excel-table td {
+            padding: 6px;
+            border: 1px solid #e5e7eb;
+            vertical-align: middle;
+        }
+        .wizard-excel-table tbody tr:hover { background: #f8fafc; }
+        .wizard-excel-table .building-row { background: #fff; }
+        .wizard-excel-table .vacancy-row { background: #fafafa; }
+        
+        /* 테이블 컬럼 스타일 */
+        .col-no { text-align: center; width: 40px; font-weight: 600; background: #f8fafc; }
+        .col-order { text-align: center; width: 50px; }
+        .col-name { font-weight: 600; min-width: 120px; }
+        .col-addr { color: #666; font-size: 11px; min-width: 150px; }
+        .col-floor { font-weight: 600; color: #2563eb; text-align: center; }
+        .col-num { text-align: right; white-space: nowrap; }
+        .col-date { text-align: center; white-space: nowrap; }
+        .col-add { text-align: center; width: 70px; vertical-align: middle; }
+        .col-vacancy-del { text-align: center; width: 50px; vertical-align: middle; }
+        .rent-value { color: #dc2626; font-weight: 600; }
+        .no-vacancy { text-align: center; color: #888; }
+        .empty-table-msg { text-align: center; padding: 60px !important; color: #888; font-size: 14px; }
+        
+        /* 순서 버튼 */
+        .order-buttons { display: flex; flex-direction: column; gap: 1px; align-items: center; }
+        .order-btn {
+            width: 20px; height: 16px;
+            border: 1px solid #d1d5db;
+            background: #fff;
+            cursor: pointer;
+            font-size: 9px;
+            border-radius: 2px;
+            line-height: 1;
+        }
+        .order-btn:hover:not(:disabled) { background: #f3f4f6; }
+        .order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        /* 액션 버튼 */
+        .btn-add-vacancy {
+            padding: 4px 10px;
+            background: #2563eb;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+        .btn-add-vacancy:hover { background: #1d4ed8; }
+        .btn-add-small {
+            width: 24px; height: 24px;
+            background: #10b981;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+        }
+        .btn-add-small:hover { background: #059669; }
+        .btn-delete {
+            width: 24px; height: 24px;
+            background: #fee2e2;
+            color: #dc2626;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .btn-delete:hover { background: #fecaca; }
+        .btn-delete-inline {
+            width: 20px; height: 20px;
+            background: transparent;
+            color: #9ca3af;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            padding: 0;
+            flex-shrink: 0;
+        }
+        .btn-delete-inline:hover { color: #dc2626; }
+        .btn-del-vacancy {
+            padding: 2px 6px;
+            background: #fff;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+        .btn-del-vacancy:hover { background: #fee2e2; }
+        .btn-del-vacancy-row {
+            padding: 2px 8px;
+            background: #fff;
+            color: #6b7280;
+            border: 1px solid #e5e7eb;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .btn-del-vacancy-row:hover { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
+        
+        /* 공실 삭제 버튼 그룹 */
+        .col-del > div {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+        
+        /* 인라인 공실 폼 */
+        .vacancy-form-row td { background: #f0f9ff !important; }
+        .inline-vacancy-form { padding: 8px 12px; }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .form-field label {
+            display: block;
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        .form-field label .required { color: #dc2626; }
+        .form-field input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+        .form-field input:focus { outline: none; border-color: #2563eb; }
+        .form-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        
+        /* 하단 바 */
+        .wizard-bottom-bar {
+            padding: 12px 24px;
+            background: #f8fafc;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 12px;
+        }
+        .wizard-bottom-bar .btn-secondary {
+            white-space: nowrap;
+            padding: 10px 24px;
+        }
+        .wizard-bottom-bar .btn-primary {
+            padding: 10px 24px;
+            min-width: 180px;
+        }
+        .btn-lg { padding: 10px 24px; font-size: 14px; }
+    </style>
+    
+    <!-- 공실 입력 모달 -->
+    <div id="vacancyInputModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:10001; align-items:center; justify-content:center;">
+        <div class="vacancy-modal-content" style="background:#fff; border-radius:12px; width:90%; max-width:450px; padding:24px; position:relative;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="margin:0; font-size:16px; font-weight:600;">➕ 공실 정보 입력</h3>
+                <button type="button" id="vacancyModalCloseBtn" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888; padding:4px 8px;">×</button>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div>
+                    <label style="display:block; font-size:12px; color:#666; margin-bottom:4px;">공실층</label>
+                    <input type="text" id="vacancyFloor" placeholder="예: 10F" style="width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; color:#666; margin-bottom:4px;">임대면적(평)</label>
+                    <input type="number" id="vacancyRentArea" placeholder="0" style="width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; color:#666; margin-bottom:4px;">전용면적(평)</label>
+                    <input type="number" id="vacancyExclusiveArea" placeholder="0" style="width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; color:#666; margin-bottom:4px;">임대료/평</label>
+                    <input type="number" id="vacancyRentPy" placeholder="0" style="width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; color:#666; margin-bottom:4px;">보증금/평</label>
+                    <input type="number" id="vacancyDepositPy" placeholder="0" style="width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; color:#666; margin-bottom:4px;">관리비/평</label>
+                    <input type="number" id="vacancyMaintenancePy" placeholder="0" style="width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:6px; font-size:14px; box-sizing:border-box;">
+                </div>
+            </div>
+            
+            <div style="margin-top:16px; padding:12px; background:#f8fafc; border-radius:8px; font-size:12px; color:#666;">
+                <div>📅 발행년월: <strong id="vacancyPublishDate"></strong></div>
+                <div>🏢 출처: 사용자 직접입력</div>
+                <div>👤 입력자: <span id="vacancyInputUser"></span></div>
+            </div>
+            
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
+                <button type="button" id="vacancyModalCancelBtn" style="padding:10px 20px; border:1px solid #e5e7eb; border-radius:6px; background:#fff; cursor:pointer;">취소</button>
+                <button type="button" id="vacancyModalSaveBtn" style="padding:10px 20px; border:none; border-radius:6px; background:#2563eb; color:#fff; cursor:pointer; font-weight:600;">저장</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    // 공실 입력 모달 이벤트 바인딩 (DOMContentLoaded 후)
+    document.addEventListener('DOMContentLoaded', function() {
+        const vacancyModal = document.getElementById('vacancyInputModal');
+        const closeBtn = document.getElementById('vacancyModalCloseBtn');
+        const cancelBtn = document.getElementById('vacancyModalCancelBtn');
+        const saveBtn = document.getElementById('vacancyModalSaveBtn');
+        
+        // 배경 클릭 시 닫기
+        if (vacancyModal) {
+            vacancyModal.addEventListener('click', function(e) {
+                if (e.target === vacancyModal) {
+                    if (typeof closeVacancyModal === 'function') closeVacancyModal();
+                }
+            });
+        }
+        
+        // X 버튼 클릭
+        if (closeBtn) {
+            closeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof closeVacancyModal === 'function') closeVacancyModal();
+            });
+        }
+        
+        // 취소 버튼 클릭
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof closeVacancyModal === 'function') closeVacancyModal();
+            });
+        }
+        
+        // 저장 버튼 클릭
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof saveVacancyInput === 'function') saveVacancyInput();
+            });
+        }
+        
+        // ★ 빌딩 정보 편집 폼 submit 이벤트
+        const buildingEditForm = document.getElementById('buildingEditForm');
+        if (buildingEditForm) {
+            buildingEditForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                // 폼 데이터 수집
+                const formData = {
+                    // 기본 정보
+                    name: document.getElementById('editBuildingName')?.value || '',
+                    grade: document.getElementById('editGrade')?.value || '',
+                    
+                    // ★ #13: 별칭
+                    aliases: (document.getElementById('editAliases')?.value || '').split(',').map(a => a.trim()).filter(Boolean),
+                    
+                    // 기준층 정보
+                    typicalFloorPy: document.getElementById('editTypicalFloorPy')?.value || '',
+                    typicalFloorLeasePy: document.getElementById('editTypicalFloorLeasePy')?.value || '',
+                    exclusiveRate: document.getElementById('editExclusiveRate')?.value || '',
+                    
+                    // 임대조건
+                    depositPy: document.getElementById('editDepositPy')?.value || '',
+                    rentPy: document.getElementById('editRentPy')?.value || '',
+                    maintenancePy: document.getElementById('editMaintenancePy')?.value || '',
+                    
+                    // 시설 정보
+                    hvac: document.getElementById('editHvac')?.value || '',
+                    ceilingHeight: document.getElementById('editCeilingHeight')?.value || '',
+                    floorLoad: document.getElementById('editFloorLoad')?.value || '',
+                    
+                    // 주차/승강기 수동입력
+                    parkingDisplay: document.getElementById('editParkingDisplay')?.value || '',
+                    elevator: document.getElementById('editElevator')?.value || '',
+                    parkingRatio: document.getElementById('editParkingRatio')?.value || '',
+                    nearbyStation: document.getElementById('editNearbyStation')?.value || '',
+                    
+                    // 관리 정보
+                    pm: document.getElementById('editPm')?.value || '',
+                    owner: document.getElementById('editOwner')?.value || '',
+                    
+                    // 채권분석 정보
+                    bondStatus: document.getElementById('editBondStatus')?.value || '',
+                    jointCollateral: document.getElementById('editJointCollateral')?.value || '',
+                    seniorLien: document.getElementById('editSeniorLien')?.value || '',
+                    collateralRatio: document.getElementById('editCollateralRatio')?.value || '',
+                    officialLandPrice: document.getElementById('editOfficialLandPrice')?.value || '',
+                    landPriceApplied: document.getElementById('editLandPriceApplied')?.value || '',
+                    
+                    // 기타
+                    description: document.getElementById('editDescription')?.value || '',
+                    url: document.getElementById('editUrl')?.value || ''
+                };
+                
+                console.log('📝 빌딩 정보 저장:', formData);
+                
+                // saveBuildingEdit 호출
+                if (typeof saveBuildingEdit === 'function') {
+                    await saveBuildingEdit(formData);
+                } else {
+                    console.error('saveBuildingEdit 함수를 찾을 수 없습니다');
+                }
+            });
+        }
+    });
+    
+    // ============================================================
+    // ★ v3.11: 빌딩 정보 편집 모달 함수
+    // ============================================================
+    
+    /**
+     * 빌딩 편집 모달 열기 - 현재 빌딩 정보를 폼에 채워넣음
+     */
+    window.openBuildingEditModal = function() {
+        const building = window.state?.selectedBuilding;
+        if (!building) {
+            if (typeof showToast === 'function') showToast('빌딩을 먼저 선택해주세요', 'error');
+            return;
+        }
+        
+        console.log('📝 빌딩 편집 모달 열기:', building.name);
+        
+        // 폼 필드에 현재 값 채우기
+        const setVal = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.value = value || '';
+        };
+        
+        // 기본 정보
+        setVal('editBuildingName', building.name);
+        setVal('editGrade', building.grade);
+        
+        // ★ #13: 별칭
+        setVal('editAliases', (building.aliases || []).join(', '));
+        
+        // 기준층 정보
+        setVal('editTypicalFloorPy', building.area?.typicalFloorPy || building.typicalFloorPy);
+        setVal('editTypicalFloorLeasePy', building.area?.typicalFloorLeasePy || building.typicalFloorLeasePy);
+        setVal('editExclusiveRate', building.area?.exclusiveRate || building.exclusiveRate);
+        
+        // 임대조건 (만원 단위로 변환하여 표시)
+        const toManwon = (val) => {
+            if (!val) return '';
+            const num = parseFloat(val);
+            // 1000 이상이면 원 단위로 저장된 것 → 만원으로 변환
+            return num >= 1000 ? (num / 10000).toFixed(1) : num;
+        };
+        setVal('editDepositPy', toManwon(building.depositPy));
+        setVal('editRentPy', toManwon(building.rentPy));
+        setVal('editMaintenancePy', toManwon(building.maintenancePy));
+        
+        // 시설 정보
+        setVal('editHvac', building.hvac);
+        setVal('editCeilingHeight', building.ceilingHeight);
+        setVal('editFloorLoad', building.floorLoad);
+        
+        // 주차/승강기 (수동입력)
+        setVal('editParkingDisplay', building.parking?.display || building.parkingDisplay);
+        setVal('editElevator', building.specs?.elevator || building.elevator);
+        setVal('editParkingRatio', building.parking?.ratio || building.parkingRatio);
+        setVal('editNearbyStation', building.nearbyStation || building.nearestStation);
+        
+        // 관리 정보
+        setVal('editPm', building.pm);
+        setVal('editOwner', building.owner);
+        
+        // 채권분석 정보
+        setVal('editBondStatus', building.bondStatus);
+        setVal('editJointCollateral', building.jointCollateral);
+        setVal('editSeniorLien', building.seniorLien);
+        setVal('editCollateralRatio', building.collateralRatio);
+        setVal('editOfficialLandPrice', building.officialLandPrice);
+        setVal('editLandPriceApplied', building.landPriceApplied);
+        
+        // 기타
+        setVal('editDescription', building.description);
+        setVal('editUrl', building.url || building.homepage);
+        
+        // 건축물대장 정보 (읽기전용) 표시
+        const readonlyInfo = document.getElementById('buildingReadonlyInfo');
+        if (readonlyInfo) {
+            const raw = building._raw || building;
+            const bi = building.buildingInfo || {};
+            readonlyInfo.innerHTML = `
+                <div>📍 <strong>주소:</strong> ${building.address || '-'}</div>
+                <div>📐 <strong>연면적:</strong> ${building.area?.grossFloorPy || building.grossFloorPy || '-'}평 (${building.area?.grossFloorSqm || building.grossFloorSqm || '-'}㎡)</div>
+                <div>🏗️ <strong>층수:</strong> ${typeof building.floors === 'object' ? building.floors?.display : (building.floors || '-')}</div>
+                <div>📅 <strong>준공:</strong> ${building.completionYear || '-'}</div>
+                <div>🔢 <strong>용적률/건폐율:</strong> ${building.vlRat || bi.vlRat || building.floorAreaRatio || '-'}% / ${building.bcRat || bi.bcRat || building.buildingCoverageRatio || '-'}%</div>
+                <div>🏢 <strong>용도:</strong> ${building.mainPurpose || bi.mainPurpose || '-'}</div>
+                <div>🧱 <strong>구조:</strong> ${building.strctCdNm || bi.strctCdNm || building.specs?.structure || '-'}</div>
+                <div>🅿️ <strong>주차(대장):</strong> ${building.parking?.total || bi.totPkngCnt || '-'}대</div>
+            `;
+        }
+        
+        // 모달 표시
+        document.getElementById('buildingEditModal').classList.add('show');
+        document.getElementById('modalOverlay').classList.add('show');
+    };
+    
+    /**
+     * 빌딩 정보 저장
+     */
+    window.saveBuildingEdit = async function(formData) {
+        const building = window.state?.selectedBuilding;
+        if (!building) {
+            if (typeof showToast === 'function') showToast('빌딩을 먼저 선택해주세요', 'error');
+            return;
+        }
+        
+        console.log('💾 빌딩 정보 저장:', formData);
+        
+        try {
+            const { db, ref, update } = await import('./js/portal-firebase.js');
+            
+            // 만원 → 원 단위 변환 함수
+            const toWon = (val) => {
+                if (!val || val === '') return null;
+                const num = parseFloat(val);
+                // 100 미만이면 만원 단위로 입력한 것 → 원 단위로 변환
+                return num < 100 ? Math.round(num * 10000) : Math.round(num);
+            };
+            
+            // 업데이트 데이터 구성
+            const updates = {
+                updatedAt: new Date().toISOString(),
+                updatedBy: window.state?.currentUser?.email || 'unknown'
+            };
+            
+            // ★ v3.12: 모든 필드를 무조건 업데이트 (빈 값도 저장 → 값 삭제 가능)
+            // 기본 정보
+            if (formData.name) updates.name = formData.name;  // 빌딩명은 빈값 방지
+            updates.grade = formData.grade || '';
+            
+            // ★ #13: 별칭
+            updates.aliases = formData.aliases || [];
+            
+            // 기준층 정보 - area 객체에 저장
+            updates['area/typicalFloorPy'] = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
+            updates['area/typicalFloorLeasePy'] = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
+            updates['area/exclusiveRate'] = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
+            
+            // 호환성을 위해 루트 레벨에도 저장
+            updates.typicalFloorPy = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
+            updates.typicalFloorLeasePy = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
+            updates.exclusiveRate = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
+            
+            // 임대조건 (원 단위로 저장)
+            const depositWon = toWon(formData.depositPy);
+            const rentWon = toWon(formData.rentPy);
+            const maintenanceWon = toWon(formData.maintenancePy);
+            
+            updates.depositPy = depositWon;
+            updates.rentPy = rentWon;
+            updates.maintenancePy = maintenanceWon;
+            
+            // 시설 정보
+            updates.hvac = formData.hvac || '';
+            updates.ceilingHeight = formData.ceilingHeight ? parseInt(formData.ceilingHeight) : null;
+            updates.floorLoad = formData.floorLoad ? parseInt(formData.floorLoad) : null;
+            
+            // 주차/승강기
+            updates['parking/display'] = formData.parkingDisplay || '';
+            updates.parkingDisplay = formData.parkingDisplay || '';
+            updates['specs/elevator'] = formData.elevator || '';
+            updates.elevator = formData.elevator || '';
+            updates['parking/ratio'] = formData.parkingRatio || '';
+            updates.parkingRatio = formData.parkingRatio || '';
+            updates.nearbyStation = formData.nearbyStation || '';
+            
+            // 관리 정보
+            updates.pm = formData.pm || '';
+            updates.owner = formData.owner || '';
+            
+            // 채권분석 정보
+            updates.bondStatus = formData.bondStatus || '';
+            updates.jointCollateral = formData.jointCollateral || '';
+            updates.seniorLien = formData.seniorLien || '';
+            updates.collateralRatio = formData.collateralRatio || '';
+            updates.officialLandPrice = formData.officialLandPrice || '';
+            updates.landPriceApplied = formData.landPriceApplied || '';
+            
+            // 기타
+            updates.description = formData.description || '';
+            updates.url = formData.url || '';
+            
+            console.log('📤 Firebase 업데이트:', updates);
+            
+            // Firebase 업데이트
+            await update(ref(db, `buildings/${building.id}`), updates);
+            
+            // 로컬 state 업데이트
+            Object.keys(updates).forEach(key => {
+                if (!key.includes('/')) {
+                    building[key] = updates[key];
+                } else {
+                    // nested path 처리 (예: area/typicalFloorPy)
+                    const [parent, child] = key.split('/');
+                    if (!building[parent]) building[parent] = {};
+                    building[parent][child] = updates[key];
+                }
+            });
+            
+            // ★ dataCache.buildings 동기화 (processBuildings가 여기서 읽으므로 필수)
+            if (window.state.dataCache?.buildings?.[building.id]) {
+                Object.keys(updates).forEach(key => {
+                    if (!key.includes('/')) {
+                        window.state.dataCache.buildings[building.id][key] = updates[key];
+                    } else {
+                        const [parent, child] = key.split('/');
+                        if (!window.state.dataCache.buildings[building.id][parent]) {
+                            window.state.dataCache.buildings[building.id][parent] = {};
+                        }
+                        window.state.dataCache.buildings[building.id][parent][child] = updates[key];
+                    }
+                });
+            }
+            
+            // allBuildings에서도 업데이트
+            const idx = window.state.allBuildings.findIndex(b => b.id === building.id);
+            if (idx >= 0) {
+                window.state.allBuildings[idx] = { ...window.state.allBuildings[idx], ...building };
+            }
+            
+            // 모달 닫기
+            if (typeof closeModal === 'function') {
+                closeModal('buildingEditModal');
+            } else {
+                document.getElementById('buildingEditModal').classList.remove('show');
+                document.getElementById('modalOverlay').classList.remove('show');
+            }
+            
+            // ★ refreshAfterCrud로 빌딩목록/지도 전체 갱신
+            if (typeof refreshAfterCrud === 'function') {
+                refreshAfterCrud(() => {
+                    if (typeof renderInfoSection === 'function') renderInfoSection();
+                    else if (window.renderInfoSection) window.renderInfoSection();
+                });
+            } else {
+                // fallback: 상세 패널만 새로고침
+                if (typeof renderInfoSection === 'function') {
+                    renderInfoSection();
+                } else if (window.renderInfoSection) {
+                    window.renderInfoSection();
+                }
+                // 빌딩 목록도 갱신 시도
+                if (typeof renderBuildingList === 'function') renderBuildingList();
+                if (typeof renderTableView === 'function' && window.state?.currentViewMode === 'list') renderTableView();
+            }
+            
+            if (typeof showToast === 'function') {
+                showToast('빌딩 정보가 저장되었습니다', 'success');
+            }
+            
+        } catch (error) {
+            console.error('빌딩 정보 저장 오류:', error);
+            if (typeof showToast === 'function') {
+                showToast('저장 실패: ' + error.message, 'error');
+            }
+        }
+    };
+    
+    // ============================================================
+    // ★ 기준가 마이그레이션 함수들
+    // ============================================================
+    
+    // 마이그레이션 현황 확인
+    async function checkMigrationStatus() {
+        const statusEl = document.getElementById('migrationStatus');
+        statusEl.textContent = '확인 중...';
+        
+        try {
+            const { db, ref, get } = await import('./js/portal-firebase.js');
+            
+            // vacancies 컬렉션 조회
+            const vacSnap = await get(ref(db, 'vacancies'));
+            const vacancies = vacSnap.val() || {};
+            const vacancyBuildingIds = Object.keys(vacancies);
+            
+            // buildings 컬렉션에서 floorPricing 확인
+            const buildSnap = await get(ref(db, 'buildings'));
+            const buildings = buildSnap.val() || {};
+            
+            let withPricing = 0;
+            let withoutPricing = 0;
+            let totalVacancyCount = 0;
+            
+            vacancyBuildingIds.forEach(buildingId => {
+                const buildingVacancies = vacancies[buildingId];
+                if (buildingVacancies && typeof buildingVacancies === 'object') {
+                    totalVacancyCount += Object.keys(buildingVacancies).length;
+                }
+                
+                const building = buildings[buildingId];
+                const fp = building?.floorPricing;
+                if (fp && Array.isArray(fp) && fp.length > 0) {
+                    withPricing++;
+                } else {
+                    withoutPricing++;
+                }
+            });
+            
+            statusEl.innerHTML = `
+                <span style="color: #15803d;">✅ ${withPricing}개 완료</span> / 
+                <span style="color: #dc2626;">❌ ${withoutPricing}개 미생성</span>
+                <span style="color: #6b7280;">(총 공실 ${totalVacancyCount}건)</span>
+            `;
+            
+            if (withoutPricing > 0) {
+                showToast(`기준가 미생성 빌딩: ${withoutPricing}개`, 'warning');
+            } else {
+                showToast('모든 빌딩에 기준가가 있습니다!', 'success');
+            }
+            
+        } catch (error) {
+            console.error('현황 확인 오류:', error);
+            statusEl.textContent = '오류 발생';
+            showToast('현황 확인 실패: ' + error.message, 'error');
+        }
+    }
+    
+    // 기준가 일괄 생성 실행
+    async function runFloorPricingMigration() {
+        if (!confirm('vacancies 데이터에서 floorPricing을 일괄 생성합니다.\n\n기존 floorPricing이 있는 빌딩은 건너뜁니다.\n계속하시겠습니까?')) {
+            return;
+        }
+        
+        const progressDiv = document.getElementById('migrationProgress');
+        const progressBar = document.getElementById('migrationProgressBar');
+        const progressText = document.getElementById('migrationProgressText');
+        
+        progressDiv.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressText.textContent = '준비 중...';
+        
+        try {
+            const { db, ref, get, set, update } = await import('./js/portal-firebase.js');
+            
+            // 데이터 로드
+            const [vacSnap, buildSnap] = await Promise.all([
+                get(ref(db, 'vacancies')),
+                get(ref(db, 'buildings'))
+            ]);
+            
+            const vacancies = vacSnap.val() || {};
+            const buildings = buildSnap.val() || {};
+            const vacancyBuildingIds = Object.keys(vacancies);
+            
+            // 마이그레이션 대상 필터 (floorPricing이 없는 빌딩)
+            const targetBuildings = vacancyBuildingIds.filter(buildingId => {
+                const building = buildings[buildingId];
+                const fp = building?.floorPricing;
+                return !fp || !Array.isArray(fp) || fp.length === 0;
+            });
+            
+            if (targetBuildings.length === 0) {
+                progressDiv.style.display = 'none';
+                showToast('마이그레이션할 빌딩이 없습니다', 'info');
+                return;
+            }
+            
+            progressText.textContent = `0 / ${targetBuildings.length} 빌딩 처리 중...`;
+            
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (let i = 0; i < targetBuildings.length; i++) {
+                const buildingId = targetBuildings[i];
+                const buildingVacancies = vacancies[buildingId];
+                const buildingInfo = buildings[buildingId];
+                
+                try {
+                    // vacancies를 배열로 변환
+                    const vacList = Object.values(buildingVacancies || {});
+                    
+                    // 가격이 있는 공실만 필터
+                    const vacWithPrice = vacList.filter(v => v.rentPy || v.depositPy);
+                    
+                    if (vacWithPrice.length === 0) {
+                        continue; // 가격 정보 없으면 건너뜀
+                    }
+                    
+                    // 고유 가격 조합 추출
+                    const priceMap = {};
+                    vacWithPrice.forEach(v => {
+                        const deposit = parseFloat(String(v.depositPy || 0).replace(/,/g, '')) || 0;
+                        const rent = parseFloat(String(v.rentPy || 0).replace(/,/g, '')) || 0;
+                        const maint = parseFloat(String(v.maintenancePy || 0).replace(/,/g, '')) || 0;
+                        const key = `${deposit}_${rent}_${maint}`;
+                        
+                        if (!priceMap[key]) {
+                            priceMap[key] = {
+                                depositPy: deposit,
+                                rentPy: rent,
+                                maintenancePy: maint,
+                                floors: [],
+                                source: v.source || '',
+                                publishDate: v.publishDate || ''
+                            };
+                        }
+                        priceMap[key].floors.push(v.floor);
+                    });
+                    
+                    // floorPricing 생성
+                    const pricingList = Object.values(priceMap);
+                    const newPricings = pricingList.map((p, idx) => {
+                        const floors = p.floors.filter(f => f).sort((a, b) => {
+                            const numA = parseInt(a) || 0;
+                            const numB = parseInt(b) || 0;
+                            return numA - numB;
+                        });
+                        
+                        let label = '기준가';
+                        let floorRange = '전체';
+                        
+                        if (floors.length === 1) {
+                            label = floors[0];
+                            floorRange = floors[0];
+                        } else if (floors.length > 1) {
+                            label = `${floors[0]}~${floors[floors.length-1]}`;
+                            floorRange = label;
+                        }
+                        
+                        if (pricingList.length > 1) {
+                            if (idx === 0) label = `저층부 (${floorRange})`;
+                            else if (idx === pricingList.length - 1) label = `고층부 (${floorRange})`;
+                            else label = `중층부 (${floorRange})`;
+                        }
+                        
+                        return {
+                            id: `fp_mig_${Date.now()}_${idx}`,
+                            label: label,
+                            floorRange: floorRange,
+                            depositPy: p.depositPy,
+                            rentPy: p.rentPy,
+                            maintenancePy: p.maintenancePy,
+                            effectiveDate: p.publishDate || new Date().toISOString().slice(0, 7),
+                            sourceType: 'ocr',
+                            sourceCompany: p.source || 'migration',
+                            notes: '마이그레이션으로 생성',
+                            createdAt: new Date().toISOString()
+                        };
+                    });
+                    
+                    if (newPricings.length > 0) {
+                        // Firebase 저장
+                        await set(ref(db, `buildings/${buildingId}/floorPricing`), newPricings);
+                        successCount++;
+                    }
+                    
+                } catch (err) {
+                    console.error(`마이그레이션 오류 (${buildingId}):`, err);
+                    errorCount++;
+                }
+                
+                // 진행률 업데이트
+                const progress = Math.round(((i + 1) / targetBuildings.length) * 100);
+                progressBar.style.width = progress + '%';
+                progressText.textContent = `${i + 1} / ${targetBuildings.length} 빌딩 처리 중... (성공: ${successCount}, 오류: ${errorCount})`;
+            }
+            
+            // 완료
+            progressBar.style.width = '100%';
+            progressBar.style.background = '#22c55e';
+            progressText.textContent = `완료! 성공: ${successCount}개, 오류: ${errorCount}개`;
+            
+            showToast(`마이그레이션 완료! 성공 ${successCount}개, 오류 ${errorCount}개`, 'success');
+            
+            // 현황 다시 확인
+            setTimeout(checkMigrationStatus, 1000);
+            
+            // 데이터 새로고침
+            if (window.loadData) {
+                setTimeout(() => window.loadData(), 2000);
+            }
+            
+        } catch (error) {
+            console.error('마이그레이션 오류:', error);
+            progressText.textContent = '오류 발생: ' + error.message;
+            showToast('마이그레이션 실패: ' + error.message, 'error');
+        }
+    }
+    
+    // 전역 등록
+    window.checkMigrationStatus = checkMigrationStatus;
+    window.runFloorPricingMigration = runFloorPricingMigration;
+    
+    // ============================================================
+    // ★ NEW-1: 기업명/발행연월 일괄 수정
+    // ============================================================
+    
+    function toggleBatchEditPanel() {
+        const panel = document.getElementById('batchEditPanel');
+        if (!panel) return;
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+    
+    // vacancies 전체에서 고유 source, publishDate 목록 로드
+    async function loadBatchEditSources() {
+        const statusEl = document.getElementById('batchEditStatus');
+        statusEl.textContent = '로딩 중...';
+        
+        try {
+            const { db, ref, get } = await import('./js/portal-firebase.js');
+            const vacSnap = await get(ref(db, 'vacancies'));
+            const vacancies = vacSnap.val() || {};
+            
+            const sources = new Map();  // source → count
+            const dates = new Map();    // publishDate → count
+            
+            // 모든 빌딩의 모든 공실 순회
+            Object.entries(vacancies).forEach(([buildingId, bVacs]) => {
+                if (!bVacs || typeof bVacs !== 'object') return;
+                Object.entries(bVacs).forEach(([vacId, vac]) => {
+                    if (!vac || typeof vac !== 'object') return;
+                    const src = vac.source || vac.sourceCompany || '';
+                    const dt = vac.publishDate || '';
+                    if (src) sources.set(src, (sources.get(src) || 0) + 1);
+                    if (dt) dates.set(dt, (dates.get(dt) || 0) + 1);
+                });
+            });
+            
+            // source 드롭다운
+            const srcSelect = document.getElementById('batchEditOldSource');
+            srcSelect.innerHTML = '<option value="">-- 전체 (필터 없음) --</option>';
+            [...sources.entries()]
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([src, cnt]) => {
+                    const opt = document.createElement('option');
+                    opt.value = src;
+                    opt.textContent = `${src} (${cnt}건)`;
+                    srcSelect.appendChild(opt);
+                });
+            
+            // publishDate 드롭다운
+            const dtSelect = document.getElementById('batchEditOldDate');
+            dtSelect.innerHTML = '<option value="">-- 전체 (필터 없음) --</option>';
+            [...dates.entries()]
+                .sort((a, b) => b[0].localeCompare(a[0]))
+                .forEach(([dt, cnt]) => {
+                    const opt = document.createElement('option');
+                    opt.value = dt;
+                    opt.textContent = `${dt} (${cnt}건)`;
+                    dtSelect.appendChild(opt);
+                });
+            
+            // 전역 캐시 저장 (재검색 방지)
+            window._batchEditVacancies = vacancies;
+            
+            statusEl.textContent = `✅ ${sources.size}개 기업, ${dates.size}개 연월 로드`;
+            updateBatchEditCount();
+            
+        } catch (err) {
+            console.error('일괄 수정 로드 오류:', err);
+            statusEl.textContent = '❌ 로드 실패';
+            if (typeof showToast === 'function') showToast('데이터 로드 실패: ' + err.message, 'error');
+        }
+    }
+    
+    // 선택 조건에 매칭되는 레코드 수 표시
+    function updateBatchEditCount() {
+        const vacancies = window._batchEditVacancies;
+        if (!vacancies) return;
+        
+        const oldSource = document.getElementById('batchEditOldSource').value;
+        const oldDate = document.getElementById('batchEditOldDate').value;
+        const countEl = document.getElementById('batchEditMatchCount');
+        
+        if (!oldSource && !oldDate) {
+            countEl.textContent = '⚠️ 기업명 또는 발행연월 중 최소 하나를 선택해주세요';
+            return;
+        }
+        
+        let matchCount = 0;
+        let buildingCount = 0;
+        
+        Object.entries(vacancies).forEach(([buildingId, bVacs]) => {
+            if (!bVacs || typeof bVacs !== 'object') return;
+            let buildingHasMatch = false;
+            Object.entries(bVacs).forEach(([vacId, vac]) => {
+                if (!vac || typeof vac !== 'object') return;
+                const srcMatch = !oldSource || (vac.source || vac.sourceCompany || '') === oldSource;
+                const dtMatch = !oldDate || (vac.publishDate || '') === oldDate;
+                if (srcMatch && dtMatch) {
+                    matchCount++;
+                    buildingHasMatch = true;
+                }
+            });
+            if (buildingHasMatch) buildingCount++;
+        });
+        
+        countEl.textContent = `📊 매칭: ${buildingCount}개 빌딩, ${matchCount}건의 공실 데이터`;
+    }
+    
+    // 미리보기
+    async function previewBatchEdit() {
+        const vacancies = window._batchEditVacancies;
+        if (!vacancies) {
+            if (typeof showToast === 'function') showToast('먼저 목록을 로드해주세요', 'warning');
+            return;
+        }
+        
+        const oldSource = document.getElementById('batchEditOldSource').value;
+        const oldDate = document.getElementById('batchEditOldDate').value;
+        const newSource = document.getElementById('batchEditNewSource').value.trim();
+        const newDate = document.getElementById('batchEditNewDate').value;
+        
+        if (!oldSource && !oldDate) {
+            if (typeof showToast === 'function') showToast('변경할 기존 소스를 선택해주세요', 'warning');
+            return;
+        }
+        if (!newSource && !newDate) {
+            if (typeof showToast === 'function') showToast('새 값을 하나 이상 입력해주세요', 'warning');
+            return;
+        }
+        
+        // buildings 이름 로드
+        const { db, ref, get } = await import('./js/portal-firebase.js');
+        const buildSnap = await get(ref(db, 'buildings'));
+        const buildings = buildSnap.val() || {};
+        
+        const resultEl = document.getElementById('batchEditResult');
+        resultEl.style.display = 'block';
+        
+        let html = '<div style="font-weight: 600; margin-bottom: 8px;">📋 변경 미리보기</div>';
+        let total = 0;
+        
+        Object.entries(vacancies).forEach(([buildingId, bVacs]) => {
+            if (!bVacs || typeof bVacs !== 'object') return;
+            const matches = [];
+            Object.entries(bVacs).forEach(([vacId, vac]) => {
+                if (!vac || typeof vac !== 'object') return;
+                const srcMatch = !oldSource || (vac.source || vac.sourceCompany || '') === oldSource;
+                const dtMatch = !oldDate || (vac.publishDate || '') === oldDate;
+                if (srcMatch && dtMatch) matches.push({ vacId, vac });
+            });
+            if (matches.length === 0) return;
+            
+            const bName = buildings[buildingId]?.name || buildingId;
+            total += matches.length;
+            
+            html += `<div style="margin-top: 6px; padding: 6px 8px; background: white; border-radius: 4px; border: 1px solid #e2e8f0;">`;
+            html += `<strong>${bName}</strong> <span style="color: #7c3aed;">(${matches.length}건)</span>`;
+            html += `<div style="font-size: 11px; color: #64748b; margin-top: 2px;">`;
+            if (newSource) html += `기업명: ${oldSource || '*'} → <span style="color: #059669; font-weight: 600;">${newSource}</span> `;
+            if (newDate) html += `발행연월: ${oldDate || '*'} → <span style="color: #059669; font-weight: 600;">${newDate}</span>`;
+            html += `</div></div>`;
+        });
+        
+        html = `<div style="margin-bottom: 8px; padding: 6px 10px; background: #ede9fe; border-radius: 4px; font-weight: 600; color: #5b21b6;">총 ${total}건 변경 예정</div>` + html;
+        resultEl.innerHTML = html;
+    }
+    
+    // 실행
+    async function executeBatchEdit() {
+        const vacancies = window._batchEditVacancies;
+        if (!vacancies) {
+            if (typeof showToast === 'function') showToast('먼저 목록을 로드해주세요', 'warning');
+            return;
+        }
+        
+        const oldSource = document.getElementById('batchEditOldSource').value;
+        const oldDate = document.getElementById('batchEditOldDate').value;
+        const newSource = document.getElementById('batchEditNewSource').value.trim();
+        const newDate = document.getElementById('batchEditNewDate').value;
+        
+        if (!oldSource && !oldDate) {
+            if (typeof showToast === 'function') showToast('변경할 기존 소스를 선택해주세요', 'warning');
+            return;
+        }
+        if (!newSource && !newDate) {
+            if (typeof showToast === 'function') showToast('새 값을 하나 이상 입력해주세요', 'warning');
+            return;
+        }
+        
+        // 매칭 레코드 수집
+        const updates = {};
+        let matchCount = 0;
+        
+        Object.entries(vacancies).forEach(([buildingId, bVacs]) => {
+            if (!bVacs || typeof bVacs !== 'object') return;
+            Object.entries(bVacs).forEach(([vacId, vac]) => {
+                if (!vac || typeof vac !== 'object') return;
+                const srcMatch = !oldSource || (vac.source || vac.sourceCompany || '') === oldSource;
+                const dtMatch = !oldDate || (vac.publishDate || '') === oldDate;
+                if (srcMatch && dtMatch) {
+                    if (newSource) {
+                        updates[`vacancies/${buildingId}/${vacId}/source`] = newSource;
+                        if (vac.sourceCompany) {
+                            updates[`vacancies/${buildingId}/${vacId}/sourceCompany`] = newSource;
+                        }
+                    }
+                    if (newDate) {
+                        updates[`vacancies/${buildingId}/${vacId}/publishDate`] = newDate;
+                    }
+                    matchCount++;
+                }
+            });
+        });
+        
+        if (matchCount === 0) {
+            if (typeof showToast === 'function') showToast('매칭되는 데이터가 없습니다', 'warning');
+            return;
+        }
+        
+        const changeDesc = [];
+        if (newSource) changeDesc.push(`기업명: ${oldSource || '전체'} → ${newSource}`);
+        if (newDate) changeDesc.push(`발행연월: ${oldDate || '전체'} → ${newDate}`);
+        
+        if (!confirm(`⚠️ 일괄 수정을 실행합니다.\n\n${changeDesc.join('\n')}\n\n대상: ${matchCount}건\n\n계속하시겠습니까?`)) {
+            return;
+        }
+        
+        try {
+            const { db, ref, update } = await import('./js/portal-firebase.js');
+            
+            // Firebase multi-path update (한 번에 모든 변경 적용)
+            await update(ref(db), updates);
+            
+            if (typeof showToast === 'function') {
+                showToast(`✅ ${matchCount}건 일괄 수정 완료!`, 'success');
+            }
+            
+            // 결과 표시
+            const resultEl = document.getElementById('batchEditResult');
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = `
+                <div style="padding: 12px; background: #f0fdf4; border-radius: 6px; color: #166534;">
+                    <div style="font-weight: 600; margin-bottom: 4px;">✅ 일괄 수정 완료</div>
+                    <div style="font-size: 11px;">${changeDesc.join(' | ')} — ${matchCount}건 업데이트</div>
+                </div>
+            `;
+            
+            // 캐시 무효화 → 다시 로드하면 최신 반영
+            window._batchEditVacancies = null;
+            document.getElementById('batchEditStatus').textContent = '🔄 변경 완료 — 새로 로드 필요';
+            
+        } catch (err) {
+            console.error('일괄 수정 오류:', err);
+            if (typeof showToast === 'function') showToast('일괄 수정 실패: ' + err.message, 'error');
+        }
+    }
+    
+    // 전역 등록
+    window.toggleBatchEditPanel = toggleBatchEditPanel;
+    window.loadBatchEditSources = loadBatchEditSources;
+    window.updateBatchEditCount = updateBatchEditCount;
+    window.previewBatchEdit = previewBatchEdit;
+    window.executeBatchEdit = executeBatchEdit;
+    </script>
+    
+    <!-- Comp List 스타일 -->
+    <style>
+        /* 플로팅 버튼 호버 */
+        #compListFloatingBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+        }
+        
+        /* 플로팅 패널 */
+        .complist-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            color: white;
+        }
+        .complist-panel-header h4 { margin: 0; font-size: 15px; }
+        .complist-close-btn {
+            background: none; border: none; color: white;
+            font-size: 20px; cursor: pointer; opacity: 0.8;
+        }
+        .complist-close-btn:hover { opacity: 1; }
+        
+        .complist-panel-content {
+            max-height: 350px;
+            overflow-y: auto;
+        }
+        
+        .complist-empty {
+            padding: 40px 20px;
+            text-align: center;
+            color: #666;
+        }
+        
+        .complist-items { padding: 8px 0; }
+        
+        .complist-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.2s;
+        }
+        .complist-item:hover { background: #f8fafc; }
+        
+        .complist-item-name {
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            color: #2563eb;
+        }
+        .complist-item-name:hover { text-decoration: underline; }
+        
+        .complist-item-meta {
+            font-size: 12px;
+            color: #888;
+            margin-top: 2px;
+        }
+        
+        .complist-item-actions { display: flex; gap: 4px; }
+        
+        .complist-action-btn {
+            width: 28px; height: 28px;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .complist-action-btn:hover { background: #f1f5f9; }
+        
+        .complist-panel-footer {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+            padding: 12px 20px;
+            border-top: 1px solid #e5e7eb;
+            background: #f8fafc;
+        }
+        
+        /* 마법사 */
+        .wizard-progress {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+        }
+        
+        .wizard-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: #f1f5f9;
+            color: #666;
+            font-size: 13px;
+        }
+        .wizard-step.active {
+            background: #2563eb;
+            color: white;
+        }
+        .wizard-step.completed {
+            background: #10b981;
+            color: white;
+        }
+        .step-num {
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .wizard-step-line {
+            width: 30px;
+            height: 2px;
+            background: #e5e7eb;
+        }
+        
+        .wizard-step-content { margin-bottom: 24px; }
+        
+        .wizard-hint {
+            text-align: center;
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+        
+        .wizard-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding-top: 16px;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        /* 폼 */
+        .form-group { margin-bottom: 20px; }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+        }
+        
+        /* 유형 선택 */
+        .type-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .type-option {
+            cursor: pointer;
+        }
+        .type-option input { display: none; }
+        .type-card {
+            padding: 20px;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .type-option:hover .type-card { border-color: #2563eb; }
+        .type-option.selected .type-card {
+            border-color: #2563eb;
+            background: #eff6ff;
+        }
+        .type-icon { font-size: 32px; margin-bottom: 8px; }
+        .type-name { font-size: 15px; font-weight: 600; }
+        .type-desc { font-size: 12px; color: #666; margin-top: 4px; }
+        
+        /* 정렬 리스트 */
+        .sortable-list {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .sortable-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+            cursor: grab;
+        }
+        .sortable-item:last-child { border-bottom: none; }
+        .sortable-item.dragging { opacity: 0.5; }
+        .sortable-handle { color: #888; }
+        .sortable-num {
+            width: 24px; height: 24px;
+            background: #2563eb;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .sortable-name { flex: 1; font-weight: 500; }
+        .sortable-vacancy { font-size: 12px; color: #888; }
+        .sortable-arrows button {
+            width: 24px; height: 24px;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .sortable-arrows button:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        /* 미리보기 테이블 */
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .preview-header h3 { margin: 0; font-size: 16px; }
+        .preview-type {
+            padding: 4px 12px;
+            background: #eff6ff;
+            color: #2563eb;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .preview-table-wrapper {
+            overflow-x: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        .preview-table th {
+            background: #f8fafc;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 1px solid #e5e7eb;
+            white-space: nowrap;
+        }
+        .preview-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .preview-table tr:hover { background: #f8fafc; }
+        
+        .btn-mini {
+            padding: 4px 8px;
+            font-size: 11px;
+            border: 1px solid #e5e7eb;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+        }
+        .btn-mini:hover { background: #f1f5f9; }
+        .btn-mini.btn-danger { color: #dc2626; border-color: #fecaca; }
+        .btn-mini.btn-danger:hover { background: #fef2f2; }
+        
+        .preview-actions {
+            margin-top: 16px;
+            text-align: center;
+        }
+        
+        /* Phase 2: 선택 모드 */
+        .selection-action-bar {
+            display: none;
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f2937;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 9996;
+            gap: 16px;
+            align-items: center;
+        }
+        .selection-count { font-weight: 600; }
+        .selection-action-bar .btn { margin-left: 8px; }
+        
+        #selectionModeBtn {
+            padding: 8px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 20px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        #selectionModeBtn.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+        
+        .building-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        
+        /* Phase 3: 관리 페이지 */
+        .manage-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 16px;
+        }
+        .manage-toolbar .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .manage-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+            max-height: 60vh;
+            overflow-y: auto;
+            padding: 4px;
+        }
+        
+        .manage-card {
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+        }
+        .manage-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .manage-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .manage-card-header h4 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .manage-card-type {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .manage-card-type.general {
+            background: #eff6ff;
+            color: #2563eb;
+        }
+        .manage-card-type.lg {
+            background: #fef2f2;
+            color: #dc2626;
+        }
+        
+        .manage-card-body {
+            padding: 16px;
+        }
+        .manage-card-info {
+            display: flex;
+            gap: 16px;
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .manage-card-buildings {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .building-tag {
+            padding: 4px 10px;
+            background: #f1f5f9;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #475569;
+        }
+        .building-tag.more {
+            background: #e5e7eb;
+            color: #666;
+        }
+        
+        .manage-card-footer {
+            display: flex;
+            gap: 8px;
+            padding: 12px 16px;
+            border-top: 1px solid #e5e7eb;
+            background: #fafafa;
+        }
+        
+        .manage-empty {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+        }
+        
+        .detail-header {
+            position: relative;
+            padding-right: 30px;
+            margin-bottom: 8px;
+        }
+        .detail-header h3 { margin: 0; }
+        .detail-title-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .detail-header .sub {
+            margin: 4px 0 0 0;
+            color: var(--text-muted, #666);
+            font-size: 13px;
+        }
+        .detail-type {
+            padding: 4px 12px;
+            background: #eff6ff;
+            color: #2563eb;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        .detail-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 13px;
+            color: #666;
+        }
+        
+        /* ===== 담당자 목록 스타일 v3.10 ===== */
+        .contact-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color, #e5e7eb);
+        }
+        .contact-list-header h4 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .contact-list-header .add-btn {
+            padding: 6px 12px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .contact-list-header .add-btn:hover {
+            background: #2563eb;
+        }
+        
+        .contact-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            background: var(--bg-primary, white);
+            border: 1px solid var(--border-color, #e5e7eb);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: all 0.15s;
+        }
+        .contact-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+        }
+        .contact-card.primary {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        }
+        .contact-card.our-manager {
+            border-color: #10b981;
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+        }
+        
+        .contact-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .contact-card.our-manager .contact-avatar {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        
+        .contact-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .contact-name-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .contact-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-primary, #1e293b);
+        }
+        .contact-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        .contact-badge.primary {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .contact-badge.our {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .contact-badge.type {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+        
+        .contact-details {
+            font-size: 13px;
+            color: var(--text-secondary, #64748b);
+            line-height: 1.6;
+        }
+        .contact-details .detail-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .contact-details .icon {
+            width: 14px;
+            text-align: center;
+            opacity: 0.7;
+        }
+        .contact-company {
+            font-size: 12px;
+            color: var(--text-muted, #94a3b8);
+            margin-top: 4px;
+        }
+        .contact-notes {
+            font-size: 12px;
+            color: var(--text-muted, #94a3b8);
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px dashed var(--border-color, #e5e7eb);
+        }
+        
+        .contact-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .contact-action-btn {
+            width: 32px;
+            height: 32px;
+            border: 1px solid var(--border-color, #e5e7eb);
+            border-radius: 6px;
+            background: var(--bg-primary, white);
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+        }
+        .contact-action-btn:hover {
+            background: var(--bg-secondary, #f8fafc);
+        }
+        .contact-action-btn.edit:hover {
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }
+        .contact-action-btn.delete:hover {
+            border-color: #dc2626;
+            color: #dc2626;
+            background: #fef2f2;
+        }
+        
+        .contact-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-muted, #94a3b8);
+        }
+        .contact-empty .icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+        .contact-empty p {
+            margin: 0 0 16px;
+            font-size: 14px;
+        }
+        
+        /* 담당자 타입별 색상 */
+        .contact-type-owner { border-left: 3px solid #f59e0b; }
+        .contact-type-manager { border-left: 3px solid #3b82f6; }
+        .contact-type-broker { border-left: 3px solid #8b5cf6; }
+        .contact-type-other { border-left: 3px solid #6b7280; }
+    </style>
+    
+    <script>
+        // 공실 입력 모달 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            // 현재 연월 설정
+            const now = new Date();
+            const yearMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+            const publishDateEl = document.getElementById('vacancyPublishDate');
+            if (publishDateEl) publishDateEl.textContent = yearMonth;
+        });
+    </script>
+    
+    <!-- ★ v3.10: 담당자 수정/삭제 기능 -->
+    <script>
+        // 담당자 타입 라벨
+        const CONTACT_TYPE_LABELS = {
+            owner: '빌딩주/임대팀',
+            manager: '관리사무소',
+            broker: '중개사',
+            other: '기타'
+        };
+        
+        // 담당자 목록 렌더링 (sectionContact에서 호출)
+        window.renderContactList = function(contacts, buildingId) {
+            const container = document.getElementById('sectionContact');
+            if (!container) return;
+            
+            // 정렬: 주 담당자 우선, 그 다음 우리 담당자, 나머지
+            const sortedContacts = [...(contacts || [])].sort((a, b) => {
+                if (a.isPrimary && !b.isPrimary) return -1;
+                if (!a.isPrimary && b.isPrimary) return 1;
+                if (a.isOurManager && !b.isOurManager) return -1;
+                if (!a.isOurManager && b.isOurManager) return 1;
+                return 0;
+            });
+            
+            let html = `
+                <div class="contact-list-header">
+                    <h4>👤 담당자 목록</h4>
+                    <button class="add-btn" onclick="openContactModal()">
+                        ➕ 담당자 추가
+                    </button>
+                </div>
+            `;
+            
+            if (!sortedContacts || sortedContacts.length === 0) {
+                html += `
+                    <div class="contact-empty">
+                        <div class="icon">👤</div>
+                        <p>등록된 담당자가 없습니다</p>
+                        <button class="btn btn-primary btn-sm" onclick="openContactModal()">+ 담당자 추가</button>
+                    </div>
+                `;
+            } else {
+                sortedContacts.forEach((contact, index) => {
+                    const typeClass = contact.contactType ? `contact-type-${contact.contactType}` : '';
+                    const cardClass = contact.isPrimary ? 'primary' : (contact.isOurManager ? 'our-manager' : '');
+                    const initial = (contact.name || '?').charAt(0).toUpperCase();
+                    
+                    html += `
+                        <div class="contact-card ${typeClass} ${cardClass}">
+                            <div class="contact-avatar">${initial}</div>
+                            <div class="contact-info">
+                                <div class="contact-name-row">
+                                    <span class="contact-name">${contact.name || '-'}</span>
+                                    ${contact.isPrimary ? '<span class="contact-badge primary">⭐ 주 담당자</span>' : ''}
+                                    ${contact.isOurManager ? '<span class="contact-badge our">🏷️ S&I</span>' : ''}
+                                    ${contact.contactType ? `<span class="contact-badge type">${CONTACT_TYPE_LABELS[contact.contactType] || contact.contactType}</span>` : ''}
+                                </div>
+                                <div class="contact-details">
+                                    ${contact.phone ? `<div class="detail-row"><span class="icon">📞</span> ${contact.phone}</div>` : ''}
+                                    ${contact.email ? `<div class="detail-row"><span class="icon">✉️</span> ${contact.email}</div>` : ''}
+                                </div>
+                                ${contact.company ? `<div class="contact-company">🏢 ${contact.company}</div>` : ''}
+                                ${contact.notes ? `<div class="contact-notes">💬 ${contact.notes}</div>` : ''}
+                            </div>
+                            <div class="contact-actions">
+                                <button class="contact-action-btn edit" onclick="editContact('${contact.id}', '${buildingId}')" title="수정">✏️</button>
+                                <button class="contact-action-btn delete" onclick="deleteContact('${contact.id}', '${buildingId}', '${(contact.name || '').replace(/'/g, "\\'")}')" title="삭제">🗑️</button>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            container.innerHTML = html;
+        };
+        
+        // 담당자 추가 모달 열기
+        window.openContactModal = function(contactId) {
+            const modal = document.getElementById('contactModal');
+            const form = document.getElementById('contactForm');
+            const title = document.getElementById('contactModalTitle');
+            
+            // 폼 초기화
+            form.reset();
+            document.getElementById('contactId').value = '';
+            document.getElementById('contactUserId').value = '';
+            document.getElementById('ourManagerSelectionArea').style.display = 'none';
+            document.getElementById('manualInputArea').style.display = 'block';
+            document.getElementById('contactIsOurManager').checked = false;
+            
+            if (contactId) {
+                title.textContent = '담당자 수정';
+            } else {
+                title.textContent = '담당자 추가';
+            }
+            
+            modal.classList.add('active');
+            
+            // S&I 직원 목록 로드
+            loadOurManagerList();
+        };
+        
+        // 담당자 수정
+        window.editContact = function(contactId, buildingId) {
+            // state에서 담당자 정보 찾기
+            const building = window.state?.selectedBuilding;
+            if (!building || !building.contactPoints) {
+                showToast('담당자 정보를 찾을 수 없습니다', 'error');
+                return;
+            }
+            
+            const contact = building.contactPoints.find(c => c.id === contactId);
+            if (!contact) {
+                showToast('담당자 정보를 찾을 수 없습니다', 'error');
+                return;
+            }
+            
+            // 모달 열기
+            openContactModal(contactId);
+            
+            // 폼에 데이터 채우기
+            document.getElementById('contactId').value = contact.id || '';
+            document.getElementById('contactUserId').value = contact.userId || '';
+            document.getElementById('contactName').value = contact.name || '';
+            document.getElementById('contactPhone').value = contact.phone || '';
+            document.getElementById('contactEmail').value = contact.email || '';
+            document.getElementById('contactCompany').value = contact.company || '';
+            document.getElementById('contactType').value = contact.contactType || 'other';
+            document.getElementById('contactPrimary').checked = contact.isPrimary || false;
+            document.getElementById('contactNotes').value = contact.notes || '';
+            
+            // 우리 담당자인 경우
+            if (contact.isOurManager) {
+                document.getElementById('contactIsOurManager').checked = true;
+                document.getElementById('ourManagerSelectionArea').style.display = 'block';
+                document.getElementById('manualInputArea').style.display = 'none';
+            }
+        };
+        
+        // 담당자 삭제
+        window.deleteContact = function(contactId, buildingId, contactName) {
+            if (!confirm(`"${contactName}" 담당자를 삭제하시겠습니까?`)) {
+                return;
+            }
+            
+            // Firebase에서 삭제
+            if (typeof firebase !== 'undefined' && window.state?.selectedBuilding) {
+                const building = window.state.selectedBuilding;
+                const contacts = building.contactPoints || [];
+                const newContacts = contacts.filter(c => c.id !== contactId);
+                
+                const db = firebase.database();
+                const contactsRef = db.ref(`buildings/${buildingId}/contactPoints`);
+                
+                contactsRef.set(newContacts)
+                    .then(() => {
+                        showToast('담당자가 삭제되었습니다', 'success');
+                        
+                        // state 업데이트
+                        window.state.selectedBuilding.contactPoints = newContacts;
+                        
+                        // 담당자 탭 카운트 업데이트
+                        const countEl = document.getElementById('contactCount');
+                        if (countEl) countEl.textContent = newContacts.length;
+                        
+                        // 목록 다시 렌더링
+                        renderContactList(newContacts, buildingId);
+                    })
+                    .catch(err => {
+                        console.error('담당자 삭제 오류:', err);
+                        showToast('담당자 삭제 실패', 'error');
+                    });
+            }
+        };
+        
+        // 담당자 저장 (폼 제출 시)
+        document.addEventListener('DOMContentLoaded', function() {
+            const contactForm = document.getElementById('contactForm');
+            if (contactForm) {
+                contactForm.onsubmit = function(e) {
+                    e.preventDefault();
+                    saveContact();
+                };
+            }
+        });
+        
+        // 담당자 저장
+        window.saveContact = function() {
+            const buildingId = window.state?.selectedBuilding?.id;
+            if (!buildingId) {
+                showToast('빌딩을 먼저 선택해주세요', 'error');
+                return;
+            }
+            
+            const contactId = document.getElementById('contactId').value;
+            const isEdit = !!contactId;
+            
+            const isOurManager = document.getElementById('contactIsOurManager').checked;
+            
+            let contactData;
+            
+            if (isOurManager) {
+                // S&I 직원 선택된 경우
+                const selectedManagers = document.querySelectorAll('#ourManagerList input[type="checkbox"]:checked');
+                if (selectedManagers.length === 0) {
+                    showToast('S&I 직원을 선택해주세요', 'error');
+                    return;
+                }
+                
+                // 여러 명 선택 시 각각 저장
+                const managers = [];
+                selectedManagers.forEach(cb => {
+                    const userData = JSON.parse(cb.dataset.user || '{}');
+                    managers.push({
+                        id: isEdit ? contactId : 'cp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                        userId: userData.uid || '',
+                        name: userData.name || userData.email,
+                        phone: userData.phone || '',
+                        email: userData.email || '',
+                        company: 'S&I Corporation',
+                        contactType: 'other',
+                        isOurManager: true,
+                        isPrimary: document.getElementById('contactPrimary').checked,
+                        notes: document.getElementById('contactNotes').value.trim(),
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    });
+                });
+                
+                contactData = managers;
+            } else {
+                // 일반 담당자 입력
+                const name = document.getElementById('contactName').value.trim();
+                const phone = document.getElementById('contactPhone').value.trim();
+                
+                if (!name) {
+                    showToast('담당자명을 입력해주세요', 'error');
+                    return;
+                }
+                if (!phone) {
+                    showToast('연락처를 입력해주세요', 'error');
+                    return;
+                }
+                
+                contactData = [{
+                    id: isEdit ? contactId : 'cp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    userId: document.getElementById('contactUserId').value || '',
+                    name: name,
+                    phone: phone,
+                    email: document.getElementById('contactEmail').value.trim(),
+                    company: document.getElementById('contactCompany').value.trim(),
+                    contactType: document.getElementById('contactType').value,
+                    isOurManager: false,
+                    isPrimary: document.getElementById('contactPrimary').checked,
+                    notes: document.getElementById('contactNotes').value.trim(),
+                    createdAt: isEdit ? undefined : new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                }];
+            }
+            
+            // Firebase 저장
+            if (typeof firebase !== 'undefined') {
+                const building = window.state.selectedBuilding;
+                let contacts = building.contactPoints || [];
+                
+                if (isEdit) {
+                    // 수정: 기존 담당자 교체
+                    const idx = contacts.findIndex(c => c.id === contactId);
+                    if (idx >= 0) {
+                        contacts[idx] = { ...contacts[idx], ...contactData[0] };
+                    }
+                } else {
+                    // 추가: 새 담당자 추가
+                    contacts = [...contacts, ...contactData];
+                }
+                
+                // 주 담당자 설정 시 다른 담당자의 isPrimary 해제
+                if (contactData[0].isPrimary) {
+                    contacts = contacts.map(c => ({
+                        ...c,
+                        isPrimary: contactData.some(cd => cd.id === c.id) ? c.isPrimary : false
+                    }));
+                }
+                
+                const db = firebase.database();
+                const contactsRef = db.ref(`buildings/${buildingId}/contactPoints`);
+                
+                contactsRef.set(contacts)
+                    .then(() => {
+                        showToast(isEdit ? '담당자가 수정되었습니다' : '담당자가 추가되었습니다', 'success');
+                        
+                        // state 업데이트
+                        window.state.selectedBuilding.contactPoints = contacts;
+                        
+                        // 담당자 탭 카운트 업데이트
+                        const countEl = document.getElementById('contactCount');
+                        if (countEl) countEl.textContent = contacts.length;
+                        
+                        // 목록 다시 렌더링
+                        renderContactList(contacts, buildingId);
+                        
+                        // 모달 닫기
+                        closeModal('contactModal');
+                    })
+                    .catch(err => {
+                        console.error('담당자 저장 오류:', err);
+                        showToast('담당자 저장 실패', 'error');
+                    });
+            }
+        };
+        
+        // S&I 직원 목록 로드
+        window.loadOurManagerList = function() {
+            const container = document.getElementById('ourManagerList');
+            if (!container) return;
+            
+            container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">로딩 중...</div>';
+            
+            // dataCache에서 users 가져오기
+            if (window.dataCache && window.dataCache.users) {
+                const users = Object.values(window.dataCache.users).filter(u => u.role !== 'viewer');
+                
+                if (users.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">등록된 S&I 직원이 없습니다</div>';
+                    return;
+                }
+                
+                container.innerHTML = users.map(user => `
+                    <label style="display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px solid var(--border-color); cursor: pointer;">
+                        <input type="checkbox" data-user='${JSON.stringify(user).replace(/'/g, "\\'")}' style="width: 16px; height: 16px; accent-color: #10b981;">
+                        <div>
+                            <div style="font-weight: 500; font-size: 13px;">${user.name || user.email}</div>
+                            <div style="font-size: 11px; color: var(--text-muted);">${user.phone || ''} · ${user.email}</div>
+                        </div>
+                    </label>
+                `).join('');
+            } else {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px;">데이터를 불러올 수 없습니다</div>';
+            }
+        };
+        
+        // 우리 담당자 체크박스 토글
+        window.toggleOurManagerSelection = function() {
+            const isChecked = document.getElementById('contactIsOurManager').checked;
+            document.getElementById('ourManagerSelectionArea').style.display = isChecked ? 'block' : 'none';
+            document.getElementById('manualInputArea').style.display = isChecked ? 'none' : 'block';
+            
+            if (isChecked) {
+                loadOurManagerList();
+            }
+        };
+    </script>
+    <div id="selectionActionBar" class="selection-action-bar">
+        <span class="selection-count">빌딩을 선택하세요</span>
+        <button onclick="toggleSelectAll()" class="btn btn-secondary btn-sm">전체선택</button>
+        <button onclick="addSelectedToCompList()" class="btn btn-primary btn-sm">Comp List에 담기</button>
+        <button onclick="toggleSelectionMode()" class="btn btn-sm" style="background:#666;color:#fff;">취소</button>
+    </div>
+    
+    <!-- Phase 2: 선택 모드 버튼 (필터바 옆에 위치) -->
+    <button id="selectionModeBtn" onclick="toggleSelectionMode()" style="position:fixed; top:130px; right:30px; z-index:100;">
+        ☑️ 선택모드
+    </button>
+    
+    <!-- Comp List는 별도 페이지(complist.html)로 이동 -->
+    
+    <!-- ★ #13: 중복 빌딩 관리 오버레이 -->
+    <div id="duplicateManagerOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:9998; justify-content:center; align-items:center;">
+        <div style="background:white; border-radius:14px; width:95%; max-width:900px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <div style="padding:18px 24px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                <div>
+                    <h3 style="font-size:18px; font-weight:700; color:#1e293b; margin:0;">🔗 중복 빌딩 관리</h3>
+                    <div style="font-size:12px; color:#64748b; margin-top:4px;">동일 주소/유사 빌딩명을 탐지하여 통합합니다</div>
+                </div>
+                <button onclick="closeDuplicateManager()" style="width:36px; height:36px; border:none; background:#f1f5f9; border-radius:50%; cursor:pointer; font-size:18px; color:#64748b; display:flex; align-items:center; justify-content:center;">×</button>
+            </div>
+            <div id="dupManagerContent" style="padding:20px 24px; overflow-y:auto; flex:1;"></div>
+        </div>
+    </div>
+    
+    <!-- ★ #13: 중복 빌딩 관리 스크립트 -->
+    <script src="js/portal-merge.js?v=1.1"></script>
+</body>
+</html>
