@@ -163,8 +163,23 @@ export function showDataPopup(buildingId, type) {
 
 // 데이터 팝업 닫기
 export function closeDataPopup() {
-    document.getElementById('dataPopupModal').classList.remove('show');
+    const modal = document.getElementById('dataPopupModal');
+    modal.classList.remove('show');
+    // ★ 공실 팝업에서 확장했던 스타일 복원
+    if (modal.dataset.popupType === 'vacancy') {
+        modal.style.maxWidth = '700px';
+        delete modal.dataset.popupType;
+        const content = document.getElementById('dataPopupContent');
+        if (content) {
+            content.style.padding = '16px 20px';
+            content.style.maxHeight = '60vh';
+            content.style.overflow = 'auto';
+        }
+    }
     document.getElementById('modalOverlay').classList.remove('show');
+    // ★ 전체화면 이미지 오버레이 제거
+    const imgOverlay = document.getElementById('vacPopupImageOverlay');
+    if (imgOverlay) imgOverlay.remove();
 }
 
 // ===== 렌트롤 테이블 렌더링 =====
@@ -312,10 +327,9 @@ export function showVacancyPopup(buildingId) {
     // 출처별 그룹핑
     const groups = {};
     vacancies.forEach(v => {
-        const key = v.source || '기타';
-        if (!groups[key]) groups[key] = { source: key, publishDate: v.publishDate, items: [] };
+        const key = `${v.source || '기타'}_${v.publishDate || ''}`;
+        if (!groups[key]) groups[key] = { source: v.source || '기타', publishDate: v.publishDate || '', items: [] };
         groups[key].items.push(v);
-        if ((v.publishDate || '') > (groups[key].publishDate || '')) groups[key].publishDate = v.publishDate;
     });
     
     const sortedGroups = Object.values(groups).sort((a, b) => (b.publishDate || '').localeCompare(a.publishDate || ''));
@@ -324,33 +338,176 @@ export function showVacancyPopup(buildingId) {
     const title = document.getElementById('dataPopupTitle');
     const content = document.getElementById('dataPopupContent');
     
+    // ★ 모달 너비 확장 (공실용)
+    modal.style.maxWidth = '1100px';
+    modal.dataset.popupType = 'vacancy';
+    
     title.textContent = `🏢 공실 현황 - ${building.name}`;
-    content.innerHTML = sortedGroups.map(g => `
-        <div style="margin-bottom:16px;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-                <span class="mini-badge badge-vacancy">${g.source}</span>
-                <span style="font-size:12px;color:var(--text-muted);">${g.publishDate || ''}</span>
-                <span style="font-size:12px;font-weight:600;">${g.items.length}건</span>
+    
+    // ★ 이미지 URL 헬퍼
+    const getImageUrl = (group) => {
+        // 1) 공실 데이터에 pageImageUrl이 있으면 사용
+        const firstWithImg = group.items.find(v => v.pageImageUrl);
+        if (firstWithImg?.pageImageUrl) return firstWithImg.pageImageUrl;
+        
+        // 2) pageNum으로 URL 생성
+        const pageNum = group.items[0]?.pageNum || group.items[0]?.page || null;
+        if (pageNum && group.source !== '기타') {
+            const folder = (group.source + '_' + group.publishDate).replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
+            return 'https://firebasestorage.googleapis.com/v0/b/cre-unified.firebasestorage.app/o/leasing-docs%2F' 
+                + encodeURIComponent(folder) + '%2Fpage_' + String(pageNum).padStart(3, '0') + '.jpg?alt=media';
+        }
+        return '';
+    };
+    
+    // 초기 이미지 URL
+    const firstImageUrl = getImageUrl(sortedGroups[0]);
+    
+    // ★ 좌우 분할 레이아웃
+    content.innerHTML = `
+        <div style="display: flex; gap: 0; height: calc(80vh - 70px); min-height: 400px;">
+            <!-- 좌측: 공실 리스트 -->
+            <div style="flex: 1; min-width: 0; overflow-y: auto; border-right: 1px solid var(--border-color); padding: 16px;">
+                <!-- 출처 탭 -->
+                ${sortedGroups.length > 1 ? `
+                <div style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;">
+                    ${sortedGroups.map((g, i) => `
+                        <button class="vacancy-popup-tab ${i === 0 ? 'active' : ''}" 
+                                data-group-idx="${i}"
+                                onclick="switchVacancyPopupTab(${i})"
+                                style="padding: 6px 12px; border: 1px solid ${i === 0 ? 'var(--accent-color)' : 'var(--border-color)'}; 
+                                       border-radius: 16px; font-size: 12px; cursor: pointer; white-space: nowrap;
+                                       background: ${i === 0 ? 'var(--accent-color)' : 'var(--bg-secondary)'}; 
+                                       color: ${i === 0 ? '#fff' : 'var(--text-primary)'}; font-weight: 600;">
+                            ${g.source} <span style="opacity:0.8;">${g.publishDate}</span> 
+                            <span style="font-weight:700;">${g.items.length}</span>
+                        </button>
+                    `).join('')}
+                </div>` : ''}
+                
+                <!-- 그룹별 테이블 -->
+                ${sortedGroups.map((g, i) => `
+                    <div class="vacancy-popup-group" data-group-idx="${i}" style="${i > 0 ? 'display:none;' : ''}">
+                        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                            <span style="background:var(--accent-color); color:#fff; padding:2px 10px; border-radius:10px; font-size:12px; font-weight:700;">${g.source}</span>
+                            <span style="font-size:12px; color:var(--text-muted);">${g.publishDate}</span>
+                            ${g.items[0]?.pageNum || g.items[0]?.page ? `<span style="font-size:11px; background:var(--bg-tertiary); padding:2px 6px; border-radius:4px;">P.${g.items[0]?.pageNum || g.items[0]?.page}</span>` : ''}
+                        </div>
+                        <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--text-muted);">📋 공실 정보 (${g.items.length}건)</div>
+                        <table class="popup-table">
+                            <thead><tr>
+                                <th>층</th><th>임대면적</th><th>전용면적</th>
+                                <th>보증금/평</th><th>임대료/평</th><th>관리비/평</th><th>입주시기</th>
+                            </tr></thead>
+                            <tbody>${g.items.map(v => `
+                                <tr>
+                                    <td style="font-weight:600; color:var(--accent-color);">${v.floor || '-'}</td>
+                                    <td style="text-align:right;">${v.rentArea ? formatNumber(v.rentArea) + '평' : '-'}</td>
+                                    <td style="text-align:right;">${v.exclusiveArea ? formatNumber(v.exclusiveArea) + '평' : '-'}</td>
+                                    <td style="text-align:right;">${v.depositPy ? formatNumber(v.depositPy) : '-'}</td>
+                                    <td style="text-align:right;">${v.rentPy ? formatNumber(v.rentPy) : '-'}</td>
+                                    <td style="text-align:right;">${v.maintenancePy ? formatNumber(v.maintenancePy) : '-'}</td>
+                                    <td style="text-align:center;">${v.moveInDate || '-'}</td>
+                                </tr>
+                            `).join('')}</tbody>
+                        </table>
+                    </div>
+                `).join('')}
             </div>
-            <table class="popup-table">
-                <thead><tr><th>층</th><th>임대면적</th><th>전용면적</th><th>보증금/평</th><th>임대료/평</th><th>관리비/평</th><th>입주시기</th></tr></thead>
-                <tbody>${g.items.map(v => `
-                    <tr>
-                        <td style="font-weight:600;color:var(--accent-color);">${v.floor || '-'}</td>
-                        <td>${v.rentArea ? formatNumber(v.rentArea) + '평' : '-'}</td>
-                        <td>${v.exclusiveArea ? formatNumber(v.exclusiveArea) + '평' : '-'}</td>
-                        <td>${v.depositPy || '-'}</td>
-                        <td>${v.rentPy || '-'}</td>
-                        <td>${v.maintenancePy || '-'}</td>
-                        <td>${v.moveInDate || '-'}</td>
-                    </tr>
-                `).join('')}</tbody>
-            </table>
+            
+            <!-- 우측: 원본 이미지 -->
+            <div style="flex: 0 0 45%; min-width: 0; display: flex; flex-direction: column; background: var(--bg-secondary);">
+                <div style="padding: 10px 14px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 12px; font-weight: 600; color: var(--text-muted);">📄 원본 이미지</span>
+                    <button id="vacPopupFullscreenBtn" onclick="openVacPopupImageFull()" 
+                            style="font-size: 11px; padding: 4px 10px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-primary); cursor: pointer; color: var(--text-primary);"
+                            title="원본 크기로 보기">🔍 확대</button>
+                </div>
+                <div id="vacPopupImageContainer" style="flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 8px;">
+                    ${firstImageUrl ? 
+                        `<img id="vacPopupImage" src="${firstImageUrl}" 
+                              style="max-width: 100%; height: auto; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" 
+                              onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                              onclick="openVacPopupImageFull()">
+                         <div style="display:none; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; gap:8px;">
+                            <span style="font-size:40px;">📄</span>
+                            <span>이미지를 불러올 수 없습니다</span>
+                         </div>` :
+                        `<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; gap:8px;">
+                            <span style="font-size:40px;">📄</span>
+                            <span>원본 이미지 없음</span>
+                         </div>`
+                    }
+                </div>
+            </div>
         </div>
-    `).join('');
+    `;
+    
+    // ★ 이미지 URL 목록을 window에 저장 (탭 전환용)
+    window._vacPopupImageUrls = sortedGroups.map(g => getImageUrl(g));
+    window._vacPopupCurrentIdx = 0;
+    
+    // ★ content 스타일 오버라이드 (좌우분할용)
+    content.style.padding = '0';
+    content.style.maxHeight = 'none';
+    content.style.overflow = 'hidden';
     
     modal.classList.add('show');
     document.getElementById('modalOverlay').classList.add('show');
+}
+
+// ★ 공실 팝업 탭 전환
+function switchVacancyPopupTab(idx) {
+    // 탭 active 전환
+    document.querySelectorAll('.vacancy-popup-tab').forEach(tab => {
+        const isActive = parseInt(tab.dataset.groupIdx) === idx;
+        tab.classList.toggle('active', isActive);
+        tab.style.background = isActive ? 'var(--accent-color)' : 'var(--bg-secondary)';
+        tab.style.color = isActive ? '#fff' : 'var(--text-primary)';
+        tab.style.borderColor = isActive ? 'var(--accent-color)' : 'var(--border-color)';
+    });
+    
+    // 그룹 표시 전환
+    document.querySelectorAll('.vacancy-popup-group').forEach(group => {
+        group.style.display = parseInt(group.dataset.groupIdx) === idx ? '' : 'none';
+    });
+    
+    // 이미지 전환
+    const imageUrl = window._vacPopupImageUrls?.[idx] || '';
+    const container = document.getElementById('vacPopupImageContainer');
+    if (container) {
+        if (imageUrl) {
+            container.innerHTML = `
+                <img id="vacPopupImage" src="${imageUrl}" 
+                     style="max-width: 100%; height: auto; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" 
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                     onclick="openVacPopupImageFull()">
+                <div style="display:none; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; gap:8px;">
+                    <span style="font-size:40px;">📄</span>
+                    <span>이미지를 불러올 수 없습니다</span>
+                </div>`;
+        } else {
+            container.innerHTML = `
+                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-muted); font-size:13px; gap:8px;">
+                    <span style="font-size:40px;">📄</span>
+                    <span>원본 이미지 없음</span>
+                </div>`;
+        }
+    }
+    window._vacPopupCurrentIdx = idx;
+}
+
+// ★ 이미지 전체화면 보기
+function openVacPopupImageFull() {
+    const img = document.getElementById('vacPopupImage');
+    if (!img?.src) return;
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'vacPopupImageOverlay';
+    overlay.style.cssText = 'position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); z-index:10002; display:flex; align-items:center; justify-content:center; cursor:zoom-out;';
+    overlay.onclick = () => overlay.remove();
+    overlay.innerHTML = `<img src="${img.src}" style="max-width:95vw; max-height:95vh; object-fit:contain; border-radius:8px; box-shadow:0 0 40px rgba(0,0,0,0.5);">`;
+    document.body.appendChild(overlay);
 }
 
 // ===== 안내문 미리보기 팝업 =====
@@ -548,6 +705,10 @@ export function registerPopupGlobals() {
     window.openRentrollDetailModal = openRentrollDetailModal;
     window.showVacancyPopup = showVacancyPopup;
     window.showDocumentPreview = showDocumentPreview;
+    
+    // ★ 공실 팝업 좌우분할 관련
+    window.switchVacancyPopupTab = switchVacancyPopupTab;
+    window.openVacPopupImageFull = openVacPopupImageFull;
     
     // 이미지 뷰어 함수
     window.openImageViewer = openImageViewer;
