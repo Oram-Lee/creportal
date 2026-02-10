@@ -507,8 +507,8 @@ export function renderInfoSection() {
         
         <!-- 기준층/전용률 정보 -->
         <div class="info-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 8px;">
-            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${formatNumber(b.area?.typicalFloorPy || b.typicalFloorPy || b.typicalFloorExclusive || b.typicalFloorArea)}<span class="unit">평</span></div></div>
-            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${formatNumber(b.area?.typicalFloorLeasePy || b.typicalFloorLeasePy || b.typicalFloorRent) || '-'}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const floorPy = b.area?.typicalFloorPy || b.typicalFloorPy || 0; const rate = b.area?.exclusiveRate || b.exclusiveRate || 0; return floorPy && rate ? formatNumber(Math.round(floorPy * rate / 100 * 1000) / 1000) : '-'; })()}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${formatNumber(b.area?.typicalFloorPy || b.typicalFloorPy || b.typicalFloorLeasePy) || '-'}<span class="unit">평</span></div></div>
             <div class="info-card"><div class="label">전용률</div><div class="value">${b.area?.exclusiveRate || b.exclusiveRate || '-'}<span class="unit">%</span></div></div>
         </div>
         

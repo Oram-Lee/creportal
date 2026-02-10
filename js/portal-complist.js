@@ -48,13 +48,55 @@ function toWon(value) {
 }
 
 // ★ 외부 이미지 URL → base64 변환 헬퍼
+// fetch() 대신 <img> + Canvas 방식 사용 (Firebase Storage CORS 우회)
 async function fetchImageAsBase64(url) {
     if (!url) return null;
     // 이미 base64인 경우
     if (url.startsWith('data:image')) {
         return { base64: url.split(',')[1], extension: url.includes('png') ? 'png' : 'jpeg' };
     }
-    // 외부 URL인 경우 fetch → base64 변환
+    // 외부 URL → img 태그로 로드 → canvas → base64
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        const timeoutId = setTimeout(() => {
+            console.warn('이미지 로드 타임아웃:', url?.substring(0, 80));
+            resolve(null);
+        }, 10000); // 10초 타임아웃
+        
+        img.onload = () => {
+            clearTimeout(timeoutId);
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                const base64Data = dataUrl.split(',')[1];
+                if (base64Data && base64Data.length > 100) {
+                    resolve({ base64: base64Data, extension: 'jpeg' });
+                } else {
+                    resolve(null);
+                }
+            } catch (e) {
+                console.warn('Canvas export 실패 (CORS):', e.message);
+                // CORS 실패 시 fetch로 재시도
+                fetchImageViaFetch(url).then(resolve);
+            }
+        };
+        img.onerror = () => {
+            clearTimeout(timeoutId);
+            console.warn('이미지 로드 실패:', url?.substring(0, 80));
+            resolve(null);
+        };
+        img.src = url;
+    });
+}
+
+// fetch API를 통한 이미지 로드 (fallback)
+async function fetchImageViaFetch(url) {
     try {
         const response = await fetch(url);
         if (!response.ok) return null;
@@ -69,7 +111,7 @@ async function fetchImageAsBase64(url) {
         const ext = blob.type.includes('png') ? 'png' : 'jpeg';
         return { base64: base64Data, extension: ext };
     } catch (e) {
-        console.warn('이미지 fetch 실패:', url, e);
+        console.warn('fetch 이미지 실패:', e.message);
         return null;
     }
 }
@@ -1332,8 +1374,8 @@ export async function downloadCompListExcel(data) {
     sheet.getRow(2).height = 50;
     sheet.getRow(3).height = 17;
     sheet.getRow(4).height = 17;
-    sheet.getRow(5).height = 15;
-    sheet.getRow(6).height = 100;
+    sheet.getRow(5).height = 50;    // ★ 이미지 영역 상단
+    sheet.getRow(6).height = 80;    // ★ 이미지 영역 하단 (합계 130px)
     sheet.getRow(9).height = 60;
     for (let i = 7; i <= 55; i++) {
         if (i !== 9) sheet.getRow(i).height = 17;
@@ -1381,10 +1423,18 @@ export async function downloadCompListExcel(data) {
     b5.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
     
     // 외관사진 이미지 삽입 (C열~) — ★ 외부 URL도 base64 변환 지원
+    console.log('[CompList Excel] 이미지 삽입 시작, 빌딩 수:', flattenedEntries.length);
     const imagePromises = flattenedEntries.map(async (entry, idx) => {
         const col = getColumnLetter(3 + idx);  // ★ C=3부터
         const bd = entry.building.buildingData || {};
         const imageUrl = getExteriorUrl(bd);
+        
+        // ★ 디버깅: 이미지 URL 확인
+        console.log(`[CompList Excel] 빌딩 ${idx}: ${entry.building.buildingName}`);
+        console.log(`  exteriorImage: ${bd.exteriorImage ? bd.exteriorImage.substring(0, 80) + '...' : '없음'}`);
+        console.log(`  mainImage: ${bd.mainImage ? bd.mainImage.substring(0, 80) + '...' : '없음'}`);
+        console.log(`  images.exterior: ${bd.images?.exterior ? JSON.stringify(bd.images.exterior).substring(0, 80) : '없음'}`);
+        console.log(`  → getExteriorUrl 결과: ${imageUrl ? imageUrl.substring(0, 80) + '...' : '빈 문자열'}`);
         
         // 셀 병합 (행 5-6)
         sheet.mergeCells(`${col}5:${col}6`);
@@ -1402,15 +1452,15 @@ export async function downloadCompListExcel(data) {
                         br: { col: 3 + idx, row: 6 },   // 행6까지
                         editAs: 'oneCell'
                     });
+                    console.log(`  ✅ 이미지 삽입 성공`);
                 } else {
-                    imgCell.value = '-';
+                    console.log(`  ⚠️ 이미지 변환 실패 → 빈 셀 유지 (수동 삽입 가능)`);
                 }
             } catch (e) {
                 console.error('이미지 삽입 실패:', e);
-                imgCell.value = '-';
             }
         } else {
-            imgCell.value = '-';
+            console.log(`  ℹ️ 이미지 없음 → 빈 셀 유지 (수동 삽입 가능)`);
         }
     });
     
@@ -1569,8 +1619,8 @@ export async function downloadCompListExcel(data) {
         headerCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
         headerCell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
         
-        // 빌딩개요 (6행)
-        setDataCell(`${col}6`, bd.description || '', null, 'left');
+        // 빌딩개요 (6행) — ★ 이미지 병합셀(5-6)과 겹치므로 삭제
+        // description은 별도 삽입하지 않음 (이미지 영역 보존)
         
         // 빌딩 현황 (7-18행)
         setDataCell(`${col}7`, bd.addressJibun || bd.address || '');
@@ -1927,14 +1977,10 @@ async function downloadCompListExcelLG(data) {
                         br: { col: 7 + bIdx * 3, row: 17 },
                         editAs: 'oneCell'
                     });
-                } else {
-                    sheet.getCell(`${col1}9`).value = '-';
                 }
             } catch (e) {
-                sheet.getCell(`${col1}9`).value = '-';
+                console.warn('LG 외관 이미지 삽입 실패:', e);
             }
-        } else {
-            sheet.getCell(`${col1}9`).value = '-';
         }
         
         // 헬퍼 함수
@@ -2068,14 +2114,10 @@ async function downloadCompListExcelLG(data) {
                         br: { col: 7 + bIdx * 3, row: 71 },  // ★ v10.2: complist.html 기준 통일
                         editAs: 'oneCell'
                     });
-                } else {
-                    sheet.getCell(`${col1}63`).value = '평면도 없음';
                 }
             } catch (e) {
-                sheet.getCell(`${col1}63`).value = '평면도 없음';
+                console.warn('LG 평면도 삽입 실패:', e);
             }
-        } else {
-            sheet.getCell(`${col1}63`).value = '평면도 없음';
         }
         
         // ★ 특이사항 (행 73-83)
