@@ -38,10 +38,40 @@ function getExteriorUrl(bd) {
 }
 
 // 원 단위 변환 (만원 단위 → 원 단위 정규화)
+// ★ 콤마 포맷 문자열("15,000") 처리 추가
 function toWon(value) {
-    const num = parseFloat(value) || 0;
+    if (value === null || value === undefined || value === '') return 0;
+    const cleaned = String(value).replace(/,/g, '').trim();
+    const num = parseFloat(cleaned) || 0;
     if (num === 0) return 0;
     return num < 1000 ? num * 10000 : num;
+}
+
+// ★ 외부 이미지 URL → base64 변환 헬퍼
+async function fetchImageAsBase64(url) {
+    if (!url) return null;
+    // 이미 base64인 경우
+    if (url.startsWith('data:image')) {
+        return { base64: url.split(',')[1], extension: url.includes('png') ? 'png' : 'jpeg' };
+    }
+    // 외부 URL인 경우 fetch → base64 변환
+    try {
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        const blob = await response.blob();
+        const reader = new FileReader();
+        const base64 = await new Promise((resolve, reject) => {
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+        const base64Data = base64.split(',')[1];
+        const ext = blob.type.includes('png') ? 'png' : 'jpeg';
+        return { base64: base64Data, extension: ext };
+    } catch (e) {
+        console.warn('이미지 fetch 실패:', url, e);
+        return null;
+    }
 }
 
 // ============================================================
@@ -1168,9 +1198,9 @@ export function saveWizardVacancy(buildingId) {
         floor: floor,
         rentArea: parseFloat(document.getElementById(`vf_rentArea_${buildingId}`)?.value) || 0,
         exclusiveArea: parseFloat(document.getElementById(`vf_exclusiveArea_${buildingId}`)?.value) || 0,
-        depositPy: depositPyStr ? formatNumber(parseFloat(depositPyStr)) : '',
-        rentPy: formatNumber(rentPy),
-        maintenancePy: maintenancePyStr ? formatNumber(parseFloat(maintenancePyStr)) : '',
+        depositPy: depositPyStr ? parseFloat(depositPyStr) : '',
+        rentPy: rentPy,
+        maintenancePy: maintenancePyStr ? parseFloat(maintenancePyStr) : '',
         moveInDate: document.getElementById(`vf_moveIn_${buildingId}`)?.value?.trim() || '즉시',
         source: '사용자 직접입력',
         publishDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`,
@@ -1350,8 +1380,8 @@ export async function downloadCompListExcel(data) {
     b5.alignment = { horizontal: 'center', vertical: 'middle' };
     b5.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
     
-    // 외관사진 이미지 삽입 (C열~)
-    flattenedEntries.forEach((entry, idx) => {
+    // 외관사진 이미지 삽입 (C열~) — ★ 외부 URL도 base64 변환 지원
+    const imagePromises = flattenedEntries.map(async (entry, idx) => {
         const col = getColumnLetter(3 + idx);  // ★ C=3부터
         const bd = entry.building.buildingData || {};
         const imageUrl = getExteriorUrl(bd);
@@ -1362,26 +1392,30 @@ export async function downloadCompListExcel(data) {
         const imgCell = sheet.getCell(`${col}5`);
         imgCell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
         
-        if (imageUrl && imageUrl.startsWith('data:image')) {
+        if (imageUrl) {
             try {
-                const base64Data = imageUrl.split(',')[1];
-                const extension = imageUrl.includes('png') ? 'png' : 'jpeg';
-                const imageId = workbook.addImage({ base64: base64Data, extension });
-                sheet.addImage(imageId, {
-                    tl: { col: 2 + idx, row: 4 },  // ★ 0-indexed: C=col2, 행5=row4
-                    br: { col: 3 + idx, row: 6 },   // 행6까지
-                    editAs: 'oneCell'
-                });
+                const imgData = await fetchImageAsBase64(imageUrl);
+                if (imgData) {
+                    const imageId = workbook.addImage({ base64: imgData.base64, extension: imgData.extension });
+                    sheet.addImage(imageId, {
+                        tl: { col: 2 + idx, row: 4 },  // ★ 0-indexed: C=col2, 행5=row4
+                        br: { col: 3 + idx, row: 6 },   // 행6까지
+                        editAs: 'oneCell'
+                    });
+                } else {
+                    imgCell.value = '-';
+                }
             } catch (e) {
                 console.error('이미지 삽입 실패:', e);
                 imgCell.value = '-';
             }
-        } else if (imageUrl) {
-            imgCell.value = '이미지 있음';
         } else {
             imgCell.value = '-';
         }
     });
+    
+    // 모든 이미지 로딩 완료 대기
+    await Promise.all(imagePromises);
     
     // ★ A열 대항목 카테고리
     setCategoryCell('A6', '빌딩개요/일반', 'FFFFFFFF');
@@ -1839,7 +1873,8 @@ async function downloadCompListExcelLG(data) {
     // ============================================================
     // 7. 빌딩별 데이터 입력 (E열부터 시작, 빌딩당 3열)
     // ============================================================
-    buildings.forEach((b, bIdx) => {
+    for (let bIdx = 0; bIdx < buildings.length; bIdx++) {
+        const b = buildings[bIdx];
         const startColNum = 5 + bIdx * 3; // E=5, H=8, K=11, ...
         const col1 = getColumnLetter(startColNum);     // 층/주요값
         const col2 = getColumnLetter(startColNum + 1); // 전용
@@ -1880,23 +1915,24 @@ async function downloadCompListExcelLG(data) {
         cell8.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } };
         cell8.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
         
-        // ★ 건물 외관 이미지 삽입 (행 9-17)
+        // ★ 건물 외관 이미지 삽입 (행 9-17) — 외부 URL도 base64 변환 지원
         const extImageUrl = getExteriorUrl(bd);
-        if (extImageUrl && extImageUrl.startsWith('data:image')) {
+        if (extImageUrl) {
             try {
-                const base64Data = extImageUrl.split(',')[1];
-                const extension = extImageUrl.includes('png') ? 'png' : 'jpeg';
-                const imageId = workbook.addImage({ base64: base64Data, extension });
-                sheet.addImage(imageId, {
-                    tl: { col: 4 + bIdx * 3, row: 8 },   // 0-indexed
-                    br: { col: 7 + bIdx * 3, row: 17 },
-                    editAs: 'oneCell'
-                });
+                const imgData = await fetchImageAsBase64(extImageUrl);
+                if (imgData) {
+                    const imageId = workbook.addImage({ base64: imgData.base64, extension: imgData.extension });
+                    sheet.addImage(imageId, {
+                        tl: { col: 4 + bIdx * 3, row: 8 },   // 0-indexed
+                        br: { col: 7 + bIdx * 3, row: 17 },
+                        editAs: 'oneCell'
+                    });
+                } else {
+                    sheet.getCell(`${col1}9`).value = '-';
+                }
             } catch (e) {
                 sheet.getCell(`${col1}9`).value = '-';
             }
-        } else if (extImageUrl) {
-            sheet.getCell(`${col1}9`).value = '이미지 있음';
         } else {
             sheet.getCell(`${col1}9`).value = '-';
         }
@@ -1984,11 +2020,11 @@ async function downloadCompListExcelLG(data) {
         setFormula(`${col1}43`, `${col2}34`);
         setFormula(`${col1}44`, `${col3}34`);
         
-        // 기준층 임대기준 (45-47행) - ★ toWon() 원 단위 정규화
+        // 기준층 임대기준 (45-47행) - ★ toWon() 원 단위 정규화, 하드코딩 fallback 제거
         const v0 = vacancies[0] || {};
-        setCell(`${col1}45`, toWon(v0.depositPy) || 750000, { numFmt: '₩#,##0', fill: 'FFFFF2CC' });
-        setCell(`${col1}46`, toWon(v0.rentPy) || 75000, { numFmt: '₩#,##0', fill: 'FFFFF2CC' });
-        setCell(`${col1}47`, toWon(v0.maintenancePy) || 37000, { numFmt: '₩#,##0', fill: 'FFFFF2CC' });
+        setCell(`${col1}45`, toWon(v0.depositPy) || '', { numFmt: '₩#,##0', fill: 'FFFFF2CC' });
+        setCell(`${col1}46`, toWon(v0.rentPy) || '', { numFmt: '₩#,##0', fill: 'FFFFF2CC' });
+        setCell(`${col1}47`, toWon(v0.maintenancePy) || '', { numFmt: '₩#,##0', fill: 'FFFFF2CC' });
         
         // 실질 임대기준 (48-49행)
         setFormula(`${col1}48`, `${col1}46*(12-${col1}49)/12`, '#,##0.00');
@@ -2013,7 +2049,7 @@ async function downloadCompListExcelLG(data) {
                 ? (bd.parkingInfo?.display || (bd.parkingInfo?.total ? `총 ${bd.parkingInfo.total}대` : ''))
                 : (bd.parkingInfo || bd.parking || ''));
         setCell(`${col1}59`, bd.parkingTotal || parkingDisplay || '-');
-        setCell(`${col1}60`, parseFloat(bd.freeParkingCondition) || 50, { fill: 'FFFFF2CC' });
+        setCell(`${col1}60`, parseFloat(bd.freeParkingCondition) || '', { fill: 'FFFFF2CC' });
         setFormula(`${col1}61`, `${col1}44/${col1}60`, '#,##0.0');
         setCell(`${col1}62`, bd.paidParking || bd.parkingFee || bd.parking?.fee || '-', { fill: 'FFFFFBEB' });
         
@@ -2022,21 +2058,22 @@ async function downloadCompListExcelLG(data) {
         const fpImageUrl = floorPlanImages.length > 0 ? 
             (typeof floorPlanImages[0] === 'string' ? floorPlanImages[0] : floorPlanImages[0]?.url) : '';
         
-        if (fpImageUrl && fpImageUrl.startsWith('data:image')) {
+        if (fpImageUrl) {
             try {
-                const base64Data = fpImageUrl.split(',')[1];
-                const extension = fpImageUrl.includes('png') ? 'png' : 'jpeg';
-                const imageId = workbook.addImage({ base64: base64Data, extension });
-                sheet.addImage(imageId, {
-                    tl: { col: 4 + bIdx * 3, row: 62 },  // 0-indexed
-                    br: { col: 7 + bIdx * 3, row: 71 },  // ★ v10.2: complist.html 기준 통일
-                    editAs: 'oneCell'
-                });
+                const imgData = await fetchImageAsBase64(fpImageUrl);
+                if (imgData) {
+                    const imageId = workbook.addImage({ base64: imgData.base64, extension: imgData.extension });
+                    sheet.addImage(imageId, {
+                        tl: { col: 4 + bIdx * 3, row: 62 },  // 0-indexed
+                        br: { col: 7 + bIdx * 3, row: 71 },  // ★ v10.2: complist.html 기준 통일
+                        editAs: 'oneCell'
+                    });
+                } else {
+                    sheet.getCell(`${col1}63`).value = '평면도 없음';
+                }
             } catch (e) {
                 sheet.getCell(`${col1}63`).value = '평면도 없음';
             }
-        } else if (fpImageUrl) {
-            sheet.getCell(`${col1}63`).value = '평면도 있음';
         } else {
             sheet.getCell(`${col1}63`).value = '평면도 없음';
         }
@@ -2044,7 +2081,7 @@ async function downloadCompListExcelLG(data) {
         // ★ 특이사항 (행 73-83)
         sheet.getCell(`${col1}73`).value = bd.remarks || bd.specialNotes || '';
         sheet.getCell(`${col1}73`).alignment = { horizontal: 'left', vertical: 'top', wrapText: true };
-    });
+    }
     
     // ★ 특이사항 라벨
     const a72 = sheet.getCell('A72');
