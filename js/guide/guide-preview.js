@@ -30,7 +30,7 @@
  * - window.print() 기반 PDF 저장 기능
  */
 
-import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo } from './guide-state.js';
+import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo, getRegionOrder } from './guide-state.js';
 import { showToast, formatNumber, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js';
 
 // ★ v3.6: 층 표기 정규화 함수 (FF 중복 방지)
@@ -83,14 +83,7 @@ function safeFormatPrice(value) {
     return value;
 }
 
-// 기본 권역 순서 (커스텀 권역은 뒤에 추가됨)
-const BASE_REGION_ORDER = ['GBD', 'YBD', 'CBD', 'BBD', 'PAN', 'ETC'];
-
-// 동적 권역 순서 가져오기
-function getRegionOrder() {
-    const customCodes = state.customRegions.map(r => r.code);
-    return [...BASE_REGION_ORDER, ...customCodes];
-}
+// ★ 권역 순서는 guide-state.js에서 import (getRegionOrder)
 
 // 빌딩 데이터를 권역별로 그룹핑
 function groupBuildingsByRegion(tocItems, buildingDataMap) {

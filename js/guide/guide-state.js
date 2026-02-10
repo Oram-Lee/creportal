@@ -48,6 +48,8 @@ export const state = {
     },
     // 커스텀 권역 (사용자 정의)
     customRegions: [],
+    // ★ 권역 순서 (드래그앤드롭으로 사용자 정의, null이면 기본순서)
+    regionOrder: null,
     // ★ 권역 별칭 (임대안내문에서만 표시되는 이름)
     regionAliases: {},
     // 엔딩 페이지 설정
@@ -159,6 +161,30 @@ export function getAllRegions() {
     return [...DEFAULT_REGIONS, ...state.customRegions];
 }
 
+// ★ 권역 순서 관련 함수들
+export function setRegionOrder(order) {
+    state.regionOrder = order;
+    saveSettingsToLocal();
+}
+
+export function resetRegionOrder() {
+    state.regionOrder = null;
+    saveSettingsToLocal();
+}
+
+export function getRegionOrder() {
+    if (state.regionOrder && Array.isArray(state.regionOrder)) {
+        // 커스텀 순서에 없는 새 권역이 추가되었을 수 있으므로 보완
+        const baseCodes = DEFAULT_REGIONS.map(r => r.code);
+        const customCodes = (state.customRegions || []).map(r => r.code);
+        const allCodes = [...baseCodes, ...customCodes];
+        const missing = allCodes.filter(c => !state.regionOrder.includes(c));
+        return [...state.regionOrder.filter(c => allCodes.includes(c)), ...missing];
+    }
+    const customCodes = (state.customRegions || []).map(r => r.code);
+    return [...DEFAULT_REGIONS.map(r => r.code), ...customCodes];
+}
+
 // 권역 코드로 권역 정보 가져오기
 export function getRegionInfo(code) {
     const all = getAllRegions();
@@ -245,6 +271,7 @@ export function saveSettingsToLocal() {
             endingSettings: state.endingSettings,
             customRegions: state.customRegions,
             regionAliases: state.regionAliases,
+            regionOrder: state.regionOrder,
             savedAt: new Date().toISOString()
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
@@ -271,6 +298,9 @@ export function loadSettingsFromLocal() {
             }
             if (data.regionAliases) {
                 state.regionAliases = data.regionAliases;
+            }
+            if (data.regionOrder) {
+                state.regionOrder = data.regionOrder;
             }
             console.log('[State] 설정 로드됨:', data.savedAt);
             return true;

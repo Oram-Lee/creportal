@@ -571,6 +571,69 @@
             margin-top: 8px;
             border-left: 3px solid var(--border-color);
             margin-left: 4px;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+        }
+        
+        /* ★ 권역 드래그앤드롭 스타일 */
+        .toc-region-group.region-dragging {
+            opacity: 0.4;
+            transform: scale(0.98);
+        }
+        .toc-region-group.region-drag-over-top {
+            border-top: 3px solid var(--accent-color);
+            padding-top: 2px;
+        }
+        .toc-region-group.region-drag-over-bottom {
+            border-bottom: 3px solid var(--accent-color);
+            padding-bottom: 2px;
+        }
+        
+        /* 권역 드래그 핸들 */
+        .region-drag-handle {
+            cursor: grab;
+            color: #9ca3af;
+            font-size: 14px;
+            letter-spacing: -2px;
+            padding: 0 4px;
+            user-select: none;
+            transition: color 0.15s;
+        }
+        .region-drag-handle:hover {
+            color: #22c55e;
+        }
+        .toc-item.toc-region-header:active .region-drag-handle {
+            cursor: grabbing;
+        }
+        .toc-item.toc-region-header.active .region-drag-handle {
+            color: rgba(255,255,255,0.6);
+        }
+        
+        /* 권역 순서 힌트 + 초기화 버튼 */
+        .region-order-reset {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 10px;
+            font-size: 10px;
+            color: var(--text-muted);
+        }
+        .region-order-hint {
+            opacity: 0.7;
+        }
+        .region-order-reset-btn {
+            background: none;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 10px;
+            color: #6b7280;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .region-order-reset-btn:hover {
+            background: #fee2e2;
+            border-color: #fca5a5;
+            color: #dc2626;
         }
         
         /* 권역 헤더 (목차) */

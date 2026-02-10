@@ -7,21 +7,21 @@
  * - ★ 페이지 네비게이션: 이전/다음 버튼
  * - ★ 자동 생성 항목 클릭 시 해당 페이지 미리보기
  * - ★ selectPage() 통합 함수
+ * 
+ * v5.0 수정사항 (2026-02-10):
+ * - ★ 권역 순서 드래그앤드롭: 좌측 TOC에서 권역 헤더를 드래그하여 순서 변경
+ * - ★ state.regionOrder로 사용자 정의 순서 저장 (localStorage 자동 저장)
+ * - ★ 순서 초기화 버튼: 커스텀 순서일 때 "↻ 초기화" 버튼 표시
+ * - ★ tocItems 자동 재정렬: 권역 순서 변경 시 빌딩 목록도 자동 정렬
+ * - ★ guide-preview.js와 순서 동기화: 미리보기/출력에도 변경 순서 반영
  */
 
-import { state } from './guide-state.js';
+import { state, getRegionOrder, setRegionOrder, resetRegionOrder } from './guide-state.js';
 import { showToast, getRegionName } from './guide-utils.js';
 // 순환 의존성 방지 - window 객체를 통해 호출
 // renderCoverEditor, renderBuildingEditor, renderDividerEditor, renderGuideList, renderEndingEditor
 
-// 기본 권역 순서
-const BASE_REGION_ORDER = ['GBD', 'YBD', 'CBD', 'BBD', 'PAN', 'ETC'];
-
-// 동적 권역 순서 가져오기
-function getRegionOrder() {
-    const customCodes = (state.customRegions || []).map(r => r.code);
-    return [...BASE_REGION_ORDER, ...customCodes];
-}
+// ★ 권역 순서는 guide-state.js에서 import (getRegionOrder)
 
 // 빌딩을 권역별로 그룹핑
 function groupItemsByRegion() {
@@ -195,19 +195,40 @@ export function renderToc() {
         </div>
     `;
     
+    // ★ 권역 순서가 커스텀이면 초기화 버튼 표시
+    if (state.regionOrder && Array.isArray(state.regionOrder)) {
+        html += `
+            <div class="region-order-reset">
+                <span class="region-order-hint">⠿ 권역 헤더를 드래그하여 순서 변경</span>
+                <button class="region-order-reset-btn" onclick="event.stopPropagation(); resetRegionOrderAction()" title="기본 순서로 되돌리기">↻ 초기화</button>
+            </div>
+        `;
+    } else {
+        html += `
+            <div class="region-order-reset">
+                <span class="region-order-hint">⠿ 권역 헤더를 드래그하여 순서 변경</span>
+            </div>
+        `;
+    }
+    
     // 3. 권역별
-    activeRegions.forEach(region => {
+    activeRegions.forEach((region, regionIdx) => {
         const items = regionGroups[region];
         const buildingCount = items.filter(i => i.type === 'building').length;
         
-        // 권역 그룹 시작
-        html += `<div class="toc-region-group">`;
+        // 권역 그룹 시작 — ★ 드래그앤드롭 가능
+        html += `<div class="toc-region-group" data-region="${region}"
+                      draggable="true"
+                      ondragstart="handleRegionDragStart(event, '${region}')"
+                      ondragover="handleRegionDragOver(event)"
+                      ondrop="handleRegionDrop(event, '${region}')"
+                      ondragend="handleRegionDragEnd(event)">`;
         
-        // 권역 목차 (자동 생성)
+        // 권역 목차 (자동 생성) — ★ 드래그 핸들 추가
         html += `
             <div class="toc-item toc-region-header ${state.selectedPageType === 'toc-region' && state.selectedRegion === region ? 'active' : ''}"
                  onclick="selectPage('toc-region', '${region}')">
-                <span class="item-icon">📑</span>
+                <span class="region-drag-handle" title="드래그하여 권역 순서 변경">⠿</span>
                 <span class="region-badge region-${region}">${region}</span>
                 <span class="item-name">${getRegionName(region)}</span>
                 <span class="count-badge">${buildingCount}</span>
@@ -522,16 +543,171 @@ export function getPageInfo() {
     };
 }
 
-// 드래그 시작
+// ★ 권역 드래그앤드롭 ============================
+let draggedRegion = null;
+
+export function handleRegionDragStart(e, region) {
+    // 빌딩 개별 드래그와 충돌 방지: 이벤트 소스가 region-drag-handle이면 권역 드래그
+    const handle = e.target.closest('.region-drag-handle');
+    const regionHeader = e.target.closest('.toc-region-header');
+    if (!handle && !regionHeader) {
+        // 빌딩 아이템에서 시작된 드래그는 무시 (빌딩 드래그 핸들러가 처리)
+        e.preventDefault();
+        return;
+    }
+    
+    draggedRegion = region;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', `region:${region}`);
+    
+    // 권역 그룹 전체에 dragging 스타일 적용
+    const group = e.target.closest('.toc-region-group');
+    if (group) {
+        setTimeout(() => group.classList.add('region-dragging'), 0);
+    }
+    
+    console.log(`[RegionDrag] 시작: ${region}`);
+}
+
+export function handleRegionDragOver(e) {
+    if (!draggedRegion) return; // 권역 드래그가 아니면 무시
+    
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    const targetGroup = e.target.closest('.toc-region-group');
+    if (targetGroup) {
+        // 기존 하이라이트 모두 제거
+        document.querySelectorAll('.toc-region-group').forEach(g => {
+            g.classList.remove('region-drag-over-top', 'region-drag-over-bottom');
+        });
+        
+        // 마우스 위치에 따라 위/아래 하이라이트
+        const rect = targetGroup.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+            targetGroup.classList.add('region-drag-over-top');
+        } else {
+            targetGroup.classList.add('region-drag-over-bottom');
+        }
+    }
+}
+
+export function handleRegionDrop(e, targetRegion) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedRegion || draggedRegion === targetRegion) {
+        cleanupRegionDrag();
+        return;
+    }
+    
+    // 현재 권역 순서 가져오기
+    const currentOrder = getRegionOrder();
+    const fromIdx = currentOrder.indexOf(draggedRegion);
+    const toIdx = currentOrder.indexOf(targetRegion);
+    
+    if (fromIdx === -1 || toIdx === -1) {
+        cleanupRegionDrag();
+        return;
+    }
+    
+    // 드롭 위치(위/아래) 판단
+    const targetGroup = e.target.closest('.toc-region-group');
+    let dropAfter = false;
+    if (targetGroup) {
+        const rect = targetGroup.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        dropAfter = (e.clientY >= midY);
+    }
+    
+    // 순서 변경: 먼저 제거 후 삽입
+    const newOrder = [...currentOrder];
+    newOrder.splice(fromIdx, 1);
+    
+    // 삽입 위치 계산
+    let insertAt = newOrder.indexOf(targetRegion);
+    if (insertAt === -1) insertAt = newOrder.length;
+    if (dropAfter) insertAt++;
+    
+    newOrder.splice(insertAt, 0, draggedRegion);
+    
+    // tocItems도 새 권역 순서에 맞게 재정렬
+    reorderTocItemsByRegion(newOrder);
+    
+    // 상태 저장
+    setRegionOrder(newOrder);
+    
+    console.log(`[RegionDrag] 순서 변경: ${currentOrder.join(',')} → ${newOrder.join(',')}`);
+    showToast(`권역 순서가 변경되었습니다`, 'success');
+    
+    cleanupRegionDrag();
+    renderToc();
+}
+
+export function handleRegionDragEnd(e) {
+    cleanupRegionDrag();
+}
+
+function cleanupRegionDrag() {
+    draggedRegion = null;
+    document.querySelectorAll('.toc-region-group').forEach(g => {
+        g.classList.remove('region-dragging', 'region-drag-over-top', 'region-drag-over-bottom');
+    });
+}
+
+// ★ tocItems를 새 권역 순서에 맞게 재정렬
+function reorderTocItemsByRegion(newRegionOrder) {
+    const regionGroups = groupItemsByRegion();
+    const reordered = [];
+    
+    newRegionOrder.forEach(region => {
+        if (regionGroups[region]) {
+            regionGroups[region].forEach(({ item }) => {
+                reordered.push(item);
+            });
+        }
+    });
+    
+    // 어떤 권역에도 속하지 않은 아이템 추가 (안전장치)
+    const reorderedIds = new Set(reordered.map(i => i.buildingId || i.title));
+    state.tocItems.forEach(item => {
+        const id = item.buildingId || item.title;
+        if (!reorderedIds.has(id)) {
+            reordered.push(item);
+        }
+    });
+    
+    state.tocItems = reordered;
+}
+
+// ★ 권역 순서 초기화
+export function resetRegionOrderAction() {
+    if (confirm('권역 순서를 기본값(GBD → YBD → CBD → BBD → PAN → ETC)으로 초기화하시겠습니까?')) {
+        resetRegionOrder();
+        
+        // tocItems도 기본 순서로 재정렬
+        const defaultOrder = getRegionOrder();
+        reorderTocItemsByRegion(defaultOrder);
+        
+        renderToc();
+        showToast('권역 순서가 초기화되었습니다', 'success');
+    }
+}
+
+// 드래그 시작 (빌딩 개별)
 let draggedIdx = null;
 export function handleDragStart(e, idx) {
+    if (draggedRegion) return; // 권역 드래그 중이면 무시
+    e.stopPropagation(); // ★ 권역 그룹으로 이벤트 버블링 방지
     draggedIdx = idx;
     e.target.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
 }
 
-// 드래그 오버
+// 드래그 오버 (빌딩 개별)
 export function handleDragOver(e) {
+    if (draggedRegion) return; // 권역 드래그 중이면 무시
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     const target = e.target.closest('.toc-item');
@@ -645,10 +821,18 @@ export function registerTocFunctions() {
     window.closeEditor = closeEditor;
     window.renderToc = renderToc;
     window.setTocItemsFromGuide = setTocItemsFromGuide;
+    // 빌딩 개별 드래그
     window.handleDragStart = handleDragStart;
     window.handleDragOver = handleDragOver;
     window.handleDrop = handleDrop;
     window.handleDragEnd = handleDragEnd;
+    // ★ 권역 드래그앤드롭
+    window.handleRegionDragStart = handleRegionDragStart;
+    window.handleRegionDragOver = handleRegionDragOver;
+    window.handleRegionDrop = handleRegionDrop;
+    window.handleRegionDragEnd = handleRegionDragEnd;
+    window.resetRegionOrderAction = resetRegionOrderAction;
+    // 기타
     window.deleteTocItem = deleteTocItem;
     window.selectTocItem = selectTocItem;
     window.selectPage = selectPage;
