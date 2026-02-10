@@ -60,14 +60,6 @@ if (typeof state.vacancySortOrder === 'undefined') {
     state.vacancySortOrder = 'asc';
 }
 
-/**
- * 면적 포맷 (소숫점 토글 반영)
- * @param {number|string} value - 면적 값
- * @param {boolean} forceDecimal - 강제 소숫점 표시 (편집 모드용)
- * @returns {string} - 포맷된 문자열
- */
-function formatArea(value, forceDecimal = false) {
-
 // ★ Sprint3-NEW2: 주차정보 포맷 함수
 function formatParkingDisplay(b) {
     // 건축물대장 데이터 우선
@@ -94,6 +86,14 @@ function formatParkingDisplay(b) {
     }
     return '-';
 }
+
+/**
+ * 면적 포맷 (소숫점 토글 반영)
+ * @param {number|string} value - 면적 값
+ * @param {boolean} forceDecimal - 강제 소숫점 표시 (편집 모드용)
+ * @returns {string} - 포맷된 문자열
+ */
+function formatArea(value, forceDecimal = false) {
     if (!value && value !== 0) return '-';
     const num = parseFloat(value);
     if (isNaN(num)) return '-';
