@@ -393,7 +393,6 @@ export function addDirectVacancy(idx) {
         rent, 
         maintenance,
         moveIn,
-        sourceType: 'direct',
         createdAt: new Date().toISOString()
     });
     

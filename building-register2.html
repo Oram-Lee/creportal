@@ -1771,15 +1771,6 @@
                             total: parseInt(document.getElementById('parkingTotal').value) || 0,
                             ratio: document.getElementById('parkingRatio').value
                         },
-                        // ★★★ v9.6: 건축물대장 핵심 필드 추가 저장 ★★★
-                        bcRat: selectedBuilding?.buildingInfo?.bcRat || 0,
-                        vlRat: selectedBuilding?.buildingInfo?.vlRat || 0,
-                        mainPurpose: selectedBuilding?.buildingInfo?.mainPurpose || '',
-                        etcPurpose: selectedBuilding?.buildingInfo?.etcPurpose || '',
-                        roofCode: selectedBuilding?.buildingInfo?.roofCode || '',
-                        strctCdNm: selectedBuilding?.buildingInfo?.strctCdNm || '',
-                        // ★★★ v9.6: 건축물대장 원본 데이터 보존 ★★★
-                        buildingInfo: selectedBuilding?.buildingInfo || null,
                         nearbyStation: document.getElementById('nearbyStation').value,
                         stationDistance: document.getElementById('stationDistance').value,
                         pm: document.getElementById('pm').value,

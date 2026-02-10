@@ -1952,7 +1952,6 @@
                 // 폼 데이터 수집
                 const formData = {
                     // 기본 정보
-                    name: document.getElementById('editBuildingName')?.value || '',
                     grade: document.getElementById('editGrade')?.value || '',
                     
                     // 기준층 정보
@@ -2078,16 +2077,12 @@
         const readonlyInfo = document.getElementById('buildingReadonlyInfo');
         if (readonlyInfo) {
             const raw = building._raw || building;
-            const bi = building.buildingInfo || {};
             readonlyInfo.innerHTML = `
                 <div>📍 <strong>주소:</strong> ${building.address || '-'}</div>
                 <div>📐 <strong>연면적:</strong> ${building.area?.grossFloorPy || building.grossFloorPy || '-'}평 (${building.area?.grossFloorSqm || building.grossFloorSqm || '-'}㎡)</div>
                 <div>🏗️ <strong>층수:</strong> ${typeof building.floors === 'object' ? building.floors?.display : (building.floors || '-')}</div>
                 <div>📅 <strong>준공:</strong> ${building.completionYear || '-'}</div>
-                <div>🔢 <strong>용적률/건폐율:</strong> ${building.vlRat || bi.vlRat || building.floorAreaRatio || '-'}% / ${building.bcRat || bi.bcRat || building.buildingCoverageRatio || '-'}%</div>
-                <div>🏢 <strong>용도:</strong> ${building.mainPurpose || bi.mainPurpose || '-'}</div>
-                <div>🧱 <strong>구조:</strong> ${building.strctCdNm || bi.strctCdNm || building.specs?.structure || '-'}</div>
-                <div>🅿️ <strong>주차(대장):</strong> ${building.parking?.total || bi.totPkngCnt || '-'}대</div>
+                <div>🔢 <strong>용적률/건폐율:</strong> ${building.vlRat || building.floorAreaRatio || '-'}% / ${building.bcRat || building.buildingCoverageRatio || '-'}%</div>
             `;
         }
         
@@ -2125,59 +2120,65 @@
                 updatedBy: window.state?.currentUser?.email || 'unknown'
             };
             
-            // ★ v3.12: 모든 필드를 무조건 업데이트 (빈 값도 저장 → 값 삭제 가능)
             // 기본 정보
-            if (formData.name) updates.name = formData.name;  // 빌딩명은 빈값 방지
-            updates.grade = formData.grade || '';
+            if (formData.grade) updates.grade = formData.grade;
             
             // 기준층 정보 - area 객체에 저장
-            updates['area/typicalFloorPy'] = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
-            updates['area/typicalFloorLeasePy'] = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
-            updates['area/exclusiveRate'] = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
-            
-            // 호환성을 위해 루트 레벨에도 저장
-            updates.typicalFloorPy = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
-            updates.typicalFloorLeasePy = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
-            updates.exclusiveRate = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
+            if (formData.typicalFloorPy || formData.typicalFloorLeasePy || formData.exclusiveRate) {
+                updates['area/typicalFloorPy'] = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
+                updates['area/typicalFloorLeasePy'] = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
+                updates['area/exclusiveRate'] = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
+                
+                // 호환성을 위해 루트 레벨에도 저장
+                updates.typicalFloorPy = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
+                updates.typicalFloorLeasePy = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
+                updates.exclusiveRate = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
+            }
             
             // 임대조건 (원 단위로 저장)
             const depositWon = toWon(formData.depositPy);
             const rentWon = toWon(formData.rentPy);
             const maintenanceWon = toWon(formData.maintenancePy);
             
-            updates.depositPy = depositWon;
-            updates.rentPy = rentWon;
-            updates.maintenancePy = maintenanceWon;
+            if (depositWon !== null) updates.depositPy = depositWon;
+            if (rentWon !== null) updates.rentPy = rentWon;
+            if (maintenanceWon !== null) updates.maintenancePy = maintenanceWon;
             
             // 시설 정보
-            updates.hvac = formData.hvac || '';
-            updates.ceilingHeight = formData.ceilingHeight ? parseInt(formData.ceilingHeight) : null;
-            updates.floorLoad = formData.floorLoad ? parseInt(formData.floorLoad) : null;
+            if (formData.hvac) updates.hvac = formData.hvac;
+            if (formData.ceilingHeight) updates.ceilingHeight = parseInt(formData.ceilingHeight);
+            if (formData.floorLoad) updates.floorLoad = parseInt(formData.floorLoad);
             
             // 주차/승강기
-            updates['parking/display'] = formData.parkingDisplay || '';
-            updates.parkingDisplay = formData.parkingDisplay || '';
-            updates['specs/elevator'] = formData.elevator || '';
-            updates.elevator = formData.elevator || '';
-            updates['parking/ratio'] = formData.parkingRatio || '';
-            updates.parkingRatio = formData.parkingRatio || '';
-            updates.nearbyStation = formData.nearbyStation || '';
+            if (formData.parkingDisplay) {
+                updates['parking/display'] = formData.parkingDisplay;
+                updates.parkingDisplay = formData.parkingDisplay;
+            }
+            if (formData.elevator) {
+                updates['specs/elevator'] = formData.elevator;
+                updates.elevator = formData.elevator;
+            }
+            if (formData.parkingRatio) {
+                updates['parking/ratio'] = formData.parkingRatio;
+                updates.parkingRatio = formData.parkingRatio;
+            }
+            if (formData.nearbyStation) updates.nearbyStation = formData.nearbyStation;
             
             // 관리 정보
-            updates.pm = formData.pm || '';
-            updates.owner = formData.owner || '';
+            if (formData.pm) updates.pm = formData.pm;
+            if (formData.owner) updates.owner = formData.owner;
             
             // 채권분석 정보
-            updates.bondStatus = formData.bondStatus || '';
-            updates.jointCollateral = formData.jointCollateral || '';
-            updates.seniorLien = formData.seniorLien || '';
-            updates.collateralRatio = formData.collateralRatio || '';
-            updates.officialLandPrice = formData.officialLandPrice || '';
-            updates.landPriceApplied = formData.landPriceApplied || '';
+            if (formData.bondStatus) updates.bondStatus = formData.bondStatus;
+            if (formData.jointCollateral) updates.jointCollateral = formData.jointCollateral;
+            if (formData.seniorLien) updates.seniorLien = formData.seniorLien;
+            if (formData.collateralRatio) updates.collateralRatio = formData.collateralRatio;
+            if (formData.officialLandPrice) updates.officialLandPrice = formData.officialLandPrice;
+            if (formData.landPriceApplied) updates.landPriceApplied = formData.landPriceApplied;
             
             // 기타
-            updates.description = formData.description || '';
-            updates.url = formData.url || '';
+            if (formData.description) updates.description = formData.description;
+            if (formData.url) updates.url = formData.url;
             
             console.log('📤 Firebase 업데이트:', updates);
             

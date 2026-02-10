@@ -121,27 +121,6 @@ async function loadExternalVacancies(buildingId) {
     }
 }
 
-// ★ v3.8: 기준가(floorPricing) 비동기 로드 - 공실 이관 시 동반 참조
-async function loadFloorPricing(buildingId, item) {
-    try {
-        const fpRef = ref(db, `buildings/${buildingId}/floorPricing`);
-        const snapshot = await get(fpRef);
-        
-        if (snapshot.exists()) {
-            const data = snapshot.val();
-            item.floorPricing = Array.isArray(data) ? data : Object.values(data);
-            console.log(`✅ floorPricing 로드: ${buildingId} → ${item.floorPricing.length}개`);
-        } else {
-            item.floorPricing = [];
-        }
-        item.floorPricingLoaded = true;
-    } catch (error) {
-        console.error('floorPricing 로드 오류:', error);
-        item.floorPricing = [];
-        item.floorPricingLoaded = true;
-    }
-}
-
 // 빌딩 에디터 렌더링
 export function renderBuildingEditor(item, building) {
     const editorMain = document.getElementById('editorMain');
@@ -163,11 +142,6 @@ export function renderBuildingEditor(item, building) {
     if (!item.customVacancies) item.customVacancies = [];
     if (!item.selectedExternalVacancies) item.selectedExternalVacancies = [];
     if (!item.leasingGuideVacancies) item.leasingGuideVacancies = [];  // ★ 안내문 공실
-    
-    // ★ v3.8: 기준가(floorPricing) 자동 로드 - 공실 이관 시 동반 참조용
-    if (!item.floorPricingLoaded) {
-        loadFloorPricing(building.id, item);
-    }
     
     // ★ 타사 공실 자동 로드 (vacancies가 없거나 로드되지 않은 경우)
     let externalVacancies = building.vacancies;
@@ -723,12 +697,6 @@ export function renderBuildingEditor(item, building) {
                         `).join('') : `<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">등록된 공실이 없습니다</td></tr>`}
                     </tbody>
                 </table>
-                ${item.floorPricing && item.floorPricing.length > 0 ? `
-                    <div style="margin-top:8px; padding:8px 12px; background:var(--bg-secondary, #f8fafc); border-radius:6px; font-size:12px; color:#64748b;">
-                        💰 기준가 ${item.floorPricing.length}건 연동됨
-                        (${item.floorPricing.map(fp => fp.label || fp.floorRange || '기준가').join(', ')})
-                    </div>
-                ` : ''}
             </div>
         </div>
     `;
