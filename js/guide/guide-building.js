@@ -45,6 +45,12 @@
  * - ★ 지도 자동 생성 버튼 추가 (카카오 Static Map API)
  * - generateLocationMap() 함수: 서버 API 호출 → Firebase Storage 저장
  * - 수동 모드에서 좌표가 있으면 "🗺️ 지도 생성" 버튼 표시
+ * 
+ * v5.2 수정사항 (2026-02-10):
+ * - ★ #11: 수동 모드 LOCATION 이미지 드래그앤드롭/Ctrl+V 지원
+ * - setupLocationDropAndPaste(): 드래그앤드롭 + 클립보드 붙여넣기 이벤트 설정
+ * - processLocationImage(): 이미지 파일 압축 후 mapImage에 적용
+ * - 플레이스홀더 텍스트 변경: "드래그앤드롭, Ctrl+V 또는 클릭"
  */
 
 import { state, db, ref, get, update, getAllRegions } from './guide-state.js';
@@ -367,7 +373,7 @@ export function renderBuildingEditor(item, building) {
                             ` : ((item.mapImage || building.images?.location) ? `<img src="${item.mapImage || building.images?.location}" alt="위치">` : `
                                 <div class="upload-placeholder">
                                     <span class="placeholder-icon">🗺️</span>
-                                    <span class="placeholder-text">지도 업로드</span>
+                                    <span class="placeholder-text">드래그앤드롭, Ctrl+V 또는 클릭</span>
                                     <span class="placeholder-size">${IMAGE_SIZES.map.label}</span>
                                 </div>
                             `)}
@@ -756,6 +762,16 @@ export function renderBuildingEditor(item, building) {
         document.body.appendChild(input);
     }
     
+    // ★ v5.2: 수동 모드 LOCATION 드래그앤드롭 + Ctrl+V 이벤트 바인딩
+    if (item.mapMode !== 'auto') {
+        setTimeout(() => {
+            const locationMap = document.getElementById(`locationMap_${idx}`);
+            if (locationMap) {
+                setupLocationDropAndPaste(locationMap, idx);
+            }
+        }, 100);
+    }
+    
     // 자동 모드일 때 카카오맵 초기화
     if (item.mapMode === 'auto') {
         setTimeout(() => initBuildingKakaoMap(idx, building), 200);
@@ -1108,6 +1124,116 @@ export function resetToStorageMapImage(idx, buildingId) {
         item.mapImage = null;  // 업로드 이미지 삭제 → Storage 이미지 사용
         renderBuildingEditor(item, building);
         showToast('기본 이미지로 복원되었습니다', 'success');
+    }
+}
+
+// ★ v5.2: LOCATION 영역 드래그앤드롭 + Ctrl+V 설정
+function setupLocationDropAndPaste(container, idx) {
+    // 기존 이벤트 제거 (중복 방지)
+    container.removeAttribute('data-dnd-bound');
+    
+    // --- 드래그앤드롭 ---
+    container.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        container.style.outline = '2px dashed #3b82f6';
+        container.style.outlineOffset = '-2px';
+        container.style.background = 'rgba(59, 130, 246, 0.05)';
+    });
+    
+    container.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        container.style.outline = '';
+        container.style.outlineOffset = '';
+        container.style.background = '';
+    });
+    
+    container.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        container.style.outline = '';
+        container.style.outlineOffset = '';
+        container.style.background = '';
+        
+        const files = e.dataTransfer?.files;
+        if (files && files.length > 0) {
+            const file = files[0];
+            if (file.type.startsWith('image/')) {
+                processLocationImage(file, idx);
+            } else {
+                showToast('이미지 파일만 업로드 가능합니다', 'warning');
+            }
+        }
+    });
+    
+    // --- Ctrl+V (클립보드 붙여넣기) ---
+    // container에 tabindex를 설정하여 포커스 가능하게
+    container.setAttribute('tabindex', '0');
+    container.style.outline = container.style.outline || '';  // focus 시 기본 outline 유지
+    
+    container.addEventListener('paste', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        
+        for (const clipItem of items) {
+            if (clipItem.type.startsWith('image/')) {
+                const file = clipItem.getAsFile();
+                if (file) {
+                    processLocationImage(file, idx);
+                    return;
+                }
+            }
+        }
+        showToast('클립보드에 이미지가 없습니다', 'warning');
+    });
+    
+    // 클릭 시 포커스 (Ctrl+V 수신 가능하도록)
+    container.addEventListener('focus', () => {
+        container.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.3)';
+    });
+    container.addEventListener('blur', () => {
+        container.style.boxShadow = '';
+    });
+    
+    container.setAttribute('data-dnd-bound', 'true');
+}
+
+// ★ v5.2: LOCATION 이미지 파일 처리 (압축 후 적용)
+async function processLocationImage(file, idx) {
+    const item = state.tocItems[idx];
+    if (!item) return;
+    
+    showToast('이미지 처리 중...', 'info');
+    
+    try {
+        const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => resolve(ev.target.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+        
+        // 압축 (800px, 70% 품질)
+        const compressed = await compressImage(dataUrl, 800, 0.7);
+        item.mapImage = compressed;
+        
+        const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
+        renderBuildingEditor(item, building);
+        showToast('지도 이미지가 적용되었습니다', 'success');
+        
+        // 지도 탭 자동 활성화
+        setTimeout(() => {
+            const tabBtn = document.querySelector('.image-tab[data-type="map"]');
+            if (tabBtn) switchImageTab(idx, 'map', tabBtn);
+        }, 100);
+        
+    } catch (error) {
+        console.error('이미지 처리 오류:', error);
+        showToast('이미지 처리 중 오류가 발생했습니다', 'error');
     }
 }
 

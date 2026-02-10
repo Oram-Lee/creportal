@@ -979,7 +979,7 @@
                     <div style="padding: 20px; background: var(--bg-secondary); border: 2px dashed var(--border-color); border-radius: 8px; text-align: center;">
                         <div style="margin-bottom: 12px; color: var(--text-secondary); font-size: 13px;">
                             이전에 다운로드한 JSON 파일을 업로드하면<br>
-                            <strong>OCR 없이 바로 Firebase에 저장</strong>할 수 있습니다.
+                            <strong>OCR 없이 바로 Firebase에 저장</strong>하거나 <strong style="color: var(--accent-color);">중간저장 작업을 이어서 처리</strong>할 수 있습니다.
                         </div>
                         <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
                             <label class="btn btn-secondary" style="cursor: pointer;">
@@ -2018,7 +2018,79 @@
             grid.innerHTML = '';
             thumbnails.forEach(item => grid.appendChild(item));
             
+            // ★ v3.0: resume 데이터가 있으면 페이지 선택 자동 복원
+            if (state.resumeData) {
+                applyResumePageSelection();
+            }
+            
             updateSelectedCount();
+        }
+        
+        // ★ v3.0: resume 데이터 기반 페이지 선택 복원
+        function applyResumePageSelection() {
+            const resumeData = state.resumeData;
+            if (!resumeData) return;
+            
+            const savedSelectedPages = new Set(resumeData.selectedPages || []);
+            const processedPages = new Set(resumeData.processedPages || []);
+            const remainingPages = resumeData.remainingPages || [];
+            
+            // 1. 기존 자동 선택 초기화
+            state.selectedPages.clear();
+            
+            // 2. 저장된 선택 페이지 중 미처리된 것만 선택
+            const remainingSet = new Set(remainingPages);
+            
+            for (const pageNum of savedSelectedPages) {
+                const item = document.querySelector(`.thumbnail-item[data-page="${pageNum}"]`);
+                if (!item) continue;
+                
+                if (processedPages.has(pageNum)) {
+                    // 처리 완료된 페이지: 선택 해제 + 완료 표시
+                    item.classList.remove('selected');
+                    item.classList.add('skip');
+                    markPageAsProcessed(item, pageNum);
+                } else if (remainingSet.has(pageNum)) {
+                    // 미처리 페이지: 선택 상태로
+                    item.classList.add('selected');
+                    item.classList.remove('skip');
+                    item.querySelector('.checkbox').textContent = '✓';
+                    state.selectedPages.add(pageNum);
+                }
+            }
+            
+            // 3. 원래 선택 안 했던 페이지들은 skip 유지 (변경 없음)
+            
+            const processedCount = processedPages.size;
+            const remainingCount = state.selectedPages.size;
+            
+            showToast(`📋 페이지 복원 완료: 처리됨 ${processedCount}개 ✅ / 남음 ${remainingCount}개 선택됨`, 'success');
+            console.log(`[Resume] 처리됨: ${[...processedPages].join(',')}, 남음: ${[...state.selectedPages].join(',')}`);
+        }
+        
+        // ★ v3.0: 처리 완료된 페이지 시각적 표시
+        function markPageAsProcessed(item, pageNum) {
+            // 기존 뱃지가 있으면 제거
+            const existing = item.querySelector('.processed-badge');
+            if (existing) existing.remove();
+            
+            // 완료 오버레이 추가
+            const badge = document.createElement('div');
+            badge.className = 'processed-badge';
+            badge.innerHTML = '✅ 완료';
+            badge.style.cssText = `
+                position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: rgba(22, 163, 74, 0.85); color: white; padding: 4px 10px;
+                border-radius: 12px; font-size: 11px; font-weight: 700; z-index: 10;
+                pointer-events: none;
+            `;
+            item.style.position = 'relative';
+            item.style.opacity = '0.55';
+            item.appendChild(badge);
+            
+            // 체크박스 비움
+            const checkbox = item.querySelector('.checkbox');
+            if (checkbox) checkbox.textContent = '';
         }
         
         // 페이지 타입 분류
@@ -2199,7 +2271,7 @@
             await executeOCR();
         }
         
-        // ★ v2.2: 중복 데이터 체크 (마이그레이션 후 경로 변경)
+        // ★ v2.2 → v3.0 개선: 중복 데이터 체크 + 버전별 내역 분리
         async function checkDuplicateData(company, publishDate) {
             try {
                 await loadBuildings();  // vacanciesCache도 함께 로드됨
@@ -2208,6 +2280,8 @@
                 let vacancyCount = 0;
                 let latestDate = null;
                 const documentIds = new Set();
+                // ★ v3.0: 버전별 내역 추적
+                const versionBreakdown = {};  // { '25.01': { buildings: Set, vacancies: 0 }, '25.01_2nd': { ... } }
                 
                 // ★ 마이그레이션 후: vacanciesCache에서 조회
                 for (const [bldgId, bldgVacancies] of Object.entries(vacanciesCache || {})) {
@@ -2220,11 +2294,21 @@
                         const vacSource = vacancy.source || '';
                         const vacPubDate = vacancy.publishDate || '';
                         
+                        // _meta 키는 카운트에서 제외
+                        if (vacId.endsWith('_meta')) continue;
+                        
                         // 정확히 같거나, 버전이 붙은 경우 (25.01, 25.01_2nd 등)
                         if (vacSource === company && 
                             (vacPubDate === publishDate || vacPubDate.startsWith(publishDate + '_'))) {
                             hasSameSource = true;
                             vacancyCount++;
+                            
+                            // ★ v3.0: 버전별 집계
+                            if (!versionBreakdown[vacPubDate]) {
+                                versionBreakdown[vacPubDate] = { buildings: new Set(), vacancies: 0 };
+                            }
+                            versionBreakdown[vacPubDate].buildings.add(bldgId);
+                            versionBreakdown[vacPubDate].vacancies++;
                             
                             if (vacancy.documentId) {
                                 documentIds.add(vacancy.documentId);
@@ -2261,13 +2345,23 @@
                 const suffix = getOrdinalSuffix(nextVersionNum);
                 const nextVersion = `${publishDate}_${nextVersionNum}${suffix}`;
                 
+                // ★ v3.0: versionBreakdown을 직렬화 가능한 형태로 변환
+                const versionDetails = {};
+                for (const [ver, info] of Object.entries(versionBreakdown)) {
+                    versionDetails[ver] = { 
+                        buildingCount: info.buildings.size, 
+                        vacancyCount: info.vacancies 
+                    };
+                }
+                
                 return {
                     exists: true,
                     data: {
                         buildingCount,
                         vacancyCount,
                         latestDate,
-                        documentIds: Array.from(documentIds)
+                        documentIds: Array.from(documentIds),
+                        versionDetails  // ★ v3.0 추가
                     },
                     nextVersion
                 };
@@ -2286,14 +2380,26 @@
             return 'th';
         }
         
-        // ★ v2.2: 중복 체크 모달 표시
+        // ★ v2.2 → v3.0 개선: 중복 체크 모달 표시 + 버전별 내역
         function showDuplicateCheckModal(duplicateCheck) {
             const { company, publishDate } = state.duplicateContext;
             const { data, nextVersion } = duplicateCheck;
             
             document.getElementById('duplicateInfo').textContent = `${company} / ${publishDate}`;
-            document.getElementById('duplicateStats').textContent = 
-                `빌딩 ${data.buildingCount}개, 공실 ${data.vacancyCount}건`;
+            
+            // ★ v3.0: 버전별 내역 표시
+            let statsHtml = '';
+            if (data.versionDetails && Object.keys(data.versionDetails).length > 0) {
+                const versionParts = Object.entries(data.versionDetails)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([ver, info]) => `<span style="white-space:nowrap;">${ver} (${info.vacancyCount}건/${info.buildingCount}빌딩)</span>`)
+                    .join(' + ');
+                statsHtml = `${versionParts} = <strong>총 ${data.vacancyCount}건</strong>`;
+            } else {
+                statsHtml = `빌딩 ${data.buildingCount}개, 공실 ${data.vacancyCount}건`;
+            }
+            
+            document.getElementById('duplicateStats').innerHTML = statsHtml;
             document.getElementById('duplicateDate').textContent = 
                 data.latestDate ? data.latestDate.toLocaleDateString('ko-KR') + ' 등록' : '';
             document.getElementById('newVersionLabel').textContent = `→ ${nextVersion}`;
@@ -2629,14 +2735,17 @@
             const publishDate = state.currentPublishDate || `${year.slice(2)}.${month}`;
             
             const saveData = {
-                version: '2.3',
+                version: '3.0',
                 savedAt: new Date().toISOString(),
                 source: company,
                 publishDate: publishDate,
+                publishYear: year,       // ★ v3.0: 연도 원본 저장
+                publishMonth: month,     // ★ v3.0: 월 원본 저장
                 pdfFileName: state.pdfFile?.name || 'unknown',
                 selectedPages: Array.from(state.selectedPages),
                 processedPages: state.batchState.processedPagesList,
                 remainingPages: state.batchState.remainingPages,
+                pageTypes: state.pageTypes,  // ★ v3.0: 페이지 타입 저장
                 extractedData: state.extractedData,
                 failedPages: state.failedPages,
                 batchState: {
@@ -2657,7 +2766,8 @@
             addLog('저장', `JSON 파일 다운로드 완료 (${state.extractedData.length}개 빌딩)`, 'success');
         }
         
-        // ★ v2.3: JSON에서 이어서 처리 데이터 불러오기
+        // ★ v2.3 → v3.0 개선: JSON에서 이어서 처리 데이터 불러오기
+        // 회사/연월 자동 설정 + PDF 첨부 후 페이지 선택 자동 복원
         function loadResumeJson(input) {
             const file = input.files[0];
             if (!file) return;
@@ -2685,21 +2795,49 @@
                         state.selectedPages = new Set(data.selectedPages);
                     }
                     
+                    // ★ v3.0: 페이지 타입 복원
+                    if (data.pageTypes) {
+                        state.pageTypes = data.pageTypes;
+                    }
+                    
+                    // ★ v3.0: 회사/연월 UI 자동 설정
+                    restoreCompanyAndDateUI(data);
+                    
                     const remainingCount = state.batchState.remainingPages.length;
                     const processedCount = state.batchState.processedPagesList.length;
+                    const pdfName = data.pdfFileName || 'PDF';
                     
                     document.getElementById('resumeStatus').innerHTML = `
                         ✅ <strong>${data.source} ${data.publishDate}</strong> 불러옴 | 
                         처리됨: ${processedCount}개 | 
                         <span style="color: #dc2626;">남음: ${remainingCount}개</span>
+                        <br><span style="font-size:11px; color:#6b7280; margin-top:2px;">📎 원본 PDF: ${pdfName}</span>
                     `;
-                    
-                    showToast(`이어서 처리 데이터 불러옴 (${remainingCount}개 페이지 남음)`, 'success');
                     
                     // 남은 페이지가 없으면 바로 결과 확인으로
                     if (remainingCount === 0) {
                         showToast('모든 페이지가 이미 처리됨. 결과 확인으로 이동합니다.', 'info');
+                        
+                        // 결과 테이블 업데이트
+                        const totalVacancies = state.extractedData.reduce((sum, b) => sum + (b.vacancies?.length || 0), 0);
+                        document.getElementById('resultBuildingCount').textContent = state.extractedData.length;
+                        document.getElementById('resultVacancyCount').textContent = totalVacancies;
+                        renderResultTable();
+                        
                         goToStep(4);
+                    } else {
+                        showToast(`이어서 처리 데이터 불러옴 (${remainingCount}개 페이지 남음). 동일한 PDF를 첨부해주세요.`, 'success');
+                        
+                        // ★ v3.0: PDF가 이미 로드되어 있으면 즉시 페이지 복원
+                        if (state.pdfDoc) {
+                            applyResumePageSelection();
+                            updateSelectedCount();
+                            showToast(`📋 미처리 ${remainingCount}개 페이지가 자동 선택되었습니다. OCR 시작 버튼을 눌러주세요.`, 'info');
+                        } else {
+                            // PDF 미첨부 → Step 1로 이동 (PDF 첨부 유도)
+                            goToStep(1);
+                            showToast(`📎 "${pdfName}" PDF를 첨부하면 미처리 페이지가 자동 선택됩니다.`, 'info');
+                        }
                     }
                     
                 } catch (err) {
@@ -2709,6 +2847,46 @@
             };
             reader.readAsText(file);
             input.value = ''; // 같은 파일 다시 선택 가능하도록
+        }
+        
+        // ★ v3.0: 회사/연월 UI 자동 복원
+        function restoreCompanyAndDateUI(data) {
+            try {
+                // 회사 설정
+                if (data.source) {
+                    const selectEl = document.getElementById('sourceCompany');
+                    const customInput = document.getElementById('sourceCompanyCustom');
+                    const options = Array.from(selectEl.options).map(o => o.value);
+                    
+                    if (options.includes(data.source)) {
+                        selectEl.value = data.source;
+                        customInput.style.display = 'none';
+                    } else {
+                        selectEl.value = 'other';
+                        customInput.value = data.source;
+                        customInput.style.display = 'block';
+                    }
+                }
+                
+                // 연도/월 설정
+                if (data.publishYear && data.publishMonth) {
+                    // v3.0: 원본 연도/월 직접 사용
+                    document.getElementById('publishYear').value = data.publishYear;
+                    document.getElementById('publishMonth').value = data.publishMonth;
+                } else if (data.publishDate) {
+                    // 하위 호환: publishDate에서 파싱
+                    const basePubDate = data.publishDate.split('_')[0]; // 25.01_2nd → 25.01
+                    const parts = basePubDate.split('.');
+                    if (parts.length === 2) {
+                        document.getElementById('publishYear').value = '20' + parts[0];
+                        document.getElementById('publishMonth').value = parts[1];
+                    }
+                }
+                
+                console.log(`[Resume] 회사: ${data.source}, 연월: ${data.publishDate} UI 자동 설정 완료`);
+            } catch (e) {
+                console.warn('[Resume] 회사/연월 UI 자동 설정 실패:', e);
+            }
         }
         
         // ★ 멀티페이지 빌딩 병합 함수 ★
@@ -4378,12 +4556,28 @@
                 meta: {
                     source: company,
                     publishDate: publishDate,
+                    publishYear: year,       // ★ v3.0: 원본 값 저장
+                    publishMonth: month,     // ★ v3.0: 원본 값 저장
                     region: region,
                     extractedAt: new Date().toISOString(),
                     buildingCount: state.extractedData.length,
                     vacancyCount: state.extractedData.reduce((sum, b) => sum + (b.vacancies?.length || 0), 0)
                 },
-                extractedData: state.extractedData
+                extractedData: state.extractedData,
+                // ★ v3.0: resume 가능하도록 추가 상태 저장
+                ...(state.batchState.processedPagesList.length > 0 && {
+                    version: '3.0',
+                    pdfFileName: state.pdfFile?.name || state.resumeData?.pdfFileName || 'unknown',
+                    selectedPages: Array.from(state.selectedPages),
+                    processedPages: state.batchState.processedPagesList,
+                    remainingPages: state.batchState.remainingPages,
+                    pageTypes: state.pageTypes,
+                    failedPages: state.failedPages,
+                    batchState: {
+                        currentBatch: state.batchState.currentBatch,
+                        totalBatches: state.batchState.totalBatches
+                    }
+                })
             };
             
             // JSON 파일 다운로드
@@ -4399,7 +4593,7 @@
             showToast('JSON 다운로드 완료!', 'success');
         }
         
-        // JSON 업로드
+        // JSON 업로드 (★ v3.0: resume JSON 자동 감지)
         async function importFromExcel(event) {
             const file = event.target.files[0];
             if (!file) return;
@@ -4417,6 +4611,52 @@
                 const text = await file.text();
                 const data = JSON.parse(text);
                 
+                // ★ v3.0: resume JSON 감지 (version 필드 + processedPages 존재)
+                if (data.version && data.processedPages && data.remainingPages) {
+                    // resume JSON → loadResumeJson 플로우로 라우팅
+                    state.resumeData = data;
+                    state.extractedData = data.extractedData || [];
+                    state.failedPages = data.failedPages || [];
+                    state.batchState.processedPagesList = data.processedPages || [];
+                    state.batchState.remainingPages = data.remainingPages || [];
+                    state.batchState.currentBatch = data.batchState?.currentBatch || 0;
+                    state.batchState.totalBatches = data.batchState?.totalBatches || 0;
+                    state.currentPublishDate = data.publishDate;
+                    
+                    if (data.selectedPages && data.selectedPages.length > 0) {
+                        state.selectedPages = new Set(data.selectedPages);
+                    }
+                    if (data.pageTypes) {
+                        state.pageTypes = data.pageTypes;
+                    }
+                    
+                    // 회사/연월 UI 자동 설정
+                    restoreCompanyAndDateUI(data);
+                    
+                    const remainingCount = state.batchState.remainingPages.length;
+                    const processedCount = state.batchState.processedPagesList.length;
+                    
+                    if (remainingCount === 0) {
+                        // 모든 페이지 처리 완료 → 결과 테이블로
+                        const totalVacancies = state.extractedData.reduce((sum, b) => sum + (b.vacancies?.length || 0), 0);
+                        document.getElementById('resultBuildingCount').textContent = state.extractedData.length;
+                        document.getElementById('resultVacancyCount').textContent = totalVacancies;
+                        renderResultTable();
+                        goToStep(4);
+                        showToast(`모든 페이지 처리 완료 상태. ${state.extractedData.length}개 빌딩, ${totalVacancies}건 공실`, 'success');
+                    } else {
+                        // 미처리 페이지 존재 → PDF 첨부 유도
+                        showToast(`📋 중간저장 JSON 감지! 처리됨: ${processedCount}개, 남음: ${remainingCount}개. PDF를 첨부하면 자동 복원됩니다.`, 'info');
+                        
+                        // Step 1에 머무름 (PDF 첨부 유도)
+                        // 이미 Step 1이므로 별도 이동 불필요
+                    }
+                    
+                    event.target.value = '';
+                    return;
+                }
+                
+                // 일반 JSON 처리 (기존 로직)
                 if (Array.isArray(data)) {
                     // 구버전: 배열만 있는 경우
                     state.extractedData = data;
@@ -4427,10 +4667,19 @@
                     // 메타데이터로 UI 설정
                     if (data.meta) {
                         if (data.meta.source) {
-                            document.getElementById('sourceCompany').value = data.meta.source;
+                            const selectEl = document.getElementById('sourceCompany');
+                            const options = Array.from(selectEl.options).map(o => o.value);
+                            if (options.includes(data.meta.source)) {
+                                selectEl.value = data.meta.source;
+                            } else {
+                                selectEl.value = 'other';
+                                document.getElementById('sourceCompanyCustom').value = data.meta.source;
+                                document.getElementById('sourceCompanyCustom').style.display = 'block';
+                            }
                         }
                         if (data.meta.publishDate) {
-                            const parts = data.meta.publishDate.split('.');
+                            const basePubDate = data.meta.publishDate.split('_')[0];
+                            const parts = basePubDate.split('.');
                             if (parts.length === 2) {
                                 document.getElementById('publishYear').value = '20' + parts[0];
                                 document.getElementById('publishMonth').value = parts[1];
