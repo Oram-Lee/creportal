@@ -46,7 +46,6 @@
                 <a href="leasing-guide.html" class="nav-item"><span class="nav-icon">📄</span> 임대안내문</a>
                 <div class="nav-item"><span class="nav-icon">📊</span> 시계열</div>
                 <a href="admin-leasing.html" class="nav-item"><span class="nav-icon">⚙️</span> OCR관리</a>
-                <div class="nav-item" onclick="openDuplicateManager()" title="동일주소 빌딩 통합 관리"><span class="nav-icon">🔗</span> 중복관리</div>
             </nav>
             <div class="header-right">
                 <button class="theme-btn" onclick="toggleTheme()" title="다크모드">🌙</button>
@@ -626,15 +625,6 @@
                 </div>
             </div>
             
-            <!-- ★ #13: 별칭(aliases) 관리 -->
-            <div class="form-row">
-                <div>
-                    <small style="color: var(--text-muted);">🏷️ 빌딩 별칭 (콤마로 구분, OCR 매칭에 활용)</small>
-                    <input type="text" id="editAliases" placeholder="삼성타워, Samsung Tower, 삼성B/D">
-                    <small style="color: #94a3b8; font-size: 10px;">동일 빌딩의 다른 이름을 입력하면 OCR 매칭 정확도가 향상됩니다</small>
-                </div>
-            </div>
-            
             <!-- 기준층 정보 (편집 가능) -->
             <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">📐 기준층 정보</div>
             <div class="form-row">
@@ -1176,89 +1166,6 @@
                     <div id="migrationProgressBar" style="height: 100%; background: #f59e0b; width: 0%; transition: width 0.3s;"></div>
                 </div>
                 <div id="migrationProgressText" style="font-size: 11px; color: #92400e; margin-top: 4px; text-align: center;"></div>
-            </div>
-        </div>
-        
-        <!-- ★ 기업명/발행연월 일괄 수정 섹션 -->
-        <div style="margin-bottom: 16px; padding: 16px; background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%); border-radius: 10px; border: 2px solid #8b5cf6;">
-            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                <div>
-                    <div style="font-size: 14px; font-weight: 600; color: #5b21b6; display: flex; align-items: center; gap: 8px;">
-                        ✏️ 기업명/발행연월 일괄 수정
-                        <span id="batchEditStatus" style="font-size: 11px; font-weight: normal; color: #7c3aed;"></span>
-                    </div>
-                    <div style="font-size: 12px; color: #6d28d9; margin-top: 4px;">
-                        잘못 저장된 OCR 소스(기업명)와 발행연월을 일괄 변경합니다
-                    </div>
-                </div>
-                <button onclick="toggleBatchEditPanel()" 
-                        style="padding: 8px 16px; background: white; color: #5b21b6; border: 1px solid #a78bfa; border-radius: 6px; font-size: 12px; cursor: pointer;">
-                    📋 수정 패널 열기
-                </button>
-            </div>
-            
-            <div id="batchEditPanel" style="display: none; margin-top: 14px; padding: 14px; background: white; border-radius: 8px; border: 1px solid #c4b5fd;">
-                <!-- Step 1: 현재 저장된 기업명/연월 목록 로드 -->
-                <div style="margin-bottom: 12px;">
-                    <div style="font-size: 12px; font-weight: 600; color: #5b21b6; margin-bottom: 8px;">1️⃣ 변경할 기존 소스 선택</div>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
-                        <div style="flex: 1; min-width: 200px;">
-                            <label style="font-size: 11px; color: #6b7280;">기업명 (source)</label>
-                            <select id="batchEditOldSource" onchange="updateBatchEditCount()" 
-                                    style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                                <option value="">-- 로드 필요 --</option>
-                            </select>
-                        </div>
-                        <div style="flex: 1; min-width: 150px;">
-                            <label style="font-size: 11px; color: #6b7280;">발행연월 (publishDate)</label>
-                            <select id="batchEditOldDate" onchange="updateBatchEditCount()"
-                                    style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                                <option value="">-- 로드 필요 --</option>
-                            </select>
-                        </div>
-                        <button onclick="loadBatchEditSources()" 
-                                style="padding: 8px 14px; background: #7c3aed; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;">
-                            🔄 목록 로드
-                        </button>
-                    </div>
-                    <div id="batchEditMatchCount" style="font-size: 11px; color: #7c3aed; margin-top: 6px;"></div>
-                </div>
-                
-                <!-- Step 2: 새 값 입력 -->
-                <div style="margin-bottom: 12px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
-                    <div style="font-size: 12px; font-weight: 600; color: #5b21b6; margin-bottom: 8px;">2️⃣ 변경할 새 값 입력</div>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <div style="flex: 1; min-width: 200px;">
-                            <label style="font-size: 11px; color: #6b7280;">새 기업명</label>
-                            <input type="text" id="batchEditNewSource" placeholder="예: JLL, CBRE, Cushman..."
-                                   style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                        </div>
-                        <div style="flex: 1; min-width: 150px;">
-                            <label style="font-size: 11px; color: #6b7280;">새 발행연월</label>
-                            <input type="month" id="batchEditNewDate"
-                                   style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
-                        </div>
-                    </div>
-                    <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">
-                        💡 기업명만 변경, 발행연월만 변경, 또는 둘 다 변경 가능합니다. 빈칸으로 두면 해당 항목은 변경하지 않습니다.
-                    </div>
-                </div>
-                
-                <!-- 실행 버튼 -->
-                <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 12px; border-top: 1px solid #e5e7eb;">
-                    <button onclick="previewBatchEdit()" 
-                            style="padding: 8px 16px; background: #f5f3ff; color: #7c3aed; border: 1px solid #c4b5fd; border-radius: 6px; font-size: 12px; cursor: pointer;">
-                        👁️ 미리보기
-                    </button>
-                    <button onclick="executeBatchEdit()" 
-                            style="padding: 8px 16px; background: linear-gradient(135deg, #7c3aed, #6d28d9); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;">
-                        ✏️ 일괄 수정 실행
-                    </button>
-                </div>
-                
-                <!-- 결과 영역 -->
-                <div id="batchEditResult" style="display: none; margin-top: 12px; padding: 12px; background: #f8fafc; border-radius: 6px; max-height: 200px; overflow-y: auto; font-size: 12px;">
-                </div>
             </div>
         </div>
         
@@ -2048,9 +1955,6 @@
                     name: document.getElementById('editBuildingName')?.value || '',
                     grade: document.getElementById('editGrade')?.value || '',
                     
-                    // ★ #13: 별칭
-                    aliases: (document.getElementById('editAliases')?.value || '').split(',').map(a => a.trim()).filter(Boolean),
-                    
                     // 기준층 정보
                     typicalFloorPy: document.getElementById('editTypicalFloorPy')?.value || '',
                     typicalFloorLeasePy: document.getElementById('editTypicalFloorLeasePy')?.value || '',
@@ -2126,9 +2030,6 @@
         // 기본 정보
         setVal('editBuildingName', building.name);
         setVal('editGrade', building.grade);
-        
-        // ★ #13: 별칭
-        setVal('editAliases', (building.aliases || []).join(', '));
         
         // 기준층 정보
         setVal('editTypicalFloorPy', building.area?.typicalFloorPy || building.typicalFloorPy);
@@ -2229,9 +2130,6 @@
             if (formData.name) updates.name = formData.name;  // 빌딩명은 빈값 방지
             updates.grade = formData.grade || '';
             
-            // ★ #13: 별칭
-            updates.aliases = formData.aliases || [];
-            
             // 기준층 정보 - area 객체에 저장
             updates['area/typicalFloorPy'] = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
             updates['area/typicalFloorLeasePy'] = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
@@ -2298,21 +2196,6 @@
                 }
             });
             
-            // ★ dataCache.buildings 동기화 (processBuildings가 여기서 읽으므로 필수)
-            if (window.state.dataCache?.buildings?.[building.id]) {
-                Object.keys(updates).forEach(key => {
-                    if (!key.includes('/')) {
-                        window.state.dataCache.buildings[building.id][key] = updates[key];
-                    } else {
-                        const [parent, child] = key.split('/');
-                        if (!window.state.dataCache.buildings[building.id][parent]) {
-                            window.state.dataCache.buildings[building.id][parent] = {};
-                        }
-                        window.state.dataCache.buildings[building.id][parent][child] = updates[key];
-                    }
-                });
-            }
-            
             // allBuildings에서도 업데이트
             const idx = window.state.allBuildings.findIndex(b => b.id === building.id);
             if (idx >= 0) {
@@ -2327,22 +2210,11 @@
                 document.getElementById('modalOverlay').classList.remove('show');
             }
             
-            // ★ refreshAfterCrud로 빌딩목록/지도 전체 갱신
-            if (typeof refreshAfterCrud === 'function') {
-                refreshAfterCrud(() => {
-                    if (typeof renderInfoSection === 'function') renderInfoSection();
-                    else if (window.renderInfoSection) window.renderInfoSection();
-                });
-            } else {
-                // fallback: 상세 패널만 새로고침
-                if (typeof renderInfoSection === 'function') {
-                    renderInfoSection();
-                } else if (window.renderInfoSection) {
-                    window.renderInfoSection();
-                }
-                // 빌딩 목록도 갱신 시도
-                if (typeof renderBuildingList === 'function') renderBuildingList();
-                if (typeof renderTableView === 'function' && window.state?.currentViewMode === 'list') renderTableView();
+            // 상세 패널 새로고침
+            if (typeof renderInfoSection === 'function') {
+                renderInfoSection();
+            } else if (window.renderInfoSection) {
+                window.renderInfoSection();
             }
             
             if (typeof showToast === 'function') {
@@ -2581,269 +2453,6 @@
     // 전역 등록
     window.checkMigrationStatus = checkMigrationStatus;
     window.runFloorPricingMigration = runFloorPricingMigration;
-    
-    // ============================================================
-    // ★ NEW-1: 기업명/발행연월 일괄 수정
-    // ============================================================
-    
-    function toggleBatchEditPanel() {
-        const panel = document.getElementById('batchEditPanel');
-        if (!panel) return;
-        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    }
-    
-    // vacancies 전체에서 고유 source, publishDate 목록 로드
-    async function loadBatchEditSources() {
-        const statusEl = document.getElementById('batchEditStatus');
-        statusEl.textContent = '로딩 중...';
-        
-        try {
-            const { db, ref, get } = await import('./js/portal-firebase.js');
-            const vacSnap = await get(ref(db, 'vacancies'));
-            const vacancies = vacSnap.val() || {};
-            
-            const sources = new Map();  // source → count
-            const dates = new Map();    // publishDate → count
-            
-            // 모든 빌딩의 모든 공실 순회
-            Object.entries(vacancies).forEach(([buildingId, bVacs]) => {
-                if (!bVacs || typeof bVacs !== 'object') return;
-                Object.entries(bVacs).forEach(([vacId, vac]) => {
-                    if (!vac || typeof vac !== 'object') return;
-                    const src = vac.source || vac.sourceCompany || '';
-                    const dt = vac.publishDate || '';
-                    if (src) sources.set(src, (sources.get(src) || 0) + 1);
-                    if (dt) dates.set(dt, (dates.get(dt) || 0) + 1);
-                });
-            });
-            
-            // source 드롭다운
-            const srcSelect = document.getElementById('batchEditOldSource');
-            srcSelect.innerHTML = '<option value="">-- 전체 (필터 없음) --</option>';
-            [...sources.entries()]
-                .sort((a, b) => b[1] - a[1])
-                .forEach(([src, cnt]) => {
-                    const opt = document.createElement('option');
-                    opt.value = src;
-                    opt.textContent = `${src} (${cnt}건)`;
-                    srcSelect.appendChild(opt);
-                });
-            
-            // publishDate 드롭다운
-            const dtSelect = document.getElementById('batchEditOldDate');
-            dtSelect.innerHTML = '<option value="">-- 전체 (필터 없음) --</option>';
-            [...dates.entries()]
-                .sort((a, b) => b[0].localeCompare(a[0]))
-                .forEach(([dt, cnt]) => {
-                    const opt = document.createElement('option');
-                    opt.value = dt;
-                    opt.textContent = `${dt} (${cnt}건)`;
-                    dtSelect.appendChild(opt);
-                });
-            
-            // 전역 캐시 저장 (재검색 방지)
-            window._batchEditVacancies = vacancies;
-            
-            statusEl.textContent = `✅ ${sources.size}개 기업, ${dates.size}개 연월 로드`;
-            updateBatchEditCount();
-            
-        } catch (err) {
-            console.error('일괄 수정 로드 오류:', err);
-            statusEl.textContent = '❌ 로드 실패';
-            if (typeof showToast === 'function') showToast('데이터 로드 실패: ' + err.message, 'error');
-        }
-    }
-    
-    // 선택 조건에 매칭되는 레코드 수 표시
-    function updateBatchEditCount() {
-        const vacancies = window._batchEditVacancies;
-        if (!vacancies) return;
-        
-        const oldSource = document.getElementById('batchEditOldSource').value;
-        const oldDate = document.getElementById('batchEditOldDate').value;
-        const countEl = document.getElementById('batchEditMatchCount');
-        
-        if (!oldSource && !oldDate) {
-            countEl.textContent = '⚠️ 기업명 또는 발행연월 중 최소 하나를 선택해주세요';
-            return;
-        }
-        
-        let matchCount = 0;
-        let buildingCount = 0;
-        
-        Object.entries(vacancies).forEach(([buildingId, bVacs]) => {
-            if (!bVacs || typeof bVacs !== 'object') return;
-            let buildingHasMatch = false;
-            Object.entries(bVacs).forEach(([vacId, vac]) => {
-                if (!vac || typeof vac !== 'object') return;
-                const srcMatch = !oldSource || (vac.source || vac.sourceCompany || '') === oldSource;
-                const dtMatch = !oldDate || (vac.publishDate || '') === oldDate;
-                if (srcMatch && dtMatch) {
-                    matchCount++;
-                    buildingHasMatch = true;
-                }
-            });
-            if (buildingHasMatch) buildingCount++;
-        });
-        
-        countEl.textContent = `📊 매칭: ${buildingCount}개 빌딩, ${matchCount}건의 공실 데이터`;
-    }
-    
-    // 미리보기
-    async function previewBatchEdit() {
-        const vacancies = window._batchEditVacancies;
-        if (!vacancies) {
-            if (typeof showToast === 'function') showToast('먼저 목록을 로드해주세요', 'warning');
-            return;
-        }
-        
-        const oldSource = document.getElementById('batchEditOldSource').value;
-        const oldDate = document.getElementById('batchEditOldDate').value;
-        const newSource = document.getElementById('batchEditNewSource').value.trim();
-        const newDate = document.getElementById('batchEditNewDate').value;
-        
-        if (!oldSource && !oldDate) {
-            if (typeof showToast === 'function') showToast('변경할 기존 소스를 선택해주세요', 'warning');
-            return;
-        }
-        if (!newSource && !newDate) {
-            if (typeof showToast === 'function') showToast('새 값을 하나 이상 입력해주세요', 'warning');
-            return;
-        }
-        
-        // buildings 이름 로드
-        const { db, ref, get } = await import('./js/portal-firebase.js');
-        const buildSnap = await get(ref(db, 'buildings'));
-        const buildings = buildSnap.val() || {};
-        
-        const resultEl = document.getElementById('batchEditResult');
-        resultEl.style.display = 'block';
-        
-        let html = '<div style="font-weight: 600; margin-bottom: 8px;">📋 변경 미리보기</div>';
-        let total = 0;
-        
-        Object.entries(vacancies).forEach(([buildingId, bVacs]) => {
-            if (!bVacs || typeof bVacs !== 'object') return;
-            const matches = [];
-            Object.entries(bVacs).forEach(([vacId, vac]) => {
-                if (!vac || typeof vac !== 'object') return;
-                const srcMatch = !oldSource || (vac.source || vac.sourceCompany || '') === oldSource;
-                const dtMatch = !oldDate || (vac.publishDate || '') === oldDate;
-                if (srcMatch && dtMatch) matches.push({ vacId, vac });
-            });
-            if (matches.length === 0) return;
-            
-            const bName = buildings[buildingId]?.name || buildingId;
-            total += matches.length;
-            
-            html += `<div style="margin-top: 6px; padding: 6px 8px; background: white; border-radius: 4px; border: 1px solid #e2e8f0;">`;
-            html += `<strong>${bName}</strong> <span style="color: #7c3aed;">(${matches.length}건)</span>`;
-            html += `<div style="font-size: 11px; color: #64748b; margin-top: 2px;">`;
-            if (newSource) html += `기업명: ${oldSource || '*'} → <span style="color: #059669; font-weight: 600;">${newSource}</span> `;
-            if (newDate) html += `발행연월: ${oldDate || '*'} → <span style="color: #059669; font-weight: 600;">${newDate}</span>`;
-            html += `</div></div>`;
-        });
-        
-        html = `<div style="margin-bottom: 8px; padding: 6px 10px; background: #ede9fe; border-radius: 4px; font-weight: 600; color: #5b21b6;">총 ${total}건 변경 예정</div>` + html;
-        resultEl.innerHTML = html;
-    }
-    
-    // 실행
-    async function executeBatchEdit() {
-        const vacancies = window._batchEditVacancies;
-        if (!vacancies) {
-            if (typeof showToast === 'function') showToast('먼저 목록을 로드해주세요', 'warning');
-            return;
-        }
-        
-        const oldSource = document.getElementById('batchEditOldSource').value;
-        const oldDate = document.getElementById('batchEditOldDate').value;
-        const newSource = document.getElementById('batchEditNewSource').value.trim();
-        const newDate = document.getElementById('batchEditNewDate').value;
-        
-        if (!oldSource && !oldDate) {
-            if (typeof showToast === 'function') showToast('변경할 기존 소스를 선택해주세요', 'warning');
-            return;
-        }
-        if (!newSource && !newDate) {
-            if (typeof showToast === 'function') showToast('새 값을 하나 이상 입력해주세요', 'warning');
-            return;
-        }
-        
-        // 매칭 레코드 수집
-        const updates = {};
-        let matchCount = 0;
-        
-        Object.entries(vacancies).forEach(([buildingId, bVacs]) => {
-            if (!bVacs || typeof bVacs !== 'object') return;
-            Object.entries(bVacs).forEach(([vacId, vac]) => {
-                if (!vac || typeof vac !== 'object') return;
-                const srcMatch = !oldSource || (vac.source || vac.sourceCompany || '') === oldSource;
-                const dtMatch = !oldDate || (vac.publishDate || '') === oldDate;
-                if (srcMatch && dtMatch) {
-                    if (newSource) {
-                        updates[`vacancies/${buildingId}/${vacId}/source`] = newSource;
-                        if (vac.sourceCompany) {
-                            updates[`vacancies/${buildingId}/${vacId}/sourceCompany`] = newSource;
-                        }
-                    }
-                    if (newDate) {
-                        updates[`vacancies/${buildingId}/${vacId}/publishDate`] = newDate;
-                    }
-                    matchCount++;
-                }
-            });
-        });
-        
-        if (matchCount === 0) {
-            if (typeof showToast === 'function') showToast('매칭되는 데이터가 없습니다', 'warning');
-            return;
-        }
-        
-        const changeDesc = [];
-        if (newSource) changeDesc.push(`기업명: ${oldSource || '전체'} → ${newSource}`);
-        if (newDate) changeDesc.push(`발행연월: ${oldDate || '전체'} → ${newDate}`);
-        
-        if (!confirm(`⚠️ 일괄 수정을 실행합니다.\n\n${changeDesc.join('\n')}\n\n대상: ${matchCount}건\n\n계속하시겠습니까?`)) {
-            return;
-        }
-        
-        try {
-            const { db, ref, update } = await import('./js/portal-firebase.js');
-            
-            // Firebase multi-path update (한 번에 모든 변경 적용)
-            await update(ref(db), updates);
-            
-            if (typeof showToast === 'function') {
-                showToast(`✅ ${matchCount}건 일괄 수정 완료!`, 'success');
-            }
-            
-            // 결과 표시
-            const resultEl = document.getElementById('batchEditResult');
-            resultEl.style.display = 'block';
-            resultEl.innerHTML = `
-                <div style="padding: 12px; background: #f0fdf4; border-radius: 6px; color: #166534;">
-                    <div style="font-weight: 600; margin-bottom: 4px;">✅ 일괄 수정 완료</div>
-                    <div style="font-size: 11px;">${changeDesc.join(' | ')} — ${matchCount}건 업데이트</div>
-                </div>
-            `;
-            
-            // 캐시 무효화 → 다시 로드하면 최신 반영
-            window._batchEditVacancies = null;
-            document.getElementById('batchEditStatus').textContent = '🔄 변경 완료 — 새로 로드 필요';
-            
-        } catch (err) {
-            console.error('일괄 수정 오류:', err);
-            if (typeof showToast === 'function') showToast('일괄 수정 실패: ' + err.message, 'error');
-        }
-    }
-    
-    // 전역 등록
-    window.toggleBatchEditPanel = toggleBatchEditPanel;
-    window.loadBatchEditSources = loadBatchEditSources;
-    window.updateBatchEditCount = updateBatchEditCount;
-    window.previewBatchEdit = previewBatchEdit;
-    window.executeBatchEdit = executeBatchEdit;
     </script>
     
     <!-- Comp List 스타일 -->
@@ -3879,22 +3488,5 @@
     </button>
     
     <!-- Comp List는 별도 페이지(complist.html)로 이동 -->
-    
-    <!-- ★ #13: 중복 빌딩 관리 오버레이 -->
-    <div id="duplicateManagerOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:9998; justify-content:center; align-items:center;">
-        <div style="background:white; border-radius:14px; width:95%; max-width:900px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,0.3);">
-            <div style="padding:18px 24px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
-                <div>
-                    <h3 style="font-size:18px; font-weight:700; color:#1e293b; margin:0;">🔗 중복 빌딩 관리</h3>
-                    <div style="font-size:12px; color:#64748b; margin-top:4px;">동일 주소/유사 빌딩명을 탐지하여 통합합니다</div>
-                </div>
-                <button onclick="closeDuplicateManager()" style="width:36px; height:36px; border:none; background:#f1f5f9; border-radius:50%; cursor:pointer; font-size:18px; color:#64748b; display:flex; align-items:center; justify-content:center;">×</button>
-            </div>
-            <div id="dupManagerContent" style="padding:20px 24px; overflow-y:auto; flex:1;"></div>
-        </div>
-    </div>
-    
-    <!-- ★ #13: 중복 빌딩 관리 스크립트 -->
-    <script src="js/portal-merge.js?v=1.1"></script>
 </body>
 </html>
