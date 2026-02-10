@@ -14,7 +14,7 @@
 // Firebase 참조 헬퍼 (Modular SDK 대응)
 // ============================================================
 async function getMergeFirebaseRefs() {
-    const mod = await import('./js/portal-firebase.js');
+    const mod = await import('./portal-firebase.js');
     return {
         db: mod.db,
         ref: mod.ref,
