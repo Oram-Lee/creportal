@@ -1387,7 +1387,8 @@ export async function downloadCompListExcel(data) {
     // ============================================================
     sheet.mergeCells('B3:B4');
     sheet.mergeCells('B5:B6');
-    sheet.mergeCells('A7:A18');
+    sheet.mergeCells('A5:A9');     // ★ 빌딩개요/일반 (외관사진+주소+도로명+위치)
+    sheet.mergeCells('A10:A18');   // ★ 빌딩 현황 (빌딩규모~냉난방)
     sheet.mergeCells('A19:A20');
     sheet.mergeCells('A21:A23');
     sheet.mergeCells('A25:A31');
@@ -1469,8 +1470,8 @@ export async function downloadCompListExcel(data) {
     await Promise.all(imagePromises);
     
     // ★ A열 대항목 카테고리
-    setCategoryCell('A6', '빌딩개요/일반', 'FFFFFFFF');
-    setCategoryCell('A7', '빌딩 현황', 'FFFFFFFF');
+    setCategoryCell('A5', '빌딩개요/일반', 'FFFFFFFF');
+    setCategoryCell('A10', '빌딩 현황', 'FFFFFFFF');
     setCategoryCell('A19', '빌딩 세부현황', 'FFFFFFFF');
     setCategoryCell('A21', '주차 관련', 'FFFFFFFF');
     setCategoryCell('A25', '임차 제안', 'FFF9D6AE');
