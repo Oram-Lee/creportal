@@ -39,8 +39,8 @@
         <header class="header">
             <div class="header-logo"><span class="icon">🏢</span> CRE PORTAL</div>
             <nav class="header-nav">
-                <div class="nav-item active" data-view="map" onclick="setViewMode('map'); document.getElementById('drawingToggleBtn').style.display='flex';"><span class="nav-icon">🗺️</span> 지도</div>
-                <div class="nav-item" data-view="list" onclick="setViewMode('list'); document.getElementById('drawingToggleBtn').style.display='none'; document.getElementById('drawingToolsPanel').style.display='none';"><span class="nav-icon">🔍</span> 검색</div>
+                <div class="nav-item active" data-view="map" onclick="setViewMode('map')"><span class="nav-icon">🗺️</span> 지도</div>
+                <div class="nav-item" data-view="list" onclick="setViewMode('list')"><span class="nav-icon">🔍</span> 검색</div>
                 <a href="building-register.html" class="nav-item nav-highlight"><span class="nav-icon">➕</span> 빌딩추가</a>
                 <a href="complist.html" class="nav-item"><span class="nav-icon">📋</span> Comp List</a>
                 <a href="leasing-guide.html" class="nav-item"><span class="nav-icon">📄</span> 임대안내문</a>
@@ -207,7 +207,11 @@
                     <div id="buildingListView"></div>
                 </div>
                 <div class="table-footer">
-                    <div class="info">총 <strong id="tableCount">0</strong>개 빌딩</div>
+                    <div class="info">총 <strong id="tableCount">0</strong>개 빌딩 | 선택: <strong id="selectedCount">0</strong>개</div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-secondary btn-sm" onclick="exportSelected()">📥 선택 내보내기</button>
+                        <button class="btn btn-primary btn-sm" onclick="createLeasingGuide()">📄 임대안내문 만들기</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -310,7 +314,6 @@
             <div class="form-row">
                 <label>구분 선택 <span style="color:#dc2626">*</span></label>
                 <select id="pricingPreset" onchange="handleFloorPresetChange()" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary); margin-bottom: 10px;">
-                    <option value="">-- 구분 선택 --</option>
                     <option value="typical">📊 기준층 (전체 또는 대표층)</option>
                     <option value="low">⬇️ 저층부 (B1~5F)</option>
                     <option value="midlow">↘️ 중저층부 (6~10F)</option>
@@ -322,11 +325,11 @@
                 <input type="text" id="pricingLabel" placeholder="예: 저층부, 고층부, 기준층" required>
             </div>
             <div class="form-row">
-                <label>층 범위 <span style="color:#dc2626">*</span></label>
+                <label>층 범위</label>
                 <div style="display: flex; gap: 8px; align-items: center;">
-                    <input type="text" id="pricingFloorStart" placeholder="시작층 (B1, 1)" style="flex:1;" required>
+                    <input type="text" id="pricingFloorStart" placeholder="시작층 (B1, 1)" style="flex:1;">
                     <span style="color: var(--text-muted);">~</span>
-                    <input type="text" id="pricingFloorEnd" placeholder="종료층 (10, 20)" style="flex:1;" required>
+                    <input type="text" id="pricingFloorEnd" placeholder="종료층 (10, 20)" style="flex:1;">
                 </div>
             </div>
             <div class="form-row">
@@ -2092,11 +2095,30 @@
     });
     
     // ============================================================
+    // ★ 공통 모달 닫기 함수
+    // ============================================================
+    window.closeModal = function(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+        }
+        const overlay = document.getElementById('modalOverlay');
+        // 다른 모달이 열려있지 않으면 오버레이도 닫기
+        const anyOpen = document.querySelectorAll('.modal.show, .modal[style*="display: block"]');
+        if (overlay && anyOpen.length === 0) {
+            overlay.classList.remove('show');
+            overlay.style.display = 'none';
+        }
+    };
+
+    // ============================================================
     // ★ v3.11: 빌딩 정보 편집 모달 함수
     // ============================================================
     
     /**
      * 빌딩 편집 모달 열기 - 현재 빌딩 정보를 폼에 채워넣음
+     * ★ 수정: 중첩 경로(pricing.depositPy, area.typicalFloorPy 등)와 루트 레벨 모두 확인
      */
     window.openBuildingEditModal = function() {
         const building = window.state?.selectedBuilding;
@@ -2105,7 +2127,15 @@
             return;
         }
         
-        console.log('📝 빌딩 편집 모달 열기:', building.name);
+        console.log('📝 빌딩 편집 모달 열기:', building.name, building);
+        
+        // 다중 경로에서 값 추출하는 헬퍼
+        const getVal = (...paths) => {
+            for (const p of paths) {
+                if (p !== undefined && p !== null && p !== '' && p !== 0) return p;
+            }
+            return '';
+        };
         
         // 폼 필드에 현재 값 채우기
         const setVal = (id, value) => {
@@ -2120,70 +2150,235 @@
         // ★ #13: 별칭
         setVal('editAliases', (building.aliases || []).join(', '));
         
-        // 기준층 정보
-        setVal('editTypicalFloorPy', building.area?.typicalFloorPy || building.typicalFloorPy);
-        setVal('editTypicalFloorLeasePy', building.area?.typicalFloorLeasePy || building.typicalFloorLeasePy);
-        setVal('editExclusiveRate', building.area?.exclusiveRate || building.exclusiveRate);
+        // 기준층 정보 - area 하위 또는 루트 레벨
+        setVal('editTypicalFloorPy', getVal(building.area?.typicalFloorPy, building.typicalFloorPy));
+        setVal('editTypicalFloorLeasePy', getVal(building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy));
+        setVal('editExclusiveRate', getVal(building.area?.exclusiveRate, building.exclusiveRate));
         
         // 임대조건 (만원 단위로 변환하여 표시)
+        // ★ 수정: pricing 하위 또는 루트 레벨 모두 확인
         const toManwon = (val) => {
-            if (!val) return '';
+            if (!val && val !== 0) return '';
             const num = parseFloat(val);
+            if (isNaN(num) || num === 0) return '';
             // 1000 이상이면 원 단위로 저장된 것 → 만원으로 변환
             return num >= 1000 ? (num / 10000).toFixed(1) : num;
         };
-        setVal('editDepositPy', toManwon(building.depositPy));
-        setVal('editRentPy', toManwon(building.rentPy));
-        setVal('editMaintenancePy', toManwon(building.maintenancePy));
+        setVal('editDepositPy', toManwon(getVal(building.depositPy, building.pricing?.depositPy)));
+        setVal('editRentPy', toManwon(getVal(building.rentPy, building.pricing?.rentPy)));
+        setVal('editMaintenancePy', toManwon(getVal(building.maintenancePy, building.pricing?.maintenancePy)));
         
         // 시설 정보
-        setVal('editHvac', building.hvac);
-        setVal('editCeilingHeight', building.ceilingHeight);
-        setVal('editFloorLoad', building.floorLoad);
+        setVal('editHvac', building.hvac || '');
+        setVal('editCeilingHeight', building.ceilingHeight || '');
+        setVal('editFloorLoad', building.floorLoad || '');
         
-        // 주차/승강기 (수동입력)
-        setVal('editParkingDisplay', building.parking?.display || building.parkingDisplay);
-        setVal('editElevator', building.specs?.elevator || building.elevator);
-        setVal('editParkingRatio', building.parking?.ratio || building.parkingRatio);
-        setVal('editNearbyStation', building.nearbyStation || building.nearestStation);
+        // 주차/승강기 (수동입력) - specs 하위 또는 루트
+        setVal('editParkingDisplay', getVal(building.parking?.display, building.parkingDisplay));
+        setVal('editElevator', getVal(building.specs?.elevator, building.elevator));
+        setVal('editParkingRatio', getVal(building.parking?.ratio, building.parkingRatio));
+        setVal('editNearbyStation', getVal(building.nearbyStation, building.nearestStation));
         
         // 관리 정보
-        setVal('editPm', building.pm);
-        setVal('editOwner', building.owner);
+        setVal('editPm', building.pm || '');
+        setVal('editOwner', building.owner || '');
         
         // 채권분석 정보
-        setVal('editBondStatus', building.bondStatus);
-        setVal('editJointCollateral', building.jointCollateral);
-        setVal('editSeniorLien', building.seniorLien);
-        setVal('editCollateralRatio', building.collateralRatio);
-        setVal('editOfficialLandPrice', building.officialLandPrice);
-        setVal('editLandPriceApplied', building.landPriceApplied);
+        setVal('editBondStatus', building.bondStatus || '');
+        setVal('editJointCollateral', building.jointCollateral || '');
+        setVal('editSeniorLien', building.seniorLien || '');
+        setVal('editCollateralRatio', building.collateralRatio || '');
+        setVal('editOfficialLandPrice', building.officialLandPrice || '');
+        setVal('editLandPriceApplied', building.landPriceApplied || '');
         
         // 기타
-        setVal('editDescription', building.description);
-        setVal('editUrl', building.url || building.homepage);
+        setVal('editDescription', building.description || '');
+        setVal('editUrl', building.url || building.homepage || '');
         
         // 건축물대장 정보 (읽기전용) 표시
         const readonlyInfo = document.getElementById('buildingReadonlyInfo');
         if (readonlyInfo) {
-            const raw = building._raw || building;
             const bi = building.buildingInfo || {};
+            const grossPy = getVal(building.area?.grossFloorPy, building.grossFloorPy);
+            const grossSqm = getVal(building.area?.grossFloorSqm, building.grossFloorSqm);
+            const floorsDisplay = typeof building.floors === 'object' ? building.floors?.display : (building.floors || '-');
+            const completionYear = building.completionYear || bi.useAprDay?.substring(0, 4) || '-';
+            const vlRat = getVal(building.vlRat, bi.vlRat, building.floorAreaRatio);
+            const bcRat = getVal(building.bcRat, bi.bcRat, building.buildingCoverageRatio);
+            const mainPurpose = getVal(building.mainPurpose, bi.mainPurpose, bi.mainPurpsCdNm);
+            const structure = getVal(building.strctCdNm, bi.strctCdNm, building.specs?.structure);
+            const parkingTotal = getVal(building.parking?.total, bi.totPkngCnt);
+            const elevatorInfo = (() => {
+                const p = getVal(bi.rideUseElvtCnt, building.specs?.passengerElevator, 0);
+                const f = getVal(bi.emgenUseElvtCnt, building.specs?.freightElevator, 0);
+                if (p || f) return `승용 ${p}대 / 비상 ${f}대`;
+                return getVal(building.specs?.elevator, building.elevator, '-');
+            })();
+            
             readonlyInfo.innerHTML = `
-                <div>📍 <strong>주소:</strong> ${building.address || '-'}</div>
-                <div>📐 <strong>연면적:</strong> ${building.area?.grossFloorPy || building.grossFloorPy || '-'}평 (${building.area?.grossFloorSqm || building.grossFloorSqm || '-'}㎡)</div>
-                <div>🏗️ <strong>층수:</strong> ${typeof building.floors === 'object' ? building.floors?.display : (building.floors || '-')}</div>
-                <div>📅 <strong>준공:</strong> ${building.completionYear || '-'}</div>
-                <div>🔢 <strong>용적률/건폐율:</strong> ${building.vlRat || bi.vlRat || building.floorAreaRatio || '-'}% / ${building.bcRat || bi.bcRat || building.buildingCoverageRatio || '-'}%</div>
-                <div>🏢 <strong>용도:</strong> ${building.mainPurpose || bi.mainPurpose || '-'}</div>
-                <div>🧱 <strong>구조:</strong> ${building.strctCdNm || bi.strctCdNm || building.specs?.structure || '-'}</div>
-                <div>🅿️ <strong>주차(대장):</strong> ${building.parking?.total || bi.totPkngCnt || '-'}대</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 12px;">
+                    <div>📍 <strong>주소:</strong> ${building.address || '-'}</div>
+                    <div>📅 <strong>준공:</strong> ${completionYear}</div>
+                    <div>📐 <strong>연면적:</strong> ${grossPy ? grossPy + '평' : '-'} ${grossSqm ? '(' + grossSqm + '㎡)' : ''}</div>
+                    <div>🏗️ <strong>층수:</strong> ${floorsDisplay || '-'}</div>
+                    <div>📊 <strong>용적률/건폐율:</strong> ${vlRat || '-'}% / ${bcRat || '-'}%</div>
+                    <div>🏢 <strong>용도:</strong> ${mainPurpose || '-'}</div>
+                    <div>🧱 <strong>구조:</strong> ${structure || '-'}</div>
+                    <div>🅿️ <strong>주차(대장):</strong> ${parkingTotal || '-'}대</div>
+                    <div>🛗 <strong>승강기:</strong> ${elevatorInfo}</div>
+                    <div>🏠 <strong>대지면적:</strong> ${bi.platArea ? Math.round(bi.platArea).toLocaleString() + '㎡' : getVal(building.area?.landArea) ? Math.round(building.area.landArea).toLocaleString() + '㎡' : '-'}</div>
+                </div>
             `;
         }
         
         // 모달 표시
-        document.getElementById('buildingEditModal').classList.add('show');
-        document.getElementById('modalOverlay').classList.add('show');
+        const modal = document.getElementById('buildingEditModal');
+        modal.classList.add('show');
+        modal.style.display = 'block';
+        const overlay = document.getElementById('modalOverlay');
+        if (overlay) { overlay.classList.add('show'); overlay.style.display = 'block'; }
     };
+
+    // ============================================================
+    // ★ 기준가 추가 모달 함수들
+    // ============================================================
+    
+    /**
+     * 기준가 추가 모달 열기
+     */
+    window.openPricingModal = function() {
+        const building = window.state?.selectedBuilding;
+        if (!building) {
+            if (typeof showToast === 'function') showToast('빌딩을 먼저 선택해주세요', 'error');
+            return;
+        }
+        
+        // 폼 초기화
+        document.getElementById('pricingForm').reset();
+        document.getElementById('pricingId').value = '';
+        document.getElementById('pricingModalTitle').textContent = '기준가 추가';
+        
+        // ★ 기본값: 기준층 선택
+        const preset = document.getElementById('pricingPreset');
+        preset.value = 'typical';
+        handleFloorPresetChange(); // 라벨/층범위 자동 채움
+        
+        // 모달 표시
+        const modal = document.getElementById('pricingModal');
+        modal.classList.add('show');
+        modal.style.display = 'block';
+        const overlay = document.getElementById('modalOverlay');
+        if (overlay) { overlay.classList.add('show'); overlay.style.display = 'block'; }
+    };
+    
+    /**
+     * 기준가 프리셋 변경 핸들러
+     */
+    window.handleFloorPresetChange = function() {
+        const preset = document.getElementById('pricingPreset').value;
+        const labelInput = document.getElementById('pricingLabel');
+        const floorStart = document.getElementById('pricingFloorStart');
+        const floorEnd = document.getElementById('pricingFloorEnd');
+        
+        const presets = {
+            'typical': { label: '기준층', start: '', end: '' },
+            'low': { label: '저층부', start: 'B1', end: '5' },
+            'midlow': { label: '중저층부', start: '6', end: '10' },
+            'mid': { label: '중층부', start: '11', end: '15' },
+            'midhigh': { label: '중고층부', start: '16', end: '20' },
+            'high': { label: '고층부', start: '21', end: '' },
+            'custom': { label: '', start: '', end: '' }
+        };
+        
+        const p = presets[preset];
+        if (p) {
+            labelInput.value = p.label;
+            floorStart.value = p.start;
+            floorEnd.value = p.end;
+            
+            // 직접입력이면 라벨 편집 가능하게 포커스
+            if (preset === 'custom') {
+                labelInput.focus();
+            }
+        }
+    };
+    
+    /**
+     * 기준가 폼 제출 핸들러 (DOMContentLoaded에서 바인딩)
+     */
+    document.addEventListener('DOMContentLoaded', function() {
+        const pricingForm = document.getElementById('pricingForm');
+        if (pricingForm) {
+            pricingForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const building = window.state?.selectedBuilding;
+                if (!building) return;
+                
+                const label = document.getElementById('pricingLabel').value.trim();
+                const floorStart = document.getElementById('pricingFloorStart').value.trim();
+                const floorEnd = document.getElementById('pricingFloorEnd').value.trim();
+                const rentArea = parseFloat(document.getElementById('pricingRentArea').value) || 0;
+                const exclusiveArea = parseFloat(document.getElementById('pricingExclusiveArea').value) || 0;
+                const depositPy = parseFloat(document.getElementById('pricingDeposit').value) || 0;
+                const rentPy = parseFloat(document.getElementById('pricingRent').value) || 0;
+                const maintenancePy = parseFloat(document.getElementById('pricingMaintenance').value) || 0;
+                const effectiveDate = document.getElementById('pricingEffectiveDate').value || '';
+                const notes = document.getElementById('pricingNotes').value.trim();
+                
+                if (!label) {
+                    if (typeof showToast === 'function') showToast('구분 라벨을 입력해주세요', 'warning');
+                    return;
+                }
+                if (!rentPy && !depositPy) {
+                    if (typeof showToast === 'function') showToast('임대료 또는 보증금을 입력해주세요', 'warning');
+                    return;
+                }
+                
+                try {
+                    const { db, ref, update } = await import('./js/portal-firebase.js');
+                    
+                    const floorRange = floorStart && floorEnd ? `${floorStart}~${floorEnd}F` :
+                                       floorStart ? `${floorStart}F~` :
+                                       floorEnd ? `~${floorEnd}F` : '전체';
+                    
+                    const newPricing = {
+                        id: 'fp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                        label,
+                        floorRange,
+                        rentArea: rentArea || null,
+                        exclusiveArea: exclusiveArea || null,
+                        depositPy,
+                        rentPy,
+                        maintenancePy,
+                        effectiveDate,
+                        notes,
+                        sourceType: 'manual',
+                        createdAt: new Date().toISOString(),
+                        createdBy: window.state?.currentUser?.email || 'unknown'
+                    };
+                    
+                    if (!building.floorPricing) building.floorPricing = [];
+                    building.floorPricing.push(newPricing);
+                    
+                    await update(ref(db, `buildings/${building.id}`), { floorPricing: building.floorPricing });
+                    
+                    closeModal('pricingModal');
+                    if (typeof showToast === 'function') showToast('기준가가 추가되었습니다', 'success');
+                    if (typeof renderPricingSection === 'function') renderPricingSection();
+                    else if (window.renderPricingSection) window.renderPricingSection();
+                    
+                    // 카운트 업데이트
+                    const countEl = document.getElementById('pricingCount');
+                    if (countEl) countEl.textContent = building.floorPricing.length;
+                    
+                } catch (error) {
+                    console.error('기준가 저장 오류:', error);
+                    if (typeof showToast === 'function') showToast('저장 실패: ' + error.message, 'error');
+                }
+            });
+        }
+    });
     
     /**
      * 빌딩 정보 저장
@@ -2310,12 +2505,7 @@
             }
             
             // 모달 닫기
-            if (typeof closeModal === 'function') {
-                closeModal('buildingEditModal');
-            } else {
-                document.getElementById('buildingEditModal').classList.remove('show');
-                document.getElementById('modalOverlay').classList.remove('show');
-            }
+            closeModal('buildingEditModal');
             
             // ★ refreshAfterCrud로 빌딩목록/지도 전체 갱신
             if (typeof refreshAfterCrud === 'function') {
@@ -3159,6 +3349,21 @@
         .selection-count { font-weight: 600; }
         .selection-action-bar .btn { margin-left: 8px; }
         
+        #selectionModeBtn {
+            padding: 8px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 20px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        #selectionModeBtn.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+        
         .building-checkbox {
             width: 18px;
             height: 18px;
@@ -3855,7 +4060,17 @@
             }
         };
     </script>
-    <!-- ★ 선택모드/선택 내보내기 기능 삭제됨 -->
+    <div id="selectionActionBar" class="selection-action-bar">
+        <span class="selection-count">빌딩을 선택하세요</span>
+        <button onclick="toggleSelectAll()" class="btn btn-secondary btn-sm">전체선택</button>
+        <button onclick="addSelectedToCompList()" class="btn btn-primary btn-sm">Comp List에 담기</button>
+        <button onclick="toggleSelectionMode()" class="btn btn-sm" style="background:#666;color:#fff;">취소</button>
+    </div>
+    
+    <!-- Phase 2: 선택 모드 버튼 (필터바 옆에 위치) -->
+    <button id="selectionModeBtn" onclick="toggleSelectionMode()" style="position:fixed; top:130px; right:30px; z-index:100;">
+        ☑️ 선택모드
+    </button>
     
     <!-- Comp List는 별도 페이지(complist.html)로 이동 -->
     

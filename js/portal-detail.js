@@ -715,9 +715,42 @@ export async function refreshVacanciesSection() {
 
 // ===== 기준가 섹션 =====
 
+// ★ 기준가 범례(label) 자동 수정 맵
+const LABEL_FIX_MAP = {
+    '저층': '저층부', '중층': '중층부', '고층': '고층부',
+    '중저층': '중저층부', '중고층': '중고층부'
+};
+
+// ★ 기준가 범례 자동수정 함수 (Firebase에도 반영)
+async function autoFixPricingLabels(building) {
+    if (!building?.floorPricing?.length) return;
+    let needsSave = false;
+    
+    building.floorPricing.forEach(fp => {
+        const fixed = LABEL_FIX_MAP[fp.label];
+        if (fixed) {
+            console.log(`🔧 기준가 범례 수정: "${fp.label}" → "${fixed}"`);
+            fp.label = fixed;
+            needsSave = true;
+        }
+    });
+    
+    if (needsSave) {
+        try {
+            await update(ref(db, `buildings/${building.id}`), { floorPricing: building.floorPricing });
+            console.log('✅ 기준가 범례 자동수정 완료 (Firebase 반영)');
+        } catch (e) {
+            console.warn('기준가 범례 자동수정 Firebase 저장 실패:', e);
+        }
+    }
+}
+
 export function renderPricingSection() {
     const b = state.selectedBuilding;
     const allPricing = b.floorPricing || [];
+    
+    // ★ 범례 자동수정 (비동기, UI 블로킹 없음)
+    autoFixPricingLabels(b);
     
     // 기본 임대조건 확인 (buildings 컬렉션의 최상위 필드)
     const hasBasePricing = b.depositPy || b.rentPy || b.maintenancePy;
@@ -825,6 +858,8 @@ export function renderPricingSection() {
                             ${fp.depositPy ? '보증금 ' + formatNumber(fp.depositPy) : ''} 
                             ${fp.maintenancePy ? '| 관리비 ' + formatNumber(fp.maintenancePy) : ''}
                         </div>
+                        ${fp.effectiveDate ? `<div style="font-size: 10px; color: #6366f1; margin-top: 3px;">📅 ${fp.effectiveDate}</div>` : ''}
+                        ${fp.notes ? `<div style="font-size: 10px; color: #78350f; margin-top: 3px;">📝 ${fp.notes}</div>` : ''}
                     </div>
                 `).join('')}
             </div>
@@ -984,8 +1019,13 @@ export function renderPricingSection() {
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted); padding-top: 8px; border-top: 1px solid ${isOfficial ? '#fde68a' : 'var(--border-color)'};">
                         <span>📅 ${displayDate}${fp.sourceCompany ? ' · <strong style="color: var(--text-secondary)">' + fp.sourceCompany + '</strong>' : ''}</span>
-                        <span>${fp.notes || ''}</span>
+                        ${fp.effectiveDate ? `<span style="color: #6366f1; font-weight: 500;">적용: ${fp.effectiveDate}</span>` : ''}
                     </div>
+                    ${fp.notes ? `
+                    <div style="margin-top: 6px; padding: 6px 10px; background: ${isOfficial ? '#fef9c3' : '#f0f9ff'}; border-radius: 6px; font-size: 11px; color: ${isOfficial ? '#854d0e' : '#1e40af'};">
+                        📝 ${fp.notes}
+                    </div>
+                    ` : ''}
                     
                     ${/* ★ 액션 버튼 영역 */ ''}
                     <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed ${isOfficial ? '#fde68a' : 'var(--border-color)'};">
@@ -1180,8 +1220,11 @@ export function editPricing(pricingId) {
     }
     
     // 모달 표시
-    document.getElementById('editPricingModal').style.display = 'block';
-    document.getElementById('modalOverlay').style.display = 'block';
+    const modal = document.getElementById('editPricingModal');
+    modal.style.display = 'block';
+    modal.classList.add('show');
+    const overlay = document.getElementById('modalOverlay');
+    if (overlay) { overlay.style.display = 'block'; overlay.classList.add('show'); }
 }
 
 // ★ 기준가 수정 저장
@@ -1260,8 +1303,12 @@ export async function saveEditPricing() {
 
 // ★ 기준가 수정 모달 닫기
 export function closeEditPricingModal() {
-    document.getElementById('editPricingModal').style.display = 'none';
-    document.getElementById('modalOverlay').style.display = 'none';
+    if (typeof window.closeModal === 'function') {
+        window.closeModal('editPricingModal');
+    } else {
+        document.getElementById('editPricingModal').style.display = 'none';
+        document.getElementById('modalOverlay').style.display = 'none';
+    }
 }
 
 // ★ 기준가 삭제
@@ -2966,13 +3013,9 @@ export async function fetchBuildingFloorDetail(viewType = 'floorOutline') {
         // 데이터 렌더링
         renderFloorDetailData(container, viewType, targetData, typeLabels[viewType]);
         
-        // 캐시 저장 - 모든 결과 타입 저장 (호실 상세 모달에서 활용)
+        // 캐시 저장 (같은 빌딩 재조회 방지)
         if (!building._floorDetailCache) building._floorDetailCache = {};
-        Object.keys(results).forEach(key => {
-            if (results[key] && results[key].length > 0) {
-                building._floorDetailCache[key] = results[key];
-            }
-        });
+        building._floorDetailCache[viewType] = targetData;
         
     } catch (error) {
         console.error('건축물대장 층별상세 조회 오류:', error);
@@ -3099,6 +3142,7 @@ function renderExposeInfo(container, data, label) {
     floors.forEach(floor => {
         const floorLabel = floor.flrGbCdNm === '지하' ? `B${floor.flrNo}` : `${floor.flrNo}F`;
         const isBelow = floor.flrGbCdNm === '지하';
+        const unitNames = floor.units.map(u => u.hoNm || '?').sort();
         
         html += `
             <div style="margin-bottom: 6px; padding: 6px 10px; background: ${isBelow ? '#fef2f2' : '#eff6ff'}; border-radius: 6px; border-left: 3px solid ${isBelow ? '#dc2626' : '#3b82f6'};">
@@ -3107,12 +3151,8 @@ function renderExposeInfo(container, data, label) {
                     <span style="font-size: 10px; color: #6b7280;">${floor.units.length}개 호실</span>
                 </div>
                 <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px;">
-                    ${floor.units.sort((a, b) => (a.hoNm || '').localeCompare(b.hoNm || '')).map(unit => `
-                        <span onclick="showUnitDetailModal('${(unit.hoNm || '').replace(/'/g, "\\'")}', '${unit.flrGbCdNm}', ${unit.flrNo})"
-                              style="padding: 2px 6px; background: white; border-radius: 3px; font-size: 10px; color: #374151; border: 1px solid #e5e7eb; cursor: pointer; transition: all 0.15s;"
-                              onmouseover="this.style.background='#dbeafe'; this.style.borderColor='#3b82f6'; this.style.color='#1d4ed8';"
-                              onmouseout="this.style.background='white'; this.style.borderColor='#e5e7eb'; this.style.color='#374151';"
-                              title="클릭하여 상세정보 보기">${unit.hoNm || '?'}</span>
+                    ${unitNames.map(name => `
+                        <span style="padding: 2px 6px; background: white; border-radius: 3px; font-size: 10px; color: #374151; border: 1px solid #e5e7eb;">${name}</span>
                     `).join('')}
                 </div>
             </div>
@@ -3221,196 +3261,8 @@ function renderExposeAreaInfo(container, data, label) {
     container.innerHTML = html;
 }
 
-/**
- * ★ 호실 상세정보 모달 (건축물대장 스타일)
- * 전유부 호실 칩 클릭 시 전유공용면적 데이터를 조회하여 표시
- */
-async function showUnitDetailModal(hoNm, flrGbCdNm, flrNo) {
-    const building = state.selectedBuilding;
-    if (!building) return;
-    
-    // 1. 캐시에서 전유공용면적 데이터 확인
-    let areaData = building._floorDetailCache?.exposeAreaInfo;
-    let exposeData = building._floorDetailCache?.exposeInfo;
-    
-    // 캐시 없으면 API 호출
-    if (!areaData) {
-        try {
-            const address = building.address || building.addressJibun || building.addressRoad;
-            const API_URL = window.API_BASE_URL || 'https://portal-dsyl.onrender.com';
-            const response = await fetch(`${API_URL}/api/building-register/floor-detail?address=${encodeURIComponent(address)}`);
-            const data = await response.json();
-            if (data.success && data.results) {
-                if (!building._floorDetailCache) building._floorDetailCache = {};
-                Object.keys(data.results).forEach(key => {
-                    if (data.results[key]?.length > 0) building._floorDetailCache[key] = data.results[key];
-                });
-                areaData = data.results.exposeAreaInfo;
-                exposeData = data.results.exposeInfo;
-            }
-        } catch (e) {
-            console.error('호실 상세 조회 오류:', e);
-        }
-    }
-    
-    // 2. 해당 호실의 면적 데이터 필터
-    const unitAreas = areaData ? areaData.filter(d => 
-        d.hoNm === hoNm && d.flrGbCdNm === flrGbCdNm && d.flrNo === flrNo
-    ) : [];
-    
-    // 전유부 기본정보
-    const unitExpose = exposeData ? exposeData.find(d => 
-        d.hoNm === hoNm && d.flrGbCdNm === flrGbCdNm && d.flrNo === flrNo
-    ) : null;
-    
-    // 전유/공용 분리
-    const privateAreas = unitAreas.filter(d => d.exposPubuseGbCdNm === '전유');
-    const publicAreas = unitAreas.filter(d => d.exposPubuseGbCdNm === '공용');
-    const totalPrivate = privateAreas.reduce((s, d) => s + (d.area || 0), 0);
-    const totalPublic = publicAreas.reduce((s, d) => s + (d.area || 0), 0);
-    const totalAll = totalPrivate + totalPublic;
-    
-    const floorLabel = flrGbCdNm === '지하' ? `지하 ${flrNo}층` : `${flrNo}층`;
-    const buildingName = building.name || building.buildingName || '';
-    
-    // 3. 건축물대장 스타일 모달 생성
-    const modal = document.createElement('div');
-    modal.id = 'unitDetailModal';
-    modal.style.cssText = 'position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5); animation: fadeIn 0.2s;';
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    
-    // 면적 행 생성 함수
-    const makeAreaRows = (areas, type) => {
-        if (!areas || areas.length === 0) return '';
-        return areas.map((a, i) => {
-            const usage = a.mainPurpsCdNm || a.etcPurps || '-';
-            const structure = a.strctCdNm || '-';
-            const areaM2 = a.area ? a.area.toFixed(2) : '-';
-            const areaPy = a.area ? (a.area / 3.3058).toFixed(2) : '-';
-            return `
-                <tr>
-                    ${i === 0 ? `<td rowspan="${areas.length}" style="padding:8px 10px; text-align:center; border:1px solid #d1d5db; background:${type === '전유' ? '#eff6ff' : '#f0fdf4'}; font-weight:600; font-size:11px; color:${type === '전유' ? '#1d4ed8' : '#059669'}; vertical-align:middle;">${type}</td>` : ''}
-                    <td style="padding:7px 10px; border:1px solid #d1d5db; font-size:11px;">${usage}</td>
-                    <td style="padding:7px 10px; border:1px solid #d1d5db; font-size:11px; color:#6b7280;">${structure}</td>
-                    <td style="padding:7px 10px; border:1px solid #d1d5db; text-align:right; font-family:monospace; font-size:11px;">${areaM2}</td>
-                    <td style="padding:7px 10px; border:1px solid #d1d5db; text-align:right; font-family:monospace; font-size:11px; color:#6b7280;">${areaPy}</td>
-                </tr>
-            `;
-        }).join('');
-    };
-
-    const hasData = unitAreas.length > 0;
-
-    modal.innerHTML = `
-        <div style="background:white; border-radius:12px; width:420px; max-width:92vw; max-height:85vh; overflow:hidden; box-shadow:0 25px 50px rgba(0,0,0,0.25); display:flex; flex-direction:column;">
-            <!-- 헤더: 건축물대장 스타일 -->
-            <div style="background:linear-gradient(135deg, #1e3a5f, #2c5282); color:white; padding:14px 18px;">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                    <div>
-                        <div style="font-size:10px; opacity:0.7; letter-spacing:1px; margin-bottom:4px;">건축물대장 — 전유부</div>
-                        <div style="font-size:16px; font-weight:700; letter-spacing:0.5px;">${hoNm || '-'}</div>
-                    </div>
-                    <button onclick="document.getElementById('unitDetailModal').remove()" 
-                            style="background:rgba(255,255,255,0.15); border:none; color:white; width:28px; height:28px; border-radius:6px; cursor:pointer; font-size:16px; display:flex; align-items:center; justify-content:center;">✕</button>
-                </div>
-            </div>
-            
-            <div style="overflow-y:auto; flex:1;">
-                <!-- 기본정보 테이블 -->
-                <table style="width:100%; border-collapse:collapse; font-size:12px; border:1px solid #d1d5db;">
-                    <colgroup>
-                        <col style="width:80px; background:#f8fafc;">
-                        <col>
-                        <col style="width:80px; background:#f8fafc;">
-                        <col>
-                    </colgroup>
-                    <tbody>
-                        <tr>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-weight:600; font-size:11px; color:#374151; background:#f1f5f9;">건물명</td>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:11px;" colspan="3">${buildingName || (unitExpose?.bldNm) || '-'}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-weight:600; font-size:11px; color:#374151; background:#f1f5f9;">호명칭</td>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:11px; font-weight:600;">${hoNm || '-'}</td>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-weight:600; font-size:11px; color:#374151; background:#f1f5f9;">층</td>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:11px;">${floorLabel}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-weight:600; font-size:11px; color:#374151; background:#f1f5f9;">동명칭</td>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:11px;">${unitExpose?.dongNm || '-'}</td>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-weight:600; font-size:11px; color:#374151; background:#f1f5f9;">생성일자</td>
-                            <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:11px;">${unitExpose?.crtnDay ? unitExpose.crtnDay.replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3') : '-'}</td>
-                        </tr>
-                    </tbody>
-                </table>
-
-                ${hasData ? `
-                <!-- 면적 상세 테이블 -->
-                <div style="padding:10px 0 0;">
-                    <div style="padding:0 12px 6px; font-size:11px; font-weight:600; color:#374151;">📐 면적 내역</div>
-                    <table style="width:100%; border-collapse:collapse; font-size:12px; border:1px solid #d1d5db;">
-                        <thead>
-                            <tr style="background:#f1f5f9;">
-                                <th style="padding:7px 10px; border:1px solid #d1d5db; font-size:10px; font-weight:600; width:50px;">구분</th>
-                                <th style="padding:7px 10px; border:1px solid #d1d5db; font-size:10px; font-weight:600;">용도</th>
-                                <th style="padding:7px 10px; border:1px solid #d1d5db; font-size:10px; font-weight:600; width:60px;">구조</th>
-                                <th style="padding:7px 10px; border:1px solid #d1d5db; font-size:10px; font-weight:600; text-align:right; width:70px;">면적(㎡)</th>
-                                <th style="padding:7px 10px; border:1px solid #d1d5db; font-size:10px; font-weight:600; text-align:right; width:65px;">면적(평)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${makeAreaRows(privateAreas, '전유')}
-                            ${makeAreaRows(publicAreas, '공용')}
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- 합계 요약 카드 -->
-                <div style="padding:12px; display:flex; gap:8px;">
-                    <div style="flex:1; background:#eff6ff; border-radius:8px; padding:10px 12px; text-align:center; border:1px solid #bfdbfe;">
-                        <div style="font-size:9px; color:#3b82f6; font-weight:600; margin-bottom:4px;">전유면적</div>
-                        <div style="font-size:14px; font-weight:700; color:#1d4ed8;">${totalPrivate.toFixed(2)}㎡</div>
-                        <div style="font-size:10px; color:#6b7280; margin-top:2px;">${(totalPrivate / 3.3058).toFixed(2)}평</div>
-                    </div>
-                    <div style="flex:1; background:#f0fdf4; border-radius:8px; padding:10px 12px; text-align:center; border:1px solid #bbf7d0;">
-                        <div style="font-size:9px; color:#059669; font-weight:600; margin-bottom:4px;">공용면적</div>
-                        <div style="font-size:14px; font-weight:700; color:#047857;">${totalPublic.toFixed(2)}㎡</div>
-                        <div style="font-size:10px; color:#6b7280; margin-top:2px;">${(totalPublic / 3.3058).toFixed(2)}평</div>
-                    </div>
-                    <div style="flex:1; background:#faf5ff; border-radius:8px; padding:10px 12px; text-align:center; border:1px solid #ddd6fe;">
-                        <div style="font-size:9px; color:#7c3aed; font-weight:600; margin-bottom:4px;">합계</div>
-                        <div style="font-size:14px; font-weight:700; color:#6d28d9;">${totalAll.toFixed(2)}㎡</div>
-                        <div style="font-size:10px; color:#6b7280; margin-top:2px;">${(totalAll / 3.3058).toFixed(2)}평</div>
-                    </div>
-                </div>
-                ` : `
-                <!-- 면적 데이터 없음 -->
-                <div style="padding:20px; text-align:center;">
-                    <div style="font-size:24px; margin-bottom:8px;">📭</div>
-                    <div style="font-size:12px; color:#92400e; background:#fef3c7; padding:10px 16px; border-radius:8px; display:inline-block;">
-                        전유공용면적 데이터가 없습니다
-                    </div>
-                </div>
-                `}
-            </div>
-            
-            <!-- 푸터 -->
-            <div style="padding:10px 14px; border-top:1px solid #e5e7eb; background:#f9fafb; display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:10px; color:#9ca3af;">건축물대장 전유부 정보</span>
-                <button onclick="document.getElementById('unitDetailModal').remove()" 
-                        style="padding:6px 16px; background:#e5e7eb; border:none; border-radius:6px; font-size:11px; cursor:pointer; color:#374151;">닫기</button>
-            </div>
-        </div>
-    `;
-    
-    // 기존 모달 제거 후 추가
-    document.getElementById('unitDetailModal')?.remove();
-    document.body.appendChild(modal);
-}
-
 // 전역 등록
 window.fetchBuildingFloorDetail = fetchBuildingFloorDetail;
-window.showUnitDetailModal = showUnitDetailModal;
 
 // ===== 이미지 뷰어 & 갤러리 =====
 

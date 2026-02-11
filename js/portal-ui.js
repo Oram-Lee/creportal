@@ -105,9 +105,9 @@ export function renderStarredList(container, list) {
         </div>
         <div class="starred-list">
             ${list.map(b => `
-                <div class="starred-card" data-id="${b.id}">
-                    <input type="checkbox" class="starred-check" data-id="${b.id}" onchange="updateStarredSelection()">
-                    <div class="starred-card-content" onclick="openDetail('${b.id}')">
+                <div class="starred-card" data-id="${b.id}" onclick="openDetail('${b.id}')" style="cursor: pointer;">
+                    <input type="checkbox" class="starred-check" data-id="${b.id}" onchange="updateStarredSelection()" onclick="event.stopPropagation()">
+                    <div class="starred-card-content">
                         <div class="starred-name">${b.name || '이름없음'}</div>
                         <div class="starred-info">${b.address || ''}</div>
                         <div class="starred-badges">
