@@ -2665,21 +2665,17 @@ export async function saveInlineVacancy() {
         console.log('✅ 공실 Firebase 저장 완료:', `vacancies/${building.id}`, vacancyData);
         
         // ★ 로컬 상태 업데이트 (즉시 반영)
+        const newEntry = { ...vacancyData, _key: newVacancyRef.key };
+        
         if (!building.vacancies) building.vacancies = [];
-        building.vacancies.push({
-            ...vacancyData,
-            _key: newVacancyRef.key
-        });
+        building.vacancies.push(newEntry);
         building.vacancyCount = building.vacancies.length;
         
-        // allBuildings에서도 업데이트
-        const buildingInAll = state.allBuildings.find(b => b.id === building.id);
-        if (buildingInAll) {
+        // allBuildings에서도 업데이트 (같은 객체가 아닌 경우에만)
+        const buildingInAll = state.allBuildings?.find(b => b.id === building.id);
+        if (buildingInAll && buildingInAll !== building) {
             if (!buildingInAll.vacancies) buildingInAll.vacancies = [];
-            buildingInAll.vacancies.push({
-                ...vacancyData,
-                _key: newVacancyRef.key
-            });
+            buildingInAll.vacancies.push({ ...newEntry });
             buildingInAll.vacancyCount = buildingInAll.vacancies.length;
         }
         
