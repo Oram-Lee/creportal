@@ -3752,12 +3752,27 @@ export async function deleteVacancyByIdx(idx) {
     try {
         await remove(ref(db, `vacancies/${buildingId}/${vacancyKey}`));
         
-        // 로컬 상태 업데이트
-        const building = state.allBuildings.find(b => b.id === buildingId);
-        if (building && building.vacancies) {
-            building.vacancies = building.vacancies.filter(v => v._key !== vacancyKey && 
-                !(v.source === vacancy.source && v.publishDate === vacancy.publishDate && v.floor === vacancy.floor));
-            building.vacancyCount = building.vacancies.length;
+        // ★ 로컬 상태 업데이트 - selectedBuilding 직접 업데이트
+        const filterFn = v => v._key !== vacancyKey && 
+            !(v.source === vacancy.source && v.publishDate === vacancy.publishDate && v.floor === vacancy.floor);
+        
+        if (state.selectedBuilding) {
+            if (state.selectedBuilding.vacancies) {
+                state.selectedBuilding.vacancies = state.selectedBuilding.vacancies.filter(filterFn);
+                state.selectedBuilding.vacancyCount = state.selectedBuilding.vacancies.length;
+            }
+            if (state.selectedBuilding.documents) {
+                state.selectedBuilding.documents = state.selectedBuilding.documents.filter(filterFn);
+            }
+        }
+        
+        // allBuildings도 업데이트
+        const building = state.allBuildings?.find(b => b.id === buildingId);
+        if (building && building !== state.selectedBuilding) {
+            if (building.vacancies) {
+                building.vacancies = building.vacancies.filter(filterFn);
+                building.vacancyCount = building.vacancies.length;
+            }
         }
         
         showToast('공실 정보가 삭제되었습니다', 'success');
@@ -3793,12 +3808,27 @@ export async function deleteSelectedVacancies() {
             await remove(ref(db, `vacancies/${buildingId}/${vacancy._key}`));
         }
         
-        // 로컬 상태 업데이트
-        const building = state.allBuildings.find(b => b.id === buildingId);
-        if (building && building.vacancies) {
-            const keysToDelete = new Set(toDelete.map(v => v._key));
-            building.vacancies = building.vacancies.filter(v => !keysToDelete.has(v._key));
-            building.vacancyCount = building.vacancies.length;
+        // ★ 로컬 상태 업데이트 - selectedBuilding 직접 업데이트
+        const keysToDelete = new Set(toDelete.map(v => v._key));
+        const filterFn = v => !keysToDelete.has(v._key);
+        
+        if (state.selectedBuilding) {
+            if (state.selectedBuilding.vacancies) {
+                state.selectedBuilding.vacancies = state.selectedBuilding.vacancies.filter(filterFn);
+                state.selectedBuilding.vacancyCount = state.selectedBuilding.vacancies.length;
+            }
+            if (state.selectedBuilding.documents) {
+                state.selectedBuilding.documents = state.selectedBuilding.documents.filter(filterFn);
+            }
+        }
+        
+        // allBuildings도 업데이트
+        const building = state.allBuildings?.find(b => b.id === buildingId);
+        if (building && building !== state.selectedBuilding) {
+            if (building.vacancies) {
+                building.vacancies = building.vacancies.filter(filterFn);
+                building.vacancyCount = building.vacancies.length;
+            }
         }
         
         // 선택 상태 초기화
