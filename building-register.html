@@ -882,12 +882,20 @@
             
             if (!address && !buildingName) return null;
             
-            // 도로명+번지 추출 (더 유연한 패턴)
+            // 도로명+번지 추출 (하위도로 패턴 우선 처리)
             const extractKey = (addr) => {
                 if (!addr) return '';
-                // "공항대로 165" 또는 "공항대로165" 모두 매칭
-                const match = addr.match(/([가-힣]+(?:로|길|대로)\d*)\s*(\d+(?:-\d+)?)/);
-                const key = match ? (match[1] + match[2]).replace(/\s/g, '') : '';
+                // ★ Step 1: "둔산로123번길 21", "세종대로23길 10" 같은 하위도로 패턴
+                // 도로명(로/대로) + 숫자 + (번길|길) + 건물번호
+                const matchSubRoad = addr.match(/([가-힣]+(?:로|대로)\s*\d+(?:번길|길))\s*(\d+(?:-\d+)?)/);
+                if (matchSubRoad) {
+                    const key = (matchSubRoad[1] + '_' + matchSubRoad[2]).replace(/\s/g, '');
+                    console.log(`  주소 키 추출(하위도로): "${addr}" → "${key}"`);
+                    return key;
+                }
+                // ★ Step 2: "공항대로 165", "테헤란로 152" 표준 패턴
+                const match = addr.match(/([가-힣]+(?:대로|로|길))\s*(\d+(?:-\d+)?)/);
+                const key = match ? (match[1] + '_' + match[2]).replace(/\s/g, '') : '';
                 console.log(`  주소 키 추출: "${addr}" → "${key}"`);
                 return key;
             };
