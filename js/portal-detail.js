@@ -354,10 +354,20 @@ export function renderInfoSection() {
                             ${exteriorImages.map((img, i) => `
                                 <div class="thumb-item ${i === 0 ? 'active' : ''}" onclick="selectImage('exterior', ${i})">
                                     <img src="${img.url}" alt="외관 ${i+1}">
+                                    <button class="thumb-delete-btn" onclick="event.stopPropagation(); confirmDeleteImage('exterior', ${i})" title="삭제">✕</button>
                                 </div>
                             `).join('')}
                         </div>
-                    ` : ''}
+                    ` : `
+                        ${exteriorImages.length === 1 ? `
+                            <div class="image-thumbs-row" id="exteriorThumbsRow">
+                                <div class="thumb-item active" onclick="selectImage('exterior', 0)">
+                                    <img src="${exteriorImages[0].url}" alt="외관 1">
+                                    <button class="thumb-delete-btn" onclick="event.stopPropagation(); confirmDeleteImage('exterior', 0)" title="삭제">✕</button>
+                                </div>
+                            </div>
+                        ` : ''}
+                    `}
                     <button class="btn-add-image" onclick="addExteriorImage()">➕ 외관 사진 추가</button>
                 ` : `
                     <div class="image-empty-area" onclick="addExteriorImage()">
@@ -391,10 +401,20 @@ export function renderInfoSection() {
                             ${floorPlanImages.map((img, i) => `
                                 <div class="thumb-item ${i === 0 ? 'active' : ''}" onclick="selectImage('floorplan', ${i})">
                                     <img src="${img.url}" alt="평면도 ${i+1}">
+                                    <button class="thumb-delete-btn" onclick="event.stopPropagation(); confirmDeleteImage('floorplan', ${i})" title="삭제">✕</button>
                                 </div>
                             `).join('')}
                         </div>
-                    ` : ''}
+                    ` : `
+                        ${floorPlanImages.length === 1 ? `
+                            <div class="image-thumbs-row" id="floorplanThumbsRow">
+                                <div class="thumb-item active" onclick="selectImage('floorplan', 0)">
+                                    <img src="${floorPlanImages[0].url}" alt="평면도 1">
+                                    <button class="thumb-delete-btn" onclick="event.stopPropagation(); confirmDeleteImage('floorplan', 0)" title="삭제">✕</button>
+                                </div>
+                            </div>
+                        ` : ''}
+                    `}
                     <button class="btn-add-image" onclick="addFloorPlanImage()">➕ 평면도 추가</button>
                 ` : `
                     <div class="image-empty-area" onclick="addFloorPlanImage()">
@@ -715,42 +735,9 @@ export async function refreshVacanciesSection() {
 
 // ===== 기준가 섹션 =====
 
-// ★ 기준가 범례(label) 자동 수정 맵
-const LABEL_FIX_MAP = {
-    '저층': '저층부', '중층': '중층부', '고층': '고층부',
-    '중저층': '중저층부', '중고층': '중고층부'
-};
-
-// ★ 기준가 범례 자동수정 함수 (Firebase에도 반영)
-async function autoFixPricingLabels(building) {
-    if (!building?.floorPricing?.length) return;
-    let needsSave = false;
-    
-    building.floorPricing.forEach(fp => {
-        const fixed = LABEL_FIX_MAP[fp.label];
-        if (fixed) {
-            console.log(`🔧 기준가 범례 수정: "${fp.label}" → "${fixed}"`);
-            fp.label = fixed;
-            needsSave = true;
-        }
-    });
-    
-    if (needsSave) {
-        try {
-            await update(ref(db, `buildings/${building.id}`), { floorPricing: building.floorPricing });
-            console.log('✅ 기준가 범례 자동수정 완료 (Firebase 반영)');
-        } catch (e) {
-            console.warn('기준가 범례 자동수정 Firebase 저장 실패:', e);
-        }
-    }
-}
-
 export function renderPricingSection() {
     const b = state.selectedBuilding;
     const allPricing = b.floorPricing || [];
-    
-    // ★ 범례 자동수정 (비동기, UI 블로킹 없음)
-    autoFixPricingLabels(b);
     
     // 기본 임대조건 확인 (buildings 컬렉션의 최상위 필드)
     const hasBasePricing = b.depositPy || b.rentPy || b.maintenancePy;
@@ -858,8 +845,6 @@ export function renderPricingSection() {
                             ${fp.depositPy ? '보증금 ' + formatNumber(fp.depositPy) : ''} 
                             ${fp.maintenancePy ? '| 관리비 ' + formatNumber(fp.maintenancePy) : ''}
                         </div>
-                        ${fp.effectiveDate ? `<div style="font-size: 10px; color: #6366f1; margin-top: 3px;">📅 ${fp.effectiveDate}</div>` : ''}
-                        ${fp.notes ? `<div style="font-size: 10px; color: #78350f; margin-top: 3px;">📝 ${fp.notes}</div>` : ''}
                     </div>
                 `).join('')}
             </div>
@@ -1019,13 +1004,8 @@ export function renderPricingSection() {
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted); padding-top: 8px; border-top: 1px solid ${isOfficial ? '#fde68a' : 'var(--border-color)'};">
                         <span>📅 ${displayDate}${fp.sourceCompany ? ' · <strong style="color: var(--text-secondary)">' + fp.sourceCompany + '</strong>' : ''}</span>
-                        ${fp.effectiveDate ? `<span style="color: #6366f1; font-weight: 500;">적용: ${fp.effectiveDate}</span>` : ''}
+                        <span>${fp.notes || ''}</span>
                     </div>
-                    ${fp.notes ? `
-                    <div style="margin-top: 6px; padding: 6px 10px; background: ${isOfficial ? '#fef9c3' : '#f0f9ff'}; border-radius: 6px; font-size: 11px; color: ${isOfficial ? '#854d0e' : '#1e40af'};">
-                        📝 ${fp.notes}
-                    </div>
-                    ` : ''}
                     
                     ${/* ★ 액션 버튼 영역 */ ''}
                     <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed ${isOfficial ? '#fde68a' : 'var(--border-color)'};">
@@ -1220,11 +1200,8 @@ export function editPricing(pricingId) {
     }
     
     // 모달 표시
-    const modal = document.getElementById('editPricingModal');
-    modal.style.display = 'block';
-    modal.classList.add('show');
-    const overlay = document.getElementById('modalOverlay');
-    if (overlay) { overlay.style.display = 'block'; overlay.classList.add('show'); }
+    document.getElementById('editPricingModal').style.display = 'block';
+    document.getElementById('modalOverlay').style.display = 'block';
 }
 
 // ★ 기준가 수정 저장
@@ -1303,12 +1280,8 @@ export async function saveEditPricing() {
 
 // ★ 기준가 수정 모달 닫기
 export function closeEditPricingModal() {
-    if (typeof window.closeModal === 'function') {
-        window.closeModal('editPricingModal');
-    } else {
-        document.getElementById('editPricingModal').style.display = 'none';
-        document.getElementById('modalOverlay').style.display = 'none';
-    }
+    document.getElementById('editPricingModal').style.display = 'none';
+    document.getElementById('modalOverlay').style.display = 'none';
 }
 
 // ★ 기준가 삭제
@@ -3383,6 +3356,7 @@ window.fetchBuildingFloorDetail = fetchBuildingFloorDetail;
             border-radius: 2px;
         }
         .thumb-item {
+            position: relative;
             flex-shrink: 0;
             width: 48px;
             height: 36px;
@@ -3403,6 +3377,114 @@ window.fetchBuildingFloorDetail = fetchBuildingFloorDetail;
             height: 100%;
             object-fit: cover;
         }
+        /* ★ 썸네일 삭제 버튼 */
+        .thumb-delete-btn {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 18px;
+            height: 18px;
+            background: #ef4444;
+            color: white;
+            border: 1.5px solid white;
+            border-radius: 50%;
+            font-size: 11px;
+            line-height: 14px;
+            text-align: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 5;
+            padding: 0;
+        }
+        .thumb-item:hover .thumb-delete-btn {
+            opacity: 1;
+        }
+        .thumb-delete-btn:hover {
+            background: #dc2626;
+            transform: scale(1.1);
+        }
+        
+        /* ★ 이미지 삭제 확인 모달 */
+        .img-confirm-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 20000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.15s ease;
+        }
+        .img-confirm-dialog {
+            background: white;
+            border-radius: 14px;
+            width: 340px;
+            max-width: 90vw;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideUp 0.2s ease;
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .img-confirm-preview {
+            width: 100%;
+            height: 180px;
+            background: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .img-confirm-preview img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .img-confirm-body {
+            padding: 20px;
+            text-align: center;
+        }
+        .img-confirm-body h4 {
+            margin: 0 0 6px;
+            font-size: 15px;
+            color: #1f2937;
+        }
+        .img-confirm-body p {
+            margin: 0 0 18px;
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .img-confirm-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .img-confirm-actions button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .img-confirm-cancel {
+            background: #f3f4f6;
+            color: #374151;
+        }
+        .img-confirm-cancel:hover { background: #e5e7eb; }
+        .img-confirm-delete {
+            background: #ef4444;
+            color: white;
+        }
+        .img-confirm-delete:hover { background: #dc2626; }
         
         /* 추가 버튼 */
         .btn-add-image {
@@ -3777,38 +3859,104 @@ window.addFloorPlanImage = function() {
     input.click();
 };
 
-// 평면도 이미지 삭제
-window.deleteFloorPlanImage = async function() {
-    // 뷰어 상태에서 현재 인덱스 가져오기
-    const viewerState = window._imageViewerState;
-    const index = viewerState?.currentIndex ?? 0;
+// ★ 이미지 삭제 확인 모달 표시
+window.confirmDeleteImage = function(type, index) {
+    const b = state.selectedBuilding;
+    if (!b) return;
     
-    if (!confirm('이 평면도 이미지를 삭제하시겠습니까?')) return;
+    // 뷰어에서 호출된 경우 뷰어 상태의 인덱스 사용
+    if (index === undefined || index === null) {
+        const viewerState = window._imageViewerState;
+        index = viewerState?.currentIndex ?? 0;
+    }
+    
+    const images = type === 'exterior' ? (b.exteriorImages || []) :
+                   type === 'floorplan' ? (b.floorPlanImages || []) : [];
+    if (index < 0 || index >= images.length) return;
+    
+    const imageUrl = images[index]?.url || images[index];
+    const typeLabel = type === 'exterior' ? '외관 사진' : '평면도';
+    
+    // 기존 확인 모달 제거
+    const existing = document.getElementById('imgConfirmOverlay');
+    if (existing) existing.remove();
+    
+    const html = `
+        <div id="imgConfirmOverlay" class="img-confirm-overlay" onclick="if(event.target===this) cancelDeleteImage()">
+            <div class="img-confirm-dialog">
+                <div class="img-confirm-preview">
+                    <img src="${imageUrl}" alt="삭제 대상">
+                </div>
+                <div class="img-confirm-body">
+                    <h4>🗑️ ${typeLabel} 삭제</h4>
+                    <p>${typeLabel} ${index + 1}번째 이미지를 삭제하시겠습니까?<br>이 작업은 되돌릴 수 없습니다.</p>
+                    <div class="img-confirm-actions">
+                        <button class="img-confirm-cancel" onclick="cancelDeleteImage()">취소</button>
+                        <button class="img-confirm-delete" onclick="executeDeleteImage('${type}', ${index})">삭제</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', html);
+};
+
+// 삭제 확인 모달 닫기
+window.cancelDeleteImage = function() {
+    const overlay = document.getElementById('imgConfirmOverlay');
+    if (overlay) overlay.remove();
+};
+
+// 실제 이미지 삭제 실행
+window.executeDeleteImage = async function(type, index) {
+    // 확인 모달 닫기
+    cancelDeleteImage();
     
     const b = state.selectedBuilding;
     if (!b) return;
     
-    let floorPlanImages = b.images?.floorPlan || [];
-    floorPlanImages = floorPlanImages.filter((_, i) => i !== index);
+    const isExterior = (type === 'exterior');
+    const fieldName = isExterior ? 'exterior' : 'floorPlan';
+    const typeLabel = isExterior ? '외관 사진' : '평면도';
+    
+    let images = b.images?.[fieldName] || [];
+    images = images.filter((_, i) => i !== index);
     
     try {
         // Firebase 업데이트
         await update(ref(db, `buildings/${b.id}/images`), {
-            floorPlan: floorPlanImages
+            [fieldName]: images
         });
         
         // 로컬 상태 업데이트
         if (!b.images) b.images = {};
-        b.images.floorPlan = floorPlanImages;
-        b.floorPlanImages = floorPlanImages.map(img => typeof img === 'string' ? { url: img } : img);
+        b.images[fieldName] = images;
         
-        showToast('평면도가 삭제되었습니다', 'success');
+        if (isExterior) {
+            b.exteriorImages = images.map(img => typeof img === 'string' ? { url: img } : img);
+        } else {
+            b.floorPlanImages = images.map(img => typeof img === 'string' ? { url: img } : img);
+        }
+        
+        showToast(`${typeLabel}이(가) 삭제되었습니다`, 'success');
+        
+        // 뷰어가 열려있으면 닫기
         closeImageViewer();
+        
+        // 갤러리 새로고침
         renderInfoSection();
     } catch (err) {
-        console.error('평면도 삭제 실패:', err);
-        showToast('평면도 삭제 실패', 'error');
+        console.error(`${typeLabel} 삭제 실패:`, err);
+        showToast(`${typeLabel} 삭제 실패`, 'error');
     }
+};
+
+// 평면도 이미지 삭제 (뷰어에서 호출 - 확인 모달 거침)
+window.deleteFloorPlanImage = function() {
+    const viewerState = window._imageViewerState;
+    const index = viewerState?.currentIndex ?? 0;
+    confirmDeleteImage('floorplan', index);
 };
 
 // 외관 이미지 추가
@@ -3860,38 +4008,11 @@ window.addExteriorImage = function() {
     input.click();
 };
 
-// 외관 이미지 삭제
-window.deleteExteriorImage = async function() {
-    // 뷰어 상태에서 현재 인덱스 가져오기
+// 외관 이미지 삭제 (뷰어에서 호출 - 확인 모달 거침)
+window.deleteExteriorImage = function() {
     const viewerState = window._imageViewerState;
     const index = viewerState?.currentIndex ?? 0;
-    
-    if (!confirm('이 외관 이미지를 삭제하시겠습니까?')) return;
-    
-    const b = state.selectedBuilding;
-    if (!b) return;
-    
-    let exteriorImages = b.images?.exterior || [];
-    exteriorImages = exteriorImages.filter((_, i) => i !== index);
-    
-    try {
-        // Firebase 업데이트
-        await update(ref(db, `buildings/${b.id}/images`), {
-            exterior: exteriorImages
-        });
-        
-        // 로컬 상태 업데이트
-        if (!b.images) b.images = {};
-        b.images.exterior = exteriorImages;
-        b.exteriorImages = exteriorImages.map(img => typeof img === 'string' ? { url: img } : img);
-        
-        showToast('외관 사진이 삭제되었습니다', 'success');
-        closeImageViewer();
-        renderInfoSection();
-    } catch (err) {
-        console.error('외관 사진 삭제 실패:', err);
-        showToast('외관 사진 삭제 실패', 'error');
-    }
+    confirmDeleteImage('exterior', index);
 };
 
 // ===== ★ v2.0: 공실 편집/삭제/이관 기능 =====

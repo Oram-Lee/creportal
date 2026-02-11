@@ -324,13 +324,15 @@ export function processBuildings() {
                 landArea: b.area?.landArea || b.landArea,
                 buildingArea: b.area?.buildingArea || b.buildingArea,
                 
-                // 가격
-                rent: b.pricing?.rent,
-                rentPy: b.pricing?.rentPy,
-                maintenance: b.pricing?.maintenance,
-                maintenancePy: b.pricing?.maintenancePy,
-                deposit: b.pricing?.deposit,
-                depositPy: b.pricing?.depositPy,
+                // ★ pricing 객체 전체 (편집 모달용)
+                pricing: b.pricing,
+                // 가격 (개별 필드 - 하위 호환, nested + flat fallback)
+                rent: b.pricing?.rent || b.rent,
+                rentPy: b.pricing?.rentPy || b.rentPy,
+                maintenance: b.pricing?.maintenance || b.maintenance,
+                maintenancePy: b.pricing?.maintenancePy || b.maintenancePy,
+                deposit: b.pricing?.deposit || b.deposit,
+                depositPy: b.pricing?.depositPy || b.depositPy,
                 
                 // ★ specs 객체 전체 (건축물대장 갱신용)
                 specs: b.specs,
