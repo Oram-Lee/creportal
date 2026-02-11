@@ -13,7 +13,7 @@ import { state } from './portal-state.js';
 import { formatNumber, showToast } from './portal-utils.js';
 import { panToBuilding } from './portal-map.js';
 import { toggleStar } from './portal-ui.js';
-import { db, ref, update, remove, set } from './portal-firebase.js';
+import { db, ref, update, remove, set, get, push } from './portal-firebase.js';
 
 // ★ v3.10: state를 전역으로 노출 (portal.html의 담당자 CRUD 함수에서 사용)
 window.state = state;
@@ -655,25 +655,36 @@ export async function refreshVacanciesSection() {
         if (snapshot.exists()) {
             const vacancyData = snapshot.val();
             
-            // documents 배열로 변환
-            const documents = [];
+            // 배열로 변환 (_key 보존)
+            const entries = [];
             Object.entries(vacancyData).forEach(([key, val]) => {
                 if (val && typeof val === 'object') {
-                    documents.push({ id: key, ...val });
+                    entries.push({ _key: key, id: key, ...val });
                 }
             });
             
-            // state.selectedBuilding.documents 업데이트
-            state.selectedBuilding.documents = documents;
+            // ★ documents와 vacancies 모두 업데이트
+            state.selectedBuilding.documents = entries;
+            state.selectedBuilding.vacancies = entries;
+            state.selectedBuilding.vacancyCount = entries.length;
+            
+            // allBuildings에서도 업데이트
+            const buildingInAll = state.allBuildings?.find(b => b.id === buildingId);
+            if (buildingInAll) {
+                buildingInAll.vacancies = entries;
+                buildingInAll.vacancyCount = entries.length;
+            }
             
             // 안내문 섹션 다시 렌더링
             renderDocumentSection();
             
             if (window.showToast) {
-                showToast(`공실 데이터 새로고침 완료 (${documents.length}건)`, 'success');
+                showToast(`공실 데이터 새로고침 완료 (${entries.length}건)`, 'success');
             }
         } else {
             state.selectedBuilding.documents = [];
+            state.selectedBuilding.vacancies = [];
+            state.selectedBuilding.vacancyCount = 0;
             renderDocumentSection();
             showToast('공실 데이터 없음', 'info');
         }
@@ -1072,7 +1083,7 @@ export async function setOfficialPricing(pricingId) {
         
         showToast(`'${officialPricing.label || '기준가'}'가 공식 기준가로 적용되었습니다`, 'success');
         renderPricingSection();
-        renderBasicInfo();
+        renderInfoSection();
         
         // 빌딩 목록도 새로고침
         if (window.renderBuildingList) {
@@ -1101,7 +1112,7 @@ export async function unsetOfficialPricing(pricingId) {
         b.floorPricing[pricingIdx].isOfficial = false;
         delete b.floorPricing[pricingIdx].officialAt;
         
-        await update(ref(db, `buildings/${b.id}/floorPricing`), b.floorPricing);
+        await set(ref(db, `buildings/${b.id}/floorPricing`), b.floorPricing);
         
         showToast('공식 기준가가 해제되었습니다', 'success');
         renderPricingSection();
@@ -1890,8 +1901,31 @@ export function renderDocumentSection() {
     }
     
     // ★ v3.13: docs가 없을 때만 early return (vacancies 없어도 _meta로 만실 여부 확인 가능)
+    // ★ v3.15: vacancies에는 있지만 docs에 없는 출처/기간 조합을 합성 doc으로 추가
+    // (직접입력 등 수동 추가된 공실이 출처 탭에 나타나도록)
+    const docKeySet = new Set(docs.map(d => `${d.source || '기타'}|${d.publishDate || ''}`));
+    const vacancySourceMap = {};
+    vacancies.forEach(v => {
+        const key = `${v.source || '기타'}|${v.publishDate || ''}`;
+        if (!docKeySet.has(key)) {
+            if (!vacancySourceMap[key]) {
+                vacancySourceMap[key] = { source: v.source || '기타', publishDate: v.publishDate || '', floors: [], count: 0 };
+            }
+            vacancySourceMap[key].floors.push(v.floor);
+            vacancySourceMap[key].count++;
+        }
+    });
+    Object.values(vacancySourceMap).forEach(synth => {
+        docs.push({
+            source: synth.source,
+            publishDate: synth.publishDate,
+            vacancyCount: synth.count,
+            floors: synth.floors,
+            fromManualEntry: true  // 수동 추가 표시
+        });
+    });
+    
     if (docs.length === 0) {
-        const now = new Date();
         document.getElementById('sectionDocument').innerHTML = `
             <div class="section-title">📄 임대안내문</div>
             <div style="padding: 20px 0;">
@@ -1899,51 +1933,18 @@ export function renderDocumentSection() {
                     <div style="font-size: 13px; color: var(--text-muted);">
                         등록된 임대안내문이 없습니다
                     </div>
-                    <button onclick="addBuildingOnlyToCompList()" 
-                            style="padding: 6px 14px; background: var(--bg-tertiary, #f3f4f6); color: var(--text-primary, #333); border: none; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
-                        <span>📋</span> 빌딩 정보만 담기
-                    </button>
-                </div>
-                
-                <div id="inlineVacancyForm" style="padding: 16px; background: #f0f9ff; border: 2px dashed var(--accent-color, #2563eb); border-radius: 8px;">
-                    <div style="font-size: 13px; font-weight: 600; color: var(--accent-color, #2563eb); margin-bottom: 12px;">➕ 공실 정보 직접 입력</div>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px;">
-                        <div>
-                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">공실층 *</label>
-                            <input type="text" id="inlineVacancyFloor" placeholder="예: 10F" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                        </div>
-                        <div>
-                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">임대면적(평)</label>
-                            <input type="number" id="inlineVacancyRentArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                        </div>
-                        <div>
-                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">전용면적(평)</label>
-                            <input type="number" id="inlineVacancyExclusiveArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                        </div>
-                        <div>
-                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">임대료/평 *</label>
-                            <input type="number" id="inlineVacancyRentPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                        </div>
-                        <div>
-                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">보증금/평</label>
-                            <input type="number" id="inlineVacancyDepositPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                        </div>
-                        <div>
-                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">관리비/평</label>
-                            <input type="number" id="inlineVacancyMaintenancePy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                        </div>
-                        <div>
-                            <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">입주시기</label>
-                            <input type="text" id="inlineVacancyMoveIn" placeholder="즉시, 25년3월" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                        </div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="font-size: 11px; color: #888;">
-                            📅 ${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')} · 사용자 직접입력
-                        </div>
-                        <button onclick="saveInlineVacancy()" style="padding: 8px 16px; border: none; border-radius: 4px; background: var(--accent-color, #2563eb); color: white; cursor: pointer; font-size: 12px; font-weight: 500;">Comp List에 추가</button>
+                    <div style="display: flex; gap: 6px;">
+                        <button onclick="showInlineVacancyForm('manual')" 
+                                style="padding: 6px 14px; background: var(--accent-color, #2563eb); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
+                            <span>➕</span> 공실 직접입력
+                        </button>
+                        <button onclick="addBuildingOnlyToCompList()" 
+                                style="padding: 6px 14px; background: var(--bg-tertiary, #f3f4f6); color: var(--text-primary, #333); border: none; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
+                            <span>📋</span> 빌딩 정보만 담기
+                        </button>
                     </div>
                 </div>
+                <div id="inlineVacancyForm" style="display: none; margin-top: 12px; padding: 16px; background: #f0f9ff; border: 2px dashed var(--accent-color, #2563eb); border-radius: 8px;"></div>
             </div>
         `;
         return;
@@ -2028,50 +2029,9 @@ export function renderDocumentSection() {
     // 전역 상태에 현재 표시 중인 공실 저장 (선택 시 사용)
     state.currentDisplayedVacancies = vacanciesWithId;
     
-    // 인라인 입력 폼 HTML
+    // ★ v3.15: 인라인 입력 폼 컨테이너 (showInlineVacancyForm()이 동적으로 내용 채움)
     const inlineInputFormHtml = `
-        <div id="inlineVacancyForm" style="display: none; margin-top: 12px; padding: 16px; background: #f0f9ff; border: 2px dashed var(--accent-color); border-radius: 8px;">
-            <div style="font-size: 13px; font-weight: 600; color: var(--accent-color); margin-bottom: 12px;">➕ 공실 정보 직접 입력</div>
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px;">
-                <div>
-                    <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">공실층 *</label>
-                    <input type="text" id="inlineVacancyFloor" placeholder="예: 10F" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">임대면적(평)</label>
-                    <input type="number" id="inlineVacancyRentArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">전용면적(평)</label>
-                    <input type="number" id="inlineVacancyExclusiveArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">임대료/평 *</label>
-                    <input type="number" id="inlineVacancyRentPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">보증금/평</label>
-                    <input type="number" id="inlineVacancyDepositPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">관리비/평</label>
-                    <input type="number" id="inlineVacancyMaintenancePy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                </div>
-                <div>
-                    <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">입주시기</label>
-                    <input type="text" id="inlineVacancyMoveIn" placeholder="즉시, 25년3월" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-                </div>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="font-size: 11px; color: #888;">
-                    📅 ${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')} · 사용자 직접입력
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="hideInlineVacancyForm()" style="padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">취소</button>
-                    <button onclick="saveInlineVacancy()" style="padding: 8px 16px; border: none; border-radius: 4px; background: var(--accent-color); color: white; cursor: pointer; font-size: 12px; font-weight: 500;">Comp List에 추가</button>
-                </div>
-            </div>
-        </div>
+        <div id="inlineVacancyForm" style="display: none; margin-top: 12px; padding: 16px; background: #f0f9ff; border: 2px dashed var(--accent-color); border-radius: 8px;"></div>
     `;
     
     // 공실 테이블 HTML
@@ -2284,14 +2244,21 @@ export function renderDocumentSection() {
         <div class="doc-filter-section" style="margin-bottom: 12px;">
             <div class="doc-filter-label" style="font-size: 12px; color: var(--text-muted); margin-bottom: 6px;">🏢 회사별</div>
             <div class="doc-filter-tabs" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                ${sourceList.map(source => `
+                ${sourceList.map(source => {
+                    const isManual = source === '직접입력';
+                    const icon = isManual ? '✏️ ' : '';
+                    return `
                     <button class="doc-source-tab" 
                             onclick="selectDocSource('${source}')"
                             style="padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid var(--border-color); transition: all 0.2s;
-                                   ${state.selectedDocSource === source ? 'background: var(--accent-color); color: white; border-color: var(--accent-color);' : 'background: var(--bg-secondary); color: var(--text-primary);'}">
-                        ${source} <span style="opacity: 0.7;">${sourceGroups[source].length}</span>
-                    </button>
-                `).join('')}
+                                   ${state.selectedDocSource === source 
+                                       ? 'background: var(--accent-color); color: white; border-color: var(--accent-color);' 
+                                       : isManual 
+                                           ? 'background: #f0fdf4; color: #166534; border-color: #bbf7d0;' 
+                                           : 'background: var(--bg-secondary); color: var(--text-primary);'}">
+                        ${icon}${source} <span style="opacity: 0.7;">${sourceGroups[source].length}</span>
+                    </button>`;
+                }).join('')}
             </div>
         </div>
         
@@ -2511,35 +2478,136 @@ export function addBuildingOnlyToCompList() {
 
 // ===== 인라인 공실 입력 폼 =====
 
-export function showInlineVacancyForm() {
+export function showInlineVacancyForm(mode) {
+    // mode: 'current' = 현재 출처에 추가, 'manual' = 새로 직접입력, undefined = 선택 UI 표시
+    
     const form = document.getElementById('inlineVacancyForm');
-    if (form) {
+    if (!form) return;
+    
+    if (!mode) {
+        // ★ 유형 선택 UI 표시
+        const currentSource = state.selectedDocSource;
+        const currentPeriod = state.selectedDocPeriod;
+        const hasCurrentSource = currentSource && currentSource !== 'all' && currentSource !== '직접입력';
+        
         form.style.display = 'block';
-        // 첫 번째 입력 필드에 포커스
+        form.innerHTML = `
+            <div style="font-size: 13px; font-weight: 600; color: var(--accent-color); margin-bottom: 14px;">➕ 공실 추가 유형 선택</div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                ${hasCurrentSource ? `
+                <button onclick="showInlineVacancyForm('current')" 
+                        style="flex: 1; min-width: 200px; padding: 16px; background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 10px; cursor: pointer; text-align: left;">
+                    <div style="font-size: 13px; font-weight: 700; color: #1e40af; margin-bottom: 6px;">📋 현재 출처에 추가</div>
+                    <div style="font-size: 12px; color: #3b82f6; margin-bottom: 8px;">
+                        <strong>${currentSource}</strong> ${currentPeriod !== 'all' ? currentPeriod : ''} 리스트에 누락된 공실 추가
+                    </div>
+                    <div style="font-size: 11px; color: #64748b;">OCR 처리가 누락된 공실을 해당 출처 리스트에 직접 추가합니다</div>
+                </button>` : ''}
+                <button onclick="showInlineVacancyForm('manual')" 
+                        style="flex: 1; min-width: 200px; padding: 16px; background: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 10px; cursor: pointer; text-align: left;">
+                    <div style="font-size: 13px; font-weight: 700; color: #166534; margin-bottom: 6px;">✏️ 새로 직접입력</div>
+                    <div style="font-size: 12px; color: #16a34a; margin-bottom: 8px;">
+                        출처 없이 새로운 공실 정보를 직접 입력
+                    </div>
+                    <div style="font-size: 11px; color: #64748b;">별도 출처 정보 없이 수동으로 공실을 등록합니다</div>
+                </button>
+            </div>
+            <div style="text-align: right; margin-top: 10px;">
+                <button onclick="hideInlineVacancyForm()" style="padding: 6px 14px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 12px; color: #666;">취소</button>
+            </div>
+        `;
+        return;
+    }
+    
+    // ★ 출처 결정
+    let sourceLabel, sourceValue, periodValue;
+    if (mode === 'current') {
+        sourceValue = state.selectedDocSource;
+        periodValue = state.selectedDocPeriod !== 'all' ? state.selectedDocPeriod : '';
+        sourceLabel = `${sourceValue} ${periodValue}`.trim();
+    } else {
+        sourceValue = '직접입력';
+        const now = new Date();
+        periodValue = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        sourceLabel = `직접입력 · ${periodValue}`;
+    }
+    
+    form.style.display = 'block';
+    form.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--accent-color);">
+                ➕ 공실 정보 입력 
+                <span style="font-size: 11px; padding: 2px 8px; background: ${mode === 'current' ? '#dbeafe' : '#dcfce7'}; color: ${mode === 'current' ? '#1e40af' : '#166534'}; border-radius: 10px; margin-left: 6px;">
+                    ${mode === 'current' ? '📋 ' + sourceValue : '✏️ 직접입력'}
+                </span>
+            </div>
+            <button onclick="showInlineVacancyForm()" style="font-size: 11px; color: var(--accent-color); background: none; border: none; cursor: pointer; text-decoration: underline;">← 유형 변경</button>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px;">
+            <div>
+                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">공실층 *</label>
+                <input type="text" id="inlineVacancyFloor" placeholder="예: 10F" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">임대면적(평)</label>
+                <input type="number" id="inlineVacancyRentArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">전용면적(평)</label>
+                <input type="number" id="inlineVacancyExclusiveArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">임대료/평 *</label>
+                <input type="number" id="inlineVacancyRentPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">보증금/평</label>
+                <input type="number" id="inlineVacancyDepositPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">관리비/평</label>
+                <input type="number" id="inlineVacancyMaintenancePy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">입주시기</label>
+                <input type="text" id="inlineVacancyMoveIn" placeholder="즉시, 25년3월" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+            </div>
+        </div>
+        <input type="hidden" id="inlineVacancySource" value="${sourceValue}">
+        <input type="hidden" id="inlineVacancyPeriod" value="${periodValue}">
+        <input type="hidden" id="inlineVacancyMode" value="${mode}">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 11px; color: #888;">
+                📅 ${sourceLabel}
+            </div>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="hideInlineVacancyForm()" style="padding: 8px 16px; border: 1px solid #d1d5db; border-radius: 4px; background: white; cursor: pointer; font-size: 12px;">취소</button>
+                <button onclick="saveInlineVacancy()" style="padding: 8px 16px; border: none; border-radius: 4px; background: var(--accent-color); color: white; cursor: pointer; font-size: 12px; font-weight: 500;">💾 저장</button>
+            </div>
+        </div>
+    `;
+    
+    // 첫 번째 입력 필드에 포커스
+    setTimeout(() => {
         const firstInput = document.getElementById('inlineVacancyFloor');
         if (firstInput) firstInput.focus();
-    }
+    }, 100);
 }
 
 export function hideInlineVacancyForm() {
     const form = document.getElementById('inlineVacancyForm');
     if (form) {
         form.style.display = 'none';
-        // 입력값 초기화
-        clearInlineVacancyForm();
+        form.innerHTML = '';  // ★ 동적 컨텐츠 초기화
     }
 }
 
 function clearInlineVacancyForm() {
-    const fields = ['inlineVacancyFloor', 'inlineVacancyRentArea', 'inlineVacancyExclusiveArea', 
-                    'inlineVacancyRentPy', 'inlineVacancyDepositPy', 'inlineVacancyMaintenancePy', 'inlineVacancyMoveIn'];
-    fields.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
+    // 동적 폼이므로 hideInlineVacancyForm에서 처리
+    hideInlineVacancyForm();
 }
 
-export function saveInlineVacancy() {
+export async function saveInlineVacancy() {
     const building = state.selectedBuilding;
     if (!building) {
         showToast('빌딩 정보가 없습니다', 'error');
@@ -2568,6 +2636,11 @@ export function saveInlineVacancy() {
     const depositPyStr = document.getElementById('inlineVacancyDepositPy')?.value?.trim();
     const maintenancePyStr = document.getElementById('inlineVacancyMaintenancePy')?.value?.trim();
     
+    // ★ 출처/기간 정보
+    const source = document.getElementById('inlineVacancySource')?.value || '직접입력';
+    const publishDate = document.getElementById('inlineVacancyPeriod')?.value || '';
+    const mode = document.getElementById('inlineVacancyMode')?.value || 'manual';
+    
     const now = new Date();
     const vacancyData = {
         floor: floor,
@@ -2577,55 +2650,56 @@ export function saveInlineVacancy() {
         depositPy: depositPyStr && !isNaN(parseFloat(depositPyStr)) ? formatNumber(parseFloat(depositPyStr)) : '',
         maintenancePy: maintenancePyStr && !isNaN(parseFloat(maintenancePyStr)) ? formatNumber(parseFloat(maintenancePyStr)) : '',
         moveInDate: document.getElementById('inlineVacancyMoveIn')?.value?.trim() || '즉시',
-        source: '사용자 직접입력',
-        publishDate: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+        source: source,
+        publishDate: publishDate,
+        addedManually: true,
+        addedBy: state.currentUser?.email || state.currentUser?.name || 'unknown',
+        addedAt: now.toISOString()
     };
     
-    // Comp List에 추가
-    if (typeof window.addBuildingToCompList === 'function') {
-        // 이미 빌딩이 있으면 공실만 추가, 없으면 빌딩과 함께 추가
-        if (typeof window.compListState !== 'undefined') {
-            const existingBuilding = window.compListState.currentList.buildings.find(b => b.buildingId === building.id);
-            if (existingBuilding) {
-                // 기존 빌딩에 공실 추가
-                existingBuilding.vacancies.push({
-                    id: `v_${Date.now()}`,
-                    ...vacancyData,
-                    addedBy: {
-                        id: state.currentUser?.id || '',
-                        name: state.currentUser?.name || state.currentUser?.email || '',
-                        addedAt: now.toISOString()
-                    }
-                });
-                // 로컬 스토리지 저장
-                try {
-                    localStorage.setItem('cre_complist_current', JSON.stringify(window.compListState.currentList));
-                } catch (e) { console.warn('저장 실패:', e); }
-                
-                // 플로팅 버튼 업데이트
-                if (typeof window.updateFloatingButton === 'function') {
-                    window.updateFloatingButton();
-                }
-                
-                showToast(`${building.name}에 공실 ${floor} 추가됨`, 'success');
-            } else {
-                // 새 빌딩으로 추가
-                window.addBuildingToCompList(building, [vacancyData]);
-            }
-        } else {
-            window.addBuildingToCompList(building, [vacancyData]);
+    try {
+        // ★ Firebase에 저장
+        const newVacancyRef = push(ref(db, `vacancies/${building.id}`));
+        await set(newVacancyRef, vacancyData);
+        
+        console.log('✅ 공실 Firebase 저장 완료:', `vacancies/${building.id}`, vacancyData);
+        
+        // ★ 로컬 상태 업데이트 (즉시 반영)
+        if (!building.vacancies) building.vacancies = [];
+        building.vacancies.push({
+            ...vacancyData,
+            _key: newVacancyRef.key
+        });
+        building.vacancyCount = building.vacancies.length;
+        
+        // allBuildings에서도 업데이트
+        const buildingInAll = state.allBuildings.find(b => b.id === building.id);
+        if (buildingInAll) {
+            if (!buildingInAll.vacancies) buildingInAll.vacancies = [];
+            buildingInAll.vacancies.push({
+                ...vacancyData,
+                _key: newVacancyRef.key
+            });
+            buildingInAll.vacancyCount = buildingInAll.vacancies.length;
         }
         
-        // 입력값 초기화
-        clearInlineVacancyForm();
+        showToast(`${building.name} ${floor} 공실 추가 완료 (${source})`, 'success');
         
-        // 공실이 있었던 경우 폼 숨기기
-        if (state.currentDisplayedVacancies && state.currentDisplayedVacancies.length > 0) {
-            hideInlineVacancyForm();
+        // ★ 폼 숨기고 안내문 섹션 새로고침
+        hideInlineVacancyForm();
+        
+        // 현재 선택된 출처를 저장된 출처로 설정 (새로 추가한 공실이 바로 보이도록)
+        if (mode === 'current') {
+            state.selectedDocSource = source;
+        } else if (mode === 'manual') {
+            state.selectedDocSource = source; // '직접입력'
         }
         
-    } else {
-        showToast('Comp List 모듈이 로드되지 않았습니다', 'error');
+        renderDocumentSection();
+        
+    } catch (error) {
+        console.error('공실 저장 오류:', error);
+        showToast('저장 중 오류가 발생했습니다: ' + error.message, 'error');
     }
 }
 

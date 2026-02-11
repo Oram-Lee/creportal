@@ -749,3 +749,26 @@ window.renderAliasesSection = renderAliasesSection;
 window.mergeExtractAddressKey = mergeExtractAddressKey;
 window.mergeStringSimilarity = mergeStringSimilarity;
 window.normalizeBuildingName = normalizeBuildingName;
+window.updateMergePreview = updateMergePreview;
+
+// ★ Master 변경 시 필드별 라디오 기본값 업데이트
+function updateMergePreview() {
+    const masterRadio = document.querySelector('input[name="masterBuilding"]:checked');
+    if (!masterRadio) return;
+    const masterIdx = masterRadio.dataset.idx;
+    
+    // 모든 필드 비교 라디오에서 master 빌딩 값을 기본 선택
+    document.querySelectorAll('#mergeFieldComparison input[type="radio"]').forEach(radio => {
+        if (radio.value === masterIdx) {
+            radio.checked = true;
+        }
+    });
+    
+    // Master 라디오 버튼 스타일 업데이트
+    document.querySelectorAll('input[name="masterBuilding"]').forEach(radio => {
+        const container = radio.closest('label')?.querySelector('div');
+        if (container) {
+            container.style.borderColor = radio.checked ? '#3b82f6' : '#e2e8f0';
+        }
+    });
+}
