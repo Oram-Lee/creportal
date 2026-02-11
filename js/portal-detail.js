@@ -594,6 +594,23 @@ export function renderInfoSection() {
             <div class="spec-item"><span class="label">소유자</span><span class="value">${b.owner || '-'}</span></div>
         </div>
         
+        <!-- ★ 건축물대장 전유부/층별개요 조회 버튼 -->
+        <div style="margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+            <button onclick="fetchBuildingFloorDetail('floorOutline')" 
+                    style="padding: 6px 12px; font-size: 11px; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                🏗️ 층별개요 조회
+            </button>
+            <button onclick="fetchBuildingFloorDetail('exposeInfo')" 
+                    style="padding: 6px 12px; font-size: 11px; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                📋 전유부 조회
+            </button>
+            <button onclick="fetchBuildingFloorDetail('exposeAreaInfo')" 
+                    style="padding: 6px 12px; font-size: 11px; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                📐 전유공용면적 조회
+            </button>
+        </div>
+        <div id="floorDetailContainer" style="margin-top: 8px;"></div>
+        
         <!-- 빌딩 정보 편집 버튼 -->
         <div style="margin-top: 16px; text-align: center;">
             <button onclick="openBuildingEditModal()" style="padding: 10px 24px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); cursor: pointer; font-size: 13px;">
@@ -2877,6 +2894,328 @@ export function addSelectedVacanciesToCompList() {
 
 // ===== 건축물대장 불러오기 =====
 // 참고: refreshBuildingLedger 함수는 portal-misc.js에서 전역으로 등록됨
+
+// ===== ★ 건축물대장 전유부/층별개요 조회 =====
+
+/**
+ * 건축물대장 층별상세 데이터 조회
+ * @param {string} viewType - 'floorOutline' | 'exposeInfo' | 'exposeAreaInfo'
+ */
+export async function fetchBuildingFloorDetail(viewType = 'floorOutline') {
+    const building = state.selectedBuilding;
+    if (!building) {
+        showToast('빌딩을 먼저 선택하세요', 'error');
+        return;
+    }
+    
+    const address = building.address || building.addressJibun || building.addressRoad;
+    if (!address) {
+        showToast('주소 정보가 없습니다', 'error');
+        return;
+    }
+    
+    const container = document.getElementById('floorDetailContainer');
+    if (!container) return;
+    
+    // 로딩 표시
+    const typeLabels = {
+        'floorOutline': '층별개요',
+        'exposeInfo': '전유부',
+        'exposeAreaInfo': '전유공용면적'
+    };
+    container.innerHTML = `
+        <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+            <div style="font-size: 20px; margin-bottom: 8px;">⏳</div>
+            <div style="font-size: 12px;">건축물대장 ${typeLabels[viewType]} 조회 중...</div>
+        </div>
+    `;
+    
+    try {
+        const API_URL = window.API_BASE_URL || 'https://portal-dsyl.onrender.com';
+        const response = await fetch(`${API_URL}/api/building-register/floor-detail?address=${encodeURIComponent(address)}`);
+        const data = await response.json();
+        
+        if (!data.success || !data.results) {
+            throw new Error(data.error || '조회 결과가 없습니다');
+        }
+        
+        const results = data.results;
+        const targetData = results[viewType];
+        
+        if (!targetData || targetData.length === 0) {
+            // 다른 데이터 타입에는 있는지 체크
+            const available = Object.keys(results).filter(k => results[k] && results[k].length > 0);
+            let altMsg = '';
+            if (available.length > 0) {
+                const altLabels = available.map(k => typeLabels[k] || k).join(', ');
+                altMsg = `<div style="margin-top: 8px; font-size: 11px;">사용 가능한 데이터: ${altLabels}</div>`;
+            }
+            container.innerHTML = `
+                <div style="text-align: center; padding: 20px; background: #fef3c7; border-radius: 8px; border: 1px solid #fbbf24;">
+                    <div style="font-size: 18px; margin-bottom: 6px;">📭</div>
+                    <div style="font-size: 12px; color: #92400e;">
+                        ${typeLabels[viewType]} 데이터가 없습니다.<br>
+                        <span style="font-size: 11px; color: #a16207;">집합건축물(구분소유)이 아닌 경우 전유부 데이터가 없을 수 있습니다.</span>
+                    </div>
+                    ${altMsg}
+                </div>
+            `;
+            return;
+        }
+        
+        // 데이터 렌더링
+        renderFloorDetailData(container, viewType, targetData, typeLabels[viewType]);
+        
+        // 캐시 저장 (같은 빌딩 재조회 방지)
+        if (!building._floorDetailCache) building._floorDetailCache = {};
+        building._floorDetailCache[viewType] = targetData;
+        
+    } catch (error) {
+        console.error('건축물대장 층별상세 조회 오류:', error);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 16px; background: #fef2f2; border-radius: 8px; border: 1px solid #fca5a5;">
+                <div style="font-size: 12px; color: #dc2626;">❌ 조회 실패: ${error.message}</div>
+            </div>
+        `;
+    }
+}
+
+/**
+ * 층별상세 데이터 렌더링
+ */
+function renderFloorDetailData(container, viewType, data, label) {
+    if (viewType === 'floorOutline') {
+        renderFloorOutline(container, data, label);
+    } else if (viewType === 'exposeInfo') {
+        renderExposeInfo(container, data, label);
+    } else if (viewType === 'exposeAreaInfo') {
+        renderExposeAreaInfo(container, data, label);
+    }
+}
+
+/**
+ * 층별개요 렌더링 - 층별 면적/용도 테이블
+ */
+function renderFloorOutline(container, data, label) {
+    // 지상 → 내림차순, 지하 → 오름차순 정렬
+    const above = data.filter(d => d.flrGbCdNm === '지상').sort((a, b) => b.flrNo - a.flrNo);
+    const below = data.filter(d => d.flrGbCdNm === '지하').sort((a, b) => a.flrNo - b.flrNo);
+    const sorted = [...above, ...below];
+    
+    // 총면적 계산
+    const totalArea = data.reduce((sum, d) => sum + (d.area || 0), 0);
+    const totalPy = (totalArea / 3.3058).toFixed(1);
+    
+    let html = `
+        <div style="background: white; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+            <div style="padding: 8px 12px; background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 12px; font-weight: 600;">🏗️ ${label} (${data.length}개 층)</span>
+                <span style="font-size: 11px; opacity: 0.9;">총 ${formatNumber(Math.round(totalArea))}㎡ (${formatNumber(totalPy)}평)</span>
+                <button onclick="document.getElementById('floorDetailContainer').innerHTML=''" 
+                        style="background: none; border: none; color: white; cursor: pointer; font-size: 14px; padding: 0 4px;">✕</button>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                    <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                        <tr>
+                            <th style="padding: 6px 8px; text-align: center; border-bottom: 2px solid #e5e7eb; font-weight: 600; width: 60px;">층</th>
+                            <th style="padding: 6px 8px; text-align: center; border-bottom: 2px solid #e5e7eb; font-weight: 600;">구조</th>
+                            <th style="padding: 6px 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 600;">용도</th>
+                            <th style="padding: 6px 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600; width: 80px;">면적(㎡)</th>
+                            <th style="padding: 6px 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600; width: 70px;">면적(평)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    sorted.forEach((item, idx) => {
+        const floorLabel = item.flrGbCdNm === '지하' ? `B${item.flrNo}` : `${item.flrNo}F`;
+        const areaPy = item.area ? (item.area / 3.3058).toFixed(1) : '-';
+        const usage = item.mainPurpsCdNm || item.etcPurps || '-';
+        const bgColor = idx % 2 === 0 ? 'white' : '#f9fafb';
+        const isBelow = item.flrGbCdNm === '지하';
+        
+        html += `
+            <tr style="background: ${bgColor};">
+                <td style="padding: 5px 8px; text-align: center; border-bottom: 1px solid #f0f0f0; font-weight: 600; color: ${isBelow ? '#dc2626' : '#1d4ed8'};">${floorLabel}</td>
+                <td style="padding: 5px 8px; text-align: center; border-bottom: 1px solid #f0f0f0; color: #6b7280; font-size: 10px;">${item.strctCdNm || '-'}</td>
+                <td style="padding: 5px 8px; text-align: left; border-bottom: 1px solid #f0f0f0;">${usage}</td>
+                <td style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #f0f0f0; font-family: monospace;">${item.area ? formatNumber(Math.round(item.area)) : '-'}</td>
+                <td style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #f0f0f0; font-family: monospace; color: #6b7280;">${areaPy}</td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+/**
+ * 전유부 렌더링 - 호실별 목록 (층별 그룹핑)
+ */
+function renderExposeInfo(container, data, label) {
+    // 층별 그룹핑
+    const floorMap = {};
+    data.forEach(item => {
+        const floorKey = `${item.flrGbCdNm}_${item.flrNo}`;
+        if (!floorMap[floorKey]) {
+            floorMap[floorKey] = {
+                flrGbCdNm: item.flrGbCdNm,
+                flrNo: item.flrNo,
+                units: []
+            };
+        }
+        floorMap[floorKey].units.push(item);
+    });
+    
+    // 정렬: 지상 내림차순, 지하 오름차순
+    const floors = Object.values(floorMap).sort((a, b) => {
+        if (a.flrGbCdNm === '지상' && b.flrGbCdNm === '지하') return -1;
+        if (a.flrGbCdNm === '지하' && b.flrGbCdNm === '지상') return 1;
+        if (a.flrGbCdNm === '지상') return b.flrNo - a.flrNo;
+        return a.flrNo - b.flrNo;
+    });
+    
+    let html = `
+        <div style="background: white; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+            <div style="padding: 8px 12px; background: linear-gradient(135deg, #059669, #047857); color: white; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 12px; font-weight: 600;">📋 ${label} (총 ${data.length}개 호실)</span>
+                <button onclick="document.getElementById('floorDetailContainer').innerHTML=''" 
+                        style="background: none; border: none; color: white; cursor: pointer; font-size: 14px; padding: 0 4px;">✕</button>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto; padding: 8px;">
+    `;
+    
+    floors.forEach(floor => {
+        const floorLabel = floor.flrGbCdNm === '지하' ? `B${floor.flrNo}` : `${floor.flrNo}F`;
+        const isBelow = floor.flrGbCdNm === '지하';
+        const unitNames = floor.units.map(u => u.hoNm || '?').sort();
+        
+        html += `
+            <div style="margin-bottom: 6px; padding: 6px 10px; background: ${isBelow ? '#fef2f2' : '#eff6ff'}; border-radius: 6px; border-left: 3px solid ${isBelow ? '#dc2626' : '#3b82f6'};">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 12px; font-weight: 700; color: ${isBelow ? '#dc2626' : '#1d4ed8'};">${floorLabel}</span>
+                    <span style="font-size: 10px; color: #6b7280;">${floor.units.length}개 호실</span>
+                </div>
+                <div style="margin-top: 4px; display: flex; flex-wrap: wrap; gap: 4px;">
+                    ${unitNames.map(name => `
+                        <span style="padding: 2px 6px; background: white; border-radius: 3px; font-size: 10px; color: #374151; border: 1px solid #e5e7eb;">${name}</span>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+/**
+ * 전유공용면적 렌더링 - 호실별 면적 테이블
+ */
+function renderExposeAreaInfo(container, data, label) {
+    // 전유부만 필터 (공용부 제외하고 보여줄 수도 있음)
+    const privateOnly = data.filter(d => d.exposPubuseGbCdNm === '전유');
+    const publicOnly = data.filter(d => d.exposPubuseGbCdNm === '공용');
+    
+    // 층별 그룹핑 (전유 기준)
+    const displayData = privateOnly.length > 0 ? privateOnly : data;
+    
+    // 호실별로 그룹핑 → 같은 호실의 면적 합산
+    const unitMap = {};
+    displayData.forEach(item => {
+        const key = `${item.flrGbCdNm}_${item.flrNo}_${item.hoNm || 'unknown'}`;
+        if (!unitMap[key]) {
+            unitMap[key] = { ...item, totalArea: 0 };
+        }
+        unitMap[key].totalArea += item.area || 0;
+    });
+    
+    const units = Object.values(unitMap).sort((a, b) => {
+        if (a.flrGbCdNm === '지상' && b.flrGbCdNm === '지하') return -1;
+        if (a.flrGbCdNm === '지하' && b.flrGbCdNm === '지상') return 1;
+        if (a.flrGbCdNm === '지상') return b.flrNo - a.flrNo || (a.hoNm || '').localeCompare(b.hoNm || '');
+        return a.flrNo - b.flrNo || (a.hoNm || '').localeCompare(b.hoNm || '');
+    });
+    
+    const totalArea = displayData.reduce((sum, d) => sum + (d.area || 0), 0);
+    const totalPy = (totalArea / 3.3058).toFixed(1);
+    
+    let html = `
+        <div style="background: white; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+            <div style="padding: 8px 12px; background: linear-gradient(135deg, #d97706, #b45309); color: white; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 12px; font-weight: 600;">📐 ${label} ${privateOnly.length > 0 ? '(전유)' : ''}</span>
+                <span style="font-size: 11px; opacity: 0.9;">총 ${formatNumber(Math.round(totalArea))}㎡ (${formatNumber(totalPy)}평)</span>
+                <button onclick="document.getElementById('floorDetailContainer').innerHTML=''" 
+                        style="background: none; border: none; color: white; cursor: pointer; font-size: 14px; padding: 0 4px;">✕</button>
+            </div>
+            <div style="max-height: 400px; overflow-y: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                    <thead style="position: sticky; top: 0; background: #f8f9fa;">
+                        <tr>
+                            <th style="padding: 6px 8px; text-align: center; border-bottom: 2px solid #e5e7eb; font-weight: 600; width: 50px;">층</th>
+                            <th style="padding: 6px 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 600;">호실</th>
+                            <th style="padding: 6px 8px; text-align: left; border-bottom: 2px solid #e5e7eb; font-weight: 600;">용도</th>
+                            <th style="padding: 6px 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600; width: 75px;">면적(㎡)</th>
+                            <th style="padding: 6px 8px; text-align: right; border-bottom: 2px solid #e5e7eb; font-weight: 600; width: 65px;">면적(평)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    units.forEach((item, idx) => {
+        const floorLabel = item.flrGbCdNm === '지하' ? `B${item.flrNo}` : `${item.flrNo}F`;
+        const areaPy = item.totalArea ? (item.totalArea / 3.3058).toFixed(1) : '-';
+        const usage = item.mainPurpsCdNm || item.etcPurps || '-';
+        const bgColor = idx % 2 === 0 ? 'white' : '#f9fafb';
+        const isBelow = item.flrGbCdNm === '지하';
+        
+        html += `
+            <tr style="background: ${bgColor};">
+                <td style="padding: 5px 8px; text-align: center; border-bottom: 1px solid #f0f0f0; font-weight: 600; color: ${isBelow ? '#dc2626' : '#1d4ed8'};">${floorLabel}</td>
+                <td style="padding: 5px 8px; text-align: left; border-bottom: 1px solid #f0f0f0; font-weight: 500;">${item.hoNm || '-'}</td>
+                <td style="padding: 5px 8px; text-align: left; border-bottom: 1px solid #f0f0f0; color: #6b7280;">${usage}</td>
+                <td style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #f0f0f0; font-family: monospace;">${item.totalArea ? formatNumber(Math.round(item.totalArea)) : '-'}</td>
+                <td style="padding: 5px 8px; text-align: right; border-bottom: 1px solid #f0f0f0; font-family: monospace; color: #6b7280;">${areaPy}</td>
+            </tr>
+        `;
+    });
+    
+    // 공용면적 합계 행
+    if (publicOnly.length > 0) {
+        const publicArea = publicOnly.reduce((sum, d) => sum + (d.area || 0), 0);
+        const publicPy = (publicArea / 3.3058).toFixed(1);
+        html += `
+            <tr style="background: #f0fdf4; font-weight: 600;">
+                <td colspan="3" style="padding: 5px 8px; text-align: right; border-top: 2px solid #e5e7eb; font-size: 10px; color: #059669;">공용면적 합계</td>
+                <td style="padding: 5px 8px; text-align: right; border-top: 2px solid #e5e7eb; font-family: monospace; color: #059669;">${formatNumber(Math.round(publicArea))}</td>
+                <td style="padding: 5px 8px; text-align: right; border-top: 2px solid #e5e7eb; font-family: monospace; color: #059669;">${publicPy}</td>
+            </tr>
+        `;
+    }
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// 전역 등록
+window.fetchBuildingFloorDetail = fetchBuildingFloorDetail;
 
 // ===== 이미지 뷰어 & 갤러리 =====
 
