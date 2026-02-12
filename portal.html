@@ -958,7 +958,14 @@
     <!-- 카카오맵 SDK -->
     <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=1ac6eee9b1e4c2e0cc6f1d1ca1a6a559&libraries=clusterer,services,drawing&autoload=false"></script>
 
-    <script type="module" src="js/portal-main.js?v=4.1"></script>
+    <script>
+        // 캐시 버스팅: 배포마다 자동으로 새 버전 로딩
+        const _v = new Date().toISOString().slice(0,13).replace(/[-T]/g,''); // 시간단위 갱신
+        const s1 = document.createElement('script');
+        s1.type = 'module';
+        s1.src = `js/portal-main.js?v=${_v}`;
+        document.currentScript.after(s1);
+    </script>
 
     
     <!-- 공통 모달 오버레이 -->
@@ -4063,7 +4070,11 @@
     </div>
     
     <!-- ★ #13: 중복 빌딩 관리 스크립트 -->
-    <script src="js/portal-merge.js?v=1.0"></script>
+    <script>
+        const s2 = document.createElement('script');
+        s2.src = `js/portal-merge.js?v=${new Date().toISOString().slice(0,13).replace(/[-T]/g,'')}`;
+        document.currentScript.after(s2);
+    </script>
     
     <!-- v4.1: 뷰 모드에 따른 지도전용 UI 표시/숨김 -->
     <script>
