@@ -655,20 +655,20 @@
             </div>
             
             <!-- 임대조건 -->
-            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">💰 임대조건 (평당, 만원)</div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">💰 임대조건 (평당, 원)</div>
             <div class="form-row">
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
                     <div>
                         <small style="color: var(--text-muted);">보증금</small>
-                        <input type="number" id="editDepositPy" placeholder="80" step="0.1">
+                        <input type="number" id="editDepositPy" placeholder="800000" step="1">
                     </div>
                     <div>
                         <small style="color: var(--text-muted);">임대료</small>
-                        <input type="number" id="editRentPy" placeholder="8.5" step="0.1">
+                        <input type="number" id="editRentPy" placeholder="85000" step="1">
                     </div>
                     <div>
                         <small style="color: var(--text-muted);">관리비</small>
-                        <input type="number" id="editMaintenancePy" placeholder="3.5" step="0.1">
+                        <input type="number" id="editMaintenancePy" placeholder="35000" step="1">
                     </div>
                 </div>
             </div>
@@ -2183,22 +2183,14 @@
         setVal('editTypicalFloorLeasePy', getNum(building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy, raw.area?.typicalFloorLeasePy, raw.typicalFloorLeasePy));
         setVal('editExclusiveRate', getNum(building.area?.exclusiveRate, building.exclusiveRate, raw.area?.exclusiveRate, raw.exclusiveRate));
         
-        // ★ 임대조건 - pricing 하위 또는 루트 레벨 모두 확인 (만원 단위로 변환)
-        const toManwon = (val) => {
-            if (val === undefined || val === null || val === '') return '';
-            const num = parseFloat(val);
-            if (isNaN(num)) return '';
-            if (num === 0) return 0;  // ★ 0도 유효값으로 표시
-            // 1000 이상이면 원 단위 → 만원으로 변환
-            return num >= 1000 ? (num / 10000).toFixed(1) : num;
-        };
-        const rawDeposit = getVal(building.depositPy, building.pricing?.depositPy, raw.depositPy, raw.pricing?.depositPy);
-        const rawRent = getVal(building.rentPy, building.pricing?.rentPy, raw.rentPy, raw.pricing?.rentPy);
-        const rawMaint = getVal(building.maintenancePy, building.pricing?.maintenancePy, raw.maintenancePy, raw.pricing?.maintenancePy);
+        // ★ 임대조건 - 원 단위 그대로 표시 (변환 없음)
+        const rawDeposit = getNum(building.depositPy, building.pricing?.depositPy, raw.depositPy, raw.pricing?.depositPy);
+        const rawRent = getNum(building.rentPy, building.pricing?.rentPy, raw.rentPy, raw.pricing?.rentPy);
+        const rawMaint = getNum(building.maintenancePy, building.pricing?.maintenancePy, raw.maintenancePy, raw.pricing?.maintenancePy);
         console.log('  - 임대조건 raw:', { deposit: rawDeposit, rent: rawRent, maint: rawMaint });
-        setVal('editDepositPy', toManwon(rawDeposit));
-        setVal('editRentPy', toManwon(rawRent));
-        setVal('editMaintenancePy', toManwon(rawMaint));
+        setVal('editDepositPy', rawDeposit);
+        setVal('editRentPy', rawRent);
+        setVal('editMaintenancePy', rawMaint);
         
         // 시설 정보 (★ _raw fallback)
         setVal('editHvac', getVal(building.hvac, raw.hvac, raw.specs?.hvac));
@@ -2286,14 +2278,6 @@
         try {
             const { db, ref, update } = await import('./js/portal-firebase.js');
             
-            // 만원 → 원 단위 변환 함수
-            const toWon = (val) => {
-                if (!val || val === '') return null;
-                const num = parseFloat(val);
-                // 100 미만이면 만원 단위로 입력한 것 → 원 단위로 변환
-                return num < 100 ? Math.round(num * 10000) : Math.round(num);
-            };
-            
             // 업데이트 데이터 구성
             const updates = {
                 updatedAt: new Date().toISOString(),
@@ -2318,10 +2302,14 @@
             updates.typicalFloorLeasePy = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
             updates.exclusiveRate = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
             
-            // 임대조건 (원 단위로 저장)
-            const depositWon = toWon(formData.depositPy);
-            const rentWon = toWon(formData.rentPy);
-            const maintenanceWon = toWon(formData.maintenancePy);
+            // 임대조건 (★ 원 단위 그대로 저장 — 변환 불필요)
+            const parseWon = (val) => {
+                if (!val || val === '') return null;
+                return Math.round(parseFloat(val));
+            };
+            const depositWon = parseWon(formData.depositPy);
+            const rentWon = parseWon(formData.rentPy);
+            const maintenanceWon = parseWon(formData.maintenancePy);
             
             updates.depositPy = depositWon;
             updates.rentPy = rentWon;
