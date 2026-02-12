@@ -2201,8 +2201,34 @@
         setVal('editFloorLoad', getNum(building.floorLoad, building.specs?.floorLoad, raw.floorLoad, raw.specs?.floorLoad));
         
         // 주차/승강기 (수동입력) - specs/parking 하위 또는 루트 모두 확인 (★ _raw fallback)
-        setVal('editParkingDisplay', getVal(building.parking?.display, building.parkingDisplay, raw.parking?.display, raw.parkingDisplay));
-        setVal('editElevator', getVal(building.specs?.elevator, building.elevator, raw.specs?.elevator, raw.elevator));
+        // ★ v4.1: 텍스트가 없으면 숫자 데이터에서 자동 생성
+        const parkingDisplayVal = getVal(building.parking?.display, building.parkingDisplay, raw.parking?.display, raw.parkingDisplay)
+            || (() => {
+                const total = getNum(building.parking?.total, raw.parking?.total, building.buildingInfo?.totPkngCnt, raw.buildingInfo?.totPkngCnt);
+                const self = getNum(building.parking?.selfPark, raw.parking?.selfPark, building.buildingInfo?.indrAutoUtcnt, raw.buildingInfo?.indrAutoUtcnt);
+                const mech = getNum(building.parking?.mechanical, raw.parking?.mechanical, building.buildingInfo?.indrMechUtcnt, raw.buildingInfo?.indrMechUtcnt);
+                if (!total) return '';
+                let detail = [];
+                if (self) detail.push(`자주식 ${self}대`);
+                if (mech) detail.push(`기계식 ${mech}대`);
+                return detail.length ? `총 ${total}대(${detail.join(', ')})` : `총 ${total}대`;
+            })();
+        setVal('editParkingDisplay', parkingDisplayVal);
+        
+        const elevatorVal = getVal(building.specs?.elevator, building.elevator, raw.specs?.elevator, raw.elevator)
+            || (() => {
+                const bi = building.buildingInfo || raw.buildingInfo || {};
+                const p = getNum(bi.rideUseElvtCnt, building.specs?.passengerElevator, raw.specs?.passengerElevator);
+                const f = getNum(bi.emgenUseElvtCnt, building.specs?.freightElevator, raw.specs?.freightElevator);
+                if (!p && !f) return '';
+                let parts = [];
+                if (p) parts.push(`승용 ${p}대`);
+                if (f) parts.push(`비상 ${f}대`);
+                const total = (p || 0) + (f || 0);
+                return `총 ${total}대(${parts.join(' ')})`;
+            })();
+        setVal('editElevator', elevatorVal);
+        
         setVal('editParkingRatio', getVal(building.parking?.ratio, building.parkingRatio, raw.parking?.ratio, raw.parkingRatio));
         setVal('editNearbyStation', getVal(building.nearbyStation, building.nearestStation, raw.nearbyStation));
         
