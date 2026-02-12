@@ -4134,5 +4134,56 @@
             setTimeout(() => clearInterval(timer), 10000);
         })();
     </script>
+    
+    <!-- v4.1: 클립보드 이미지 붙여넣기 -->
+    <script>
+        document.addEventListener('paste', function(e) {
+            // 입력 필드에서는 무시
+            const tag = e.target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+            
+            // 상세 패널 열려있을 때만
+            const dp = document.getElementById('detailPanel');
+            if (!dp || !dp.classList.contains('open')) return;
+            
+            // 클립보드에서 이미지 추출
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            let file = null;
+            for (const item of items) {
+                if (item.type.startsWith('image/')) { file = item.getAsFile(); break; }
+            }
+            if (!file) return;
+            
+            e.preventDefault();
+            
+            // 기존 팝업 제거
+            document.getElementById('pasteChoicePopup')?.remove();
+            
+            const popup = document.createElement('div');
+            popup.id = 'pasteChoicePopup';
+            popup.innerHTML = `
+                <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:99999;display:flex;align-items:center;justify-content:center;">
+                    <div style="background:#fff;border-radius:12px;padding:20px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.3);min-width:280px;text-align:center;">
+                        <div style="font-size:14px;font-weight:600;margin-bottom:4px;">📋 클립보드 이미지 감지</div>
+                        <div style="font-size:12px;color:#64748b;margin-bottom:16px;">어디에 추가할까요?</div>
+                        <div style="display:flex;gap:10px;justify-content:center;">
+                            <button id="pasteAsExterior" style="flex:1;padding:12px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">🏢 외관 사진</button>
+                            <button id="pasteAsFloorplan" style="flex:1;padding:12px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">📐 평면도</button>
+                        </div>
+                        <button id="pasteCancel" style="margin-top:10px;padding:6px 16px;border:none;background:none;color:#94a3b8;cursor:pointer;font-size:12px;">취소</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(popup);
+            
+            const save = (type) => { popup.remove(); window.savePastedImage?.(file, type); };
+            popup.querySelector('#pasteAsExterior').onclick = () => save('exterior');
+            popup.querySelector('#pasteAsFloorplan').onclick = () => save('floorplan');
+            popup.querySelector('#pasteCancel').onclick = () => popup.remove();
+            popup.children[0].onclick = (ev) => { if (ev.target === ev.currentTarget) popup.remove(); };
+        });
+        console.log('[v4.1] 이미지 붙여넣기 리스너 등록');
+    </script>
 </body>
 </html>
