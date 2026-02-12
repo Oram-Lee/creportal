@@ -5540,11 +5540,15 @@ window.openBuildingEditModal = function() {
         `;
     }
     
-    // 모달 표시
-    const modal = document.getElementById('buildingEditModal');
-    if (modal) { modal.classList.add('show'); modal.style.display = 'block'; }
-    const overlay = document.getElementById('modalOverlay');
-    if (overlay) { overlay.classList.add('show'); overlay.style.display = 'block'; }
+    // 모달 표시 (closeModal과 호환되도록 openModal 사용)
+    if (typeof openModal === 'function') {
+        openModal('buildingEditModal');
+    } else {
+        const modal = document.getElementById('buildingEditModal');
+        const overlay = document.getElementById('modalOverlay');
+        if (modal) modal.classList.add('show');
+        if (overlay) overlay.classList.add('show');
+    }
 };
 
 // ============================================================
@@ -5669,8 +5673,8 @@ window.saveBuildingEdit = async function(formData) {
         } else {
             const m = document.getElementById('buildingEditModal');
             const o = document.getElementById('modalOverlay');
-            if (m) { m.classList.remove('show'); m.style.display = 'none'; }
-            if (o) { o.classList.remove('show'); o.style.display = 'none'; }
+            if (m) m.classList.remove('show');
+            if (o) o.classList.remove('show');
         }
         
         // 화면 갱신
