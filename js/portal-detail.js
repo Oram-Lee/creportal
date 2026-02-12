@@ -332,7 +332,7 @@ export function renderInfoSection() {
     const imageGalleryHtml = `
         <div class="image-gallery-dual">
             <!-- 외관 이미지 영역 -->
-            <div class="image-column">
+            <div class="image-column" id="exteriorColumn">
                 <div class="column-header">
                     <span class="column-title">🏢 외관</span>
                     <span class="column-count">${exteriorImages.length}장</span>
@@ -379,7 +379,7 @@ export function renderInfoSection() {
             </div>
             
             <!-- 평면도 이미지 영역 -->
-            <div class="image-column">
+            <div class="image-column" id="floorplanColumn">
                 <div class="column-header">
                     <span class="column-title">📐 평면도</span>
                     <span class="column-count">${floorPlanImages.length}장</span>
@@ -2448,6 +2448,9 @@ export function registerDetailGlobals() {
     // ★ 기본정보 새로고침
     window.refreshInfoSection = refreshInfoSection;
     
+    // ★ v4.1: 이미지 붙여넣기 리스너
+    setupImagePaste();
+    
     // ★ 공실(안내문) 새로고침
     window.refreshVacanciesSection = refreshVacanciesSection;
     
@@ -4135,6 +4138,126 @@ window.deleteExteriorImage = function() {
     const index = viewerState?.currentIndex ?? 0;
     confirmDeleteImage('exterior', index);
 };
+
+// ===== ★ v4.1: 클립보드 이미지 붙여넣기 =====
+
+// 클립보드에서 이미지 추출
+function getClipboardImage(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return null;
+    for (const item of items) {
+        if (item.type.startsWith('image/')) {
+            return item.getAsFile();
+        }
+    }
+    return null;
+}
+
+// 이미지 파일 → DataURL 변환
+function fileToDataURL(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+// 붙여넣기 선택 팝업 표시
+function showPasteChoicePopup(file) {
+    // 기존 팝업 제거
+    document.getElementById('pasteChoicePopup')?.remove();
+    
+    const popup = document.createElement('div');
+    popup.id = 'pasteChoicePopup';
+    popup.innerHTML = `
+        <div style="position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.4); z-index:99999; display:flex; align-items:center; justify-content:center;">
+            <div style="background:#fff; border-radius:12px; padding:20px 24px; box-shadow:0 8px 30px rgba(0,0,0,0.3); min-width:280px; text-align:center;">
+                <div style="font-size:14px; font-weight:600; margin-bottom:4px;">📋 클립보드 이미지 감지</div>
+                <div style="font-size:12px; color:#64748b; margin-bottom:16px;">어디에 추가할까요?</div>
+                <div style="display:flex; gap:10px; justify-content:center;">
+                    <button id="pasteAsExterior" style="flex:1; padding:12px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; font-size:13px; transition:all 0.2s;">
+                        🏢 외관 사진
+                    </button>
+                    <button id="pasteAsFloorplan" style="flex:1; padding:12px; border:2px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; font-size:13px; transition:all 0.2s;">
+                        📐 평면도
+                    </button>
+                </div>
+                <button id="pasteCancel" style="margin-top:10px; padding:6px 16px; border:none; background:none; color:#94a3b8; cursor:pointer; font-size:12px;">취소</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(popup);
+    
+    popup.querySelector('#pasteAsExterior').onclick = () => { popup.remove(); savePastedImage(file, 'exterior'); };
+    popup.querySelector('#pasteAsFloorplan').onclick = () => { popup.remove(); savePastedImage(file, 'floorplan'); };
+    popup.querySelector('#pasteCancel').onclick = () => popup.remove();
+    popup.querySelector('div').onclick = (e) => { if (e.target === e.currentTarget) popup.remove(); };
+}
+
+// 붙여넣기 이미지 저장
+async function savePastedImage(file, type) {
+    if (file.size > 5 * 1024 * 1024) {
+        showToast('파일 크기는 5MB 이하여야 합니다', 'warning');
+        return;
+    }
+    
+    const b = state.selectedBuilding;
+    if (!b) return;
+    
+    try {
+        const imageData = await fileToDataURL(file);
+        
+        if (type === 'exterior') {
+            let exteriorImages = b.images?.exterior || [];
+            exteriorImages = [...exteriorImages, imageData];
+            await update(ref(db, `buildings/${b.id}/images`), { exterior: exteriorImages });
+            if (!b.images) b.images = {};
+            b.images.exterior = exteriorImages;
+            b.exteriorImages = exteriorImages.map(img => typeof img === 'string' ? { url: img } : img);
+            showToast('외관 사진이 붙여넣기로 추가되었습니다', 'success');
+        } else {
+            let floorPlanImages = b.images?.floorPlan || [];
+            floorPlanImages = [...floorPlanImages, imageData];
+            await update(ref(db, `buildings/${b.id}/images`), { floorPlan: floorPlanImages });
+            if (!b.images) b.images = {};
+            b.images.floorPlan = floorPlanImages;
+            b.floorPlanImages = floorPlanImages.map(img => typeof img === 'string' ? { url: img } : img);
+            showToast('평면도가 붙여넣기로 추가되었습니다', 'success');
+        }
+        
+        window.closeImageViewer?.();
+        renderInfoSection();
+    } catch (err) {
+        console.error('붙여넣기 이미지 저장 실패:', err);
+        showToast('이미지 저장 실패', 'error');
+    }
+}
+
+// 전역 붙여넣기 이벤트 리스너 설정
+function setupImagePaste() {
+    document.addEventListener('paste', (e) => {
+        // 입력 필드에서의 붙여넣기는 무시
+        const tag = e.target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+        
+        // 상세 패널이 열려있을 때만
+        const detailPanel = document.getElementById('detailPanel');
+        if (!detailPanel?.classList.contains('open')) return;
+        if (!state.selectedBuilding) return;
+        
+        const file = getClipboardImage(e);
+        if (!file) return;
+        
+        e.preventDefault();
+        showPasteChoicePopup(file);
+    });
+    console.log('[v4.1] 이미지 붙여넣기 리스너 등록 완료');
+}
+
+// 전역 등록
+window.savePastedImage = savePastedImage;
+window.setupImagePaste = setupImagePaste;
 
 // ===== ★ v2.0: 공실 편집/삭제/이관 기능 =====
 
