@@ -304,7 +304,7 @@ export function processBuildings() {
 
             return {
                 id,
-                name: b.name,
+                name: b.name || b.buildingName || b.bldNm || '',
                 address: b.address,
                 addressJibun: b.addressJibun,
                 region: b.region || b.regionId || detectRegion(b.address),
@@ -326,13 +326,13 @@ export function processBuildings() {
                 
                 // ★ pricing 객체 전체 (편집 모달용)
                 pricing: b.pricing,
-                // 가격 (개별 필드 - 하위 호환, nested + flat fallback)
-                rent: b.pricing?.rent || b.rent,
-                rentPy: b.pricing?.rentPy || b.rentPy,
-                maintenance: b.pricing?.maintenance || b.maintenance,
-                maintenancePy: b.pricing?.maintenancePy || b.maintenancePy,
-                deposit: b.pricing?.deposit || b.deposit,
-                depositPy: b.pricing?.depositPy || b.depositPy,
+                // 가격 (개별 필드 - 하위 호환, nested + flat fallback, ?? 사용으로 0 보존)
+                rent: b.pricing?.rent ?? b.rent,
+                rentPy: b.pricing?.rentPy ?? b.rentPy,
+                maintenance: b.pricing?.maintenance ?? b.maintenance,
+                maintenancePy: b.pricing?.maintenancePy ?? b.maintenancePy,
+                deposit: b.pricing?.deposit ?? b.deposit,
+                depositPy: b.pricing?.depositPy ?? b.depositPy,
                 
                 // ★ specs 객체 전체 (건축물대장 갱신용)
                 specs: b.specs,
@@ -372,6 +372,9 @@ export function processBuildings() {
                 bcRat: b.bcRat,
                 mainPurpose: b.mainPurpose || b.specs?.buildingUse || b.buildingUse,
                 
+                // ★ 주차 표시 (편집 모달용)
+                parkingDisplay: b.parking?.display || b.parkingDisplay || '',
+                
                 // 기타
                 buildingType: b.buildingType,
                 grade: b.grade,
@@ -380,6 +383,21 @@ export function processBuildings() {
                 pm: b.pm,
                 description: b.description,
                 url: b.url,
+                homepage: b.homepage || b.url || '',
+                
+                // ★ 편집 모달용 추가 필드
+                aliases: b.aliases || [],
+                buildingInfo: b.buildingInfo || {},
+                strctCdNm: b.strctCdNm || b.buildingInfo?.strctCdNm || '',
+                
+                // ★ 채권분석 필드
+                bondStatus: b.bondStatus || '',
+                jointCollateral: b.jointCollateral || '',
+                seniorLien: b.seniorLien || '',
+                collateralRatio: b.collateralRatio || '',
+                officialLandPrice: b.officialLandPrice || '',
+                landPriceApplied: b.landPriceApplied || '',
+                
                 // 신규 필드
                 notes: b.notes || '',
                 contactPoints: b.contactPoints || [],

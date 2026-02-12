@@ -2126,13 +2126,17 @@
             return;
         }
         
+        // ★ _raw에서도 fallback 시도 (processBuildings에서 누락된 필드 대비)
+        const raw = building._raw || {};
+        
         // ★ 디버그: 빌딩 객체 전체 구조 출력
-        console.log('📝 빌딩 편집 모달 열기:', building.name, JSON.parse(JSON.stringify(building)));
+        console.log('📝 빌딩 편집 모달 열기:', building.name || raw.name, JSON.parse(JSON.stringify(building)));
         console.log('  - depositPy:', building.depositPy, '| pricing?.depositPy:', building.pricing?.depositPy);
         console.log('  - typicalFloorPy:', building.typicalFloorPy, '| area?.typicalFloorPy:', building.area?.typicalFloorPy);
         console.log('  - hvac:', building.hvac, '| ceilingHeight:', building.ceilingHeight);
+        console.log('  - _raw.name:', raw.name, '| building.name:', building.name);
         
-        // ★ 다중 경로에서 유효한 값 추출 (undefined/null/빈문자열/0 스킵)
+        // ★ 다중 경로에서 유효한 값 추출 (undefined/null/빈문자열 스킵, 0은 유효)
         const getVal = (...paths) => {
             for (const p of paths) {
                 if (p !== undefined && p !== null && p !== '') return p;
@@ -2159,65 +2163,74 @@
             }
         };
         
-        // 기본 정보
-        setVal('editBuildingName', building.name);
-        setVal('editGrade', building.grade);
+        // ★ 모달 타이틀에 빌딩명 표시
+        const modalTitle = document.querySelector('#buildingEditModal .modal-title');
+        const bName = getVal(building.name, raw.name, raw.buildingName);
+        if (modalTitle) {
+            modalTitle.textContent = bName ? `✏️ ${bName} 편집` : '✏️ 빌딩 정보 편집';
+        }
         
-        // ★ #13: 별칭
-        setVal('editAliases', (building.aliases || []).join(', '));
+        // 기본 정보 (★ _raw에서도 fallback)
+        setVal('editBuildingName', getVal(building.name, raw.name, raw.buildingName));
+        setVal('editGrade', getVal(building.grade, raw.grade));
         
-        // ★ 기준층 정보 - area 하위 또는 루트 레벨 모두 확인
-        setVal('editTypicalFloorPy', getNum(building.area?.typicalFloorPy, building.typicalFloorPy));
-        setVal('editTypicalFloorLeasePy', getNum(building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy));
-        setVal('editExclusiveRate', getNum(building.area?.exclusiveRate, building.exclusiveRate));
+        // ★ #13: 별칭 (processBuildings에서 누락될 수 있으므로 _raw fallback)
+        const aliases = building.aliases || raw.aliases || [];
+        setVal('editAliases', (Array.isArray(aliases) ? aliases : []).join(', '));
+        
+        // ★ 기준층 정보 - area 하위 또는 루트 레벨 모두 확인 + _raw fallback
+        setVal('editTypicalFloorPy', getNum(building.area?.typicalFloorPy, building.typicalFloorPy, raw.area?.typicalFloorPy, raw.typicalFloorPy));
+        setVal('editTypicalFloorLeasePy', getNum(building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy, raw.area?.typicalFloorLeasePy, raw.typicalFloorLeasePy));
+        setVal('editExclusiveRate', getNum(building.area?.exclusiveRate, building.exclusiveRate, raw.area?.exclusiveRate, raw.exclusiveRate));
         
         // ★ 임대조건 - pricing 하위 또는 루트 레벨 모두 확인 (만원 단위로 변환)
         const toManwon = (val) => {
             if (val === undefined || val === null || val === '') return '';
             const num = parseFloat(val);
-            if (isNaN(num) || num === 0) return '';
+            if (isNaN(num)) return '';
+            if (num === 0) return 0;  // ★ 0도 유효값으로 표시
             // 1000 이상이면 원 단위 → 만원으로 변환
             return num >= 1000 ? (num / 10000).toFixed(1) : num;
         };
-        const rawDeposit = getVal(building.depositPy, building.pricing?.depositPy);
-        const rawRent = getVal(building.rentPy, building.pricing?.rentPy);
-        const rawMaint = getVal(building.maintenancePy, building.pricing?.maintenancePy);
+        const rawDeposit = getVal(building.depositPy, building.pricing?.depositPy, raw.depositPy, raw.pricing?.depositPy);
+        const rawRent = getVal(building.rentPy, building.pricing?.rentPy, raw.rentPy, raw.pricing?.rentPy);
+        const rawMaint = getVal(building.maintenancePy, building.pricing?.maintenancePy, raw.maintenancePy, raw.pricing?.maintenancePy);
         console.log('  - 임대조건 raw:', { deposit: rawDeposit, rent: rawRent, maint: rawMaint });
         setVal('editDepositPy', toManwon(rawDeposit));
         setVal('editRentPy', toManwon(rawRent));
         setVal('editMaintenancePy', toManwon(rawMaint));
         
-        // 시설 정보
-        setVal('editHvac', building.hvac || '');
-        setVal('editCeilingHeight', getNum(building.ceilingHeight, building.specs?.ceilingHeight));
-        setVal('editFloorLoad', getNum(building.floorLoad, building.specs?.floorLoad));
+        // 시설 정보 (★ _raw fallback)
+        setVal('editHvac', getVal(building.hvac, raw.hvac, raw.specs?.hvac));
+        setVal('editCeilingHeight', getNum(building.ceilingHeight, building.specs?.ceilingHeight, raw.ceilingHeight, raw.specs?.ceilingHeight));
+        setVal('editFloorLoad', getNum(building.floorLoad, building.specs?.floorLoad, raw.floorLoad, raw.specs?.floorLoad));
         
-        // 주차/승강기 (수동입력) - specs/parking 하위 또는 루트 모두 확인
-        setVal('editParkingDisplay', getVal(building.parking?.display, building.parkingDisplay));
-        setVal('editElevator', getVal(building.specs?.elevator, building.elevator));
-        setVal('editParkingRatio', getVal(building.parking?.ratio, building.parkingRatio));
-        setVal('editNearbyStation', getVal(building.nearbyStation, building.nearestStation));
+        // 주차/승강기 (수동입력) - specs/parking 하위 또는 루트 모두 확인 (★ _raw fallback)
+        setVal('editParkingDisplay', getVal(building.parking?.display, building.parkingDisplay, raw.parking?.display, raw.parkingDisplay));
+        setVal('editElevator', getVal(building.specs?.elevator, building.elevator, raw.specs?.elevator, raw.elevator));
+        setVal('editParkingRatio', getVal(building.parking?.ratio, building.parkingRatio, raw.parking?.ratio, raw.parkingRatio));
+        setVal('editNearbyStation', getVal(building.nearbyStation, building.nearestStation, raw.nearbyStation));
         
-        // 관리 정보
-        setVal('editPm', building.pm || '');
-        setVal('editOwner', building.owner || '');
+        // 관리 정보 (★ _raw fallback)
+        setVal('editPm', getVal(building.pm, raw.pm));
+        setVal('editOwner', getVal(building.owner, raw.owner));
         
-        // 채권분석 정보
-        setVal('editBondStatus', building.bondStatus || '');
-        setVal('editJointCollateral', building.jointCollateral || '');
-        setVal('editSeniorLien', building.seniorLien || '');
-        setVal('editCollateralRatio', building.collateralRatio || '');
-        setVal('editOfficialLandPrice', building.officialLandPrice || '');
-        setVal('editLandPriceApplied', building.landPriceApplied || '');
+        // 채권분석 정보 (★ _raw fallback)
+        setVal('editBondStatus', getVal(building.bondStatus, raw.bondStatus));
+        setVal('editJointCollateral', getVal(building.jointCollateral, raw.jointCollateral));
+        setVal('editSeniorLien', getVal(building.seniorLien, raw.seniorLien));
+        setVal('editCollateralRatio', getVal(building.collateralRatio, raw.collateralRatio));
+        setVal('editOfficialLandPrice', getVal(building.officialLandPrice, raw.officialLandPrice));
+        setVal('editLandPriceApplied', getVal(building.landPriceApplied, raw.landPriceApplied));
         
-        // 기타
-        setVal('editDescription', building.description || '');
-        setVal('editUrl', getVal(building.url, building.homepage));
+        // 기타 (★ _raw fallback)
+        setVal('editDescription', getVal(building.description, raw.description));
+        setVal('editUrl', getVal(building.url, building.homepage, raw.url, raw.homepage));
         
-        // ★ 건축물대장 정보 (읽기전용) - 확장 표시
+        // ★ 건축물대장 정보 (읽기전용) - 확장 표시 + _raw fallback
         const readonlyInfo = document.getElementById('buildingReadonlyInfo');
         if (readonlyInfo) {
-            const bi = building.buildingInfo || {};
+            const bi = building.buildingInfo || raw.buildingInfo || {};
             const grossPy = getVal(building.area?.grossFloorPy, building.grossFloorPy);
             const grossSqm = getVal(building.area?.grossFloorSqm, building.grossFloorSqm);
             const floorsDisplay = typeof building.floors === 'object' 
