@@ -207,11 +207,7 @@
                     <div id="buildingListView"></div>
                 </div>
                 <div class="table-footer">
-                    <div class="info">총 <strong id="tableCount">0</strong>개 빌딩 | 선택: <strong id="selectedCount">0</strong>개</div>
-                    <div style="display:flex;gap:8px;">
-                        <button class="btn btn-secondary btn-sm" onclick="exportSelected()">📥 선택 내보내기</button>
-                        <button class="btn btn-primary btn-sm" onclick="createLeasingGuide()">📄 임대안내문 만들기</button>
-                    </div>
+                    <div class="info">총 <strong id="tableCount">0</strong>개 빌딩</div>
                 </div>
             </div>
         </div>
@@ -1394,6 +1390,12 @@
     
     <!-- 도형 검색 스타일 -->
     <style>
+        /* v4.1: 리스트(검색) 모드에서 도형 검색 숨김 */
+        body[data-view-mode="list"] #drawingToggleBtn,
+        body[data-view-mode="list"] #drawingToolsPanel {
+            display: none !important;
+        }
+        
         /* 도형 그리기 도구 패널 */
         .drawing-tools-panel {
             position: absolute;
@@ -3354,39 +3356,6 @@
             text-align: center;
         }
         
-        /* Phase 2: 선택 모드 */
-        .selection-action-bar {
-            display: none;
-            position: fixed;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1f2937;
-            color: white;
-            padding: 12px 24px;
-            border-radius: 30px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            z-index: 9996;
-            gap: 16px;
-            align-items: center;
-        }
-        .selection-count { font-weight: 600; }
-        .selection-action-bar .btn { margin-left: 8px; }
-        
-        #selectionModeBtn {
-            padding: 8px 16px;
-            border: 2px solid #e5e7eb;
-            border-radius: 20px;
-            background: #fff;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.2s;
-        }
-        #selectionModeBtn.active {
-            background: #2563eb;
-            color: white;
-            border-color: #2563eb;
-        }
         
         .building-checkbox {
             width: 18px;
@@ -4084,19 +4053,6 @@
             }
         };
     </script>
-    <div id="selectionActionBar" class="selection-action-bar">
-        <span class="selection-count">빌딩을 선택하세요</span>
-        <button onclick="toggleSelectAll()" class="btn btn-secondary btn-sm">전체선택</button>
-        <button onclick="addSelectedToCompList()" class="btn btn-primary btn-sm">Comp List에 담기</button>
-        <button onclick="toggleSelectionMode()" class="btn btn-sm" style="background:#666;color:#fff;">취소</button>
-    </div>
-    
-    <!-- Phase 2: 선택 모드 버튼 (필터바 옆에 위치) -->
-    <button id="selectionModeBtn" onclick="toggleSelectionMode()" style="position:fixed; top:130px; right:30px; z-index:100;">
-        ☑️ 선택모드
-    </button>
-    
-    <!-- Comp List는 별도 페이지(complist.html)로 이동 -->
     
     <!-- ★ #13: 중복 빌딩 관리 오버레이 -->
     <div id="duplicateManagerOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:9998; justify-content:center; align-items:center;">
@@ -4114,5 +4070,30 @@
     
     <!-- ★ #13: 중복 빌딩 관리 스크립트 -->
     <script src="js/portal-merge.js?v=1.0"></script>
+    
+    <!-- v4.1: 뷰 모드에 따른 UI 요소 표시/숨김 -->
+    <script>
+        (function patchViewMode() {
+            // setViewMode가 등록될 때까지 대기 후 패치
+            const timer = setInterval(() => {
+                if (typeof window.setViewMode === 'function' && !window._viewModePatched) {
+                    const _orig = window.setViewMode;
+                    window.setViewMode = function(mode) {
+                        _orig(mode);
+                        document.body.setAttribute('data-view-mode', mode);
+                    };
+                    window._viewModePatched = true;
+                    // 초기값 설정: 현재 활성 탭 기준
+                    const activeNav = document.querySelector('.nav-item.active');
+                    const initialMode = activeNav?.dataset?.view || 'map';
+                    document.body.setAttribute('data-view-mode', initialMode);
+                    clearInterval(timer);
+                    console.log('[v4.1] viewMode 패치 완료, 초기 모드:', initialMode);
+                }
+            }, 200);
+            // 10초 후 포기
+            setTimeout(() => clearInterval(timer), 10000);
+        })();
+    </script>
 </body>
 </html>

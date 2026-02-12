@@ -19,10 +19,39 @@ let previewState = {
 
 let currentZoom = 1;
 
+// ★ Firebase Storage URL에서 실제 source/publishDate 추출 (이관 빌딩 대응)
+function extractPathFromUrl(url) {
+    try {
+        // URL: .../o/leasing-docs%2FCBRE%2F26_02%2Fpage_098.jpg?alt=media...
+        const decoded = decodeURIComponent(url);
+        const match = decoded.match(/leasing-docs\/([^/]+)\/([^/]+)\/page_/);
+        if (match) {
+            return {
+                source: match[1],
+                publishDate: match[2].replace('_', '.')  // 26_02 → 26.02
+            };
+        }
+    } catch (e) {
+        console.warn('URL 경로 추출 실패:', e);
+    }
+    return null;
+}
+
 // ===== 페이지 미리보기 열기 =====
 
 export function showPagePreview(imageUrl, source, publishDate, pageNum) {
     console.log('showPagePreview called:', { imageUrl, source, publishDate, pageNum });
+    
+    // ★ imageUrl이 있으면 실제 Storage 경로에서 source/publishDate 추출
+    // 이관된 빌딩의 경우 source가 변경되어 있으므로 URL 기준이 정확함
+    if (imageUrl) {
+        const extracted = extractPathFromUrl(imageUrl);
+        if (extracted) {
+            console.log('[v4.1] URL에서 경로 추출:', extracted, '(전달값:', source, publishDate, ')');
+            source = extracted.source;
+            publishDate = extracted.publishDate;
+        }
+    }
     
     // 상태 초기화
     previewState = {
