@@ -5409,3 +5409,293 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+// ============================================================
+// ★ v4.1: 빌딩 편집 모달 함수 (portal.html 인라인 캐시 문제 해결)
+// portal.html 인라인 스크립트보다 나중에 로드되어 덮어씀
+// ============================================================
+
+window.openBuildingEditModal = function() {
+    const building = window.state?.selectedBuilding;
+    if (!building) {
+        if (typeof showToast === 'function') showToast('빌딩을 먼저 선택해주세요', 'error');
+        return;
+    }
+    
+    // ★ _raw에서도 fallback 시도
+    const raw = building._raw || {};
+    
+    console.log('📝 [v4.1] 빌딩 편집 모달 열기:', building.name || raw.name);
+    
+    // 다중 경로에서 유효한 값 추출 (0은 유효)
+    const getVal = (...paths) => {
+        for (const p of paths) {
+            if (p !== undefined && p !== null && p !== '') return p;
+        }
+        return '';
+    };
+    
+    // 숫자 전용 (0도 유효)
+    const getNum = (...paths) => {
+        for (const p of paths) {
+            if (p !== undefined && p !== null && p !== '') {
+                const n = parseFloat(p);
+                if (!isNaN(n)) return n;
+            }
+        }
+        return '';
+    };
+    
+    const setVal = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.value = (value !== undefined && value !== null) ? value : '';
+    };
+    
+    // ★ 모달 타이틀에 빌딩명 표시
+    const modalTitle = document.querySelector('#buildingEditModal .modal-title');
+    const bName = getVal(building.name, raw.name, raw.buildingName);
+    if (modalTitle) {
+        modalTitle.textContent = bName ? `✏️ ${bName} 편집` : '✏️ 빌딩 정보 편집';
+    }
+    
+    // 기본 정보
+    setVal('editBuildingName', getVal(building.name, raw.name, raw.buildingName));
+    setVal('editGrade', getVal(building.grade, raw.grade));
+    
+    // 별칭
+    const aliases = building.aliases || raw.aliases || [];
+    setVal('editAliases', (Array.isArray(aliases) ? aliases : []).join(', '));
+    
+    // 기준층 정보
+    setVal('editTypicalFloorPy', getNum(building.area?.typicalFloorPy, building.typicalFloorPy, raw.area?.typicalFloorPy, raw.typicalFloorPy));
+    setVal('editTypicalFloorLeasePy', getNum(building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy, raw.area?.typicalFloorLeasePy, raw.typicalFloorLeasePy));
+    setVal('editExclusiveRate', getNum(building.area?.exclusiveRate, building.exclusiveRate, raw.area?.exclusiveRate, raw.exclusiveRate));
+    
+    // ★ 임대조건 - 원 단위 그대로 표시 (변환 없음)
+    setVal('editDepositPy', getNum(building.depositPy, building.pricing?.depositPy, raw.depositPy, raw.pricing?.depositPy));
+    setVal('editRentPy', getNum(building.rentPy, building.pricing?.rentPy, raw.rentPy, raw.pricing?.rentPy));
+    setVal('editMaintenancePy', getNum(building.maintenancePy, building.pricing?.maintenancePy, raw.maintenancePy, raw.pricing?.maintenancePy));
+    
+    // 시설 정보
+    setVal('editHvac', getVal(building.hvac, raw.hvac, raw.specs?.hvac));
+    setVal('editCeilingHeight', getNum(building.ceilingHeight, building.specs?.ceilingHeight, raw.ceilingHeight, raw.specs?.ceilingHeight));
+    setVal('editFloorLoad', getNum(building.floorLoad, building.specs?.floorLoad, raw.floorLoad, raw.specs?.floorLoad));
+    
+    // 주차/승강기
+    setVal('editParkingDisplay', getVal(building.parking?.display, building.parkingDisplay, raw.parking?.display, raw.parkingDisplay));
+    setVal('editElevator', getVal(building.specs?.elevator, building.elevator, raw.specs?.elevator, raw.elevator));
+    setVal('editParkingRatio', getVal(building.parking?.ratio, building.parkingRatio, raw.parking?.ratio, raw.parkingRatio));
+    setVal('editNearbyStation', getVal(building.nearbyStation, building.nearestStation, raw.nearbyStation));
+    
+    // 관리 정보
+    setVal('editPm', getVal(building.pm, raw.pm));
+    setVal('editOwner', getVal(building.owner, raw.owner));
+    
+    // 채권분석 정보
+    setVal('editBondStatus', getVal(building.bondStatus, raw.bondStatus));
+    setVal('editJointCollateral', getVal(building.jointCollateral, raw.jointCollateral));
+    setVal('editSeniorLien', getVal(building.seniorLien, raw.seniorLien));
+    setVal('editCollateralRatio', getVal(building.collateralRatio, raw.collateralRatio));
+    setVal('editOfficialLandPrice', getVal(building.officialLandPrice, raw.officialLandPrice));
+    setVal('editLandPriceApplied', getVal(building.landPriceApplied, raw.landPriceApplied));
+    
+    // 기타
+    setVal('editDescription', getVal(building.description, raw.description));
+    setVal('editUrl', getVal(building.url, building.homepage, raw.url, raw.homepage));
+    
+    // ★ 건축물대장 정보 (읽기전용)
+    const readonlyInfo = document.getElementById('buildingReadonlyInfo');
+    if (readonlyInfo) {
+        const bi = building.buildingInfo || raw.buildingInfo || {};
+        const grossPy = getVal(building.area?.grossFloorPy, building.grossFloorPy);
+        const grossSqm = getVal(building.area?.grossFloorSqm, building.grossFloorSqm);
+        const floorsDisplay = typeof building.floors === 'object'
+            ? (building.floors?.display || `지하${building.floors?.below || 0}층/지상${building.floors?.above || 0}층`)
+            : (building.floors || '-');
+        const completionYear = building.completionYear || bi.useAprDay?.substring(0, 4) || '-';
+        const vlRat = getVal(building.vlRat, bi.vlRat, building.floorAreaRatio);
+        const bcRat = getVal(building.bcRat, bi.bcRat, building.buildingCoverageRatio);
+        const mainPurpose = getVal(building.mainPurpose, bi.mainPurpose, bi.mainPurpsCdNm);
+        const structure = getVal(building.strctCdNm, bi.strctCdNm, building.specs?.structure);
+        const parkingTotal = getVal(building.parking?.total, bi.totPkngCnt);
+        const elevatorInfo = (() => {
+            const p = getNum(bi.rideUseElvtCnt, building.specs?.passengerElevator);
+            const f = getNum(bi.emgenUseElvtCnt, building.specs?.freightElevator);
+            if (p || f) return `승용 ${p || 0}대 / 비상 ${f || 0}대`;
+            return getVal(building.specs?.elevator, building.elevator, '-');
+        })();
+        
+        readonlyInfo.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 12px;">
+                <div>📍 <strong>주소:</strong> ${building.address || '-'}</div>
+                <div>📅 <strong>준공:</strong> ${completionYear}</div>
+                <div>📐 <strong>연면적:</strong> ${grossPy ? grossPy + '평' : '-'} ${grossSqm ? '(' + grossSqm + '㎡)' : ''}</div>
+                <div>🏗️ <strong>층수:</strong> ${floorsDisplay}</div>
+                <div>📊 <strong>용적률/건폐율:</strong> ${vlRat || '-'}% / ${bcRat || '-'}%</div>
+                <div>🏢 <strong>용도:</strong> ${mainPurpose || '-'}</div>
+                <div>🧱 <strong>구조:</strong> ${structure || '-'}</div>
+                <div>🅿️ <strong>주차:</strong> ${parkingTotal || '-'}대</div>
+                <div>🛗 <strong>승강기:</strong> ${elevatorInfo}</div>
+            </div>
+        `;
+    }
+    
+    // 모달 표시
+    const modal = document.getElementById('buildingEditModal');
+    if (modal) { modal.classList.add('show'); modal.style.display = 'block'; }
+    const overlay = document.getElementById('modalOverlay');
+    if (overlay) { overlay.classList.add('show'); overlay.style.display = 'block'; }
+};
+
+// ============================================================
+// ★ v4.1: 빌딩 정보 저장 (원 단위 직접 저장)
+// ============================================================
+
+window.saveBuildingEdit = async function(formData) {
+    const building = window.state?.selectedBuilding;
+    if (!building) {
+        if (typeof showToast === 'function') showToast('빌딩을 먼저 선택해주세요', 'error');
+        return;
+    }
+    
+    console.log('💾 [v4.1] 빌딩 정보 저장:', formData);
+    
+    try {
+        const { db, ref, update } = await import('./portal-firebase.js');
+        
+        const updates = {
+            updatedAt: new Date().toISOString(),
+            updatedBy: window.state?.currentUser?.email || 'unknown'
+        };
+        
+        // 기본 정보
+        if (formData.name) updates.name = formData.name;
+        updates.grade = formData.grade || '';
+        updates.aliases = formData.aliases || [];
+        
+        // 기준층 정보
+        updates['area/typicalFloorPy'] = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
+        updates['area/typicalFloorLeasePy'] = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
+        updates['area/exclusiveRate'] = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
+        updates.typicalFloorPy = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
+        updates.typicalFloorLeasePy = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
+        updates.exclusiveRate = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
+        
+        // ★ 임대조건 (원 단위 그대로 저장)
+        const parseWon = (val) => {
+            if (!val || val === '') return null;
+            return Math.round(parseFloat(val));
+        };
+        const depositWon = parseWon(formData.depositPy);
+        const rentWon = parseWon(formData.rentPy);
+        const maintenanceWon = parseWon(formData.maintenancePy);
+        
+        updates.depositPy = depositWon;
+        updates.rentPy = rentWon;
+        updates.maintenancePy = maintenanceWon;
+        updates['pricing/depositPy'] = depositWon;
+        updates['pricing/rentPy'] = rentWon;
+        updates['pricing/maintenancePy'] = maintenanceWon;
+        
+        // 시설 정보
+        updates.hvac = formData.hvac || '';
+        updates.ceilingHeight = formData.ceilingHeight ? parseInt(formData.ceilingHeight) : null;
+        updates.floorLoad = formData.floorLoad ? parseInt(formData.floorLoad) : null;
+        
+        // 주차/승강기
+        updates['parking/display'] = formData.parkingDisplay || '';
+        updates.parkingDisplay = formData.parkingDisplay || '';
+        updates['specs/elevator'] = formData.elevator || '';
+        updates.elevator = formData.elevator || '';
+        updates['parking/ratio'] = formData.parkingRatio || '';
+        updates.parkingRatio = formData.parkingRatio || '';
+        updates.nearbyStation = formData.nearbyStation || '';
+        
+        // 관리 정보
+        updates.pm = formData.pm || '';
+        updates.owner = formData.owner || '';
+        
+        // 채권분석 정보
+        updates.bondStatus = formData.bondStatus || '';
+        updates.jointCollateral = formData.jointCollateral || '';
+        updates.seniorLien = formData.seniorLien || '';
+        updates.collateralRatio = formData.collateralRatio || '';
+        updates.officialLandPrice = formData.officialLandPrice || '';
+        updates.landPriceApplied = formData.landPriceApplied || '';
+        
+        // 기타
+        updates.description = formData.description || '';
+        updates.url = formData.url || '';
+        
+        console.log('📤 Firebase 업데이트:', updates);
+        
+        await update(ref(db, `buildings/${building.id}`), updates);
+        
+        // 로컬 state 업데이트
+        Object.keys(updates).forEach(key => {
+            if (!key.includes('/')) {
+                building[key] = updates[key];
+            } else {
+                const [parent, child] = key.split('/');
+                if (!building[parent]) building[parent] = {};
+                building[parent][child] = updates[key];
+            }
+        });
+        
+        // dataCache.buildings 동기화
+        if (window.state.dataCache?.buildings?.[building.id]) {
+            Object.keys(updates).forEach(key => {
+                if (!key.includes('/')) {
+                    window.state.dataCache.buildings[building.id][key] = updates[key];
+                } else {
+                    const [parent, child] = key.split('/');
+                    if (!window.state.dataCache.buildings[building.id][parent]) {
+                        window.state.dataCache.buildings[building.id][parent] = {};
+                    }
+                    window.state.dataCache.buildings[building.id][parent][child] = updates[key];
+                }
+            });
+        }
+        
+        // allBuildings 업데이트
+        const idx = window.state.allBuildings.findIndex(b => b.id === building.id);
+        if (idx >= 0) {
+            window.state.allBuildings[idx] = { ...window.state.allBuildings[idx], ...building };
+        }
+        
+        // 모달 닫기
+        if (typeof closeModal === 'function') {
+            closeModal('buildingEditModal');
+        } else {
+            const m = document.getElementById('buildingEditModal');
+            const o = document.getElementById('modalOverlay');
+            if (m) { m.classList.remove('show'); m.style.display = 'none'; }
+            if (o) { o.classList.remove('show'); o.style.display = 'none'; }
+        }
+        
+        // 화면 갱신
+        if (typeof refreshAfterCrud === 'function') {
+            refreshAfterCrud(() => {
+                if (typeof renderInfoSection === 'function') renderInfoSection();
+                else if (window.renderInfoSection) window.renderInfoSection();
+            });
+        } else {
+            if (typeof renderInfoSection === 'function') renderInfoSection();
+            else if (window.renderInfoSection) window.renderInfoSection();
+            if (typeof renderBuildingList === 'function') renderBuildingList();
+            if (typeof renderTableView === 'function' && window.state?.currentViewMode === 'list') renderTableView();
+        }
+        
+        if (typeof showToast === 'function') {
+            showToast('빌딩 정보가 저장되었습니다', 'success');
+        }
+        
+    } catch (error) {
+        console.error('빌딩 정보 저장 오류:', error);
+        if (typeof showToast === 'function') {
+            showToast('저장 실패: ' + error.message, 'error');
+        }
+    }
+};
+
+console.log('✅ [v4.1] openBuildingEditModal + saveBuildingEdit 모듈 로드 완료');
