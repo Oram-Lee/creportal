@@ -1390,12 +1390,6 @@
     
     <!-- 도형 검색 스타일 -->
     <style>
-        /* v4.1: 리스트(검색) 모드에서 도형 검색 숨김 */
-        body[data-view-mode="list"] #drawingToggleBtn,
-        body[data-view-mode="list"] #drawingToolsPanel {
-            display: none !important;
-        }
-        
         /* 도형 그리기 도구 패널 */
         .drawing-tools-panel {
             position: absolute;
@@ -4071,27 +4065,35 @@
     <!-- ★ #13: 중복 빌딩 관리 스크립트 -->
     <script src="js/portal-merge.js?v=1.0"></script>
     
-    <!-- v4.1: 뷰 모드에 따른 UI 요소 표시/숨김 -->
+    <!-- v4.1: 뷰 모드에 따른 지도전용 UI 표시/숨김 -->
     <script>
         (function patchViewMode() {
-            // setViewMode가 등록될 때까지 대기 후 패치
+            const MAP_ONLY_IDS = ['drawingToggleBtn', 'drawingToolsPanel'];
+            
+            function syncMapOnlyUI(mode) {
+                MAP_ONLY_IDS.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = (mode === 'map') ? '' : 'none';
+                });
+            }
+
             const timer = setInterval(() => {
                 if (typeof window.setViewMode === 'function' && !window._viewModePatched) {
                     const _orig = window.setViewMode;
                     window.setViewMode = function(mode) {
                         _orig(mode);
-                        document.body.setAttribute('data-view-mode', mode);
+                        syncMapOnlyUI(mode);
                     };
                     window._viewModePatched = true;
-                    // 초기값 설정: 현재 활성 탭 기준
+                    
+                    // 초기 상태 동기화
                     const activeNav = document.querySelector('.nav-item.active');
-                    const initialMode = activeNav?.dataset?.view || 'map';
-                    document.body.setAttribute('data-view-mode', initialMode);
+                    const initMode = activeNav?.dataset?.view || 'map';
+                    syncMapOnlyUI(initMode);
                     clearInterval(timer);
-                    console.log('[v4.1] viewMode 패치 완료, 초기 모드:', initialMode);
+                    console.log('[v4.1] viewMode 패치 완료, 초기 모드:', initMode);
                 }
             }, 200);
-            // 10초 후 포기
             setTimeout(() => clearInterval(timer), 10000);
         })();
     </script>
