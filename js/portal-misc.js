@@ -450,121 +450,7 @@ window.applyLedgerChangesPortal = async function(buildingId) {
 };
 
 // ===== 빌딩 정보 편집 =====
-
-export function openBuildingEditModal() {
-    if (!state.selectedBuilding) return;
-    
-    const b = state.selectedBuilding;
-    
-    // 폼에 현재 값 채우기
-    document.getElementById('editDepositPy').value = b.depositPy || '';
-    document.getElementById('editRentPy').value = b.rentPy || '';
-    document.getElementById('editMaintenancePy').value = b.maintenancePy || '';
-    document.getElementById('editExclusiveRate').value = b.exclusiveRate || '';
-    document.getElementById('editTypicalFloorPy').value = b.typicalFloorPy || '';
-    document.getElementById('editTypicalFloorLeasePy').value = b.typicalFloorLeasePy || '';
-    document.getElementById('editGrade').value = b.grade || '';
-    document.getElementById('editPm').value = b.pm || '';
-    document.getElementById('editOwner').value = b.owner || '';
-    document.getElementById('editNearbyStation').value = b.nearbyStation || '';
-    document.getElementById('editDescription').value = b.description || '';
-    
-    // ★ 주차 display (수동입력용)
-    const parkingDisplay = b.parking?.display || '';
-    document.getElementById('editParkingDisplay').value = parkingDisplay;
-    
-    // ★ 승강기 (수동입력용)
-    const elevator = b.specs?.elevator || '';
-    document.getElementById('editElevator').value = elevator;
-    
-    document.getElementById('buildingEditModal').classList.add('show');
-    document.getElementById('modalOverlay').classList.add('show');
-}
-
-export async function saveBuildingEdit(formData) {
-    if (!state.selectedBuilding) return;
-    
-    try {
-        const updates = {
-            depositPy: formData.depositPy,
-            rentPy: formData.rentPy,
-            maintenancePy: formData.maintenancePy,
-            exclusiveRate: parseFloat(formData.exclusiveRate) || null,
-            typicalFloorPy: parseFloat(formData.typicalFloorPy) || null,
-            typicalFloorLeasePy: parseFloat(formData.typicalFloorLeasePy) || null,
-            grade: formData.grade,
-            pm: formData.pm,
-            owner: formData.owner,
-            nearbyStation: formData.nearbyStation,
-            description: formData.description,
-            updatedAt: new Date().toISOString(),
-            updatedBy: state.currentUser?.email
-        };
-        
-        // ★ v3.2: area/* 경로에도 저장 (renderInfoSection에서 area.* 우선 참조하므로)
-        if (formData.exclusiveRate) {
-            updates['area/exclusiveRate'] = parseFloat(formData.exclusiveRate);
-        }
-        if (formData.typicalFloorPy) {
-            updates['area/typicalFloorPy'] = parseFloat(formData.typicalFloorPy);
-        }
-        if (formData.typicalFloorLeasePy) {
-            updates['area/typicalFloorLeasePy'] = parseFloat(formData.typicalFloorLeasePy);
-        }
-        
-        // ★ 주차 display 저장 (parking.display)
-        // 건축물대장 갱신 시 parking.total이 채워지면 자동 업데이트됨
-        if (formData.parkingDisplay) {
-            updates['parking/display'] = formData.parkingDisplay;
-        }
-        
-        // ★ 승강기 저장 (specs.elevator)
-        // 건축물대장 갱신 시 rideUseElvtCnt/emgenUseElvtCnt로 자동 업데이트됨
-        if (formData.elevator) {
-            updates['specs/elevator'] = formData.elevator;
-        }
-        
-        await update(ref(db, `buildings/${state.selectedBuilding.id}`), updates);
-        
-        // 로컬 데이터 업데이트
-        Object.assign(state.selectedBuilding, updates);
-        
-        // ★ v3.2: area 객체도 업데이트
-        state.selectedBuilding.area = state.selectedBuilding.area || {};
-        if (formData.exclusiveRate) {
-            state.selectedBuilding.area.exclusiveRate = parseFloat(formData.exclusiveRate);
-        }
-        if (formData.typicalFloorPy) {
-            state.selectedBuilding.area.typicalFloorPy = parseFloat(formData.typicalFloorPy);
-        }
-        if (formData.typicalFloorLeasePy) {
-            state.selectedBuilding.area.typicalFloorLeasePy = parseFloat(formData.typicalFloorLeasePy);
-        }
-        
-        if (formData.parkingDisplay) {
-            state.selectedBuilding.parking = state.selectedBuilding.parking || {};
-            state.selectedBuilding.parking.display = formData.parkingDisplay;
-        }
-        if (formData.elevator) {
-            state.selectedBuilding.specs = state.selectedBuilding.specs || {};
-            state.selectedBuilding.specs.elevator = formData.elevator;
-        }
-        
-        document.getElementById('buildingEditModal').classList.remove('show');
-        document.getElementById('modalOverlay').classList.remove('show');
-        
-        // ★ Firebase에서 최신 데이터 다시 불러와서 화면 갱신
-        if (window.refreshInfoSection) {
-            await window.refreshInfoSection();
-        } else {
-            renderInfoSection();
-        }
-        showToast('빌딩 정보가 저장되었습니다', 'success');
-    } catch (e) {
-        console.error(e);
-        showToast('저장 실패', 'error');
-    }
-}
+// ★ v4.1: portal-detail.js로 이동됨 (openBuildingEditModal, saveBuildingEdit)
 
 // ===== 전역 함수 등록 =====
 
@@ -572,8 +458,7 @@ export function registerMiscGlobals() {
     window.createLeasingGuide = createLeasingGuide;
     window.exportSelected = exportSelected;
     window.refreshBuildingLedger = refreshBuildingLedger;
-    window.openBuildingEditModal = openBuildingEditModal;
-    window.saveBuildingEdit = saveBuildingEdit;  // ★ 빌딩 정보 저장 함수
+    // ★ v4.1: openBuildingEditModal, saveBuildingEdit는 portal-detail.js에서 등록
     // 건축물대장 관련 함수들은 위에서 window에 직접 등록됨
     // (closeLedgerModalPortal, toggleLedgerSelectAllPortal, applyLedgerChangesPortal)
 }

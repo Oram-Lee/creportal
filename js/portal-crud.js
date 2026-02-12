@@ -2159,104 +2159,7 @@ export async function saveAssignedManager() {
 // ===== 전역 함수 등록 =====
 
 // ===== 빌딩 정보 편집 모달 =====
-
-export function openBuildingEditModal() {
-    const b = state.selectedBuilding;
-    if (!b) {
-        showToast('빌딩을 먼저 선택해주세요', 'warning');
-        return;
-    }
-    
-    // 기본 정보
-    const nameEl = document.getElementById('editBuildingName');
-    const gradeEl = document.getElementById('editGrade');
-    if (nameEl) nameEl.value = b.name || '';
-    if (gradeEl) gradeEl.value = b.grade || '';
-    
-    // ★ #13: 별칭
-    const aliasesEl = document.getElementById('editAliases');
-    if (aliasesEl) aliasesEl.value = (b.aliases || []).join(', ');
-    
-    // 기준층 정보
-    const typicalFloorPyEl = document.getElementById('editTypicalFloorPy');
-    const typicalFloorLeasePyEl = document.getElementById('editTypicalFloorLeasePy');
-    const exclusiveRateEl = document.getElementById('editExclusiveRate');
-    if (typicalFloorPyEl) typicalFloorPyEl.value = b.typicalFloorPy || '';
-    if (typicalFloorLeasePyEl) typicalFloorLeasePyEl.value = b.typicalFloorLeasePy || '';
-    if (exclusiveRateEl) exclusiveRateEl.value = b.exclusiveRate || '';
-    
-    // 임대조건 (만원 단위로 표시)
-    const depositPyEl = document.getElementById('editDepositPy');
-    const rentPyEl = document.getElementById('editRentPy');
-    const maintenancePyEl = document.getElementById('editMaintenancePy');
-    if (depositPyEl) depositPyEl.value = b.depositPy || '';
-    if (rentPyEl) rentPyEl.value = b.rentPy || '';
-    if (maintenancePyEl) maintenancePyEl.value = b.maintenancePy || '';
-    
-    // 시설 정보
-    const hvacEl = document.getElementById('editHvac');
-    const ceilingHeightEl = document.getElementById('editCeilingHeight');
-    const floorLoadEl = document.getElementById('editFloorLoad');
-    if (hvacEl) hvacEl.value = b.hvac || b.specs?.hvac || '';
-    if (ceilingHeightEl) ceilingHeightEl.value = b.ceilingHeight || b.specs?.ceilingHeight || '';
-    if (floorLoadEl) floorLoadEl.value = b.floorLoad || b.specs?.floorLoad || '';
-    
-    // 주차/인근역
-    const parkingRatioEl = document.getElementById('editParkingRatio');
-    const nearbyStationEl = document.getElementById('editNearbyStation');
-    if (parkingRatioEl) parkingRatioEl.value = b.parkingRatio || '';
-    if (nearbyStationEl) nearbyStationEl.value = b.nearbyStation || '';
-    
-    // 관리 정보
-    const pmEl = document.getElementById('editPm');
-    const ownerEl = document.getElementById('editOwner');
-    if (pmEl) pmEl.value = b.pm || '';
-    if (ownerEl) ownerEl.value = b.owner || '';
-    
-    // ★ 채권분석 정보 (LG그룹용)
-    const bondStatusEl = document.getElementById('editBondStatus');
-    const jointCollateralEl = document.getElementById('editJointCollateral');
-    const seniorLienEl = document.getElementById('editSeniorLien');
-    const collateralRatioEl = document.getElementById('editCollateralRatio');
-    const officialLandPriceEl = document.getElementById('editOfficialLandPrice');
-    const landPriceAppliedEl = document.getElementById('editLandPriceApplied');
-    
-    if (bondStatusEl) bondStatusEl.value = b.bondStatus || '';
-    if (jointCollateralEl) jointCollateralEl.value = b.jointCollateral || '';
-    if (seniorLienEl) seniorLienEl.value = b.seniorLien || '';
-    if (collateralRatioEl) collateralRatioEl.value = b.collateralRatio || '';
-    if (officialLandPriceEl) officialLandPriceEl.value = b.officialLandPrice || '';
-    if (landPriceAppliedEl) landPriceAppliedEl.value = b.landPriceApplied || '';
-    
-    // 기타 정보
-    const descriptionEl = document.getElementById('editDescription');
-    const urlEl = document.getElementById('editUrl');
-    if (descriptionEl) descriptionEl.value = b.description || '';
-    if (urlEl) urlEl.value = b.url || b.homepage || '';
-    
-    // 건축물대장 읽기전용 정보 표시
-    const readonlyInfoEl = document.getElementById('buildingReadonlyInfo');
-    if (readonlyInfoEl) {
-        const raw = b._raw || b;
-        const floors = raw.floors?.display || b.floors || '-';
-        const completionYear = raw.completionYear || b.completionYear || '-';
-        const grossFloorSqm = raw.area?.grossFloorSqm || b.grossFloorSqm || '-';
-        const parkingTotal = raw.parking?.total || b.parkingTotal || '-';
-        const elevators = b.elevators || '-';
-        
-        readonlyInfoEl.innerHTML = `
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 16px;">
-                <div><span style="color: #64748b;">연면적:</span> ${grossFloorSqm ? Number(grossFloorSqm).toLocaleString() + '㎡' : '-'}</div>
-                <div><span style="color: #64748b;">규모:</span> ${floors}</div>
-                <div><span style="color: #64748b;">준공:</span> ${completionYear}년</div>
-                <div><span style="color: #64748b;">주차:</span> ${parkingTotal}대</div>
-                <div><span style="color: #64748b;">엘리베이터:</span> ${elevators}</div>
-            </div>
-        `;
-    }
-    
-    openModal('buildingEditModal');
-}
+// ★ v4.1: portal-detail.js로 이동됨
 
 export function registerCrudGlobals() {
     // 모달
@@ -2341,8 +2244,7 @@ export function registerCrudGlobals() {
     window.openAssignManagerModal = openAssignManagerModal;
     window.saveAssignedManager = saveAssignedManager;
     
-    // ★ 빌딩 정보 편집 모달
-    window.openBuildingEditModal = openBuildingEditModal;
+    // ★ v4.1: openBuildingEditModal은 portal-detail.js에서 등록
 
     // ★ refreshAfterCrud를 window에 노출 (portal.html 인라인 스크립트에서 사용)
     window.refreshAfterCrud = refreshAfterCrud;
