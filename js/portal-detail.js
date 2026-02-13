@@ -1556,30 +1556,30 @@ export async function refreshMemoSection() {
     if (!state.selectedBuilding) return;
     
     const buildingId = state.selectedBuilding.id;
-    console.log('🔄 메모 새로고침:', buildingId);
+    const buildingName = state.selectedBuilding.name;
+    console.log('🔄 메모 새로고침:', buildingId, buildingName);
     
     try {
-        // Firebase에서 최신 memos 데이터 가져오기
-        const snapshot = await get(ref(db, `buildings/${buildingId}/memos`));
-        if (snapshot.exists()) {
-            const memosData = snapshot.val();
-            // ★ v4.2: 배열/객체 변환 + null 필터링 (Firebase sparse array 대응)
-            let memos = Array.isArray(memosData) 
-                ? memosData 
-                : Object.values(memosData);
-            // null/undefined 항목 제거
-            memos = memos.filter(m => m != null && typeof m === 'object');
-            console.log(`📋 메모 ${memos.length}개 로드 (content 확인: ${memos.every(m => m.content) ? '✅' : '⚠️ content 누락 있음'})`);
-            state.selectedBuilding.memos = memos;
-            
-            // allBuildings에서도 동기화
-            const idx = state.allBuildings.findIndex(b => b.id === buildingId);
-            if (idx >= 0) {
-                state.allBuildings[idx].memos = memos;
-            }
-        } else {
-            console.log('📋 메모 없음 (snapshot empty)');
-            state.selectedBuilding.memos = [];
+        // ★ v4.2: 루트 memos 컬렉션에서 읽기 (portal-data.js와 동일한 경로)
+        const snapshot = await get(ref(db, 'memos'));
+        const allMemos = snapshot.val() || {};
+        
+        // buildingId 또는 buildingName으로 매칭 (buildIndex/lookupIndex와 동일 로직)
+        const memos = Object.entries(allMemos)
+            .filter(([key, m]) => {
+                if (!m || key === '_schema') return false;
+                return m.buildingId === buildingId || m.buildingName === buildingName;
+            })
+            .map(([key, m]) => ({ ...m, id: key }));
+        
+        console.log(`📋 메모 ${memos.length}개 로드 (memos 컬렉션, content 확인: ${memos.every(m => m.content) ? '✅' : '⚠️ content 누락 있음'})`);
+        state.selectedBuilding.memos = memos;
+        
+        // allBuildings에서도 동기화
+        const idx = state.allBuildings.findIndex(b => b.id === buildingId);
+        if (idx >= 0) {
+            state.allBuildings[idx].memos = memos;
+            state.allBuildings[idx].memoCount = memos.length;
         }
         
         // 화면 다시 렌더링
@@ -1678,7 +1678,7 @@ window.editMemo = function(memoId) {
     window.openMemoModal(memoId);
 };
 
-// ★ v3.3: 메모 저장 (임대안내문 표기는 1개만 허용 - 라디오 방식)
+// ★ v4.2: 메모 저장 — 루트 memos 컬렉션에 저장 (portal-data.js와 동일 경로)
 window.saveMemo = async function() {
     if (!state.selectedBuilding) return;
     
@@ -1694,33 +1694,41 @@ window.saveMemo = async function() {
     
     try {
         const b = state.selectedBuilding;
-        let memos = [...(b.memos || [])];
         
-        // ★ v3.3: 임대안내문 표기 체크 시, 기존 메모들의 체크 해제 (라디오 방식)
+        // ★ v4.2: 임대안내문 표기 체크 시, 같은 빌딩의 다른 메모들 체크 해제 (라디오 방식)
         if (showInLeasingGuide) {
-            memos = memos.map(m => ({
-                ...m,
-                showInLeasingGuide: false  // 모든 기존 메모의 체크 해제
-            }));
+            const otherGuide = (b.memos || []).filter(m => m.showInLeasingGuide && m.id !== memoId);
+            for (const m of otherGuide) {
+                await update(ref(db, `memos/${m.id}`), { showInLeasingGuide: false });
+            }
         }
         
         if (memoId) {
-            // 수정
-            const idx = memos.findIndex(m => m.id === memoId);
+            // ★ 수정: 루트 memos 컬렉션의 해당 문서 업데이트
+            await update(ref(db, `memos/${memoId}`), {
+                content,
+                pinned,
+                showInLeasingGuide,
+                updatedAt: new Date().toISOString(),
+                updatedBy: state.currentUser?.email
+            });
+            
+            // 로컬 상태 업데이트
+            const idx = (b.memos || []).findIndex(m => m.id === memoId);
             if (idx >= 0) {
-                memos[idx] = {
-                    ...memos[idx],
-                    content,
-                    pinned,
-                    showInLeasingGuide,
-                    updatedAt: new Date().toISOString(),
-                    updatedBy: state.currentUser?.email
-                };
+                b.memos[idx] = { ...b.memos[idx], content, pinned, showInLeasingGuide, updatedAt: new Date().toISOString(), updatedBy: state.currentUser?.email };
+            }
+            // 임대안내문 해제 반영
+            if (showInLeasingGuide) {
+                b.memos.forEach(m => { if (m.id !== memoId) m.showInLeasingGuide = false; });
             }
         } else {
-            // 추가
+            // ★ 추가: 루트 memos 컬렉션에 새 문서 push
+            const newRef = push(ref(db, 'memos'));
+            const newKey = newRef.key;
             const newMemo = {
-                id: 'memo_' + Date.now(),
+                buildingId: b.id,
+                buildingName: b.name,
                 content,
                 pinned,
                 showInLeasingGuide,
@@ -1728,28 +1736,31 @@ window.saveMemo = async function() {
                 createdBy: state.currentUser?.email,
                 author: state.currentUser?.email
             };
-            memos.push(newMemo);
+            await set(newRef, newMemo);
+            
+            // 로컬 상태 업데이트 (id는 Firebase key)
+            if (!b.memos) b.memos = [];
+            // 임대안내문 해제 반영
+            if (showInLeasingGuide) {
+                b.memos.forEach(m => { m.showInLeasingGuide = false; });
+            }
+            b.memos.push({ ...newMemo, id: newKey });
         }
         
         // ★ v4.2: 저장 시간 기록 (탭 전환 시 불필요한 새로고침 방지)
         state.lastMemoActionTime = Date.now();
         
-        // Firebase에 저장
-        await update(ref(db, `buildings/${b.id}`), { memos });
-        
-        // 로컬 상태 업데이트
-        state.selectedBuilding.memos = memos;
-        
-        // allBuildings에서도 업데이트
-        const idx = state.allBuildings.findIndex(building => building.id === b.id);
-        if (idx >= 0) {
-            state.allBuildings[idx].memos = memos;
+        // allBuildings에서도 동기화
+        const allIdx = state.allBuildings.findIndex(building => building.id === b.id);
+        if (allIdx >= 0) {
+            state.allBuildings[allIdx].memos = b.memos;
+            state.allBuildings[allIdx].memoCount = b.memos.length;
         }
         
-        // ★ v3.4: 메모 개수 배지 업데이트
+        // 메모 개수 배지 업데이트
         const countEl = document.getElementById('memoCount');
         if (countEl) {
-            countEl.textContent = memos.length;
+            countEl.textContent = b.memos.length;
         }
         
         // 모달 닫기
@@ -1765,7 +1776,7 @@ window.saveMemo = async function() {
     }
 };
 
-// ★ v3.4: 메모 삭제
+// ★ v4.2: 메모 삭제 — 루트 memos 컬렉션에서 삭제
 window.deleteMemo = async function(memoId) {
     console.log('🗑️ 메모 삭제 시도:', memoId);
     if (!state.selectedBuilding) {
@@ -1780,31 +1791,30 @@ window.deleteMemo = async function(memoId) {
     try {
         const b = state.selectedBuilding;
         const beforeCount = (b.memos || []).length;
-        let memos = (b.memos || []).filter(m => m.id !== memoId);
-        const afterCount = memos.length;
         
-        console.log(`📝 메모 개수: ${beforeCount} → ${afterCount}`);
+        // ★ v4.2: 루트 memos 컬렉션에서 삭제
+        await remove(ref(db, `memos/${memoId}`));
+        console.log('✅ Firebase memos/' + memoId + ' 삭제 완료');
         
         // ★ v4.2: 삭제 시간 기록 (탭 전환 시 불필요한 새로고침 방지)
         state.lastMemoActionTime = Date.now();
         
-        // Firebase에 저장
-        await update(ref(db, `buildings/${b.id}`), { memos });
-        console.log('✅ Firebase 업데이트 완료');
-        
         // 로컬 상태 업데이트
-        state.selectedBuilding.memos = memos;
+        b.memos = (b.memos || []).filter(m => m.id !== memoId);
+        const afterCount = b.memos.length;
+        console.log(`📝 메모 개수: ${beforeCount} → ${afterCount}`);
         
-        // allBuildings에서도 업데이트
+        // allBuildings에서도 동기화
         const idx = state.allBuildings.findIndex(building => building.id === b.id);
         if (idx >= 0) {
-            state.allBuildings[idx].memos = memos;
+            state.allBuildings[idx].memos = b.memos;
+            state.allBuildings[idx].memoCount = b.memos.length;
         }
         
-        // ★ 메모 개수 배지 업데이트
+        // 메모 개수 배지 업데이트
         const countEl = document.getElementById('memoCount');
         if (countEl) {
-            countEl.textContent = memos.length;
+            countEl.textContent = b.memos.length;
         }
         
         // 화면 갱신 (로컬 데이터로)
