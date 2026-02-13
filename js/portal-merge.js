@@ -412,18 +412,7 @@ async function openMergeView(groupIdx) {
         return;
     }
     
-    // 데이터 풍부도 점수로 Master 추천 (필드가 더 많이 채워진 쪽)
-    const richness = freshBuildings.map(b => {
-        let score = 0;
-        const fields = ['name','address','addressJibun','nearbyStation','exclusiveRate','typicalFloorPy',
-                        'depositPy','rentPy','maintenancePy','grade','hvac','pm','owner','completionYear',
-                        'grossFloorSqm','parkingTotal','description'];
-        fields.forEach(f => { if (b[f]) score++; });
-        return score;
-    });
-    const recommendedMasterIdx = richness.indexOf(Math.max(...richness));
-    
-    // 비교 필드 목록
+    // 데이터 풍부도 점수로 Master 추천
     const compareFields = [
         { key: 'name', label: '빌딩명' },
         { key: 'address', label: '도로명주소' },
@@ -450,6 +439,20 @@ async function openMergeView(groupIdx) {
         { key: 'description', label: '설명' },
     ];
     
+    const richness = freshBuildings.map(b => {
+        let score = 0;
+        compareFields.forEach(f => { if (b[f.key]) score++; });
+        return score;
+    });
+    const recommendedMasterIdx = richness.indexOf(Math.max(...richness));
+    
+    // 전역 저장
+    window._mergeFreshBuildings = freshBuildings;
+    window._mergeCompareFields = compareFields;
+    
+    // 열 너비 계산 (label열 + 빌딩열 + 직접입력열)
+    const colCount = freshBuildings.length + 1; // +1 for 직접입력
+    
     let html = `
         <div style="margin-bottom: 16px;">
             <button onclick="renderDuplicateList()" style="padding: 6px 14px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 12px; color: #475569;">
@@ -457,49 +460,44 @@ async function openMergeView(groupIdx) {
             </button>
         </div>
         
-        <!-- Master 선택 -->
-        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 16px; margin-bottom: 16px;">
-            <div style="font-size: 13px; font-weight: 600; color: #1e40af; margin-bottom: 10px;">👑 Master 빌딩 선택</div>
-            <div style="font-size: 12px; color: #3b82f6; margin-bottom: 12px;">
-                ☑️ 체크박스로 병합 대상을 선택/해제하세요. ◉ 라디오로 Master를 지정합니다. 체크 해제된 빌딩은 병합에서 제외됩니다.
-            </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <div style="font-size: 12px; color: #64748b; margin-bottom: 12px; line-height: 1.6;">
+            ☑️ 체크 해제 = 병합에서 제외 &nbsp;|&nbsp; ◉ Master = 기준 빌딩 &nbsp;|&nbsp; 값이 다른 필드는 클릭하여 선택
+        </div>
+        
+        <div style="overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 10px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed;">
     `;
+    
+    // ===== 테이블 헤더: 체크박스 + Master 라디오 + 빌딩명 =====
+    html += `<thead><tr style="background: #eff6ff; border-bottom: 2px solid #bfdbfe;">`;
+    html += `<th style="padding: 10px 12px; text-align: left; font-weight: 600; color: #1e40af; width: 110px; position: sticky; left: 0; background: #eff6ff; z-index: 1;">필드</th>`;
     
     freshBuildings.forEach((b, idx) => {
-        const isRecommended = idx === recommendedMasterIdx;
+        const isRec = idx === recommendedMasterIdx;
         html += `
-            <label style="flex: 1; min-width: 200px; position: relative;">
-                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-                    <input type="checkbox" class="mergeIncludeCheck" value="${b.id}" data-idx="${idx}" 
-                           ${true ? 'checked' : ''} onchange="updateMergeInclusion(this)"
-                           style="width: 15px; height: 15px; accent-color: #3b82f6; cursor: pointer;">
-                    <input type="radio" name="masterBuilding" value="${b.id}" ${isRecommended ? 'checked' : ''} 
-                           data-idx="${idx}" onchange="updateMergePreview()"
-                           style="cursor: pointer;">
-                    <span style="font-size: 11px; color: #64748b;">Master</span>
+            <th id="mergeColHeader_${idx}" style="padding: 10px 8px; text-align: center; min-width: 140px; vertical-align: top;">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <input type="checkbox" class="mergeIncludeCheck" data-idx="${idx}" value="${b.id}" checked
+                               onchange="onMergeInclusionChange(this)"
+                               style="width: 14px; height: 14px; accent-color: #3b82f6; cursor: pointer;"
+                               title="병합 포함/제외">
+                        <input type="radio" name="masterBuilding" value="${b.id}" data-idx="${idx}"
+                               ${isRec ? 'checked' : ''} onchange="onMasterChange()"
+                               style="cursor: pointer;" title="Master 지정">
+                    </div>
+                    <div style="font-size: 12px; font-weight: 600; color: #1e293b; line-height: 1.3;">${b.name}</div>
+                    <div style="font-size: 10px; color: #64748b;">${richness[idx]}/${compareFields.length} 채움</div>
+                    ${isRec ? '<div style="font-size: 10px; color: #3b82f6; font-weight: 600;">⭐ 추천</div>' : ''}
                 </div>
-                <div id="mergeCard_${idx}" style="padding: 12px; background: white; border: 2px solid ${isRecommended ? '#3b82f6' : '#e2e8f0'}; border-radius: 8px; cursor: pointer;"
-                     onclick="document.querySelector('input[name=masterBuilding][data-idx=\\'${idx}\\']').checked=true; updateMergePreview();">
-                    <div style="font-size: 13px; font-weight: 600;">${b.name}</div>
-                    <div style="font-size: 11px; color: #64748b; margin-top: 4px;">${b.address || b.addressJibun || '-'}</div>
-                    <div style="font-size: 11px; color: #94a3b8; margin-top: 2px;">채움률: ${richness[idx]}/${compareFields.length}</div>
-                    ${isRecommended ? '<div style="font-size: 10px; color: #3b82f6; font-weight: 600; margin-top: 4px;">⭐ 추천</div>' : ''}
-                </div>
-            </label>
-        `;
+            </th>`;
     });
     
-    html += `</div></div>`;
+    html += `<th style="padding: 10px 8px; text-align: center; min-width: 120px; font-weight: 500; color: #94a3b8;">직접 입력</th>`;
+    html += `</tr></thead>`;
     
-    // 필드별 비교 테이블
-    html += `
-        <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #1e293b;">📊 필드별 비교</div>
-        <div style="font-size: 11px; color: #64748b; margin-bottom: 12px;">
-            각 필드별로 사용할 값을 선택하세요. 기본적으로 Master 빌딩의 값이 선택됩니다.
-        </div>
-        <div id="mergeFieldComparison" style="border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden;">
-    `;
+    // ===== 테이블 바디: 필드별 행 =====
+    html += `<tbody>`;
     
     compareFields.forEach((field, fIdx) => {
         const values = freshBuildings.map(b => {
@@ -507,61 +505,68 @@ async function openMergeView(groupIdx) {
             return v != null && v !== '' ? String(v) : '';
         });
         
-        // 모든 값이 동일하거나 빈 경우 축소 표시
         const uniqueVals = [...new Set(values.filter(v => v))];
         const isConflict = uniqueVals.length > 1;
         const hasValue = uniqueVals.length > 0;
         
-        if (!hasValue) return; // 모든 빌딩에 값이 없으면 스킵
+        if (!hasValue) return; // 모든 빌딩에 값 없으면 스킵
         
-        const bgColor = isConflict ? '#fffbeb' : '#f8fafc';
-        const borderColor = isConflict ? '#fde68a' : '#f1f5f9';
+        const rowBg = isConflict ? '#fffbeb' : (fIdx % 2 === 0 ? '#ffffff' : '#f8fafc');
         
-        html += `
-            <div style="padding: 10px 14px; background: ${bgColor}; border-bottom: 1px solid ${borderColor};">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${isConflict ? '8' : '0'}px;">
-                    <span style="font-size: 12px; font-weight: 600; color: #334155; min-width: 120px;">${field.label}</span>
-                    ${isConflict 
-                        ? '<span style="font-size: 10px; padding: 1px 6px; background: #fef3c7; color: #92400e; border-radius: 4px;">⚠️ 다름</span>' 
-                        : `<span style="font-size: 12px; color: #64748b;">${uniqueVals[0] || '-'}</span>`
-                    }
-                </div>
-                ${isConflict ? `
-                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                    ${freshBuildings.map((b, bIdx) => {
-                        const val = values[bIdx];
-                        if (!val) return '';
-                        return `
-                        <label style="flex: 1; min-width: 150px; cursor: pointer;">
-                            <input type="radio" name="merge_${field.key}" value="${bIdx}" 
-                                   ${bIdx === recommendedMasterIdx ? 'checked' : ''}
-                                   data-field="${field.key}" data-val="${val.replace(/"/g, '&quot;')}">
-                            <div style="margin-top: 2px; padding: 6px 10px; background: white; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;">
-                                <div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px;">${b.name}</div>
-                                <div style="color: #1e293b; word-break: break-all;">${val}</div>
-                            </div>
-                        </label>
-                        `;
-                    }).join('')}
-                    <label style="flex: 1; min-width: 150px; cursor: pointer;">
-                        <input type="radio" name="merge_${field.key}" value="custom"
-                               data-field="${field.key}">
-                        <div style="margin-top: 2px; padding: 6px 10px; background: white; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;">
-                            <div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px;">직접 입력</div>
-                            <input type="text" id="mergeCustom_${field.key}" placeholder="직접 입력" 
-                                   style="width: 100%; border: none; font-size: 12px; outline: none; background: transparent; padding: 0;"
-                                   onfocus="document.querySelector('input[name=merge_${field.key}][value=custom]').checked=true">
-                        </div>
+        html += `<tr style="background: ${rowBg}; border-bottom: 1px solid #f1f5f9;">`;
+        
+        // 필드 라벨
+        html += `<td style="padding: 8px 12px; font-weight: 600; color: #334155; position: sticky; left: 0; background: ${rowBg}; z-index: 1; border-right: 1px solid #e2e8f0;">
+            ${field.label}
+            ${isConflict ? ' <span style="font-size: 9px; padding: 1px 4px; background: #fef3c7; color: #92400e; border-radius: 3px;">⚠️</span>' : ''}
+        </td>`;
+        
+        // 각 빌딩 값
+        freshBuildings.forEach((b, bIdx) => {
+            const val = values[bIdx];
+            const isMasterDefault = bIdx === recommendedMasterIdx;
+            
+            if (isConflict && val) {
+                // 충돌 필드: 라디오 선택 가능한 셀
+                html += `<td class="mergeCell" style="padding: 6px 8px; cursor: pointer;" 
+                             onclick="selectMergeValue('${field.key}', ${bIdx})">
+                    <label style="display: flex; align-items: flex-start; gap: 4px; cursor: pointer;">
+                        <input type="radio" name="merge_${field.key}" value="${bIdx}"
+                               ${isMasterDefault ? 'checked' : ''}
+                               data-field="${field.key}" data-val="${val.replace(/"/g, '&quot;')}"
+                               style="margin-top: 2px; flex-shrink: 0;">
+                        <span style="color: #1e293b; word-break: break-all; line-height: 1.4;">${val}</span>
                     </label>
-                </div>
-                ` : ''}
-            </div>
-        `;
+                </td>`;
+            } else if (val) {
+                // 동일값 또는 유일값: 표시만
+                html += `<td style="padding: 6px 8px; color: #475569;">${val}</td>`;
+            } else {
+                html += `<td style="padding: 6px 8px; color: #cbd5e1;">—</td>`;
+            }
+        });
+        
+        // 직접 입력 열
+        if (isConflict) {
+            html += `<td style="padding: 6px 8px;">
+                <label style="display: flex; align-items: flex-start; gap: 4px; cursor: pointer;">
+                    <input type="radio" name="merge_${field.key}" value="custom"
+                           data-field="${field.key}" style="margin-top: 2px; flex-shrink: 0;">
+                    <input type="text" id="mergeCustom_${field.key}" placeholder="입력" 
+                           style="width: 100%; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 11px; padding: 3px 6px; outline: none;"
+                           onfocus="document.querySelector('input[name=merge_${field.key}][value=custom]').checked=true">
+                </label>
+            </td>`;
+        } else {
+            html += `<td style="padding: 6px 8px; color: #cbd5e1;">—</td>`;
+        }
+        
+        html += `</tr>`;
     });
     
-    html += `</div>`;
+    html += `</tbody></table></div>`;
     
-    // 데이터 이관 안내
+    // 데이터 이관 안내 + 실행 버튼
     html += `
         <div style="margin-top: 20px; padding: 14px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px;">
             <div style="font-size: 13px; font-weight: 600; color: #166534; margin-bottom: 8px;">📦 병합 시 자동 이관되는 데이터</div>
@@ -590,9 +595,6 @@ async function openMergeView(groupIdx) {
     `;
     
     container.innerHTML = html;
-    
-    // freshBuildings를 전역에 저장
-    window._mergeFreshBuildings = freshBuildings;
 }
 
 // ============================================================
@@ -615,12 +617,12 @@ async function executeMerge() {
     // ★ v4.2: 체크된 빌딩만 병합 대상 (Master 제외)
     const includedIds = new Set();
     document.querySelectorAll('.mergeIncludeCheck:checked').forEach(cb => {
-        includedIds.add(freshBuildings[parseInt(cb.dataset.idx)].id);
+        includedIds.add(cb.value);
     });
     const absorbedBuildings = freshBuildings.filter(b => b.id !== masterId && includedIds.has(b.id));
     
     if (absorbedBuildings.length === 0) {
-        if (typeof showToast === 'function') showToast('병합할 대상 빌딩이 없습니다. 최소 1개를 체크해주세요.', 'warning');
+        if (typeof showToast === 'function') showToast('병합할 대상 빌딩을 1개 이상 체크해주세요', 'warning');
         return;
     }
     
@@ -768,158 +770,66 @@ window.renderAliasesSection = renderAliasesSection;
 window.mergeExtractAddressKey = mergeExtractAddressKey;
 window.mergeStringSimilarity = mergeStringSimilarity;
 window.normalizeBuildingName = normalizeBuildingName;
-window.updateMergePreview = updateMergePreview;
 
-// ★ v4.2: 체크박스 변경 시 - Master는 항상 체크 유지, 카드 비활성화 스타일
-function updateMergeInclusion(checkbox) {
+// ★ v4.2: 셀 클릭으로 라디오 선택
+function selectMergeValue(fieldKey, bIdx) {
+    const radio = document.querySelector(`input[name="merge_${fieldKey}"][value="${bIdx}"]`);
+    if (radio) radio.checked = true;
+}
+
+// ★ v4.2: 체크박스 변경 — 병합 포함/제외
+function onMergeInclusionChange(checkbox) {
+    const idx = checkbox.dataset.idx;
     const masterRadio = document.querySelector('input[name="masterBuilding"]:checked');
     const masterIdx = masterRadio ? masterRadio.dataset.idx : null;
     
-    // Master 빌딩은 해제 불가
-    if (checkbox.dataset.idx === masterIdx) {
+    // Master는 해제 불가
+    if (idx === masterIdx) {
         checkbox.checked = true;
-        if (typeof showToast === 'function') showToast('Master 빌딩은 병합 대상에서 제외할 수 없습니다', 'warning');
+        if (typeof showToast === 'function') showToast('Master 빌딩은 제외할 수 없습니다', 'warning');
         return;
     }
     
-    // 최소 2개는 체크되어야 함
+    // 최소 2개 체크
     const checkedCount = document.querySelectorAll('.mergeIncludeCheck:checked').length;
     if (checkedCount < 2) {
         checkbox.checked = true;
-        if (typeof showToast === 'function') showToast('최소 2개 빌딩이 선택되어야 합니다', 'warning');
+        if (typeof showToast === 'function') showToast('최소 2개 빌딩이 필요합니다', 'warning');
         return;
     }
     
-    // 카드 비활성화 스타일
-    const card = document.getElementById(`mergeCard_${checkbox.dataset.idx}`);
-    if (card) {
-        card.style.opacity = checkbox.checked ? '1' : '0.35';
-        card.style.pointerEvents = checkbox.checked ? 'auto' : 'none';
-    }
+    // 열 전체 비활성화 스타일
+    const header = document.getElementById(`mergeColHeader_${idx}`);
+    if (header) header.style.opacity = checkbox.checked ? '1' : '0.3';
     
-    // 필드 비교 다시 렌더링
-    rebuildFieldComparison();
+    // 해당 열의 셀들 비활성화
+    document.querySelectorAll(`td.mergeCell`).forEach(td => {
+        // 셀 내부 라디오의 value가 해당 idx인지 확인
+    });
 }
 
-// ★ v4.2: 필드 비교 영역 동적 재구성
-function rebuildFieldComparison() {
-    const freshBuildings = window._mergeFreshBuildings;
-    if (!freshBuildings) return;
-    
-    const includedIdxs = [];
-    document.querySelectorAll('.mergeIncludeCheck:checked').forEach(cb => {
-        includedIdxs.push(parseInt(cb.dataset.idx));
-    });
-    
-    const masterRadio = document.querySelector('input[name="masterBuilding"]:checked');
-    const masterIdx = masterRadio ? parseInt(masterRadio.dataset.idx) : includedIdxs[0];
-    
-    const compareFields = [
-        { key: 'name', label: '빌딩명' },
-        { key: 'address', label: '도로명주소' },
-        { key: 'addressJibun', label: '지번주소' },
-        { key: 'nearbyStation', label: '인근역' },
-        { key: 'grade', label: '등급' },
-        { key: 'completionYear', label: '준공년도' },
-        { key: 'totalFloors', label: '지상층수' },
-        { key: 'basementFloors', label: '지하층수' },
-        { key: 'grossFloorSqm', label: '연면적(㎡)' },
-        { key: 'typicalFloorPy', label: '기준층전용(평)' },
-        { key: 'typicalFloorLeasePy', label: '기준층임대(평)' },
-        { key: 'exclusiveRate', label: '전용률(%)' },
-        { key: 'depositPy', label: '보증금(만원/평)' },
-        { key: 'rentPy', label: '임대료(만원/평)' },
-        { key: 'maintenancePy', label: '관리비(만원/평)' },
-        { key: 'hvac', label: '냉난방' },
-        { key: 'parkingTotal', label: '총주차' },
-        { key: 'parkingFree', label: '무료주차' },
-        { key: 'parkingPaid', label: '유료주차' },
-        { key: 'parkingNote', label: '주차비고' },
-        { key: 'pm', label: 'PM' },
-        { key: 'owner', label: '소유자' },
-        { key: 'description', label: '설명' },
-    ];
-    
-    let html = '';
-    compareFields.forEach(field => {
-        const values = freshBuildings.map(b => {
-            const v = b[field.key];
-            return v != null && v !== '' ? String(v) : '';
-        });
-        
-        // 포함된 빌딩의 값만 비교
-        const includedValues = includedIdxs.map(i => values[i]).filter(v => v);
-        const uniqueVals = [...new Set(includedValues)];
-        const isConflict = uniqueVals.length > 1;
-        const hasValue = uniqueVals.length > 0;
-        
-        if (!hasValue) return;
-        
-        const bgColor = isConflict ? '#fffbeb' : '#f8fafc';
-        const borderColor = isConflict ? '#fde68a' : '#f1f5f9';
-        
-        html += `<div style="padding: 10px 14px; background: ${bgColor}; border-bottom: 1px solid ${borderColor};">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${isConflict ? '8' : '0'}px;">
-                <span style="font-size: 12px; font-weight: 600; color: #334155; min-width: 120px;">${field.label}</span>
-                ${isConflict 
-                    ? '<span style="font-size: 10px; padding: 1px 6px; background: #fef3c7; color: #92400e; border-radius: 4px;">⚠️ 다름</span>' 
-                    : '<span style="font-size: 12px; color: #64748b;">' + (uniqueVals[0] || '-') + '</span>'
-                }
-            </div>
-            ${isConflict ? '<div style="display: flex; gap: 6px; flex-wrap: wrap;">' + 
-                includedIdxs.map(bIdx => {
-                    const val = values[bIdx];
-                    if (!val) return '';
-                    const b = freshBuildings[bIdx];
-                    return '<label style="flex: 1; min-width: 150px; cursor: pointer;">'
-                        + '<input type="radio" name="merge_' + field.key + '" value="' + bIdx + '" '
-                        + (bIdx === masterIdx ? 'checked' : '')
-                        + ' data-field="' + field.key + '" data-val="' + val.replace(/"/g, '&quot;') + '">'
-                        + '<div style="margin-top: 2px; padding: 6px 10px; background: white; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;">'
-                        + '<div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px;">' + b.name + '</div>'
-                        + '<div style="color: #1e293b; word-break: break-all;">' + val + '</div>'
-                        + '</div></label>';
-                }).join('') 
-                + '<label style="flex: 1; min-width: 150px; cursor: pointer;">'
-                + '<input type="radio" name="merge_' + field.key + '" value="custom" data-field="' + field.key + '">'
-                + '<div style="margin-top: 2px; padding: 6px 10px; background: white; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 12px;">'
-                + '<div style="font-size: 10px; color: #94a3b8; margin-bottom: 2px;">직접 입력</div>'
-                + '<input type="text" id="mergeCustom_' + field.key + '" placeholder="직접 입력" '
-                + 'style="width: 100%; border: none; font-size: 12px; outline: none; background: transparent; padding: 0;" '
-                + 'onfocus="document.querySelector(\'input[name=merge_' + field.key + '][value=custom]\').checked=true">'
-                + '</div></label></div>'
-            : ''}
-        </div>`;
-    });
-    
-    const container = document.getElementById('mergeFieldComparison');
-    if (container) container.innerHTML = html;
-}
-
-window.updateMergeInclusion = updateMergeInclusion;
-
-// ★ Master 변경 시 필드별 라디오 기본값 업데이트 + 체크박스 연동
-function updateMergePreview() {
+// ★ v4.2: Master 변경 시
+function onMasterChange() {
     const masterRadio = document.querySelector('input[name="masterBuilding"]:checked');
     if (!masterRadio) return;
     const masterIdx = masterRadio.dataset.idx;
     
-    // Master로 선택된 빌딩은 반드시 체크
-    const masterCheckbox = document.querySelector(`.mergeIncludeCheck[data-idx="${masterIdx}"]`);
-    if (masterCheckbox && !masterCheckbox.checked) {
-        masterCheckbox.checked = true;
-        const card = document.getElementById(`mergeCard_${masterIdx}`);
-        if (card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
+    // Master는 반드시 체크
+    const masterCb = document.querySelector(`.mergeIncludeCheck[data-idx="${masterIdx}"]`);
+    if (masterCb && !masterCb.checked) {
+        masterCb.checked = true;
+        const header = document.getElementById(`mergeColHeader_${masterIdx}`);
+        if (header) header.style.opacity = '1';
     }
     
-    // Master 카드 스타일 업데이트
-    document.querySelectorAll('input[name="masterBuilding"]').forEach(radio => {
-        const card = document.getElementById(`mergeCard_${radio.dataset.idx}`);
-        if (card) {
-            card.style.borderColor = radio.checked ? '#3b82f6' : '#e2e8f0';
+    // 충돌 필드의 기본 선택을 새 Master로 변경
+    document.querySelectorAll('#dupManagerContent input[type="radio"][name^="merge_"]').forEach(radio => {
+        if (radio.value === masterIdx) {
+            radio.checked = true;
         }
     });
-    
-    // 필드 비교 재구성
-    rebuildFieldComparison();
 }
+
+window.selectMergeValue = selectMergeValue;
+window.onMergeInclusionChange = onMergeInclusionChange;
+window.onMasterChange = onMasterChange;
