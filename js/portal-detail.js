@@ -197,10 +197,16 @@ export function openDetail(id) {
     state.currentDisplayedVacancies = [];
     
     const b = state.selectedBuilding;
+    
+    // ★ v4.2: memos 배열 null 필터링 (Firebase에서 null 항목 유입 방지)
+    if (b.memos) {
+        b.memos = b.memos.filter(m => m != null && typeof m === 'object');
+    }
+    
     document.getElementById('detailTitle').textContent = b.name || '이름 없음';
     document.getElementById('detailSubtitle').textContent = b.address || '-';
     document.getElementById('rentrollCount').textContent = b.rentrollCount || 0;
-    // ★ v3.3: 메모 개수는 실제 memos 배열 길이로 계산
+    // ★ v4.2: null 필터링 후 카운트
     document.getElementById('memoCount').textContent = (b.memos || []).length;
     document.getElementById('documentCount').textContent = (b.documents || []).length;
     document.getElementById('pricingCount').textContent = (b.floorPricing || []).length;
@@ -1557,22 +1563,27 @@ export async function refreshMemoSection() {
         const snapshot = await get(ref(db, `buildings/${buildingId}/memos`));
         if (snapshot.exists()) {
             const memosData = snapshot.val();
-            // 배열로 변환 (객체인 경우)
-            state.selectedBuilding.memos = Array.isArray(memosData) 
+            // ★ v4.2: 배열/객체 변환 + null 필터링 (Firebase sparse array 대응)
+            let memos = Array.isArray(memosData) 
                 ? memosData 
                 : Object.values(memosData);
+            // null/undefined 항목 제거
+            memos = memos.filter(m => m != null && typeof m === 'object');
+            console.log(`📋 메모 ${memos.length}개 로드 (content 확인: ${memos.every(m => m.content) ? '✅' : '⚠️ content 누락 있음'})`);
+            state.selectedBuilding.memos = memos;
+            
+            // allBuildings에서도 동기화
+            const idx = state.allBuildings.findIndex(b => b.id === buildingId);
+            if (idx >= 0) {
+                state.allBuildings[idx].memos = memos;
+            }
         } else {
+            console.log('📋 메모 없음 (snapshot empty)');
             state.selectedBuilding.memos = [];
         }
         
         // 화면 다시 렌더링
         renderMemoSection();
-        
-        // 메모 개수 배지 업데이트
-        const countEl = document.getElementById('memoCount');
-        if (countEl) {
-            countEl.textContent = state.selectedBuilding.memos.length;
-        }
     } catch (e) {
         console.error('메모 새로고침 실패:', e);
     }
@@ -1580,37 +1591,55 @@ export async function refreshMemoSection() {
 
 export function renderMemoSection() {
     const b = state.selectedBuilding;
-    const list = (b.memos || []).sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    if (!b) return;
     
-    // 메모 개수 배지 업데이트
-    const countEl = document.getElementById('memoCount');
-    if (countEl) {
-        countEl.textContent = list.length;
-    }
-    
-    document.getElementById('sectionMemo').innerHTML = `
-        <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px;">
+    try {
+        // ★ v4.2: null/undefined 항목 필터링 (Firebase 배열 복원 시 null 발생 가능)
+        const rawMemos = (b.memos || []).filter(m => m != null && typeof m === 'object');
+        const list = rawMemos.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        
+        // 메모 개수 배지 업데이트
+        const countEl = document.getElementById('memoCount');
+        if (countEl) {
+            countEl.textContent = list.length;
+        }
+        
+        const headerHtml = `<div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px;">
             <span style="flex-shrink: 0;">메모 목록</span>
             <div style="display: flex; gap: 8px;">
                 <button class="btn btn-secondary btn-sm" style="padding: 6px 12px;" onclick="refreshMemoSection()" title="새로고침">🔄</button>
                 <button class="btn btn-primary btn-sm" style="flex-shrink: 0; padding: 6px 16px; white-space: nowrap;" onclick="openMemoModal()">+ 추가</button>
             </div>
-        </div>
-        ${list.length === 0 ? '<div class="empty-state">메모가 없습니다</div>' : list.map(m => `
-            <div class="memo-item ${m.pinned ? 'pinned' : ''}" style="position: relative; padding: 10px 12px !important; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border-color); text-align: left !important; display: block !important;">
-                <div class="memo-content" style="font-size: 13px; line-height: 1.5; margin: 0 0 6px 0 !important; padding: 0 !important; text-align: left !important; white-space: pre-wrap; word-break: break-word; display: block !important;">
-                    ${m.pinned ? '📌 ' : ''}${m.showInLeasingGuide ? '<span style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:4px; font-size:10px; margin-right:4px; font-weight:500;">안내문</span>' : ''}${m.content || ''}
-                </div>
-                <div class="memo-meta" style="display: flex; justify-content: space-between; align-items: center; padding: 0 !important; margin: 0 !important;">
-                    <span style="font-size: 11px; color: var(--text-muted);">${((m.author || m.createdBy || '-').split('@')[0])} · ${m.createdAt ? new Date(m.createdAt).toLocaleDateString() : '-'}</span>
-                    <div style="display: flex !important; gap: 6px; opacity: 1 !important; visibility: visible !important;">
-                        <button onclick="editMemo('${m.id}')" title="수정" style="padding: 4px 10px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️</button>
-                        <button onclick="deleteMemo('${m.id}')" title="삭제" style="padding: 4px 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px; cursor: pointer; font-size: 12px; color: #dc2626;">×</button>
-                    </div>
-                </div>
-            </div>
-        `).join('')}
-    `;
+        </div>`;
+        
+        let memosHtml = '';
+        if (list.length === 0) {
+            memosHtml = '<div class="empty-state">메모가 없습니다</div>';
+        } else {
+            // ★ v4.2: 각 메모를 개별 생성하여 pre-wrap 내부 여백 문제 방지
+            memosHtml = list.map(m => {
+                const prefix = (m.pinned ? '📌 ' : '') + (m.showInLeasingGuide ? '<span style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:4px; font-size:10px; margin-right:4px; font-weight:500;">안내문</span>' : '');
+                const content = m.content || '';
+                const author = ((m.author || m.createdBy || '-').split('@')[0]);
+                const date = m.createdAt ? new Date(m.createdAt).toLocaleDateString() : '-';
+                return '<div class="memo-item ' + (m.pinned ? 'pinned' : '') + '" style="position: relative; padding: 10px 12px !important; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border-color); text-align: left !important; display: block !important;">'
+                    + '<div class="memo-content" style="font-size: 13px; line-height: 1.5; margin: 0 0 6px 0 !important; padding: 0 !important; text-align: left !important; white-space: pre-wrap; word-break: break-word; display: block !important;">'
+                    + prefix + content
+                    + '</div>'
+                    + '<div class="memo-meta" style="display: flex; justify-content: space-between; align-items: center; padding: 0 !important; margin: 0 !important;">'
+                    + '<span style="font-size: 11px; color: var(--text-muted);">' + author + ' · ' + date + '</span>'
+                    + '<div style="display: flex !important; gap: 6px; opacity: 1 !important; visibility: visible !important;">'
+                    + '<button onclick="editMemo(\'' + m.id + '\')" title="수정" style="padding: 4px 10px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️</button>'
+                    + '<button onclick="deleteMemo(\'' + m.id + '\')" title="삭제" style="padding: 4px 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px; cursor: pointer; font-size: 12px; color: #dc2626;">×</button>'
+                    + '</div></div></div>';
+            }).join('');
+        }
+        
+        document.getElementById('sectionMemo').innerHTML = headerHtml + memosHtml;
+    } catch (e) {
+        console.error('❌ renderMemoSection 오류:', e);
+        document.getElementById('sectionMemo').innerHTML = '<div class="empty-state">메모 로딩 중 오류 발생</div>';
+    }
 }
 
 // ★ v3.2: 메모 모달 열기
@@ -1702,8 +1731,8 @@ window.saveMemo = async function() {
             memos.push(newMemo);
         }
         
-        // ★ v3.4: 저장 시간 기록 (새로고침 스킵용)
-        state.lastMemoDeleteTime = Date.now();
+        // ★ v4.2: 저장 시간 기록 (탭 전환 시 불필요한 새로고침 방지)
+        state.lastMemoActionTime = Date.now();
         
         // Firebase에 저장
         await update(ref(db, `buildings/${b.id}`), { memos });
@@ -1756,8 +1785,8 @@ window.deleteMemo = async function(memoId) {
         
         console.log(`📝 메모 개수: ${beforeCount} → ${afterCount}`);
         
-        // ★ 삭제 시간 기록 (새로고침 스킵용)
-        state.lastMemoDeleteTime = Date.now();
+        // ★ v4.2: 삭제 시간 기록 (탭 전환 시 불필요한 새로고침 방지)
+        state.lastMemoActionTime = Date.now();
         
         // Firebase에 저장
         await update(ref(db, `buildings/${b.id}`), { memos });
@@ -2413,11 +2442,11 @@ export function setupDetailTabs() {
             const section = document.getElementById(sectionId);
             if (section) section.classList.add('active');
             
-            // ★ v3.4: 메모 탭 클릭 시 자동 새로고침 (삭제 직후가 아닐 때만)
+            // ★ v4.2: 메모 탭 클릭 시 자동 새로고침 (저장/삭제 직후가 아닐 때만)
             if (tab.dataset.section === 'memo' && state.selectedBuilding) {
-                // 삭제 직후 2초 이내면 새로고침 스킵
-                if (state.lastMemoDeleteTime && (Date.now() - state.lastMemoDeleteTime < 2000)) {
-                    console.log('🚫 삭제 직후 새로고침 스킵');
+                // 저장/삭제 직후 3초 이내면 새로고침 스킵 (로컬 데이터가 최신)
+                if (state.lastMemoActionTime && (Date.now() - state.lastMemoActionTime < 3000)) {
+                    console.log('🚫 메모 변경 직후 새로고침 스킵');
                     return;
                 }
                 await refreshMemoSection();
