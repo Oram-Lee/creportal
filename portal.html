@@ -1058,14 +1058,11 @@
         
         // Firebase Storage 업로드 전역 함수 (portal-detail.js에서 사용)
         window.uploadImageToStorage = async function(blob, storagePath) {
-            // Firebase 모듈에서 storage 가져오기
-            const { getStorage, ref: storageRef, uploadBytes, getDownloadURL } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js');
-            const { getApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+            // portal-firebase.js에서 이미 초기화된 storage 인스턴스 사용
+            const { storage, storageRef, getDownloadURL } = await import('./js/portal-firebase.js');
+            const { uploadBytes } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js');
             
-            const app = getApp();
-            const storage = getStorage(app);
             const imageRef = storageRef(storage, storagePath);
-            
             await uploadBytes(imageRef, blob);
             const downloadUrl = await getDownloadURL(imageRef);
             
