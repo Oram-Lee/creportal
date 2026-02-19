@@ -540,7 +540,11 @@ export function renderInfoSection() {
         
         <!-- 건물 기본정보 -->
         <div class="info-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 8px;">
-            <div class="info-card"><div class="label">준공년도</div><div class="value">${b.completionYear || '-'}</div></div>
+            <div class="info-card">
+                <div class="label">준공년도</div>
+                <div class="value">${b.completionYear || '-'}</div>
+                ${b.remodelNote ? `<div style="font-size:10px; color:#be185d; margin-top:2px; padding:2px 6px; background:#fce7f3; border-radius:3px; display:inline-block;">${b.remodelNote}</div>` : ''}
+            </div>
             <div class="info-card"><div class="label">등급</div><div class="value">${b.grade || '-'}</div></div>
             <div class="info-card"><div class="label">주용도</div><div class="value" style="font-size: 13px;">${b.specs?.buildingUse || b.buildingUse || b.mainPurpose || '-'}</div></div>
         </div>
@@ -609,7 +613,7 @@ export function renderInfoSection() {
             </button>
         </div>
         <div class="spec-list">
-            <div class="spec-item"><span class="label">층수</span><span class="value">${typeof b.floors === 'object' ? (b.floors?.display || `지하${b.floors?.below || 0}층/지상${b.floors?.above || 0}층`) : (b.floors || '-')}</span></div>
+            <div class="spec-item"><span class="label">층수</span><span class="value">${b.floorsDisplay || (typeof b.floors === 'object' ? (b.floors?.display || `지하${b.floors?.below || 0}층/지상${b.floors?.above || 0}층`) : (b.floors || '-'))}</span></div>
             <div class="spec-item"><span class="label">인근역</span><span class="value">${b.nearbyStation || b.nearestStation || '-'}</span></div>
             <div class="spec-item"><span class="label">주차</span><span class="value">${formatParkingDisplay(b)}</span></div>
             <div class="spec-item"><span class="label">구조</span><span class="value">${b.specs?.structure || b.structure || '-'}</span></div>
@@ -5663,7 +5667,154 @@ window.openBuildingEditModal = function() {
         modalTitle.textContent = bName ? `✏️ ${bName} 편집` : '✏️ 빌딩 정보 편집';
     }
     
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 건축물대장 원본 데이터 참조
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const bi = building.buildingInfo || raw.buildingInfo || {};
+    const hasBi = Object.keys(bi).length > 0;
+
+    // ─ 건축물대장 수신날짜 badge
+    const fetchedAt = building.ledgerFetchedAt || raw.ledgerFetchedAt || bi._fetchedAt || '';
+    const badgeEl = document.getElementById('ledgerFetchedBadge');
+    if (badgeEl) {
+        if (fetchedAt) {
+            const d = new Date(fetchedAt);
+            const label = `${String(d.getFullYear()).slice(2)}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} 수신`;
+            badgeEl.textContent = label;
+            badgeEl.style.background = '#10b981';
+        } else if (hasBi) {
+            badgeEl.textContent = '대장 보유 (수신일 미기록)';
+            badgeEl.style.background = '#f59e0b';
+        } else {
+            badgeEl.textContent = '대장 미수신';
+            badgeEl.style.background = '#ef4444';
+        }
+    }
+
+    // ─ 건축물대장 원본값 힌트 헬퍼
+    const setBiHint = (id, biVal) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (biVal !== null && biVal !== undefined && biVal !== '') {
+            el.textContent = `건대 원본: ${biVal}`;
+            el.style.color = '#3b82f6';
+        } else {
+            el.textContent = hasBi ? '건대 미기재' : '건대 미수신';
+            el.style.color = '#94a3b8';
+        }
+    };
+
+    // ─ 건축물대장에서 각 원본값 추출
+    const bi_compYear  = bi.useAprDay ? bi.useAprDay.substring(0,4) : '';
+    const bi_floors    = (bi.grndFlrCnt || bi.groundFloor)
+                           ? `지하${bi.ugrndFlrCnt||0}층/지상${bi.grndFlrCnt||0}층` : '';
+    const bi_grossSqm  = parseFloat(bi.totArea || bi.totalArea || 0);
+    const bi_grossPy   = bi_grossSqm > 0 ? parseFloat((bi_grossSqm/3.30579).toFixed(1)) : '';
+    const bi_landSqm   = parseFloat(bi.platArea  || bi.landArea     || 0);
+    const bi_archSqm   = parseFloat(bi.archArea  || bi.buildingArea  || 0);
+    const bi_vlRat     = bi.vlRat  || bi.floorAreaRatio || '';
+    const bi_bcRat     = bi.bcRat  || bi.buildingCoverageRatio || '';
+    const bi_struct    = bi.strctCdNm  || bi.structure || '';
+    const bi_use       = bi.mainPurpsCdNm || bi.mainPurpose || bi.buildingUse || '';
+    const bi_pkngTotal = bi.totPkngCnt || '';
+    const bi_pkngSelf  = bi.indrAutoUtcnt  || '';
+    const bi_pkngMech  = bi.indrMechUtcnt  || '';
+    const bi_elvPassenger = bi.rideUseElvtCnt  || '';
+    const bi_elvFreight   = bi.emgenUseElvtCnt || '';
+
+    // ─ 건축물대장 원본 패널 렌더링 (readonly)
+    const readonlyInfo = document.getElementById('buildingReadonlyInfo');
+    if (readonlyInfo) {
+        if (hasBi) {
+            const _comp  = bi_compYear ? bi_compYear+'년' : '-';
+            const _floor = bi_floors || '-';
+            const _gPy   = bi_grossPy  ? Number(bi_grossPy).toLocaleString()+'평' : '-';
+            const _gSqm  = bi_grossSqm ? '('+Number(bi_grossSqm.toFixed(1)).toLocaleString()+'㎡)' : '';
+            const _land  = bi_landSqm  ? Number(bi_landSqm.toFixed(1)).toLocaleString()+'㎡' : '-';
+            const _arch  = bi_archSqm  ? Number(bi_archSqm.toFixed(1)).toLocaleString()+'㎡' : '-';
+            const _pkng  = bi_pkngTotal
+                ? `${bi_pkngTotal}대${bi_pkngSelf ? ' (자주'+bi_pkngSelf+'/' : ''}${bi_pkngMech ? '기계'+bi_pkngMech+')' : (bi_pkngSelf?')':'')}`
+                : '-';
+            const _elv   = (bi_elvPassenger || bi_elvFreight)
+                ? `승용${bi_elvPassenger||0}대/비상${bi_elvFreight||0}대` : '-';
+            readonlyInfo.innerHTML = `
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:3px 14px; font-size:11px; color:#475569;">
+                    <div>📅 <strong>준공:</strong> ${_comp}</div>
+                    <div>🏗️ <strong>층수:</strong> ${_floor}</div>
+                    <div>📐 <strong>연면적:</strong> ${_gPy} ${_gSqm}</div>
+                    <div>🌍 <strong>대지면적:</strong> ${_land}</div>
+                    <div>🏛️ <strong>건축면적:</strong> ${_arch}</div>
+                    <div>📊 <strong>용적/건폐율:</strong> ${bi_vlRat||'-'}%/${bi_bcRat||'-'}%</div>
+                    <div>🧱 <strong>구조:</strong> ${bi_struct||'-'}</div>
+                    <div>🏢 <strong>용도:</strong> ${bi_use||'-'}</div>
+                    <div>🅿️ <strong>주차:</strong> ${_pkng}</div>
+                    <div>🛗 <strong>승강기:</strong> ${_elv}</div>
+                </div>`;
+        } else {
+            readonlyInfo.innerHTML = '<span style="color:#ef4444;font-size:11px;">건축물대장 미수신 — 🔄 갱신 버튼으로 불러오세요</span>';
+        }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 건물 개요 — 각 필드에 건대 원본 힌트 표시 + 현재 저장값 세팅
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    // 준공연도
+    setBiHint('bi_completionYear', bi_compYear ? bi_compYear+'년' : '');
+    setVal('editCompletionYear', getVal(building.completionYear, raw.completionYear, bi_compYear));
+
+    // 리모델링 표기 (마케팅용 — 건축물대장에 없음)
+    setVal('editRemodelNote', getVal(building.remodelNote, raw.remodelNote));
+
+    // 층수 표시
+    setBiHint('bi_floors', bi_floors);
+    const _currentFloors = typeof building.floors === 'object'
+        ? (building.floors?.display || `지하${building.floors?.below||0}층/지상${building.floors?.above||0}층`)
+        : (building.floors || '');
+    setVal('editFloors', getVal(building.floorsDisplay, raw.floorsDisplay, _currentFloors));
+
+    // 연면적 (평)
+    setBiHint('bi_grossFloorPy', bi_grossPy ? `${Number(bi_grossPy).toLocaleString()}평 (${Number(bi_grossSqm.toFixed(1)).toLocaleString()}㎡)` : '');
+    setVal('editGrossFloorPy', getNum(building.area?.grossFloorPy, building.grossFloorPy, raw.area?.grossFloorPy, raw.grossFloorPy, bi_grossPy||''));
+
+    // 대지면적 (㎡)
+    setBiHint('bi_landAreaSqm', bi_landSqm ? `${Number(bi_landSqm.toFixed(1)).toLocaleString()}㎡` : '');
+    setVal('editLandAreaSqm', getNum(building.area?.landArea, building.landArea, raw.area?.landArea, raw.landArea, bi_landSqm||''));
+
+    // 건축면적 (㎡)
+    setBiHint('bi_buildingAreaSqm', bi_archSqm ? `${Number(bi_archSqm.toFixed(1)).toLocaleString()}㎡` : '');
+    setVal('editBuildingAreaSqm', getNum(building.area?.buildingArea, building.buildingArea, raw.area?.buildingArea, raw.buildingArea, bi_archSqm||''));
+
+    // 용적률
+    setBiHint('bi_vlRat', bi_vlRat ? `${bi_vlRat}%` : '');
+    setVal('editVlRat', getNum(building.vlRat, building.floorAreaRatio, raw.vlRat, raw.floorAreaRatio, bi_vlRat||''));
+
+    // 건폐율
+    setBiHint('bi_bcRat', bi_bcRat ? `${bi_bcRat}%` : '');
+    setVal('editBcRat', getNum(building.bcRat, building.buildingCoverageRatio, raw.bcRat, raw.buildingCoverageRatio, bi_bcRat||''));
+
+    // 구조
+    setBiHint('bi_structure', bi_struct);
+    setVal('editStructure', getVal(building.specs?.structure, building.structure, raw.specs?.structure, raw.structure, bi_struct));
+
+    // 건물용도
+    setBiHint('bi_buildingUse', bi_use);
+    setVal('editBuildingUse', getVal(building.specs?.buildingUse, building.buildingUse, building.mainPurpose, raw.specs?.buildingUse, raw.buildingUse, raw.mainPurpose, bi_use));
+
+    // 주차 (건대 원본 힌트: 총대수/자주/기계)
+    const _pkngHint = bi_pkngTotal
+        ? `${bi_pkngTotal}대${bi_pkngSelf ? ' · 자주'+bi_pkngSelf : ''}${bi_pkngMech ? ' · 기계'+bi_pkngMech : ''}`
+        : '';
+    setBiHint('bi_parkingDisplay', _pkngHint);
+
+    // 승강기 (건대 원본 힌트)
+    const _elvHint = (bi_elvPassenger || bi_elvFreight)
+        ? `승용${bi_elvPassenger||0}대/비상${bi_elvFreight||0}대` : '';
+    setBiHint('bi_elevator', _elvHint);
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 기본 정보
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     setVal('editBuildingName', getVal(building.name, raw.name, raw.buildingName));
     setVal('editGrade', getVal(building.grade, raw.grade));
     
@@ -5759,43 +5910,6 @@ window.openBuildingEditModal = function() {
     setVal('editDescription', getVal(building.description, raw.description));
     setVal('editUrl', getVal(building.url, building.homepage, raw.url, raw.homepage));
     
-    // ★ 건축물대장 정보 (읽기전용)
-    const readonlyInfo = document.getElementById('buildingReadonlyInfo');
-    if (readonlyInfo) {
-        const bi = building.buildingInfo || raw.buildingInfo || {};
-        const grossPy = getVal(building.area?.grossFloorPy, building.grossFloorPy);
-        const grossSqm = getVal(building.area?.grossFloorSqm, building.grossFloorSqm);
-        const floorsDisplay = typeof building.floors === 'object'
-            ? (building.floors?.display || `지하${building.floors?.below || 0}층/지상${building.floors?.above || 0}층`)
-            : (building.floors || '-');
-        const completionYear = building.completionYear || bi.useAprDay?.substring(0, 4) || '-';
-        const vlRat = getVal(building.vlRat, bi.vlRat, building.floorAreaRatio);
-        const bcRat = getVal(building.bcRat, bi.bcRat, building.buildingCoverageRatio);
-        const mainPurpose = getVal(building.mainPurpose, bi.mainPurpose, bi.mainPurpsCdNm);
-        const structure = getVal(building.strctCdNm, bi.strctCdNm, building.specs?.structure);
-        const parkingTotal = getVal(building.parking?.total, bi.totPkngCnt);
-        const elevatorInfo = (() => {
-            const p = getNum(bi.rideUseElvtCnt, building.specs?.passengerElevator);
-            const f = getNum(bi.emgenUseElvtCnt, building.specs?.freightElevator);
-            if (p || f) return `승용 ${p || 0}대 / 비상 ${f || 0}대`;
-            return getVal(building.specs?.elevator, building.elevator, '-');
-        })();
-        
-        readonlyInfo.innerHTML = `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 12px;">
-                <div>📍 <strong>주소:</strong> ${building.address || '-'}</div>
-                <div>📅 <strong>준공:</strong> ${completionYear}</div>
-                <div>📐 <strong>연면적:</strong> ${grossPy ? grossPy + '평' : '-'} ${grossSqm ? '(' + grossSqm + '㎡)' : ''}</div>
-                <div>🏗️ <strong>층수:</strong> ${floorsDisplay}</div>
-                <div>📊 <strong>용적률/건폐율:</strong> ${vlRat || '-'}% / ${bcRat || '-'}%</div>
-                <div>🏢 <strong>용도:</strong> ${mainPurpose || '-'}</div>
-                <div>🧱 <strong>구조:</strong> ${structure || '-'}</div>
-                <div>🅿️ <strong>주차:</strong> ${parkingTotal || '-'}대</div>
-                <div>🛗 <strong>승강기:</strong> ${elevatorInfo}</div>
-            </div>
-        `;
-    }
-    
     // 모달 표시 (closeModal과 호환되도록 openModal 사용)
     if (typeof openModal === 'function') {
         openModal('buildingEditModal');
@@ -5842,6 +5956,18 @@ window.saveBuildingEdit = async function(formData) {
         name:            getFieldVal('editBuildingName'),
         grade:           getFieldVal('editGrade'),
         aliases:         getFieldVal('editAliases').split(',').map(s => s.trim()).filter(Boolean),
+        // ★ 건물 개요 (건대 override)
+        completionYear:   getFieldVal('editCompletionYear'),
+        remodelNote:      getFieldVal('editRemodelNote'),
+        floorsDisplay:    getFieldVal('editFloors'),
+        grossFloorPy:     getFieldVal('editGrossFloorPy'),
+        landAreaSqm:      getFieldVal('editLandAreaSqm'),
+        buildingAreaSqm:  getFieldVal('editBuildingAreaSqm'),
+        vlRat:            getFieldVal('editVlRat'),
+        bcRat:            getFieldVal('editBcRat'),
+        structure:        getFieldVal('editStructure'),
+        buildingUse:      getFieldVal('editBuildingUse'),
+        // 기준층
         typicalFloorPy:  getFieldVal('editTypicalFloorPy'),
         typicalFloorLeasePy: getFieldVal('editTypicalFloorLeasePy'),
         exclusiveRate:   getFieldVal('editExclusiveRate'),
@@ -5883,7 +6009,46 @@ window.saveBuildingEdit = async function(formData) {
         if (formData.name) updates.name = formData.name;
         updates.grade = formData.grade || '';
         updates.aliases = formData.aliases || [];
-        
+
+        // ★ 건물 개요 — 건축물대장 override 값 저장
+        // 준공연도: completionYear 에 저장 (renderInfoSection이 이 필드 우선 참조)
+        if (formData.completionYear) updates.completionYear = String(formData.completionYear);
+        // 리모델링 표기: 마케팅용 별도 필드
+        updates.remodelNote = formData.remodelNote || '';
+        // 층수 표시: floorsDisplay에 저장 (floors 객체의 display와 별개로 override 가능)
+        if (formData.floorsDisplay) updates.floorsDisplay = formData.floorsDisplay;
+        // 연면적 (평): area/grossFloorPy override
+        if (formData.grossFloorPy) {
+            const gPy = parseFloat(formData.grossFloorPy);
+            if (!isNaN(gPy)) {
+                updates['area/grossFloorPy'] = gPy;
+                updates.grossFloorPy = gPy;
+                // ㎡도 역산 저장
+                updates['area/grossFloorSqm'] = parseFloat((gPy * 3.30579).toFixed(2));
+                updates.grossFloorSqm = parseFloat((gPy * 3.30579).toFixed(2));
+            }
+        }
+        // 대지면적 (㎡)
+        if (formData.landAreaSqm) {
+            const la = parseFloat(formData.landAreaSqm);
+            if (!isNaN(la)) { updates['area/landArea'] = la; updates.landArea = la; }
+        }
+        // 건축면적 (㎡)
+        if (formData.buildingAreaSqm) {
+            const ba = parseFloat(formData.buildingAreaSqm);
+            if (!isNaN(ba)) { updates['area/buildingArea'] = ba; updates.buildingArea = ba; }
+        }
+        // 용적률 / 건폐율
+        if (formData.vlRat !== '' && formData.vlRat !== undefined) updates.vlRat = formData.vlRat ? parseFloat(formData.vlRat) : null;
+        if (formData.bcRat !== '' && formData.bcRat !== undefined) updates.bcRat = formData.bcRat ? parseFloat(formData.bcRat) : null;
+        // 구조
+        updates['specs/structure'] = formData.structure || '';
+        updates.structure = formData.structure || '';
+        // 건물용도
+        updates['specs/buildingUse'] = formData.buildingUse || '';
+        updates.buildingUse = formData.buildingUse || '';
+        updates.mainPurpose = formData.buildingUse || '';   // 호환 필드
+
         // ★ v4.2: 기준층 정보 저장 — 필드 의미 재정렬
         //   formData.typicalFloorLeasePy (editTypicalFloorLeasePy, 기준층 임대면적)
         //     → display가 읽는 area/typicalFloorPy 에 저장 (기존 동작 유지)

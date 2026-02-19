@@ -593,20 +593,127 @@
         </div>
         <form id="buildingEditForm">
             <!-- 건축물대장 정보 (읽기전용) -->
-            <div style="padding: 14px 16px; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border-radius: 10px; margin-bottom: 20px; border: 1px solid #cbd5e1;">
-                <div style="font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
+            <!-- ★ 건축물대장 원본 정보 패널 -->
+            <div style="padding: 12px 14px; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border-radius: 10px; margin-bottom: 16px; border: 1px solid #cbd5e1;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        📋 건축물대장 정보 <span style="font-size: 10px; padding: 2px 6px; background: #94a3b8; color: white; border-radius: 4px;">자동입력</span>
+                        <span style="font-size: 11px; font-weight: 700; color: #475569;">📋 건축물대장 원본</span>
+                        <span id="ledgerFetchedBadge" style="font-size: 10px; padding: 2px 6px; background: #94a3b8; color: white; border-radius: 4px;"></span>
                     </div>
-                    <button type="button" onclick="refreshBuildingLedger()" style="padding: 4px 10px; font-size: 11px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                        🔄 건축물대장 갱신
+                    <button type="button" onclick="refreshBuildingLedger()" style="padding: 3px 10px; font-size: 11px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        🔄 갱신
                     </button>
                 </div>
-                <div id="buildingReadonlyInfo" style="font-size: 13px; color: var(--text-secondary); line-height: 1.8;"></div>
+                <div id="buildingReadonlyInfo" style="font-size: 12px; color: #64748b; line-height: 1.7;"></div>
+                <div style="font-size: 10px; color: #94a3b8; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0;">
+                    💡 아래 편집 필드에서 건축물대장과 다른 실제값을 입력하면 화면 표시에 반영됩니다
+                </div>
             </div>
             
+            <!-- ★ 건물 개요 (편집 가능) — 준공/리모델링/층수/면적/구조 등 -->
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">🏗️ 건물 개요</div>
+
+            <!-- 준공연도 + 리모델링 -->
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">준공연도</small>
+                            <small id="bi_completionYear" style="font-size:10px; color:#94a3b8;"></small>
+                        </div>
+                        <input type="number" id="editCompletionYear" placeholder="예: 2001" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                    </div>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">리모델링 표기</small>
+                            <span style="font-size:10px; padding:1px 5px; background:#fce7f3; color:#be185d; border-radius:3px; white-space:nowrap;">마케팅용</span>
+                        </div>
+                        <input type="text" id="editRemodelNote" placeholder="예: 2019년 리모델링" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                        <small style="color: #94a3b8; font-size: 10px; display:block; margin-top:3px;">기본정보에 준공연도 옆에 병기됩니다</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 층수 -->
+            <div class="form-row">
+                <div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                        <small style="color: var(--text-muted);">층수 표시</small>
+                        <small id="bi_floors" style="font-size:10px; color:#94a3b8;"></small>
+                    </div>
+                    <input type="text" id="editFloors" placeholder="예: 지하4층/지상22층" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                </div>
+            </div>
+
+            <!-- 연면적 / 대지면적 / 건축면적 -->
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">연면적 (평)</small>
+                        </div>
+                        <small id="bi_grossFloorPy" style="font-size:10px; color:#94a3b8; display:block; margin-bottom:4px;"></small>
+                        <input type="number" id="editGrossFloorPy" placeholder="자동계산" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                    </div>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">대지면적 (㎡)</small>
+                        </div>
+                        <small id="bi_landArea" style="font-size:10px; color:#94a3b8; display:block; margin-bottom:4px;"></small>
+                        <input type="number" id="editLandAreaSqm" placeholder="㎡" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                    </div>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">건축면적 (㎡)</small>
+                        </div>
+                        <small id="bi_buildingArea" style="font-size:10px; color:#94a3b8; display:block; margin-bottom:4px;"></small>
+                        <input type="number" id="editBuildingAreaSqm" placeholder="㎡" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 용적률 / 건폐율 -->
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">용적률 (%)</small>
+                            <small id="bi_vlRat" style="font-size:10px; color:#94a3b8;"></small>
+                        </div>
+                        <input type="number" id="editVlRat" placeholder="예: 799.85" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                    </div>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">건폐율 (%)</small>
+                            <small id="bi_bcRat" style="font-size:10px; color:#94a3b8;"></small>
+                        </div>
+                        <input type="number" id="editBcRat" placeholder="예: 59.93" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 구조 / 건물용도 -->
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">구조</small>
+                            <small id="bi_structure" style="font-size:10px; color:#94a3b8;"></small>
+                        </div>
+                        <input type="text" id="editStructure" placeholder="예: 철근콘크리트" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                    </div>
+                    <div>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">건물용도</small>
+                            <small id="bi_buildingUse" style="font-size:10px; color:#94a3b8;"></small>
+                        </div>
+                        <input type="text" id="editBuildingUse" placeholder="예: 업무시설" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                    </div>
+                </div>
+            </div>
+
             <!-- 빌딩명 (편집 가능) -->
-            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">🏢 기본 정보</div>
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">🏢 기본 정보</div>
             <div class="form-row">
                 <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
                     <div>
@@ -699,18 +806,24 @@
                 </div>
             </div>
             
-            <!-- 주차/승강기 정보 (건축물대장에 없으면 수동 입력) -->
+            <!-- 주차/승강기 정보 — 건대 원본과 다를 경우 직접 수정 -->
             <div class="form-row">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <div>
-                        <small style="color: var(--text-muted);">🚗 주차 (수동입력)</small>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">🚗 주차 표시</small>
+                            <small id="bi_parkingDisplay" style="font-size:10px; color:#94a3b8;"></small>
+                        </div>
                         <input type="text" id="editParkingDisplay" placeholder="총 93대(자주식 93대)">
-                        <small style="color: #94a3b8; font-size: 10px;">건축물대장 갱신 시 자동 업데이트</small>
+                        <small style="color: #94a3b8; font-size: 10px;">실제 임대 가능한 주차대수로 수정 가능</small>
                     </div>
                     <div>
-                        <small style="color: var(--text-muted);">🛗 승강기 (수동입력)</small>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">🛗 승강기 표시</small>
+                            <small id="bi_elevator" style="font-size:10px; color:#94a3b8;"></small>
+                        </div>
                         <input type="text" id="editElevator" placeholder="총 3대(승용 2대 비상 1대)">
-                        <small style="color: #94a3b8; font-size: 10px;">건축물대장 갱신 시 자동 업데이트</small>
+                        <small style="color: #94a3b8; font-size: 10px;">임대용 승강기 기준으로 수정 가능</small>
                     </div>
                 </div>
             </div>
@@ -2053,6 +2166,18 @@
                     // ★ #13: 별칭
                     aliases: (document.getElementById('editAliases')?.value || '').split(',').map(a => a.trim()).filter(Boolean),
                     
+                    // ★ 건물 개요 (건축물대장 override)
+                    completionYear: document.getElementById('editCompletionYear')?.value || '',
+                    remodelNote: document.getElementById('editRemodelNote')?.value || '',
+                    floorsDisplay: document.getElementById('editFloors')?.value || '',
+                    grossFloorPy: document.getElementById('editGrossFloorPy')?.value || '',
+                    landAreaSqm: document.getElementById('editLandAreaSqm')?.value || '',
+                    buildingAreaSqm: document.getElementById('editBuildingAreaSqm')?.value || '',
+                    vlRat: document.getElementById('editVlRat')?.value || '',
+                    bcRat: document.getElementById('editBcRat')?.value || '',
+                    structure: document.getElementById('editStructure')?.value || '',
+                    buildingUse: document.getElementById('editBuildingUse')?.value || '',
+                    
                     // 기준층 정보
                     typicalFloorPy: document.getElementById('editTypicalFloorPy')?.value || '',
                     typicalFloorLeasePy: document.getElementById('editTypicalFloorLeasePy')?.value || '',
@@ -2329,6 +2454,26 @@
             
             // ★ #13: 별칭
             updates.aliases = formData.aliases || [];
+
+            // ★ 건물 개요 (건대 override)
+            if (formData.completionYear) updates.completionYear = String(formData.completionYear);
+            updates.remodelNote = formData.remodelNote || '';
+            if (formData.floorsDisplay) updates.floorsDisplay = formData.floorsDisplay;
+            if (formData.grossFloorPy) {
+                const gPy = parseFloat(formData.grossFloorPy);
+                if (!isNaN(gPy)) {
+                    updates['area/grossFloorPy'] = gPy; updates.grossFloorPy = gPy;
+                    updates['area/grossFloorSqm'] = parseFloat((gPy * 3.30579).toFixed(2));
+                    updates.grossFloorSqm = parseFloat((gPy * 3.30579).toFixed(2));
+                }
+            }
+            if (formData.landAreaSqm) { const v=parseFloat(formData.landAreaSqm); if(!isNaN(v)){updates['area/landArea']=v;updates.landArea=v;} }
+            if (formData.buildingAreaSqm) { const v=parseFloat(formData.buildingAreaSqm); if(!isNaN(v)){updates['area/buildingArea']=v;updates.buildingArea=v;} }
+            if (formData.vlRat!==''&&formData.vlRat!=null) updates.vlRat = formData.vlRat ? parseFloat(formData.vlRat) : null;
+            if (formData.bcRat!==''&&formData.bcRat!=null) updates.bcRat = formData.bcRat ? parseFloat(formData.bcRat) : null;
+            updates['specs/structure'] = formData.structure || ''; updates.structure = formData.structure || '';
+            updates['specs/buildingUse'] = formData.buildingUse || ''; updates.buildingUse = formData.buildingUse || '';
+            updates.mainPurpose = formData.buildingUse || '';
             
             // 기준층 정보 - area 객체에 저장
             updates['area/typicalFloorPy'] = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
