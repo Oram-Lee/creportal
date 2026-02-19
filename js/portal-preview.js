@@ -28,7 +28,8 @@ function extractPathFromUrl(url) {
         if (match) {
             return {
                 source: match[1],
-                publishDate: match[2].replace('_', '.')  // 26_02 → 26.02
+                // ★ 수정: Storage 경로의 _ 구분자를 그대로 유지 (getPageImageUrl에서 처리)
+                publishDate: match[2]  // 26_02 형태 그대로 사용 (getPageImageUrl에서 safePubDate 처리)
             };
         }
     } catch (e) {
@@ -100,16 +101,19 @@ export function openPagePreview(documentId) {
 
 // ★ Firebase Storage에서 페이지 이미지 URL 가져오기
 async function getPageImageUrl(source, publishDate, pageNum) {
-    // 캐시 확인
-    if (previewState.urlCache[pageNum]) {
-        console.log('URL 캐시 히트:', pageNum);
-        return previewState.urlCache[pageNum];
+    // ★ 수정: 'in' 연산자로 체크 (null 마커도 캐시로 인정 → 재요청 방지)
+    if (pageNum in previewState.urlCache) {
+        const cached = previewState.urlCache[pageNum];
+        console.log('URL 캐시 히트:', pageNum, cached ? '(URL)' : '(실패 마커)');
+        return cached;  // null이면 null 반환 → 로딩 없이 "없음" 표시
     }
     
     // Firebase Storage 경로 생성
-    const safePubDate = (publishDate || '').replace('.', '_');
+    // ★ 수정: /g 플래그로 모든 점/공백 치환 (26.02 → 26_02, 26.02.01 → 26_02_01)
+    const safePubDate = (publishDate || '').replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
+    const safeSource  = (source || '').replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
     const paddedPage = String(pageNum).padStart(3, '0');
-    const filePath = `leasing-docs/${source}/${safePubDate}/page_${paddedPage}.jpg`;
+    const filePath = `leasing-docs/${safeSource}/${safePubDate}/page_${paddedPage}.jpg`;
     
     console.log('Firebase Storage 경로:', filePath);
     
@@ -124,6 +128,8 @@ async function getPageImageUrl(source, publishDate, pageNum) {
         return url;
     } catch (err) {
         console.error('URL 가져오기 실패:', filePath, err.code);
+        // ★ 수정: 실패한 페이지도 null 마커로 캐시 저장 → 동일 페이지 재요청 방지
+        previewState.urlCache[pageNum] = null;
         return null;
     }
 }
@@ -188,13 +194,24 @@ export function prevPagePreview() {
 }
 
 // 다음 페이지
-export function nextPagePreview() {
+export async function nextPagePreview() {
     if (!previewState.source || !previewState.publishDate) {
         showToast('페이지 이동이 지원되지 않는 이미지입니다', 'info');
         return;
     }
-    previewState.currentPage++;
-    updatePreviewImage();
+    const nextPage = previewState.currentPage + 1;
+    // ★ 수정: 다음 페이지 URL 존재 여부를 먼저 확인 (404 시 "마지막 페이지" 처리)
+    if (nextPage in previewState.urlCache && previewState.urlCache[nextPage] === null) {
+        showToast('마지막 페이지입니다', 'info');
+        return;
+    }
+    previewState.currentPage = nextPage;
+    await updatePreviewImage();
+    // 로드 실패(null)면 되돌리고 알림
+    if (previewState.urlCache[nextPage] === null) {
+        previewState.currentPage--;
+        showToast('마지막 페이지입니다', 'info');
+    }
 }
 
 // 페이지 직접 이동
