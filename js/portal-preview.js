@@ -19,6 +19,10 @@ let previewState = {
 
 let currentZoom = 1;
 
+// ★ leasing-docs/ 하위 실제 source 폴더 목록 캐시 (listAll 중복 호출 방지)
+let _leasingSourceFolders = null;
+
+
 // ★ Firebase Storage URL에서 실제 source/publishDate 추출 (이관 빌딩 대응)
 function extractPathFromUrl(url) {
     try {
@@ -63,8 +67,10 @@ export function showPagePreview(imageUrl, source, publishDate, pageNum) {
         urlCache: {}
     };
     
-    // 현재 페이지 URL 캐시에 저장
-    if (imageUrl && pageNum) {
+    // ★ 수정: imageUrl이 실제 download token을 포함한 경우만 캐시 저장
+    // 구성된 URL(?alt=media만 있는 경우)은 파일 존재 미검증이므로 캐시 저장 안 함
+    // → getPageImageUrl에서 getDownloadURL로 검증 후 저장
+    if (imageUrl && pageNum && imageUrl.includes('token=')) {
         previewState.urlCache[pageNum] = imageUrl;
     }
     
@@ -127,11 +133,51 @@ async function getPageImageUrl(source, publishDate, pageNum) {
         
         return url;
     } catch (err) {
+        if (err.code === 'storage/object-not-found') {
+            // ★ source 일괄수정 이력이 있는 빌딩 대응:
+            //   vacancy source는 변경됐지만 실제 Storage 파일은 원래 source 폴더에 존재
+            //   → 같은 publishDate로 다른 source 폴더 탐색
+            console.warn(`[preview] ${filePath} 없음 (source 불일치 가능) → 폴백 탐색...`);
+            const fallbackUrl = await _findFallbackUrl(safePubDate, paddedPage, safeSource);
+            previewState.urlCache[pageNum] = fallbackUrl;
+            return fallbackUrl;
+        }
         console.error('URL 가져오기 실패:', filePath, err.code);
-        // ★ 수정: 실패한 페이지도 null 마커로 캐시 저장 → 동일 페이지 재요청 방지
         previewState.urlCache[pageNum] = null;
         return null;
     }
+}
+
+// ★ source 불일치 시 실제 파일이 있는 폴더를 탐색하는 폴백 함수
+async function _findFallbackUrl(safePubDate, paddedPage, excludeSource) {
+    try {
+        // leasing-docs 하위 폴더 목록 (캐시 사용)
+        if (!_leasingSourceFolders) {
+            const { listAll } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js');
+            const rootRef = storageRef(storage, 'leasing-docs');
+            const result = await listAll(rootRef);
+            _leasingSourceFolders = result.prefixes.map(p => p.name);
+            console.log('[preview] leasing-docs 폴더 목록:', _leasingSourceFolders);
+        }
+
+        for (const folderName of _leasingSourceFolders) {
+            if (folderName === excludeSource) continue;  // 이미 실패한 source 제외
+            const tryPath = `leasing-docs/${folderName}/${safePubDate}/page_${paddedPage}.jpg`;
+            try {
+                const url = await getDownloadURL(storageRef(storage, tryPath));
+                console.log(`[preview] 폴백 발견: ${tryPath} → previewState.source 교정: ${excludeSource} → ${folderName}`);
+                // ★ previewState.source를 실제 파일 위치로 교정
+                //    (이후 다음/이전 페이지 이동도 올바른 source로 동작)
+                previewState.source = folderName;
+                return url;
+            } catch (e) {
+                // 이 폴더엔 없음, 계속 탐색
+            }
+        }
+    } catch (e) {
+        console.warn('[preview] 폴백 탐색 오류:', e.message);
+    }
+    return null;
 }
 
 // 이미지 업데이트
