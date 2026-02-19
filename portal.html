@@ -97,7 +97,7 @@
                     </div>
                     <!-- ★ 연층(복수층)적용 체크박스 -->
                     <label id="combinedVacancyLabel" style="display:flex; align-items:center; gap:7px; margin-top:9px; cursor:pointer; font-size:12px; color:var(--text-muted); user-select:none; padding:6px 8px; border-radius:6px; transition:background 0.15s;" onmouseover="this.style.background='var(--bg-primary)'" onmouseout="this.style.background='transparent'">
-                        <input type="checkbox" id="combinedVacancyCheck" style="width:14px; height:14px; accent-color:#10b981; cursor:pointer; flex-shrink:0;" onchange="updateCombinedVacancyLabelStyle()">
+                        <input type="checkbox" id="combinedVacancyCheck" autocomplete="off" style="width:14px; height:14px; accent-color:#10b981; cursor:pointer; flex-shrink:0;" onchange="updateCombinedVacancyLabelStyle()">
                         <span id="combinedVacancyLabelText" style="line-height:1.3;">연층(복수층) 적용 <span style="color:#94a3b8; font-size:11px;">— 합산 면적 포함</span></span>
                     </label>
                     <div class="filter-actions">
@@ -3730,6 +3730,15 @@
             const yearMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
             const publishDateEl = document.getElementById('vacancyPublishDate');
             if (publishDateEl) publishDateEl.textContent = yearMonth;
+
+            // ★ 연층 체크박스 명시적 초기화 (브라우저 폼 상태 복원 방지)
+            const combinedCb = document.getElementById('combinedVacancyCheck');
+            if (combinedCb) {
+                combinedCb.checked = false;
+                if (typeof window.updateCombinedVacancyLabelStyle === 'function') {
+                    window.updateCombinedVacancyLabelStyle();
+                }
+            }
         });
     </script>
     
@@ -4227,22 +4236,34 @@
             /* applyFilter 오버라이드 */
             window.applyFilter = function(type) {
                 var args = Array.prototype.slice.call(arguments);
-                _origApply.apply(this, args);
 
-                if (type !== 'area') return;
+                if (type !== 'area') {
+                    _origApply.apply(this, args);
+                    return;
+                }
 
                 var cb = document.getElementById('combinedVacancyCheck');
-                if (!cb || !cb.checked) return;
-
                 var fromEl = document.getElementById('vacancyAreaMin');
                 var toEl   = document.getElementById('vacancyAreaMax');
-                var from   = fromEl ? (parseFloat(fromEl.value) || 0)        : 0;
-                var to     = toEl   ? (parseFloat(toEl.value)   || Infinity)  : Infinity;
+                var from   = fromEl ? (parseFloat(fromEl.value) || 0)       : 0;
+                var to     = toEl   ? (parseFloat(toEl.value)   || Infinity) : Infinity;
 
-                /* 전용면적 필터 값이 없으면 연층 로직 불필요 */
+                /* ★ 핵심: _origApply 실행 전 스냅샷 저장
+                 *   이 시점의 filteredBuildings = 권역/임대료 등 다른 필터는
+                 *   이미 적용된 상태, 면적 필터만 아직 미적용.
+                 *   → 이게 진짜 후보 풀 (AND 조건 유지) */
+                var preFilterSnapshot = (window.state && window.state.filteredBuildings)
+                    ? window.state.filteredBuildings.slice()
+                    : [];
+
+                /* 원본 필터 실행 (개별 전용면적 조건으로 축소됨) */
+                _origApply.apply(this, args);
+
+                /* 연층 체크박스 ON + 범위 값이 있을 때만 후처리 */
+                if (!cb || !cb.checked) return;
                 if (!from && !isFinite(to)) return;
 
-                _injectCombinedBuildings(from, to);
+                _injectCombinedBuildings(from, to, preFilterSnapshot);
             };
 
             /* clearFilter 오버라이드 */
@@ -4261,21 +4282,34 @@
             console.log('[연층필터] applyFilter / clearFilter 패치 완료');
         }, 300);
 
-        /* ── 연층 조건 충족 빌딩을 filteredBuildings에 추가하고 재렌더 ── */
-        function _injectCombinedBuildings(from, to) {
+        /* ── 연층 조건 충족 빌딩을 filteredBuildings에 추가하고 재렌더 ──
+         *  candidates: _origApply 실행 전 스냅샷 (다른 필터는 이미 적용된 목록)
+         *  → 권역·임대료 등 AND 조건을 자동 유지
+         * ─────────────────────────────────────────────────────────────── */
+        function _injectCombinedBuildings(from, to, candidates) {
             var state = window.state;
             if (!state) { console.warn('[연층필터] window.state 없음'); return; }
 
-            var allBuildings      = state.allBuildings      || [];
+            /* _origApply 이후의 filteredBuildings (개별 면적 조건 통과 빌딩) */
             var filteredBuildings = state.filteredBuildings || [];
-            var shownIds          = {};
+
+            /* 이미 표시 중인 빌딩 ID 셋 */
+            var shownIds = {};
             for (var si = 0; si < filteredBuildings.length; si++) {
                 shownIds[filteredBuildings[si].id] = true;
             }
 
+            /* 후보 풀: preFilterSnapshot → 없으면 allBuildings 폴백 */
+            var pool = (candidates && candidates.length > 0)
+                ? candidates
+                : (state.allBuildings || []);
+
+            console.log('[연층필터] 후보 풀 크기:', pool.length,
+                        '/ 현재 표시:', filteredBuildings.length);
+
             var toAdd = [];
-            for (var bi = 0; bi < allBuildings.length; bi++) {
-                var building = allBuildings[bi];
+            for (var bi = 0; bi < pool.length; bi++) {
+                var building = pool[bi];
                 if (shownIds[building.id]) continue;   /* 이미 표시 중 */
                 if (building._hidden)      continue;   /* 숨김 빌딩 */
 
@@ -4283,7 +4317,6 @@
                 if (areas.length < 2) continue;
 
                 if (hasSubsetSumInRange(areas, from, to)) {
-                    /* _combinedVacancy 플래그 — 렌더러에서 활용 가능 */
                     var copy = Object.assign({}, building, { _combinedVacancy: true });
                     toAdd.push(copy);
                 }
@@ -4294,7 +4327,9 @@
                 return;
             }
 
-            console.log('[연층필터] 연층 조건 충족 빌딩 ' + toAdd.length + '개 추가');
+            console.log('[연층필터] 연층 조건 충족 빌딩 ' + toAdd.length + '개 추가',
+                        toAdd.map(function(b){ return b.name || b.id; }));
+
             state.filteredBuildings = filteredBuildings.concat(toAdd);
 
             /* 재렌더: portal-main.js에 있는 렌더 함수들 호출 */
