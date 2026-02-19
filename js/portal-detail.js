@@ -5499,6 +5499,119 @@ document.addEventListener('DOMContentLoaded', function() {
 // portal.html 인라인 스크립트보다 나중에 로드되어 덮어씀
 // ============================================================
 
+/* =====================================================
+ * ★ v4.2: 소수점 표시 유틸 — 건축물대장 원본의 긴 소수점을
+ *   2자리 반올림으로 표시하되, 실제값은 data-actual-value에
+ *   보관하여 저장 시 원본값으로 복원한다.
+ * ===================================================== */
+
+/**
+ * 개별 input 필드에 소수점 2자리 표시 + 실제값 토글 버튼 부착
+ * @param {HTMLInputElement} input
+ */
+function _applyDecimalDisplay(input) {
+    const rawVal = input.value;
+    if (rawVal === '' || rawVal === null) return;
+
+    const num = parseFloat(rawVal);
+    if (isNaN(num)) return;
+
+    const rounded = parseFloat(num.toFixed(2));
+    // 소수점 3자리 미만이면 처리 불필요
+    if (Math.abs(num - rounded) < 1e-9) return;
+
+    // 원본값 보존 + step="any" 강제 (브라우저 유효성 차단)
+    input.dataset.actualValue = rawVal;
+    input.value = num.toFixed(2);
+    input.setAttribute('step', 'any');
+
+    // 이미 토글 버튼이 붙어있으면 스킵
+    if (input.parentNode.querySelector('.decimal-toggle-btn')) return;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'decimal-toggle-btn';
+    btn.dataset.mode = 'rounded'; // 'rounded' | 'actual'
+    btn.title = '클릭하면 건축물대장 원본 소수점 전체를 표시합니다';
+    btn.style.cssText = [
+        'display:block',
+        'margin-top:3px',
+        'font-size:10px',
+        'color:#999',
+        'background:none',
+        'border:1px dashed #ccc',
+        'border-radius:3px',
+        'padding:1px 7px',
+        'cursor:pointer',
+        'line-height:1.7',
+        'white-space:nowrap',
+    ].join(';');
+    btn.textContent = `실제값 보기 (원본: ${num})`;
+
+    btn.addEventListener('click', function () {
+        if (this.dataset.mode === 'rounded') {
+            input.value = input.dataset.actualValue;
+            this.textContent = `반올림 보기 (2자리: ${rounded.toFixed(2)})`;
+            this.dataset.mode = 'actual';
+        } else {
+            input.value = rounded.toFixed(2);
+            this.textContent = `실제값 보기 (원본: ${num})`;
+            this.dataset.mode = 'rounded';
+        }
+    });
+
+    // 사용자가 직접 타이핑하면 바인딩 해제 (한 번만)
+    input.addEventListener('input', function onUserInput() {
+        delete this.dataset.actualValue;
+        const existBtn = this.parentNode.querySelector('.decimal-toggle-btn');
+        if (existBtn) existBtn.remove();
+        this.removeEventListener('input', onUserInput);
+    });
+
+    input.parentNode.appendChild(btn);
+}
+
+/**
+ * 모달 내 모든 숫자 입력 필드에 소수점 처리 일괄 적용
+ * @param {HTMLElement} modalEl
+ */
+function _applyDecimalDisplayToModal(modalEl) {
+    if (!modalEl) return;
+    // step="any" 일괄 선제 적용 (브라우저 유효성 오류 완전 차단)
+    modalEl.querySelectorAll('input[type="number"]').forEach(input => {
+        input.setAttribute('step', 'any');
+    });
+    // 소수점 3자리 이상인 필드 탐색 (number + 숫자형 text 모두)
+    modalEl.querySelectorAll('input[type="number"], input[type="text"]').forEach(input => {
+        const val = (input.value || '').trim();
+        if (/^\d+\.\d{3,}$/.test(val)) {
+            _applyDecimalDisplay(input);
+        }
+    });
+}
+
+/**
+ * 저장 직전 — 반올림 표시 중인 필드의 DOM 값을 원본으로 복원
+ * formData를 portal.html에서 수집하기 전에 DOM을 원상복구해야 하므로
+ * saveBuildingEdit 진입 시점에 직접 DOM을 읽어 처리한다.
+ * @param {HTMLElement} modalEl
+ */
+function _restoreActualValues(modalEl) {
+    if (!modalEl) return;
+    modalEl.querySelectorAll('[data-actual-value]').forEach(input => {
+        const actual = input.dataset.actualValue;
+        if (!actual) return;
+        const displayed = parseFloat(input.value);
+        const rounded   = parseFloat(parseFloat(actual).toFixed(2));
+        // 표시값이 반올림값과 같은 경우(=사용자가 건드리지 않음) → 원본 복원
+        if (Math.abs(displayed - rounded) < 0.005) {
+            input.value = actual;
+        }
+        // 이후 불필요하므로 attribute 정리
+        delete input.dataset.actualValue;
+    });
+}
+
 window.openBuildingEditModal = function() {
     const building = window.state?.selectedBuilding;
     if (!building) {
@@ -5658,6 +5771,13 @@ window.openBuildingEditModal = function() {
         if (modal) modal.classList.add('show');
         if (overlay) overlay.classList.add('show');
     }
+
+    // ★ v4.2: 모달 DOM이 visible 상태가 된 후 소수점 표시 처리
+    // (openModal이 동기라면 즉시, 비동기 애니메이션 고려해 한 틱 지연)
+    requestAnimationFrame(() => {
+        const editModal = document.getElementById('buildingEditModal');
+        _applyDecimalDisplayToModal(editModal);
+    });
 };
 
 // ============================================================
@@ -5670,8 +5790,52 @@ window.saveBuildingEdit = async function(formData) {
         if (typeof showToast === 'function') showToast('빌딩을 먼저 선택해주세요', 'error');
         return;
     }
-    
-    console.log('💾 [v4.1] 빌딩 정보 저장:', formData);
+
+    // ★ v4.2: 반올림 표시 중인 필드의 원본값을 DOM에 복원 후
+    //   formData를 재수집한다. (portal.html에서 이미 수집된 formData는
+    //   반올림값이 들어있을 수 있으므로, DOM에서 직접 다시 읽는다.)
+    const editModal = document.getElementById('buildingEditModal');
+    _restoreActualValues(editModal);
+
+    // DOM에서 최신값으로 formData 재구성 (원본값 복원 반영)
+    const getFieldVal = (id) => {
+        const el = editModal ? editModal.querySelector(`#${id}`) : null;
+        return el ? el.value : (formData[id.replace(/^edit/, '').replace(/^(.)/, c => c.toLowerCase())] ?? '');
+    };
+
+    // 재수집: 원본값이 복원된 DOM에서 읽기
+    const refreshedFormData = {
+        name:            getFieldVal('editBuildingName'),
+        grade:           getFieldVal('editGrade'),
+        aliases:         getFieldVal('editAliases').split(',').map(s => s.trim()).filter(Boolean),
+        typicalFloorPy:  getFieldVal('editTypicalFloorPy'),
+        typicalFloorLeasePy: getFieldVal('editTypicalFloorLeasePy'),
+        exclusiveRate:   getFieldVal('editExclusiveRate'),
+        depositPy:       getFieldVal('editDepositPy'),
+        rentPy:          getFieldVal('editRentPy'),
+        maintenancePy:   getFieldVal('editMaintenancePy'),
+        hvac:            getFieldVal('editHvac'),
+        ceilingHeight:   getFieldVal('editCeilingHeight'),
+        floorLoad:       getFieldVal('editFloorLoad'),
+        parkingDisplay:  getFieldVal('editParkingDisplay'),
+        elevator:        getFieldVal('editElevator'),
+        parkingRatio:    getFieldVal('editParkingRatio'),
+        nearbyStation:   getFieldVal('editNearbyStation'),
+        pm:              getFieldVal('editPm'),
+        owner:           getFieldVal('editOwner'),
+        bondStatus:      getFieldVal('editBondStatus'),
+        jointCollateral: getFieldVal('editJointCollateral'),
+        seniorLien:      getFieldVal('editSeniorLien'),
+        collateralRatio: getFieldVal('editCollateralRatio'),
+        officialLandPrice: getFieldVal('editOfficialLandPrice'),
+        landPriceApplied:  getFieldVal('editLandPriceApplied'),
+        description:     getFieldVal('editDescription'),
+        url:             getFieldVal('editUrl'),
+    };
+    // editModal이 없는 환경(구형 portal.html fallback)을 위해 전달된 formData도 병합
+    formData = Object.assign({}, formData, refreshedFormData);
+
+    console.log('💾 [v4.2] 빌딩 정보 저장 (소수점 복원 포함):', formData);
     
     try {
         const { db, ref, update } = await import('./portal-firebase.js');
@@ -5811,4 +5975,4 @@ window.saveBuildingEdit = async function(formData) {
     }
 };
 
-console.log('✅ [v4.1] openBuildingEditModal + saveBuildingEdit 모듈 로드 완료');
+console.log('✅ [v4.2] openBuildingEditModal + saveBuildingEdit 모듈 로드 완료 (소수점 표시 개선)');
