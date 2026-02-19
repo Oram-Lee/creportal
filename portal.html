@@ -2974,14 +2974,15 @@
     
     function toggleBatchEditPanel() {
         const panel = document.getElementById('batchEditPanel');
-        const icon = document.getElementById('batchEditToggleIcon');
+        const icon = document.getElementById('batchEditToggleIcon');  // 없어도 무방
+        if (!panel) return;
         if (panel.style.display === 'none') {
             panel.style.display = 'block';
-            icon.textContent = '▼';
+            if (icon) icon.textContent = '▼';
             loadBatchEditSources();
         } else {
             panel.style.display = 'none';
-            icon.textContent = '▶';
+            if (icon) icon.textContent = '▶';
         }
     }
     
@@ -2992,14 +2993,18 @@
         
         sourceSelect.innerHTML = '<option value="">로딩 중...</option>';
         dateSelect.innerHTML = '<option value="">로딩 중...</option>';
-        statusEl.textContent = '데이터 조회 중...';
+        if (statusEl) statusEl.textContent = '데이터 조회 중...';
         
         try {
             const { db, ref, get } = await import('./js/portal-firebase.js');
             
-            // ★ 수정: vacancies는 buildings/{id}/vacancies 하위에 저장됨
-            // 루트 레벨 'vacancies' 컬렉션은 존재하지 않음 → buildings 전체 로드
-            const buildSnap = await get(ref(db, 'buildings'));
+            // vacancies는 루트 컬렉션: vacancies/{buildingId}/{vacId}
+            const [vacSnap, buildSnap] = await Promise.all([
+                get(ref(db, 'vacancies')),
+                get(ref(db, 'buildings'))
+            ]);
+            
+            const vacancies = vacSnap.val() || {};
             const buildings = buildSnap.val() || {};
             
             const sources = new Set();
@@ -3007,18 +3012,14 @@
             let totalCount = 0;
             _batchVacancyData = {};
             
-            Object.entries(buildings).forEach(([buildingId, buildingData]) => {
-                if (!buildingData || typeof buildingData !== 'object') return;
-                const bName = buildingData.buildingName || buildingData.name || buildingId;
-                // ★ vacancies는 building 객체 내부 또는 하위 컬렉션 (배열/객체 양쪽 지원)
-                const vacMap = buildingData.vacancies;
-                if (!vacMap || typeof vacMap !== 'object' || Array.isArray(vacMap)) return;
-                
+            Object.entries(vacancies).forEach(([buildingId, vacMap]) => {
+                if (!vacMap || typeof vacMap !== 'object') return;
+                const bld = buildings[buildingId] || {};
+                const bName = bld.buildingName || bld.name || buildingId;
                 _batchVacancyData[buildingId] = {};
                 
                 Object.entries(vacMap).forEach(([vacId, vac]) => {
                     if (!vac || typeof vac !== 'object') return;
-                    // _meta 키 제외 (실제 공실 데이터만)
                     if (vacId.endsWith('_meta')) return;
                     totalCount++;
                     if (vac.source) sources.add(vac.source);
@@ -3032,7 +3033,6 @@
                 });
             });
             
-            // 드롭다운 채우기
             const sortedSources = [...sources].sort();
             const sortedDates = [...dates].sort().reverse();
             
@@ -3042,17 +3042,12 @@
             dateSelect.innerHTML = '<option value="">(전체 - 필터 안 함)</option>' +
                 sortedDates.map(d => `<option value="${d}">${d}</option>`).join('');
             
-            if (totalCount === 0) {
-                statusEl.textContent = '⚠ vacancy 데이터 없음 — Firebase 구조를 확인하세요';
-                console.warn('[batchEdit] buildings 내 vacancies 데이터 없음. 구조 확인 필요:', Object.keys(buildings).slice(0, 3));
-            } else {
-                statusEl.textContent = `총 ${totalCount}건 로드됨 (${sortedSources.length}개 출처)`;
-            }
+            if (statusEl) statusEl.textContent = `총 ${totalCount}건 로드됨 (${sortedSources.length}개 출처)`;
             updateBatchEditCount();
             
         } catch (error) {
             console.error('일괄수정 데이터 로드 오류:', error);
-            statusEl.textContent = '오류 발생';
+            if (statusEl) statusEl.textContent = '오류 발생';
             sourceSelect.innerHTML = '<option value="">로드 실패</option>';
             dateSelect.innerHTML = '<option value="">로드 실패</option>';
         }
@@ -3173,12 +3168,11 @@
         try {
             const { db, ref, update } = await import('./js/portal-firebase.js');
             
-            // ★ 수정: vacancies는 buildings/{id}/vacancies/{vacId} 경로에 저장됨
-            // 루트 레벨 'vacancies' 경로가 아닌 buildings 하위 경로로 업데이트
+            // vacancies 루트 컬렉션: vacancies/{buildingId}/{vacId}/source
             const updates = {};
             matches.forEach(m => {
-                if (newSource) updates[`buildings/${m.buildingId}/vacancies/${m.vacId}/source`] = newSource;
-                if (newDate) updates[`buildings/${m.buildingId}/vacancies/${m.vacId}/publishDate`] = newDate;
+                if (newSource) updates[`vacancies/${m.buildingId}/${m.vacId}/source`] = newSource;
+                if (newDate) updates[`vacancies/${m.buildingId}/${m.vacId}/publishDate`] = newDate;
             });
             
             await update(ref(db), updates);
