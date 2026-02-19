@@ -34,54 +34,207 @@ function mergeNormalizeAddress(address) {
     if (!address) return '';
     let n = address.trim();
     n = n.replace(/서울특별시/g, '서울').replace(/서울시/g, '서울');
+    n = n.replace(/경기도\s*/g, '').replace(/인천광역시/g, '인천');
     n = n.replace(/\s*\([^)]*\)/g, '');
-    n = n.replace(/[,.]/, ' ').replace(/\s+/g, ' ').trim();
+    n = n.replace(/[,]/g, ' ').replace(/\s+/g, ' ').trim();
     return n;
 }
 
+/**
+ * ★ v1.2: 주소에서 "구 + 도로명/동 + 번지"까지 포함한 정밀 키 추출
+ * 번지 번호까지 포함해야 같은 도로 위의 다른 빌딩을 구분 가능
+ * 반환 예: "강남구 논현로85길 22", "강남구 역삼동 737-7"
+ */
 function mergeExtractAddressKey(address) {
+    if (!address || address.trim().length < 4) return '';
     const normalized = mergeNormalizeAddress(address);
-    const guMatch = normalized.match(/(강남구|강동구|강북구|강서구|관악구|광진구|구로구|금천구|노원구|도봉구|동대문구|동작구|마포구|서대문구|서초구|성동구|성북구|송파구|양천구|영등포구|용산구|은평구|종로구|중구|중랑구)/);
+
+    const guMatch = normalized.match(/([가-힣]+구)/);
     const gu = guMatch ? guMatch[1] : '';
-    const roadMatch = normalized.match(/([가-힣]+로|[가-힣]+길)\s*\d+/);
-    const dongNumMatch = normalized.match(/([가-힣]+동)\s*\d+/);
-    const dongAlphaNumMatch = normalized.match(/([가-힣]+동)\s*([A-Za-z0-9][-A-Za-z0-9]*)/);
-    const dongOnlyMatch = normalized.match(/([가-힣]+동)(?:\s|$)/);
-    
-    if (roadMatch) return `${gu} ${roadMatch[0]}`.trim();
-    if (dongNumMatch) return `${gu} ${dongNumMatch[0]}`.trim();
-    if (dongAlphaNumMatch) return `${gu} ${dongAlphaNumMatch[1]} ${dongAlphaNumMatch[2]}`.trim();
-    if (dongOnlyMatch) return `${gu} ${dongOnlyMatch[1]}`.trim();
+
+    // ① 도로명 + 본번(-부번): "테헤란로 504", "논현로85길 22"
+    const roadNumMatch = normalized.match(/([가-힣]+(?:로|길)\d*)\s+(\d+(?:-\d+)?)/);
+    if (roadNumMatch) {
+        return (gu + ' ' + roadNumMatch[1] + ' ' + roadNumMatch[2]).trim();
+    }
+
+    // ② 지번: "역삼동 737-7", "논현동 70-5"
+    const jibunMatch = normalized.match(/([가-힣]+동)\s+(\d+(?:-\d+)?)/);
+    if (jibunMatch) {
+        return (gu + ' ' + jibunMatch[1] + ' ' + jibunMatch[2]).trim();
+    }
+
+    // ③ 동만 있는 경우 — 신뢰도 낮음
+    const dongMatch = normalized.match(/([가-힣]+동)/);
+    if (dongMatch) return (gu + ' ' + dongMatch[1]).trim();
+
     return gu || normalized.slice(0, 20);
 }
 
+/**
+ * ★ v1.2: 문자열 유사도 — 포함 관계 보너스 제거, Dice bigram만 사용
+ * 기존: shorter가 longer에 포함되면 +0.3 보너스 → "강남구"="강남구 테헤란로 504" 높은 유사도
+ * 수정: 실제 bigram 겹침만 계산, 짧은 문자열의 과도한 매칭 방지
+ */
 function mergeStringSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
     const s1 = str1.toLowerCase().trim();
     const s2 = str2.toLowerCase().trim();
     if (s1 === s2) return 1;
-    const longer = s1.length > s2.length ? s1 : s2;
-    const shorter = s1.length > s2.length ? s2 : s1;
-    if (longer.length === 0) return 1;
-    if (longer.includes(shorter) || shorter.includes(longer)) {
-        return Math.min(1, shorter.length / longer.length + 0.3);
-    }
-    // Dice coefficient (bigram)
+    if (s1.length < 2 || s2.length < 2) return 0;
+
+    // bigram 집합 (중복 허용 — multiset)
     const bigrams = (s) => {
-        const bg = new Set();
-        for (let i = 0; i < s.length - 1; i++) bg.add(s.slice(i, i + 2));
+        const bg = [];
+        for (let i = 0; i < s.length - 1; i++) bg.push(s.slice(i, i + 2));
         return bg;
     };
     const bg1 = bigrams(s1);
     const bg2 = bigrams(s2);
+    const set2 = [...bg2];
     let intersection = 0;
-    bg1.forEach(b => { if (bg2.has(b)) intersection++; });
-    return (2 * intersection) / (bg1.size + bg2.size) || 0;
+    bg1.forEach(b => {
+        const idx = set2.indexOf(b);
+        if (idx >= 0) { intersection++; set2.splice(idx, 1); }
+    });
+    return (2 * intersection) / (bg1.length + bg2.length) || 0;
 }
 
+/**
+ * ★ v1.2: 빌딩명 정규화 — suffix만 제거, 숫자/한자는 유지
+ * 기존: "빌딩","타워","센터" 모두 제거 → "해성1빌딩"→"해성1", "해성2빌딩"→"해성2" 유사도 과도
+ * 수정: B/D, BD, Bldg 영문 표기만 제거. 한글 suffix는 유지하여 구분력 보존
+ */
 function normalizeBuildingName(name) {
     if (!name) return '';
-    return name.replace(/빌딩|타워|센터|오피스|B\/D|BD|Bldg|bldg/gi, '').replace(/\s+/g, '').trim().toLowerCase();
+    return name
+        .replace(/\s*B\/D\s*$/i, '').replace(/\s*BD\s*$/i, '').replace(/\s*Bldg\.?\s*$/i, '')
+        .replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// ============================================================
+// ★ v1.3: Kakao Geocoder 기반 주소 양방향 보강
+// ============================================================
+
+/**
+ * Kakao Maps Services Geocoder로 주소 하나를 검색해
+ * 도로명 주소(road)와 지번 주소(jibun) 양쪽을 반환
+ * @param {string} address
+ * @returns {Promise<{road: string, jibun: string}|null>}
+ */
+function kakaoGeocodeAddress(address) {
+    return new Promise((resolve) => {
+        if (!address || !window.kakao?.maps?.services) {
+            resolve(null);
+            return;
+        }
+        const geocoder = new kakao.maps.services.Geocoder();
+        geocoder.addressSearch(address, (result, status) => {
+            if (status !== kakao.maps.services.Status.OK || !result.length) {
+                resolve(null);
+                return;
+            }
+            const r = result[0];
+            resolve({
+                road:  r.road_address?.address_name  || '',
+                jibun: r.address?.address_name        || r.address_name || ''
+            });
+        });
+    });
+}
+
+/**
+ * ★ v1.3: 빌딩 entries 중 address/addressJibun 중 하나가 비어있는 빌딩만
+ * Kakao Geocoder로 보강 (캐시: localStorage 24시간)
+ *
+ * 처리 흐름:
+ *   1. 캐시 확인 → 있으면 즉시 반영
+ *   2. 없으면 Kakao API 호출 → 캐시 저장 → 반영
+ *   3. Kakao SDK 미로드 / 실패 시 원본 그대로 유지 (graceful degradation)
+ *
+ * @param {Array} entries  — detectDuplicateBuildings의 entries 배열 (참조 수정)
+ */
+async function enrichBuildingAddresses(entries) {
+    const CACHE_KEY = 'cre_addr_cache_v1';
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
+
+    // 캐시 로드
+    let cache = {};
+    try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            const now = Date.now();
+            // TTL 지난 항목 제거
+            Object.keys(parsed).forEach(k => {
+                if (now - parsed[k].ts < CACHE_TTL) cache[k] = parsed[k];
+            });
+        }
+    } catch (_) {}
+
+    const saveCache = () => {
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify(cache)); } catch (_) {}
+    };
+
+    // Kakao SDK 사용 가능 여부 확인
+    const kakaoAvailable = !!window.kakao?.maps?.services;
+    if (!kakaoAvailable) {
+        console.warn('⚠️ [merge] Kakao SDK 미로드 — 주소 보강 스킵');
+        return;
+    }
+
+    // 보강이 필요한 빌딩만 추출
+    //   도로명만 있고 지번 없음, 또는 지번만 있고 도로명 없음
+    const needEnrich = entries.filter(e => {
+        const hasRoad  = e.address && e.addrKey;
+        const hasJibun = e.addressJibun && e.addrKeyJibun;
+        return (hasRoad && !hasJibun) || (!hasRoad && hasJibun);
+    });
+
+    if (!needEnrich.length) {
+        console.log('ℹ️ [merge] 주소 보강 대상 없음');
+        return;
+    }
+
+    console.log(`🗺️ [merge] 주소 보강 대상: ${needEnrich.length}개 빌딩`);
+
+    let enriched = 0;
+    let fromCache = 0;
+
+    for (const e of needEnrich) {
+        const queryAddr = e.address || e.addressJibun;
+        const cacheKey  = queryAddr.trim();
+
+        let resolved = null;
+
+        if (cache[cacheKey]) {
+            resolved = cache[cacheKey].data;
+            fromCache++;
+        } else {
+            // API 호출 (과호출 방지: 100ms 간격)
+            await new Promise(r => setTimeout(r, 100));
+            resolved = await kakaoGeocodeAddress(queryAddr);
+            if (resolved) {
+                cache[cacheKey] = { ts: Date.now(), data: resolved };
+                enriched++;
+            }
+        }
+
+        if (!resolved) continue;
+
+        // addrKey / addrKeyJibun 보강 (address 원본은 수정하지 않음)
+        if (!e.address && resolved.road) {
+            e.addressResolved  = resolved.road;
+            e.addrKey          = mergeExtractAddressKey(resolved.road);
+        }
+        if (!e.addressJibun && resolved.jibun) {
+            e.addressJibunResolved = resolved.jibun;
+            e.addrKeyJibun         = mergeExtractAddressKey(resolved.jibun);
+        }
+    }
+
+    saveCache();
+    console.log(`✅ [merge] 주소 보강 완료 — API: ${enriched}개, 캐시: ${fromCache}개`);
 }
 
 // ============================================================
@@ -112,6 +265,10 @@ async function detectDuplicateBuildings() {
         }));
     
     console.log(`🔍 중복 탐지 시작: ${entries.length}개 빌딩`);
+
+    // ★ v1.3: Kakao Geocoder로 단방향 주소(도로명만/지번만) 빌딩 보강
+    //   API 호출은 필요한 빌딩에만 → 결과는 localStorage 캐시(24h)
+    await enrichBuildingAddresses(entries);
     
     // Step 1: 주소키 기반 그룹핑
     const addrGroups = {};
@@ -125,14 +282,31 @@ async function detectDuplicateBuildings() {
         });
     });
     
-    // Step 2: 2개 이상 빌딩이 같은 주소키를 공유하는 그룹 추출
+    // ★ v1.2: Step 2 — 엄격한 주소 일치 기준으로 후보 쌍 선별
+    //
+    // 변경 이유:
+    //   기존 Level 2 (주소유사 0.7 + 이름 0.3)가 너무 느슨해서
+    //   같은 도로 위의 완전히 다른 빌딩들이 한 그룹으로 묶였음.
+    //   → 주소키에 번지번호까지 포함(mergeExtractAddressKey v1.2)하여
+    //     "거의 동일한 주소"만 허용하고, Level 2/3/4 임계값 대폭 상향.
+    //
+    // 판단 기준:
+    //   Level 1 (주소 완전 일치):
+    //     - 도로명키 완전 일치 OR 도로명↔지번 교차 완전 일치
+    //     - 즉 "강남구 테헤란로 504" === "강남구 테헤란로 504" 또는
+    //          "강남구 테헤란로 504" ≈ "강남구 역삼동 737-7" (동일 부지)
+    //     - 이 경우만 주소 일치 중복으로 판단
+    //   Level 2 (주소 고유사 + 이름 동일에 가까움):
+    //     - 도로명 + 번지가 거의 같고(0.92↑) 이름도 매우 유사(0.75↑)
+    //     - "한 글자 오기" 수준의 오타 허용
+    //   Level 3 (alias 직접 일치):
+    //     - 한쪽 alias가 다른 쪽 빌딩명과 완전 일치 + 같은 구
     const candidateGroups = [];
     const processedPairs = new Set();
-    
+
     Object.entries(addrGroups).forEach(([key, group]) => {
         if (group.length < 2) return;
-        
-        // 그룹 내 모든 쌍을 비교
+
         for (let i = 0; i < group.length; i++) {
             for (let j = i + 1; j < group.length; j++) {
                 const a = group[i];
@@ -140,8 +314,13 @@ async function detectDuplicateBuildings() {
                 const pairKey = [a.id, b.id].sort().join('|');
                 if (processedPairs.has(pairKey)) continue;
                 processedPairs.add(pairKey);
-                
-                // 주소 유사도 (도로명 + 지번 교차 비교)
+
+                // 주소키 유효성 체크: 번지 없는 짧은 키는 신뢰도 낮음
+                const keyHasNumber = (k) => /\d/.test(k);
+                const aKeyValid = keyHasNumber(a.addrKey) || keyHasNumber(a.addrKeyJibun);
+                const bKeyValid = keyHasNumber(b.addrKey) || keyHasNumber(b.addrKeyJibun);
+
+                // 4가지 교차 조합 유사도
                 const addrSims = [
                     mergeStringSimilarity(a.addrKey, b.addrKey),
                     mergeStringSimilarity(a.addrKey, b.addrKeyJibun),
@@ -149,41 +328,40 @@ async function detectDuplicateBuildings() {
                     mergeStringSimilarity(a.addrKeyJibun, b.addrKeyJibun)
                 ];
                 const bestAddrSim = Math.max(...addrSims);
-                
-                // 이름 유사도
+
+                // 이름 유사도 (정규화 후)
                 const nameSim = mergeStringSimilarity(a.nameNorm, b.nameNorm);
-                
-                // alias 체크
-                const aliasMatch = (a.aliases || []).some(al => 
-                    mergeStringSimilarity(normalizeBuildingName(al), b.nameNorm) > 0.7
-                ) || (b.aliases || []).some(al => 
-                    mergeStringSimilarity(normalizeBuildingName(al), a.nameNorm) > 0.7
+
+                // alias 완전 일치 체크 (contains가 아닌 normalize 후 exact match)
+                const aliasExactMatch = (a.aliases || []).some(al =>
+                    normalizeBuildingName(al) === b.nameNorm && b.nameNorm.length > 1
+                ) || (b.aliases || []).some(al =>
+                    normalizeBuildingName(al) === a.nameNorm && a.nameNorm.length > 1
                 );
-                
+
                 let matchType = null;
                 let similarity = 0;
-                
-                // Level 1: 주소 완전 일치
-                if (bestAddrSim >= 0.95) {
+
+                // ★ Level 1: 주소 완전 일치 (번지까지 동일)
+                //   두 키 모두 번지를 포함하고 유사도 0.97 이상
+                if (aKeyValid && bKeyValid && bestAddrSim >= 0.97) {
                     matchType = 'address_exact';
                     similarity = bestAddrSim;
                 }
-                // Level 2: 주소 유사 + 이름 보조
-                else if (bestAddrSim >= 0.7 && (nameSim >= 0.3 || aliasMatch)) {
+                // ★ Level 2: 주소 고유사(번지 포함) + 이름 매우 유사
+                //   오타/띄어쓰기 차이 수준의 허용
+                else if (aKeyValid && bKeyValid && bestAddrSim >= 0.92 && nameSim >= 0.75) {
                     matchType = 'address_similar';
-                    similarity = bestAddrSim * 0.7 + nameSim * 0.3;
+                    similarity = bestAddrSim * 0.6 + nameSim * 0.4;
                 }
-                // Level 3: 이름 매우 유사 + 같은 구
-                else if (nameSim >= 0.8 && a.addrKey.split(' ')[0] === b.addrKey.split(' ')[0]) {
-                    matchType = 'name_similar';
-                    similarity = nameSim;
-                }
-                // Level 4: alias 매칭
-                else if (aliasMatch && bestAddrSim >= 0.5) {
+                // ★ Level 3: alias 완전 일치 + 같은 구 + 주소 어느 정도 유사
+                else if (aliasExactMatch
+                    && a.addrKey.split(' ')[0] === b.addrKey.split(' ')[0]
+                    && bestAddrSim >= 0.7) {
                     matchType = 'alias_match';
-                    similarity = 0.85;
+                    similarity = 0.90;
                 }
-                
+
                 if (matchType) {
                     candidateGroups.push({
                         buildings: [a, b],
@@ -203,37 +381,44 @@ async function detectDuplicateBuildings() {
     return mergedGroups;
 }
 
+/**
+ * ★ v1.2: 쌍(pair)을 그룹으로 병합
+ *
+ * 전이적 병합(A-B, B-C → A,B,C 한 그룹) 제한:
+ *   - address_exact 쌍만 전이 허용
+ *   - address_similar / alias_match 쌍은 전이 없이 쌍 자체만 그룹화
+ *
+ * 이유: 기존 Union-Find가 모든 쌍을 무조건 전이적으로 병합하여
+ *   A-B(낮은 유사도), B-C(낮은 유사도) → A,B,C 46개 거대 그룹 발생
+ */
 function mergePairsToGroups(pairs) {
     const parent = {};
     const find = (x) => parent[x] === x ? x : (parent[x] = find(parent[x]));
     const union = (a, b) => { parent[find(a)] = find(b); };
-    
+    const buildingMap = {};
+
     // 모든 빌딩 ID 초기화
     pairs.forEach(p => {
         p.buildings.forEach(b => {
+            buildingMap[b.id] = b;
             if (!parent[b.id]) parent[b.id] = b.id;
         });
     });
-    
-    // Union-Find로 그룹핑
+
+    // ★ address_exact만 전이적 병합 허용
     pairs.forEach(p => {
-        if (p.buildings.length >= 2) {
+        if (p.matchType === 'address_exact' && p.buildings.length >= 2) {
             union(p.buildings[0].id, p.buildings[1].id);
         }
     });
-    
-    // 그룹별로 빌딩 수집
+
+    // address_exact 그룹 수집
     const groups = {};
-    const buildingMap = {};
-    pairs.forEach(p => {
-        p.buildings.forEach(b => { buildingMap[b.id] = b; });
-    });
-    
     Object.keys(parent).forEach(id => {
         const root = find(id);
-        if (!groups[root]) groups[root] = { 
-            buildings: [], 
-            matchType: 'mixed', 
+        if (!groups[root]) groups[root] = {
+            buildings: [],
+            matchType: 'address_exact',
             similarity: 0,
             matchTypes: new Set()
         };
@@ -241,16 +426,34 @@ function mergePairsToGroups(pairs) {
             groups[root].buildings.push(buildingMap[id]);
         }
     });
-    
-    // 매치 타입 및 유사도 집계
-    pairs.forEach(p => {
+
+    // address_exact 유사도 집계
+    pairs.filter(p => p.matchType === 'address_exact').forEach(p => {
         const root = find(p.buildings[0].id);
         if (groups[root]) {
             groups[root].matchTypes.add(p.matchType);
             groups[root].similarity = Math.max(groups[root].similarity, p.similarity);
         }
     });
-    
+
+    // ★ address_similar / alias_match는 전이 없이 독립 쌍 그룹으로 추가
+    //   단, 이미 address_exact 그룹에 포함된 빌딩은 추가하지 않음
+    const exactGrouped = new Set(Object.keys(parent));
+    pairs.filter(p => p.matchType !== 'address_exact').forEach((p, idx) => {
+        const [ba, bb] = p.buildings;
+        // 두 빌딩이 이미 같은 address_exact 그룹에 있으면 스킵
+        if (exactGrouped.has(ba.id) && exactGrouped.has(bb.id)
+            && find(ba.id) === find(bb.id)) return;
+        // 별도 쌍 그룹 생성
+        const gKey = `pair_${idx}`;
+        groups[gKey] = {
+            buildings: [ba, bb],
+            matchType: p.matchType,
+            similarity: p.similarity,
+            matchTypes: new Set([p.matchType])
+        };
+    });
+
     return Object.values(groups)
         .filter(g => g.buildings.length >= 2)
         .map((g, idx) => ({
