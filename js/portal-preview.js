@@ -13,15 +13,11 @@ let previewState = {
     publishDate: '',
     currentPage: 0,
     totalPages: 200,
-    urlCache: {},
-    // ★ 폴백으로 source가 교정됐으면 true → 이후 페이지에서 폴백 재실행 금지
-    sourceFixed: false
+    urlCache: {}
 };
 
 let currentZoom = 1;
 
-// ★ 알려진 source 목록 캐시 (폴백 탐색용)
-let _knownSources = null;
 
 
 // ★ Firebase Storage URL에서 실제 source/publishDate 추출 (이관 빌딩 대응)
@@ -65,14 +61,11 @@ export function showPagePreview(imageUrl, source, publishDate, pageNum) {
         publishDate: publishDate || '',
         currentPage: pageNum || 1,
         totalPages: 200,
-        urlCache: {},
-        sourceFixed: false  // 새 문서 열 때 폴백 플래그 리셋
+        urlCache: {}
     };
     
-    // ★ 수정: imageUrl이 실제 download token을 포함한 경우만 캐시 저장
-    // 구성된 URL(?alt=media만 있는 경우)은 파일 존재 미검증이므로 캐시 저장 안 함
-    // → getPageImageUrl에서 getDownloadURL로 검증 후 저장
-    if (imageUrl && pageNum && imageUrl.includes('token=')) {
+    // 현재 페이지 URL 캐시에 저장
+    if (imageUrl && pageNum) {
         previewState.urlCache[pageNum] = imageUrl;
     }
     
@@ -117,7 +110,6 @@ async function getPageImageUrl(source, publishDate, pageNum) {
     }
     
     // Firebase Storage 경로 생성
-    // ★ 수정: /g 플래그로 모든 점/공백 치환 (26.02 → 26_02, 26.02.01 → 26_02_01)
     const safePubDate = (publishDate || '').replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
     const safeSource  = (source || '').replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
     const paddedPage = String(pageNum).padStart(3, '0');
@@ -136,17 +128,8 @@ async function getPageImageUrl(source, publishDate, pageNum) {
         return url;
     } catch (err) {
         if (err.code === 'storage/object-not-found') {
-            // ★ sourceFixed=true이면 폴백 금지 (이미 교정된 source에서 파일 없음 = 페이지 없음)
-            if (previewState.sourceFixed) {
-                console.log(`[preview] ${filePath} 없음 (sourceFixed → 폴백 안 함)`);
-                previewState.urlCache[pageNum] = null;
-                return null;
-            }
-            // 최초 1회: source 불일치 가능성 → 폴백 탐색
-            console.warn(`[preview] ${filePath} 없음 (source 불일치 가능) → 폴백 탐색...`);
-            const fallbackUrl = await _findFallbackUrl(safePubDate, paddedPage, safeSource);
-            previewState.urlCache[pageNum] = fallbackUrl;
-            return fallbackUrl;
+            previewState.urlCache[pageNum] = null;
+            return null;
         }
         console.error('URL 가져오기 실패:', filePath, err.code);
         previewState.urlCache[pageNum] = null;
@@ -154,45 +137,6 @@ async function getPageImageUrl(source, publishDate, pageNum) {
     }
 }
 
-// ★ source 불일치 시 known sources를 순회하며 실제 파일 탐색
-// getDownloadURL 직접 시도 방식
-async function _findFallbackUrl(safePubDate, paddedPage, excludeSource) {
-    try {
-        // 1) 알려진 source 목록 수집 (1회 캐시)
-        if (!_knownSources) {
-            const known = new Set(['CBRE','JLL','Cushman','Savills','Colliers','신영','교보리얼코','메이트플러스','젠스타']);
-            const bMap = window.state && (window.state.allBuildings || (window.state.dataCache && window.state.dataCache.buildings));
-            if (bMap) {
-                Object.values(bMap).forEach(function(b) {
-                    (b.documents || []).forEach(function(d) {
-                        if (d.source) known.add(d.source.replace(/[\s.]+/g, '_').replace(/__+/g, '_'));
-                    });
-                });
-            }
-            _knownSources = Array.from(known);
-            console.log('[preview] known sources:', _knownSources);
-        }
-        // 2) excludeSource 제외 후 순서대로 getDownloadURL 시도
-        for (var i = 0; i < _knownSources.length; i++) {
-            var src = _knownSources[i];
-            if (src === excludeSource) continue;
-            var tryPath = 'leasing-docs/' + src + '/' + safePubDate + '/page_' + paddedPage + '.jpg';
-            try {
-                var url = await getDownloadURL(storageRef(storage, tryPath));
-                console.log('[preview] 폴백 발견:', tryPath, '→ source 교정:', excludeSource, '→', src);
-                previewState.source = src;
-                previewState.sourceFixed = true;  // ★ 이후 페이지는 교정된 source만 사용
-                return url;
-            } catch (e) {
-                // 이 source엔 없음, 계속
-            }
-        }
-        console.warn('[preview] 폴백 탐색 완료: 모든 source에서 파일 없음');
-    } catch (e) {
-        console.warn('[preview] 폴백 탐색 오류:', e.message);
-    }
-    return null;
-}
 // 이미지 업데이트
 async function updatePreviewImage() {
     const img = document.getElementById('pagePreviewImage');

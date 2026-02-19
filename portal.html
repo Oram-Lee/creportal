@@ -3177,6 +3177,24 @@
             
             await update(ref(db), updates);
             
+            // ★ Storage 파일도 자동 이전 (source 변경 시)
+            // DB source 수정과 Storage 경로를 항상 동기화 → portal-preview.js 폴백 불필요
+            if (newSource) {
+                const oldSource = document.getElementById('batchEditSourceSelect').value;
+                const oldDate   = document.getElementById('batchEditDateSelect').value;
+                if (oldSource && oldSource !== newSource) {
+                    // 이전 대상 publishDate 목록 수집 (필터된 date 또는 매칭된 모든 date)
+                    const datesToMove = oldDate
+                        ? [oldDate]
+                        : [...new Set(matches.map(m => m.publishDate).filter(Boolean))];
+                    
+                    if (datesToMove.length > 0) {
+                        console.log(`[batchEdit] Storage 이전 시작: ${oldSource} → ${newSource}, dates:`, datesToMove);
+                        _migrateStorageFiles(oldSource, newSource, datesToMove);  // 비동기 백그라운드 실행
+                    }
+                }
+            }
+            
             // 로그 기록
             const { push } = await import('./js/portal-firebase.js');
             const logEntry = {
@@ -3243,6 +3261,53 @@
     // 전역 등록
     window.toggleBatchEditPanel = toggleBatchEditPanel;
     window.loadBatchEditSources = loadBatchEditSources;
+
+    // ★ Storage 파일 이전 함수 (백그라운드 실행)
+    // executeBatchEdit에서 source 변경 시 자동 호출
+    async function _migrateStorageFiles(fromSource, toSource, dates) {
+        const { storage, storageRef, getDownloadURL } = await import('./js/portal-firebase.js');
+        const { listAll, uploadBytes, deleteObject } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js');
+
+        let totalMoved = 0, totalFailed = 0;
+
+        for (const date of dates) {
+            const safeFrom = fromSource.replace(/[\s.]+/g, '_').replace(/__+/g, '_');
+            const safeTo   = toSource.replace(/[\s.]+/g, '_').replace(/__+/g, '_');
+            const safeDate = date.replace(/[\s.]+/g, '_').replace(/__+/g, '_');
+            const fromPath = `leasing-docs/${safeFrom}/${safeDate}`;
+
+            try {
+                const result = await listAll(storageRef(storage, fromPath));
+                if (result.items.length === 0) {
+                    console.log(`[migrate] ${fromPath} 파일 없음 (이미 이전됐거나 경로 없음)`);
+                    continue;
+                }
+                console.log(`[migrate] ${fromPath} → leasing-docs/${safeTo}/${safeDate}/ (${result.items.length}개)`);
+
+                for (const fileRef of result.items) {
+                    const fileName = fileRef.name;
+                    const toPath   = `leasing-docs/${safeTo}/${safeDate}/${fileName}`;
+                    try {
+                        // Firebase SDK getBytes로 CORS 없이 다운로드
+                        const { getBytes } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js');
+                        const bytes = await getBytes(storageRef(storage, `${fromPath}/${fileName}`));
+                        await uploadBytes(storageRef(storage, toPath), bytes, { contentType: 'image/jpeg' });
+                        await deleteObject(storageRef(storage, `${fromPath}/${fileName}`));
+                        totalMoved++;
+                    } catch(e) {
+                        console.error(`[migrate] 실패: ${fileName}`, e.message);
+                        totalFailed++;
+                    }
+                }
+            } catch(e) {
+                console.warn(`[migrate] ${fromPath} 조회 실패:`, e.message);
+            }
+        }
+
+        const msg = `Storage 이전 완료: ${fromSource}→${toSource}, ${totalMoved}개 이전${totalFailed > 0 ? `, ${totalFailed}개 실패` : ''}`;
+        console.log(`[migrate] ✅ ${msg}`);
+        if (typeof showToast === 'function') showToast(msg, totalFailed > 0 ? 'warning' : 'success');
+    }
     window.updateBatchEditCount = updateBatchEditCount;
     window.previewBatchEdit = previewBatchEdit;
     window.executeBatchEdit = executeBatchEdit;
