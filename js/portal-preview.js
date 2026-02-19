@@ -6,6 +6,7 @@
 import { state } from './portal-state.js';
 import { showToast } from './portal-utils.js';
 import { storage, storageRef, getDownloadURL } from './portal-firebase.js';
+import { listAll } from 'https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js';
 
 // 미리보기 상태
 let previewState = {
@@ -153,7 +154,6 @@ async function _findFallbackUrl(safePubDate, paddedPage, excludeSource) {
     try {
         // leasing-docs 하위 폴더 목록 (캐시 사용)
         if (!_leasingSourceFolders) {
-            const { listAll } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js');
             const rootRef = storageRef(storage, 'leasing-docs');
             const result = await listAll(rootRef);
             _leasingSourceFolders = result.prefixes.map(p => p.name);
