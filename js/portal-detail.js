@@ -533,7 +533,7 @@ export function renderInfoSection() {
         
         <!-- 기준층/전용률 정보 -->
         <div class="info-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 8px;">
-            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const floorPy = b.area?.typicalFloorPy || b.typicalFloorPy || 0; const rate = b.area?.exclusiveRate || b.exclusiveRate || 0; return floorPy && rate ? formatNumber(Math.round(floorPy * rate / 100 * 1000) / 1000) : '-'; })()}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const excPy = b.area?.exclusiveFloorPy || b.exclusiveFloorPy; if (excPy) return formatNumber(excPy); const floorPy = b.area?.typicalFloorPy || b.typicalFloorPy || 0; const rate = b.area?.exclusiveRate || b.exclusiveRate || 0; return floorPy && rate ? formatNumber(Math.round(floorPy * rate / 100 * 1000) / 1000) : '-'; })()}<span class="unit">평</span></div></div>
             <div class="info-card"><div class="label">기준층 임대</div><div class="value">${formatNumber(b.area?.typicalFloorPy || b.typicalFloorPy || b.typicalFloorLeasePy) || '-'}<span class="unit">평</span></div></div>
             <div class="info-card"><div class="label">전용률</div><div class="value">${b.area?.exclusiveRate || b.exclusiveRate || '-'}<span class="unit">%</span></div></div>
         </div>
@@ -5663,10 +5663,36 @@ window.openBuildingEditModal = function() {
     const aliases = building.aliases || raw.aliases || [];
     setVal('editAliases', (Array.isArray(aliases) ? aliases : []).join(', '));
     
-    // 기준층 정보
-    setVal('editTypicalFloorPy', getNum(building.area?.typicalFloorPy, building.typicalFloorPy, raw.area?.typicalFloorPy, raw.typicalFloorPy));
-    setVal('editTypicalFloorLeasePy', getNum(building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy, raw.area?.typicalFloorLeasePy, raw.typicalFloorLeasePy));
-    setVal('editExclusiveRate', getNum(building.area?.exclusiveRate, building.exclusiveRate, raw.area?.exclusiveRate, raw.exclusiveRate));
+    // ★ v4.2: 기준층 정보 — 필드 의미 정리
+    //   DB 구조: typicalFloorPy = 기준층 임대면적 (display에서 그대로 사용)
+    //            exclusiveFloorPy = 기준층 전용면적 (없으면 임대×전용률 계산)
+    //            typicalFloorLeasePy = typicalFloorPy의 alias (중복 저장용)
+    //
+    //   편집 모달 필드:
+    //     editTypicalFloorPy    → 레이블 "기준층 면적(전용)" → 전용면적
+    //     editTypicalFloorLeasePy → 레이블 "기준층 임대면적"   → 임대면적
+    
+    // 기준층 임대면적: typicalFloorPy 가 실제 저장 필드
+    const _leasePy = getNum(
+        building.area?.typicalFloorPy, building.typicalFloorPy,
+        building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy,
+        raw.area?.typicalFloorPy, raw.typicalFloorPy,
+        raw.area?.typicalFloorLeasePy, raw.typicalFloorLeasePy
+    );
+    setVal('editTypicalFloorLeasePy', _leasePy);
+
+    // 기준층 전용면적: 별도 저장값 우선, 없으면 임대면적 × 전용률 계산
+    const _excRate = getNum(building.area?.exclusiveRate, building.exclusiveRate, raw.area?.exclusiveRate, raw.exclusiveRate);
+    const _storedExclPy = getNum(
+        building.area?.exclusiveFloorPy, building.exclusiveFloorPy,
+        raw.area?.exclusiveFloorPy, raw.exclusiveFloorPy
+    );
+    const _calcExclPy = (_leasePy && _excRate)
+        ? parseFloat((_leasePy * _excRate / 100).toFixed(2))
+        : '';
+    setVal('editTypicalFloorPy', _storedExclPy || _calcExclPy);
+
+    setVal('editExclusiveRate', _excRate);
     
     // ★ 임대조건 - 원 단위 그대로 표시 (변환 없음)
     setVal('editDepositPy', getNum(building.depositPy, building.pricing?.depositPy, raw.depositPy, raw.pricing?.depositPy));
@@ -5781,7 +5807,7 @@ window.openBuildingEditModal = function() {
 };
 
 // ============================================================
-// ★ v4.1: 빌딩 정보 저장 (원 단위 직접 저장)
+// ★ v4.2: 빌딩 정보 저장 (기준층 임대/전용면적 필드 분리 저장)
 // ============================================================
 
 window.saveBuildingEdit = async function(formData) {
@@ -5850,13 +5876,29 @@ window.saveBuildingEdit = async function(formData) {
         updates.grade = formData.grade || '';
         updates.aliases = formData.aliases || [];
         
-        // 기준층 정보
-        updates['area/typicalFloorPy'] = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
-        updates['area/typicalFloorLeasePy'] = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
-        updates['area/exclusiveRate'] = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
-        updates.typicalFloorPy = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
-        updates.typicalFloorLeasePy = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
-        updates.exclusiveRate = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
+        // ★ v4.2: 기준층 정보 저장 — 필드 의미 재정렬
+        //   formData.typicalFloorLeasePy (editTypicalFloorLeasePy, 기준층 임대면적)
+        //     → display가 읽는 area/typicalFloorPy 에 저장 (기존 동작 유지)
+        //   formData.typicalFloorPy (editTypicalFloorPy, 기준층 전용면적)
+        //     → area/exclusiveFloorPy 에 저장 (신규 전용 필드)
+        const parsedLeasePy    = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
+        const parsedExclPy     = formData.typicalFloorPy      ? parseFloat(formData.typicalFloorPy)      : null;
+        const parsedExclRate   = formData.exclusiveRate        ? parseFloat(formData.exclusiveRate)       : null;
+
+        // 임대면적 → 기존 display 필드에 그대로 기록
+        updates['area/typicalFloorPy']     = parsedLeasePy;
+        updates.typicalFloorPy             = parsedLeasePy;
+        // alias 필드도 동기화
+        updates['area/typicalFloorLeasePy'] = parsedLeasePy;
+        updates.typicalFloorLeasePy        = parsedLeasePy;
+
+        // 전용면적 → 신규 전용 필드에 저장
+        updates['area/exclusiveFloorPy']   = parsedExclPy;
+        updates.exclusiveFloorPy           = parsedExclPy;
+
+        // 전용률
+        updates['area/exclusiveRate']      = parsedExclRate;
+        updates.exclusiveRate              = parsedExclRate;
         
         // ★ 임대조건 (원 단위 그대로 저장)
         const parseWon = (val) => {
