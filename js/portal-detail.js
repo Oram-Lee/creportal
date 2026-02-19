@@ -2072,8 +2072,14 @@ export function renderDocumentSection() {
         pageNum = parseInt(selectedDoc.pageNum) || selectedDoc.page || 1;
         imageUrl = selectedDoc.pageImageUrl || '';
         if (!imageUrl && selectedDoc.source && selectedDoc.publishDate) {
-            const formattedFolder = (selectedDoc.source + '_' + selectedDoc.publishDate).replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
-            imageUrl = 'https://firebasestorage.googleapis.com/v0/b/cre-unified.firebasestorage.app/o/leasing-docs%2F' + encodeURIComponent(formattedFolder) + '%2Fpage_' + String(pageNum).padStart(3, '0') + '.jpg?alt=media';
+            // ★ v3.1 수정: admin-leasing.html 업로드 경로와 일치시킴
+            // 업로드 경로: leasing-docs/{source}/{publishDate}/page_NNN.jpg  (2단계 폴더)
+            // 기존 오류:  leasing-docs/{source}_{publishDate}/page_NNN.jpg   (1단계 폴더, 불일치)
+            const safeSource  = selectedDoc.source.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
+            const safePubDate = selectedDoc.publishDate.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
+            imageUrl = 'https://firebasestorage.googleapis.com/v0/b/cre-unified.firebasestorage.app/o/'
+                + encodeURIComponent(`leasing-docs/${safeSource}/${safePubDate}/page_${String(pageNum).padStart(3, '0')}.jpg`)
+                + '?alt=media';
         }
     }
     
@@ -5386,12 +5392,14 @@ export async function uploadPdfPageImage() {
         
         progressBar.style.width = '70%';
         
-        // Firebase Storage 경로 생성
+        // ★ v3.1 수정: admin-leasing.html 업로드 경로와 일치 (2단계 폴더 구조)
+        // 경로: leasing-docs/{source}/{publishDate}/page_NNN.jpg
         const source = pdfState.source || 'unknown';
         const period = pdfState.period || 'unknown';
         const pageNum = String(pdfState.targetPageNum || pdfState.currentPage).padStart(3, '0');
-        const folderName = `${source.replace(/[\s\.]+/g, '_')}_${period.replace(/[\s\.]+/g, '_')}`.replace(/__+/g, '_');
-        const storagePath = `leasing-docs/${folderName}/page_${pageNum}.jpg`;
+        const safeSource = source.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
+        const safePeriod = period.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
+        const storagePath = `leasing-docs/${safeSource}/${safePeriod}/page_${pageNum}.jpg`;
         
         console.log('업로드 경로:', storagePath);
         

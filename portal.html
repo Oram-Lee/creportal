@@ -95,6 +95,11 @@
                         <span>~</span>
                         <input type="number" id="vacancyAreaMax" placeholder="최대">
                     </div>
+                    <!-- ★ 연층(복수층)적용 체크박스 -->
+                    <label id="combinedVacancyLabel" style="display:flex; align-items:center; gap:7px; margin-top:9px; cursor:pointer; font-size:12px; color:var(--text-muted); user-select:none; padding:6px 8px; border-radius:6px; transition:background 0.15s;" onmouseover="this.style.background='var(--bg-primary)'" onmouseout="this.style.background='transparent'">
+                        <input type="checkbox" id="combinedVacancyCheck" style="width:14px; height:14px; accent-color:#10b981; cursor:pointer; flex-shrink:0;" onchange="updateCombinedVacancyLabelStyle()">
+                        <span id="combinedVacancyLabelText" style="line-height:1.3;">연층(복수층) 적용 <span style="color:#94a3b8; font-size:11px;">— 합산 면적 포함</span></span>
+                    </label>
                     <div class="filter-actions">
                         <button class="btn btn-secondary btn-sm" onclick="clearFilter('area')">초기화</button>
                         <button class="btn btn-primary btn-sm" onclick="applyFilter('area')">적용</button>
@@ -4135,6 +4140,177 @@
         })();
     </script>
     
+    <!-- ★ 연층(복수층) 공실 전용면적 필터 패치 -->
+    <script>
+    (function patchCombinedVacancyFilter() {
+        'use strict';
+
+        /* ── 체크박스 라벨 스타일 동기화 ── */
+        window.updateCombinedVacancyLabelStyle = function() {
+            const cb  = document.getElementById('combinedVacancyCheck');
+            const lbl = document.getElementById('combinedVacancyLabel');
+            if (!cb || !lbl) return;
+            if (cb.checked) {
+                lbl.style.background = '#ecfdf5';
+                lbl.style.color      = '#065f46';
+                const txt = document.getElementById('combinedVacancyLabelText');
+                if (txt) txt.style.color = '#065f46';
+            } else {
+                lbl.style.background = 'transparent';
+                lbl.style.color      = 'var(--text-muted)';
+                const txt = document.getElementById('combinedVacancyLabelText');
+                if (txt) txt.style.color = '';
+            }
+        };
+
+        /* ── 핵심: 빌딩이 합산 공실 면적 조건을 만족하는지 판정 ──
+         *  "완화 연층": 층 연속 여부 무관, 복수 공실 전용면적 합산이
+         *  [from, to] 범위에 들어오는 조합이 존재하면 true
+         * ─────────────────────────────────────────────────────────── */
+        function hasSubsetSumInRange(areas, from, to) {
+            var n = areas.length;
+            if (n < 2) return false;
+
+            var hasTo   = (isFinite(to)  && to   > 0);
+            var hasFrom = (isFinite(from) && from > 0);
+
+            /* n ≤ 18: 완전 열거 (2^18 ≈ 26만, 충분히 빠름) */
+            if (n <= 18) {
+                var limit = 1 << n;
+                for (var mask = 1; mask < limit; mask++) {
+                    var bits = 0, sum = 0;
+                    for (var i = 0; i < n; i++) {
+                        if (mask & (1 << i)) { bits++; sum += areas[i]; }
+                    }
+                    if (bits < 2)               continue;  // 단일층 제외
+                    if (hasFrom && sum < from)   continue;
+                    if (hasTo   && sum > to)     continue;
+                    return true;
+                }
+                return false;
+            }
+
+            /* n > 18: 상위 18개만 재귀 (현실에서 발생 거의 없음) */
+            var sorted18 = areas.slice().sort(function(a,b){return b-a;}).slice(0, 18);
+            return hasSubsetSumInRange(sorted18, from, to);
+        }
+
+        /* ── 빌딩의 유효 공실 전용면적 목록 추출 ── */
+        function getExclusiveAreas(buildingId) {
+            var state     = window.state;
+            var vacancies = (state && state.dataCache && state.dataCache.vacancies)
+                          ? state.dataCache.vacancies[buildingId]
+                          : null;
+            if (!vacancies) vacancies = (state && state.vacancies) ? state.vacancies[buildingId] : null;
+            if (!vacancies) return [];
+
+            var areas = [];
+            var entries = Object.entries(vacancies);
+            for (var ei = 0; ei < entries.length; ei++) {
+                var key = entries[ei][0];
+                var v   = entries[ei][1];
+                if (!v || key.endsWith('_meta')) continue;
+                var ea = parseFloat(v.exclusiveArea || v.exclusive_area || 0);
+                if (ea > 0) areas.push(ea);
+            }
+            return areas;
+        }
+
+        /* ── applyFilter / clearFilter 패치 ── */
+        var PATCH_INTERVAL = setInterval(function() {
+            if (typeof window.applyFilter !== 'function') return;
+            if (window._combinedVacancyFilterPatched) { clearInterval(PATCH_INTERVAL); return; }
+
+            var _origApply = window.applyFilter;
+            var _origClear = window.clearFilter;
+
+            /* applyFilter 오버라이드 */
+            window.applyFilter = function(type) {
+                var args = Array.prototype.slice.call(arguments);
+                _origApply.apply(this, args);
+
+                if (type !== 'area') return;
+
+                var cb = document.getElementById('combinedVacancyCheck');
+                if (!cb || !cb.checked) return;
+
+                var fromEl = document.getElementById('vacancyAreaMin');
+                var toEl   = document.getElementById('vacancyAreaMax');
+                var from   = fromEl ? (parseFloat(fromEl.value) || 0)        : 0;
+                var to     = toEl   ? (parseFloat(toEl.value)   || Infinity)  : Infinity;
+
+                /* 전용면적 필터 값이 없으면 연층 로직 불필요 */
+                if (!from && !isFinite(to)) return;
+
+                _injectCombinedBuildings(from, to);
+            };
+
+            /* clearFilter 오버라이드 */
+            window.clearFilter = function(type) {
+                var args = Array.prototype.slice.call(arguments);
+                _origClear.apply(this, args);
+                if (type === 'area') {
+                    var cb = document.getElementById('combinedVacancyCheck');
+                    if (cb) cb.checked = false;
+                    if (window.updateCombinedVacancyLabelStyle) window.updateCombinedVacancyLabelStyle();
+                }
+            };
+
+            window._combinedVacancyFilterPatched = true;
+            clearInterval(PATCH_INTERVAL);
+            console.log('[연층필터] applyFilter / clearFilter 패치 완료');
+        }, 300);
+
+        /* ── 연층 조건 충족 빌딩을 filteredBuildings에 추가하고 재렌더 ── */
+        function _injectCombinedBuildings(from, to) {
+            var state = window.state;
+            if (!state) { console.warn('[연층필터] window.state 없음'); return; }
+
+            var allBuildings      = state.allBuildings      || [];
+            var filteredBuildings = state.filteredBuildings || [];
+            var shownIds          = {};
+            for (var si = 0; si < filteredBuildings.length; si++) {
+                shownIds[filteredBuildings[si].id] = true;
+            }
+
+            var toAdd = [];
+            for (var bi = 0; bi < allBuildings.length; bi++) {
+                var building = allBuildings[bi];
+                if (shownIds[building.id]) continue;   /* 이미 표시 중 */
+                if (building._hidden)      continue;   /* 숨김 빌딩 */
+
+                var areas = getExclusiveAreas(building.id);
+                if (areas.length < 2) continue;
+
+                if (hasSubsetSumInRange(areas, from, to)) {
+                    /* _combinedVacancy 플래그 — 렌더러에서 활용 가능 */
+                    var copy = Object.assign({}, building, { _combinedVacancy: true });
+                    toAdd.push(copy);
+                }
+            }
+
+            if (toAdd.length === 0) {
+                console.log('[연층필터] 추가 대상 빌딩 없음');
+                return;
+            }
+
+            console.log('[연층필터] 연층 조건 충족 빌딩 ' + toAdd.length + '개 추가');
+            state.filteredBuildings = filteredBuildings.concat(toAdd);
+
+            /* 재렌더: portal-main.js에 있는 렌더 함수들 호출 */
+            if (typeof window.renderBuildingList === 'function')  window.renderBuildingList();
+            if (typeof window.renderTableView    === 'function'
+                && state.currentViewMode === 'list')              window.renderTableView();
+            if (typeof window.updateMapMarkers   === 'function')  window.updateMapMarkers();
+            if (typeof window.refreshMap         === 'function')  window.refreshMap();
+        }
+
+        /* 15초 후 인터벌 강제 해제 (비정상 로드 안전장치) */
+        setTimeout(function() { clearInterval(PATCH_INTERVAL); }, 15000);
+
+    })();
+    </script>
+
     <!-- v4.1: 클립보드 이미지 붙여넣기 -->
     <script>
         document.addEventListener('paste', function(e) {
