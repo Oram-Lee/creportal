@@ -982,6 +982,38 @@
                 </div>
             </div>
             
+            <!-- ★ 등록 모드 선택 (교체 / 추가) -->
+            <div style="margin-bottom: 16px;">
+                <label style="font-size: 13px; font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 8px;">등록 방식</label>
+                <div style="display: flex; gap: 10px;">
+                    <!-- 교체 -->
+                    <label for="pdfUploadModeReplace"
+                           style="flex: 1; display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 2px solid #bfdbfe; border-radius: 10px; background: #eff6ff; cursor: pointer; transition: all 0.15s;"
+                           id="pdfUploadModeLabelReplace">
+                        <input type="radio" name="pdfUploadMode" id="pdfUploadModeReplace" value="replace"
+                               checked
+                               onchange="document.getElementById('pdfUploadModeLabelReplace').style.borderColor='#2563eb'; document.getElementById('pdfUploadModeLabelAppend').style.borderColor='#d1d5db'; document.getElementById('pdfUploadModeLabelAppend').style.background='#f9fafb';"
+                               style="margin-top: 2px; accent-color: #2563eb; width: 15px; height: 15px; flex-shrink: 0;">
+                        <div>
+                            <div style="font-size: 13px; font-weight: 700; color: #1e40af;">🔄 교체</div>
+                            <div style="font-size: 11px; color: #3b82f6; margin-top: 3px;">기존 원본 이미지를 새 페이지로 교체합니다</div>
+                        </div>
+                    </label>
+                    <!-- 추가 -->
+                    <label for="pdfUploadModeAppend"
+                           style="flex: 1; display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 2px solid #d1d5db; border-radius: 10px; background: #f9fafb; cursor: pointer; transition: all 0.15s;"
+                           id="pdfUploadModeLabelAppend">
+                        <input type="radio" name="pdfUploadMode" id="pdfUploadModeAppend" value="append"
+                               onchange="document.getElementById('pdfUploadModeLabelAppend').style.borderColor='#16a34a'; document.getElementById('pdfUploadModeLabelAppend').style.background='#f0fdf4'; document.getElementById('pdfUploadModeLabelReplace').style.borderColor='#bfdbfe'; document.getElementById('pdfUploadModeLabelReplace').style.background='#eff6ff';"
+                               style="margin-top: 2px; accent-color: #16a34a; width: 15px; height: 15px; flex-shrink: 0;">
+                        <div>
+                            <div style="font-size: 13px; font-weight: 700; color: #166534;">➕ 추가</div>
+                            <div style="font-size: 11px; color: #16a34a; margin-top: 3px;" id="pdfUploadModeAppendDesc">현재 이미지에 새 페이지를 추가합니다</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
             <!-- PDF 파일 선택 -->
             <div class="form-row">
                 <label>임대안내문 PDF 파일</label>

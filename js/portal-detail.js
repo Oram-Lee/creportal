@@ -2071,19 +2071,33 @@ export function renderDocumentSection() {
     
     // 이미지 URL 생성
     let imageUrl = '';
+    let pageImageUrls = [];  // ★ 멀티페이지 지원
     let pageNum = 1;
     if (selectedDoc) {
         pageNum = parseInt(selectedDoc.pageNum) || selectedDoc.page || 1;
-        imageUrl = selectedDoc.pageImageUrl || '';
-        if (!imageUrl && selectedDoc.source && selectedDoc.publishDate) {
-            // ★ v3.1 수정: admin-leasing.html 업로드 경로와 일치시킴
-            // 업로드 경로: leasing-docs/{source}/{publishDate}/page_NNN.jpg  (2단계 폴더)
-            // 기존 오류:  leasing-docs/{source}_{publishDate}/page_NNN.jpg   (1단계 폴더, 불일치)
-            const safeSource  = selectedDoc.source.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
-            const safePubDate = selectedDoc.publishDate.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
-            imageUrl = 'https://firebasestorage.googleapis.com/v0/b/cre-unified.firebasestorage.app/o/'
-                + encodeURIComponent(`leasing-docs/${safeSource}/${safePubDate}/page_${String(pageNum).padStart(3, '0')}.jpg`)
-                + '?alt=media';
+        
+        // ★ _meta 레코드에서 pageImageUrls 우선 확인
+        const metaKey = `${state.selectedDocSource}_${state.selectedDocPeriod}`;
+        const docMeta = vacancyMetas[metaKey];
+        if (docMeta?.pageImageUrls?.length > 0) {
+            pageImageUrls = docMeta.pageImageUrls;
+            imageUrl = pageImageUrls[0];
+        } else if (docMeta?.pageImageUrl) {
+            imageUrl = docMeta.pageImageUrl;
+            pageImageUrls = [imageUrl];
+        } else {
+            imageUrl = selectedDoc.pageImageUrl || '';
+            if (imageUrl) {
+                pageImageUrls = [imageUrl];
+            } else if (selectedDoc.source && selectedDoc.publishDate) {
+                // ★ v3.1 수정: admin-leasing.html 업로드 경로와 일치시킴
+                const safeSource  = selectedDoc.source.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
+                const safePubDate = selectedDoc.publishDate.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
+                imageUrl = 'https://firebasestorage.googleapis.com/v0/b/cre-unified.firebasestorage.app/o/'
+                    + encodeURIComponent(`leasing-docs/${safeSource}/${safePubDate}/page_${String(pageNum).padStart(3, '0')}.jpg`)
+                    + '?alt=media';
+                pageImageUrls = [imageUrl];
+            }
         }
     }
     
@@ -2260,7 +2274,7 @@ export function renderDocumentSection() {
         const metaImageUrl = docMeta?.pageImageUrl || imageUrl;
         
         if (selectedDoc) {
-            // 문서는 있지만 공실이 없는 경우 → "공실 없음" 표시
+            // 문서는 있지만 공실이 없는 경우 → "공실 없음" 표시 + 공실 추가 버튼
             vacancyTableHtml = `
                 <div style="margin-top: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 16px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 8px; border: 1px solid #f59e0b;">
@@ -2273,13 +2287,18 @@ export function renderDocumentSection() {
                                 </div>
                             </div>
                         </div>
-                        <div style="display: flex; gap: 8px;">
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             ${metaImageUrl ? `
                                 <button onclick="window.open('${metaImageUrl}', '_blank')" 
                                         style="padding: 8px 14px; background: white; color: #92400e; border: 1px solid #f59e0b; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
                                     <span>📄</span> 원문보기
                                 </button>
                             ` : ''}
+                            <button onclick="showInlineVacancyForm('current')"
+                                    style="padding: 8px 14px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;"
+                                    title="이 안내문에 공실을 직접 추가합니다">
+                                <span>➕</span> 공실 추가
+                            </button>
                             <button onclick="addBuildingOnlyToCompList()" 
                                     style="padding: 8px 14px; background: #92400e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
                                 <span>📋</span> 빌딩 정보만 담기
@@ -2373,10 +2392,17 @@ export function renderDocumentSection() {
                 </div>
                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                     ${imageUrl ? `
-                        <button onclick="showPagePreview('${imageUrl.replace(/'/g, "\\'")}', '${state.selectedDocSource.replace(/'/g, "\\'")}', '${state.selectedDocPeriod.replace(/'/g, "\\'")}', ${pageNum})"
-                                style="padding: 6px 12px; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
-                            👁️ 원본
-                        </button>
+                        ${pageImageUrls.length > 1 ? `
+                            <button onclick="showMultiPagePreview(${JSON.stringify(pageImageUrls).replace(/"/g, '&quot;')}, '${state.selectedDocSource.replace(/'/g, "\\'")}', '${state.selectedDocPeriod.replace(/'/g, "\\'")}')"
+                                    style="padding: 6px 12px; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+                                👁️ 원본 (${pageImageUrls.length}장)
+                            </button>
+                        ` : `
+                            <button onclick="showPagePreview('${imageUrl.replace(/'/g, "\\'")}', '${state.selectedDocSource.replace(/'/g, "\\'")}', '${state.selectedDocPeriod.replace(/'/g, "\\'")}', ${pageNum})"
+                                    style="padding: 6px 12px; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;">
+                                👁️ 원본
+                            </button>
+                        `}
                         <button onclick="openPageMappingModal('${state.selectedBuilding?.id || ''}', '${state.selectedDocSource.replace(/'/g, "\\'")}', '${state.selectedDocPeriod.replace(/'/g, "\\'")}', ${pageNum}, '${imageUrl.replace(/'/g, "\\'")}')"
                                 style="padding: 6px 12px; background: #fef3c7; color: #92400e; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;"
                                 title="페이지 이미지가 일치하지 않을 경우 변경">
@@ -2540,6 +2566,7 @@ export function registerDetailGlobals() {
     window.pdfNextPage = pdfNextPage;
     window.goToPdfPage = goToPdfPage;
     window.uploadPdfPageImage = uploadPdfPageImage;
+    window.showMultiPagePreview = showMultiPagePreview;
     
     // 탭 이벤트 설정
     setupDetailTabs();
@@ -5188,7 +5215,8 @@ let pdfState = {
     pdfDoc: null,
     currentPage: 1,
     totalPages: 0,
-    scale: 1.5
+    scale: 1.5,
+    uploadMode: 'replace'  // 'replace' | 'append'
 };
 
 /**
@@ -5201,14 +5229,35 @@ export function openPdfUploadModal(buildingId, source, period, pageNum) {
     pdfState.targetPageNum = pageNum;
     pdfState.pdfDoc = null;
     pdfState.currentPage = pageNum || 1;
+    pdfState.uploadMode = 'replace';  // 기본값: 교체
+    
+    // 기존 pageImageUrls 개수 파악 (추가 모드 힌트용)
+    const metaKey = `${source}_${period}`;
+    const building = state.selectedBuilding;
+    const existingMeta = building?.vacancies?.find(v => v._key?.endsWith('_meta') && v.source === source && v.publishDate === period);
+    const existingCount = existingMeta?.pageImageUrls?.length || (existingMeta?.pageImageUrl ? 1 : 0);
     
     // UI 업데이트
-    const building = state.selectedBuilding;
     document.getElementById('pdfUploadBuildingName').textContent = building?.name || '빌딩명';
     document.getElementById('pdfUploadSource').textContent = source || '-';
     document.getElementById('pdfUploadPeriod').textContent = period || '-';
     document.getElementById('pdfUploadPageNum').textContent = pageNum || '-';
     document.getElementById('pdfUploadInfo').style.display = 'block';
+    
+    // 교체/추가 모드 UI 업데이트
+    const modeAppendDesc = document.getElementById('pdfUploadModeAppendDesc');
+    if (modeAppendDesc) {
+        modeAppendDesc.textContent = existingCount > 0
+            ? `현재 ${existingCount}장 등록됨 — 새 페이지를 추가합니다`
+            : '새 페이지로 추가합니다';
+    }
+    // 기본값으로 교체 선택 + 레이블 스타일 리셋
+    const modeReplace = document.getElementById('pdfUploadModeReplace');
+    if (modeReplace) modeReplace.checked = true;
+    const lblReplace = document.getElementById('pdfUploadModeLabelReplace');
+    const lblAppend  = document.getElementById('pdfUploadModeLabelAppend');
+    if (lblReplace) { lblReplace.style.borderColor = '#2563eb'; lblReplace.style.background = '#eff6ff'; }
+    if (lblAppend)  { lblAppend.style.borderColor  = '#d1d5db'; lblAppend.style.background  = '#f9fafb'; }
     
     // 초기화
     document.getElementById('pdfFileInput').value = '';
@@ -5235,6 +5284,119 @@ export function closePdfUploadModal() {
     
     // 상태 초기화
     pdfState.pdfDoc = null;
+}
+
+/**
+ * 멀티페이지 원본보기 뷰어
+ * pageImageUrls 배열을 받아 슬라이드 형식으로 보여줌
+ */
+export function showMultiPagePreview(urls, source, period) {
+    if (!urls || urls.length === 0) return;
+    
+    // 기존 팝업 제거
+    document.getElementById('multiPagePreviewOverlay')?.remove();
+    
+    let currentIdx = 0;
+    
+    const overlay = document.createElement('div');
+    overlay.id = 'multiPagePreviewOverlay';
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.92); z-index: 99999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+    `;
+    
+    const render = () => {
+        overlay.innerHTML = `
+            <div style="position: relative; width: 100%; max-width: 900px; padding: 0 16px; box-sizing: border-box;">
+                <!-- 헤더 -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; color: white;">
+                    <div style="font-size: 14px; font-weight: 600;">
+                        📄 ${source} · ${period}
+                        <span style="margin-left: 10px; font-size: 12px; opacity: 0.7; font-weight: 400;">
+                            ${currentIdx + 1} / ${urls.length}장
+                        </span>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button id="mpvOpenBtn"
+                                style="padding: 6px 14px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                            🔗 새탭 열기
+                        </button>
+                        <button id="mpvCloseBtn"
+                                style="background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1; padding: 0 4px;">×</button>
+                    </div>
+                </div>
+                
+                <!-- 이미지 -->
+                <div style="position: relative; text-align: center;">
+                    <img id="mpvImage" src="${urls[currentIdx]}" 
+                         style="max-width: 100%; max-height: 75vh; border-radius: 8px; box-shadow: 0 4px 30px rgba(0,0,0,0.5); display: block; margin: 0 auto; object-fit: contain;"
+                         onerror="this.style.background='#1e293b'; this.style.minHeight='300px'; this.alt='이미지 로드 실패';">
+                    
+                    <!-- 좌우 네비게이션 (2장 이상일 때) -->
+                    ${urls.length > 1 ? `
+                        <button id="mpvPrev" 
+                                style="position: absolute; left: -48px; top: 50%; transform: translateY(-50%);
+                                       width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.15);
+                                       border: none; color: white; font-size: 20px; cursor: pointer;
+                                       display: flex; align-items: center; justify-content: center;
+                                       ${currentIdx === 0 ? 'opacity: 0.3; cursor: not-allowed;' : ''}">‹</button>
+                        <button id="mpvNext"
+                                style="position: absolute; right: -48px; top: 50%; transform: translateY(-50%);
+                                       width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.15);
+                                       border: none; color: white; font-size: 20px; cursor: pointer;
+                                       display: flex; align-items: center; justify-content: center;
+                                       ${currentIdx === urls.length - 1 ? 'opacity: 0.3; cursor: not-allowed;' : ''}">›</button>
+                    ` : ''}
+                </div>
+                
+                <!-- 썸네일 도트 (2장 이상) -->
+                ${urls.length > 1 ? `
+                <div style="display: flex; justify-content: center; gap: 8px; margin-top: 14px;">
+                    ${urls.map((_, i) => `
+                        <button data-idx="${i}"
+                                style="width: ${i === currentIdx ? '24px' : '8px'}; height: 8px; border-radius: 4px;
+                                       background: ${i === currentIdx ? '#3b82f6' : 'rgba(255,255,255,0.4)'};
+                                       border: none; cursor: pointer; transition: all 0.2s; padding: 0;"
+                                class="mpv-dot"></button>
+                    `).join('')}
+                </div>
+                ` : ''}
+            </div>
+        `;
+        
+        // 이벤트 바인딩
+        overlay.querySelector('#mpvCloseBtn').onclick = () => overlay.remove();
+        overlay.querySelector('#mpvOpenBtn').onclick = () => window.open(urls[currentIdx], '_blank');
+        
+        if (urls.length > 1) {
+            const prevBtn = overlay.querySelector('#mpvPrev');
+            const nextBtn = overlay.querySelector('#mpvNext');
+            if (prevBtn) prevBtn.onclick = () => { if (currentIdx > 0) { currentIdx--; render(); } };
+            if (nextBtn) nextBtn.onclick = () => { if (currentIdx < urls.length - 1) { currentIdx++; render(); } };
+            overlay.querySelectorAll('.mpv-dot').forEach(dot => {
+                dot.onclick = () => { currentIdx = parseInt(dot.dataset.idx); render(); };
+            });
+        }
+    };
+    
+    render();
+    
+    // 배경 클릭 시 닫기
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    // 키보드 좌우 화살표
+    const keyHandler = (e) => {
+        if (!document.getElementById('multiPagePreviewOverlay')) {
+            document.removeEventListener('keydown', keyHandler);
+            return;
+        }
+        if (e.key === 'ArrowLeft' && currentIdx > 0) { currentIdx--; render(); }
+        if (e.key === 'ArrowRight' && currentIdx < urls.length - 1) { currentIdx++; render(); }
+        if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', keyHandler); }
+    };
+    document.addEventListener('keydown', keyHandler);
+    
+    document.body.appendChild(overlay);
 }
 
 /**
@@ -5360,6 +5522,10 @@ export async function uploadPdfPageImage() {
         return;
     }
     
+    // 교체/추가 모드 읽기
+    const modeEl = document.querySelector('input[name="pdfUploadMode"]:checked');
+    pdfState.uploadMode = modeEl?.value || 'replace';
+    
     const uploadBtn = document.getElementById('pdfUploadBtn');
     uploadBtn.disabled = true;
     uploadBtn.textContent = '⏳ 업로드 중...';
@@ -5400,12 +5566,28 @@ export async function uploadPdfPageImage() {
         // 경로: leasing-docs/{source}/{publishDate}/page_NNN.jpg
         const source = pdfState.source || 'unknown';
         const period = pdfState.period || 'unknown';
-        const pageNum = String(pdfState.targetPageNum || pdfState.currentPage).padStart(3, '0');
         const safeSource = source.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
         const safePeriod = period.replace(/[\s\.]+/g, '_').replace(/__+/g, '_');
-        const storagePath = `leasing-docs/${safeSource}/${safePeriod}/page_${pageNum}.jpg`;
         
-        console.log('업로드 경로:', storagePath);
+        // ★ 추가 모드일 때 기존 이미지 수를 기준으로 파일명 결정
+        let basePageNum;
+        if (pdfState.uploadMode === 'append') {
+            // 현재 _meta에 등록된 이미지 수 파악 → 다음 번호 사용
+            const existingMeta = state.selectedBuilding?.vacancies?.find(
+                v => v._key?.endsWith('_meta') && v.source === source && v.publishDate === period
+            );
+            const existingUrls = existingMeta?.pageImageUrls || (existingMeta?.pageImageUrl ? [existingMeta.pageImageUrl] : []);
+            basePageNum = String(pdfState.currentPage).padStart(3, '0');
+            // 파일 충돌 방지: 이미 같은 번호가 있으면 suffix 추가
+            // (실제로는 Storage가 덮어쓰기하지만 구분 위해 _p2, _p3 suffix)
+            const suffix = existingUrls.length > 0 ? `_extra${existingUrls.length}` : '';
+            var storagePath = `leasing-docs/${safeSource}/${safePeriod}/page_${basePageNum}${suffix}.jpg`;
+        } else {
+            basePageNum = String(pdfState.targetPageNum || pdfState.currentPage).padStart(3, '0');
+            var storagePath = `leasing-docs/${safeSource}/${safePeriod}/page_${basePageNum}.jpg`;
+        }
+        
+        console.log(`[pdfUpload] 모드: ${pdfState.uploadMode}, 경로: ${storagePath}`);
         
         // Firebase Storage에 업로드 (전역 함수 사용)
         if (typeof window.uploadImageToStorage !== 'function') {
@@ -5414,24 +5596,65 @@ export async function uploadPdfPageImage() {
         
         const downloadUrl = await window.uploadImageToStorage(blob, storagePath);
         
-        progressBar.style.width = '100%';
+        progressBar.style.width = '90%';
         
         console.log('업로드 완료:', downloadUrl);
         
-        // 문서 정보 업데이트 (pageImageUrl 저장)
-        const building = state.allBuildings.find(b => b.id === pdfState.buildingId);
-        if (building && building.documents) {
-            const doc = building.documents.find(d => 
-                d.source === pdfState.source && d.publishDate === pdfState.period
-            );
-            if (doc) {
-                doc.pageImageUrl = downloadUrl;
-                // Firebase에도 업데이트
-                await update(ref(db, `buildings/${pdfState.buildingId}/documents`), building.documents);
+        // ★ _meta 레코드에 pageImageUrls 배열로 저장
+        const metaKey = `${safeSource}_${safePeriod}_meta`;
+        
+        // 기존 _meta에서 현재 pageImageUrls 가져오기
+        const existingMeta = state.selectedBuilding?.vacancies?.find(
+            v => v._key === metaKey
+        );
+        let pageImageUrls = existingMeta?.pageImageUrls 
+            ? [...existingMeta.pageImageUrls]
+            : (existingMeta?.pageImageUrl ? [existingMeta.pageImageUrl] : []);
+        
+        if (pdfState.uploadMode === 'replace') {
+            // 교체: 기존 배열 초기화 후 새 URL 하나만
+            pageImageUrls = [downloadUrl];
+        } else {
+            // 추가: 배열에 append (중복 방지)
+            if (!pageImageUrls.includes(downloadUrl)) {
+                pageImageUrls.push(downloadUrl);
             }
         }
         
-        showToast('페이지 이미지가 업로드되었습니다', 'success');
+        const metaData = {
+            source: source,
+            publishDate: period,
+            pageImageUrl: pageImageUrls[0],      // 첫 번째 (하위 호환)
+            pageImageUrls: pageImageUrls,         // ★ 전체 배열
+            pageNum: pdfState.targetPageNum || pdfState.currentPage || 1,
+            updatedAt: new Date().toISOString(),
+            updatedBy: state.currentUser?.email || null
+        };
+        // undefined/null 제거
+        const cleanMeta = Object.fromEntries(
+            Object.entries(metaData).filter(([, v]) => v !== undefined && v !== null)
+        );
+        
+        await update(ref(db, `vacancies/${pdfState.buildingId}/${metaKey}`), cleanMeta);
+        
+        progressBar.style.width = '100%';
+        
+        // ★ 로컬 상태 동기화
+        const buildingObj = state.allBuildings.find(b => b.id === pdfState.buildingId);
+        [buildingObj, state.selectedBuilding?.id === pdfState.buildingId ? state.selectedBuilding : null]
+            .filter(Boolean)
+            .forEach(b => {
+                if (!b.vacancies) b.vacancies = [];
+                const mIdx = b.vacancies.findIndex(v => v._key === metaKey);
+                if (mIdx >= 0) {
+                    b.vacancies[mIdx] = { ...b.vacancies[mIdx], ...cleanMeta, _key: metaKey };
+                } else {
+                    b.vacancies.push({ ...cleanMeta, _key: metaKey });
+                }
+            });
+        
+        const modeLabel = pdfState.uploadMode === 'append' ? '추가' : '교체';
+        showToast(`페이지 이미지가 ${modeLabel}되었습니다 (총 ${pageImageUrls.length}장)`, 'success');
         closePdfUploadModal();
         
         // 문서 섹션 새로고침
