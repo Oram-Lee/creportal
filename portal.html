@@ -4590,6 +4590,276 @@
     })();
     </script>
 
+    <!-- ✅ [FIX] 건축물대장 로딩 오버레이 CSS + 마커 분산 CSS -->
+    <style>
+        /* ── 건축물대장 로딩 오버레이 ── */
+        #floorDetailLoadingOverlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.42);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9000;
+            border-radius: inherit;
+        }
+        #floorDetailLoadingBox {
+            background: #fff;
+            border-radius: 12px;
+            padding: 28px 36px;
+            text-align: center;
+            box-shadow: 0 6px 30px rgba(0,0,0,0.22);
+            min-width: 230px;
+        }
+        #floorDetailSpinner {
+            width: 42px; height: 42px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: _cre_spin 0.75s linear infinite;
+            margin: 0 auto 14px;
+        }
+        @keyframes _cre_spin { to { transform: rotate(360deg); } }
+        #floorDetailMsg {
+            font-size: 13px; color: #374151;
+            margin-bottom: 14px; line-height: 1.5;
+        }
+        #floorDetailProgressWrap {
+            height: 6px; background: #e5e7eb;
+            border-radius: 3px; margin-bottom: 18px;
+            overflow: hidden;
+        }
+        #floorDetailProgressBar {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        #floorDetailCancelBtn {
+            background: #f3f4f6; border: 1px solid #d1d5db;
+            padding: 7px 20px; border-radius: 6px;
+            cursor: pointer; font-size: 13px; color: #4b5563;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        #floorDetailCancelBtn:hover {
+            background: #fee2e2; border-color: #fca5a5; color: #dc2626;
+        }
+
+        /* ── refreshBuildingLedger 전용 오버레이 (editModal 용) ── */
+        #ledgerLoadingOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.50);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10500;
+        }
+        #ledgerLoadingBox {
+            background: #fff;
+            border-radius: 12px;
+            padding: 28px 36px;
+            text-align: center;
+            box-shadow: 0 6px 30px rgba(0,0,0,0.25);
+            min-width: 230px;
+        }
+        #ledgerSpinner {
+            width: 42px; height: 42px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: _cre_spin 0.75s linear infinite;
+            margin: 0 auto 14px;
+        }
+        #ledgerLoadingMsg { font-size: 13px; color: #374151; margin-bottom: 14px; }
+        #ledgerProgressWrap {
+            height: 6px; background: #e5e7eb;
+            border-radius: 3px; margin-bottom: 18px; overflow: hidden;
+        }
+        #ledgerProgressBar {
+            height: 100%; width: 0%;
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        #ledgerCancelBtn {
+            background: #f3f4f6; border: 1px solid #d1d5db;
+            padding: 7px 20px; border-radius: 6px;
+            cursor: pointer; font-size: 13px; color: #4b5563;
+            transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        #ledgerCancelBtn:hover {
+            background: #fee2e2; border-color: #fca5a5; color: #dc2626;
+        }
+    </style>
+
+    <!-- ✅ [FIX 2] refreshBuildingLedger 래퍼 — 딤 오버레이 + 취소 -->
+    <script>
+    (function() {
+        let _ledgerAbortCtrl = null;
+        let _ledgerTicker    = null;
+
+        function showLedgerOverlay(onCancel) {
+            removeLedgerOverlay();
+            const overlay = document.createElement('div');
+            overlay.id = 'ledgerLoadingOverlay';
+            overlay.innerHTML = `
+                <div id="ledgerLoadingBox">
+                    <div id="ledgerSpinner"></div>
+                    <p id="ledgerLoadingMsg">건축물대장 데이터 불러오는 중…</p>
+                    <div id="ledgerProgressWrap">
+                        <div id="ledgerProgressBar"></div>
+                    </div>
+                    <button id="ledgerCancelBtn">✕ 취소</button>
+                </div>`;
+            document.body.appendChild(overlay);
+            document.getElementById('ledgerCancelBtn').addEventListener('click', () => {
+                onCancel();
+                removeLedgerOverlay();
+            });
+            let pct = 0;
+            const bar = document.getElementById('ledgerProgressBar');
+            _ledgerTicker = setInterval(() => {
+                pct = Math.min(pct + Math.random() * 5 + 1, 90);
+                if (bar) bar.style.width = pct + '%';
+            }, 700);
+        }
+
+        function removeLedgerOverlay() {
+            clearInterval(_ledgerTicker);
+            _ledgerTicker = null;
+            const el = document.getElementById('ledgerLoadingOverlay');
+            if (el) el.remove();
+        }
+
+        // portal-misc.js가 먼저 window.refreshBuildingLedger를 등록할 때까지 대기 후 래핑
+        function wrapLedger() {
+            if (typeof window.refreshBuildingLedger !== 'function') {
+                setTimeout(wrapLedger, 200);
+                return;
+            }
+            const _orig = window.refreshBuildingLedger;
+            window.refreshBuildingLedger = async function(...args) {
+                // 이전 요청 취소
+                if (_ledgerAbortCtrl) _ledgerAbortCtrl.abort();
+                _ledgerAbortCtrl = new AbortController();
+                const { signal } = _ledgerAbortCtrl;
+
+                let cancelled = false;
+                showLedgerOverlay(() => {
+                    cancelled = true;
+                    if (_ledgerAbortCtrl) _ledgerAbortCtrl.abort();
+                });
+
+                // 원본 함수 실행 (signal 지원 여부와 무관하게 호출)
+                try {
+                    // signal을 마지막 인자로 전달 (portal-misc.js에서 수용하면 활용)
+                    await _orig.call(this, ...args, signal);
+                } catch(e) {
+                    if (e.name !== 'AbortError') console.error('[건축물대장] 오류:', e);
+                } finally {
+                    if (!cancelled) {
+                        // 완료 시 바를 100%로 채운 후 제거
+                        const bar = document.getElementById('ledgerProgressBar');
+                        if (bar) bar.style.width = '100%';
+                        await new Promise(r => setTimeout(r, 300));
+                    }
+                    removeLedgerOverlay();
+                }
+            };
+            console.log('[CRE Portal] refreshBuildingLedger 래퍼 등록 완료');
+        }
+        wrapLedger();
+    })();
+    </script>
+
+    <!-- ✅ [FIX 1] 동일 좌표 마커 분산 (Spider Marker) — kakao.maps 초기화 후 패치 -->
+    <script>
+    (function() {
+        /**
+         * kakao.maps.CustomOverlay 생성자를 래핑하여,
+         * 동일 좌표에 여러 오버레이가 추가될 때 방사형으로 분산시킨다.
+         */
+        const SPREAD_RADIUS = 0.00016;   // 위도 기준 약 18m
+        const _positionRegistry = {};    // key: "lat_lng" → [{overlay, origPos, spreadPos}]
+
+        function posKey(lat, lng) {
+            return parseFloat(lat).toFixed(5) + '_' + parseFloat(lng).toFixed(5);
+        }
+
+        function spreadGroup(key) {
+            const group = _positionRegistry[key];
+            if (!group || group.length <= 1) return;
+            const count = group.length;
+            group.forEach(({ overlay, origPos }, i) => {
+                const angle = (2 * Math.PI / count) * i - Math.PI / 2;
+                const sLat = origPos.getLat() + SPREAD_RADIUS * Math.cos(angle);
+                const sLng = origPos.getLng() + SPREAD_RADIUS * Math.sin(angle);
+                const newPos = new kakao.maps.LatLng(sLat, sLng);
+                overlay.setPosition(newPos);
+            });
+        }
+
+        function resetGroup(key) {
+            const group = _positionRegistry[key];
+            if (!group) return;
+            group.forEach(({ overlay, origPos }) => overlay.setPosition(origPos));
+        }
+
+        function patchKakao() {
+            if (!window.kakao || !window.kakao.maps || !window.kakao.maps.CustomOverlay) {
+                setTimeout(patchKakao, 300);
+                return;
+            }
+
+            const _OrigOverlay = kakao.maps.CustomOverlay;
+            kakao.maps.CustomOverlay = function(opts) {
+                const instance = new _OrigOverlay(opts);
+                const origPos  = opts && opts.position;
+                if (origPos && typeof origPos.getLat === 'function') {
+                    const key = posKey(origPos.getLat(), origPos.getLng());
+                    if (!_positionRegistry[key]) _positionRegistry[key] = [];
+                    _positionRegistry[key].push({ overlay: instance, origPos });
+                    // 그룹에 2개 이상이면 재분산
+                    if (_positionRegistry[key].length >= 2) {
+                        // 렌더링 완료 후 분산 (setMap 이후 position 적용 보장)
+                        setTimeout(() => spreadGroup(key), 0);
+                    }
+                }
+
+                // setMap 오버라이드: 지도에서 제거 시 registry 정리 후 재분산
+                const _origSetMap = instance.setMap.bind(instance);
+                instance.setMap = function(map) {
+                    _origSetMap(map);
+                    if (!map && origPos) {
+                        const key = posKey(origPos.getLat(), origPos.getLng());
+                        const reg = _positionRegistry[key];
+                        if (reg) {
+                            const idx = reg.findIndex(r => r.overlay === instance);
+                            if (idx !== -1) reg.splice(idx, 1);
+                            if (reg.length === 1) {
+                                // 혼자 남으면 원래 위치로 복귀
+                                reg[0].overlay.setPosition(reg[0].origPos);
+                            } else if (reg.length >= 2) {
+                                spreadGroup(key);
+                            }
+                        }
+                    }
+                };
+                return instance;
+            };
+            // 프로토타입 체인 유지
+            kakao.maps.CustomOverlay.prototype = _OrigOverlay.prototype;
+
+            console.log('[CRE Portal] kakao.maps.CustomOverlay 마커 분산 패치 완료');
+        }
+
+        // kakao SDK가 autoload=false이므로 kakao.maps.load() 이후에 패치
+        // portal-main.js에서 kakao.maps.load()를 호출하므로 폴링으로 대기
+        patchKakao();
+    })();
+    </script>
+
     <!-- v4.1: 클립보드 이미지 붙여넣기 -->
     <script>
         document.addEventListener('paste', function(e) {

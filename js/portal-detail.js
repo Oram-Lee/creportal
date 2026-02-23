@@ -2993,6 +2993,60 @@ export function addSelectedVacanciesToCompList() {
 
 // ===== ★ 건축물대장 전유부/층별개요 조회 =====
 
+/** AbortController: 진행 중인 층별상세 요청 취소용 */
+let _floorDetailAbortController = null;
+
+/**
+ * 건축물대장 층별상세 로딩 오버레이를 #detailPanel 위에 표시
+ * @param {string} label - 조회 유형명 (예: '층별개요')
+ * @param {Function} onCancel - 취소 버튼 클릭 콜백
+ */
+function showFloorDetailOverlay(label, onCancel) {
+    removeFloorDetailOverlay();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'floorDetailLoadingOverlay';
+    overlay.innerHTML = `
+        <div id="floorDetailLoadingBox">
+            <div id="floorDetailSpinner"></div>
+            <p id="floorDetailMsg">건축물대장 <strong>${label}</strong> 조회 중…</p>
+            <div id="floorDetailProgressWrap">
+                <div id="floorDetailProgressBar"></div>
+            </div>
+            <button id="floorDetailCancelBtn">✕ 취소</button>
+        </div>`;
+
+    const panel = document.getElementById('detailPanel') || document.body;
+    if (panel !== document.body) {
+        // detailPanel은 relative 포지션이어야 overlay가 정확히 덮임
+        const cs = getComputedStyle(panel);
+        if (cs.position === 'static') panel.style.position = 'relative';
+    }
+    panel.appendChild(overlay);
+
+    document.getElementById('floorDetailCancelBtn').addEventListener('click', () => {
+        onCancel();
+        removeFloorDetailOverlay();
+    });
+
+    // 가상 프로그레스바: 최대 90%까지 자동 진행
+    let pct = 0;
+    const bar = document.getElementById('floorDetailProgressBar');
+    const ticker = setInterval(() => {
+        pct = Math.min(pct + Math.random() * 5 + 1, 90);
+        if (bar) bar.style.width = pct + '%';
+    }, 700);
+    overlay._ticker = ticker;
+}
+
+function removeFloorDetailOverlay() {
+    const el = document.getElementById('floorDetailLoadingOverlay');
+    if (el) {
+        clearInterval(el._ticker);
+        el.remove();
+    }
+}
+
 /**
  * 건축물대장 층별상세 데이터 조회
  * @param {string} viewType - 'floorOutline' | 'exposeInfo' | 'exposeAreaInfo'
@@ -3013,22 +3067,34 @@ export async function fetchBuildingFloorDetail(viewType = 'floorOutline') {
     const container = document.getElementById('floorDetailContainer');
     if (!container) return;
     
-    // 로딩 표시
     const typeLabels = {
         'floorOutline': '층별개요',
         'exposeInfo': '전유부',
         'exposeAreaInfo': '전유공용면적'
     };
-    container.innerHTML = `
-        <div style="text-align: center; padding: 20px; color: var(--text-muted);">
-            <div style="font-size: 20px; margin-bottom: 8px;">⏳</div>
-            <div style="font-size: 12px;">건축물대장 ${typeLabels[viewType]} 조회 중...</div>
-        </div>
-    `;
+
+    // 이전 요청 취소
+    if (_floorDetailAbortController) {
+        _floorDetailAbortController.abort();
+    }
+    _floorDetailAbortController = new AbortController();
+    const { signal } = _floorDetailAbortController;
+
+    // 오버레이 표시
+    showFloorDetailOverlay(typeLabels[viewType], () => {
+        _floorDetailAbortController.abort();
+        container.innerHTML = `
+            <div style="text-align:center; padding:16px; color:var(--text-muted); font-size:12px;">
+                🚫 조회를 취소했습니다.
+            </div>`;
+    });
     
     try {
         const API_URL = window.API_BASE_URL || 'https://portal-dsyl.onrender.com';
-        const response = await fetch(`${API_URL}/api/building-register/floor-detail?address=${encodeURIComponent(address)}`);
+        const response = await fetch(
+            `${API_URL}/api/building-register/floor-detail?address=${encodeURIComponent(address)}`,
+            { signal }
+        );
         const data = await response.json();
         
         if (!data.success || !data.results) {
@@ -3056,6 +3122,7 @@ export async function fetchBuildingFloorDetail(viewType = 'floorOutline') {
                     ${altMsg}
                 </div>
             `;
+            removeFloorDetailOverlay();
             return;
         }
         
@@ -3065,8 +3132,16 @@ export async function fetchBuildingFloorDetail(viewType = 'floorOutline') {
         // 캐시 저장 (같은 빌딩 재조회 방지)
         if (!building._floorDetailCache) building._floorDetailCache = {};
         building._floorDetailCache[viewType] = targetData;
+
+        // 프로그레스 100% → 오버레이 제거
+        const bar = document.getElementById('floorDetailProgressBar');
+        if (bar) bar.style.width = '100%';
+        await new Promise(r => setTimeout(r, 250));
+        removeFloorDetailOverlay();
         
     } catch (error) {
+        removeFloorDetailOverlay();
+        if (error.name === 'AbortError') return; // 취소 시 에러 메시지 미표시
         console.error('건축물대장 층별상세 조회 오류:', error);
         container.innerHTML = `
             <div style="text-align: center; padding: 16px; background: #fef2f2; border-radius: 8px; border: 1px solid #fca5a5;">
