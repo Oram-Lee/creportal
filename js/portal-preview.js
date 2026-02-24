@@ -41,7 +41,22 @@ function extractPathFromUrl(url) {
 
 // ===== 페이지 미리보기 열기 =====
 
-export function showPagePreview(imageUrl, source, publishDate, pageNum) {
+// ★ [FIX] 중복 호출 방지 — 300ms 내 동일 pageNum+source 재호출 무시
+let _lastPreviewCall = { key: null, time: 0 };
+
+export function showPagePreview(imageUrl, source, publishDate, pageNum, event) {
+    // 이벤트 버블링 차단 (버튼 클릭이 부모 행까지 전파되는 것 방지)
+    if (event?.stopPropagation) event.stopPropagation();
+
+    // 300ms 내 동일 인자로 중복 호출 시 무시
+    const callKey = `${source}_${publishDate}_${pageNum}`;
+    const now = Date.now();
+    if (callKey === _lastPreviewCall.key && now - _lastPreviewCall.time < 300) {
+        console.log('[showPagePreview] 중복 호출 차단:', callKey);
+        return;
+    }
+    _lastPreviewCall = { key: callKey, time: now };
+
     console.log('showPagePreview called:', { imageUrl, source, publishDate, pageNum });
     
     // ★ imageUrl이 있으면 실제 Storage 경로에서 source/publishDate 추출
@@ -294,7 +309,12 @@ export function setupPreviewKeyboard() {
 // ===== 전역 함수 등록 =====
 
 export function registerPreviewGlobals() {
-    window.showPagePreview = showPagePreview;
+    // ★ [FIX] 전역 등록 시 event 객체 자동 전달 래퍼
+    window.showPagePreview = function(imageUrl, source, publishDate, pageNum) {
+        const ev = window.event || null;
+        if (ev?.stopPropagation) ev.stopPropagation();
+        return showPagePreview(imageUrl, source, publishDate, pageNum, ev);
+    };
     window.openPagePreview = openPagePreview;
     window.prevPagePreview = prevPagePreview;
     window.nextPagePreview = nextPagePreview;
