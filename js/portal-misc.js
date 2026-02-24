@@ -181,7 +181,7 @@ export async function refreshBuildingLedger() {
         
         if (!data.success || !data.results || data.results.length === 0) {
             showToast('건축물대장 정보를 찾을 수 없습니다', 'warning');
-            return;
+            throw new Error('no results');
         }
         
         // 첫 번째 결과 사용 (또는 빌딩명이 일치하는 결과 찾기)
@@ -255,8 +255,8 @@ export async function refreshBuildingLedger() {
         console.log('비상EV(emgenUseElvtCnt):', info?.emgenUseElvtCnt);
         
         if (!info) {
-            showToast('건축물대장 상세 정보가 없습니다', 'warning');
-            return;
+            showToast('건축물대장 상세 정보가 없습니다 (API 키 확인 필요)', 'warning');
+            throw new Error('buildingInfo null — 로딩 오버레이 해제용');
         }
         
         // 변경사항 수집 (새로운 필드 매핑 사용)
@@ -287,7 +287,7 @@ export async function refreshBuildingLedger() {
         
         if (changes.length === 0) {
             showToast('모든 정보가 최신 상태입니다 ✅', 'success');
-            return;
+            throw new Error('no changes');
         }
         
         // 변경사항 확인 모달 표시

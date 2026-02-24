@@ -4924,7 +4924,8 @@
                     // signal을 마지막 인자로 전달 (portal-misc.js에서 수용하면 활용)
                     await _orig.call(this, ...args, signal);
                 } catch(e) {
-                    if (e.name !== 'AbortError') console.error('[건축물대장] 오류:', e);
+                    const expected = ['no results', 'no changes', 'buildingInfo null — 로딩 오버레이 해제용'];
+                    if (e.name !== 'AbortError' && !expected.includes(e.message)) console.error('[건축물대장] 오류:', e);
                 } finally {
                     if (!cancelled) {
                         // 완료 시 바를 100%로 채운 후 제거
