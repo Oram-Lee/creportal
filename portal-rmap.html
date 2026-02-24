@@ -1076,14 +1076,18 @@ let reportHistory = [];   // 생성된 리포트 목록 (로컬 임시 저장)
 let currentReport = null;
 const tags = { competitor: [], compBuilding: [] };
 
-// ===== Auth =====
-auth.onAuthStateChanged(user => {
-  if (user) {
-    document.getElementById('headerUser').textContent = user.email;
-  } else {
-    window.location.href = 'index.html';
+// ===== Auth (crePortalUser 기반 — portal.html과 동일 방식) =====
+const storedUser = localStorage.getItem('crePortalUser');
+if (storedUser) {
+  try {
+    const userInfo = JSON.parse(storedUser);
+    document.getElementById('headerUser').textContent = userInfo.email || userInfo.name || '사용자';
+  } catch(e) {
+    document.getElementById('headerUser').textContent = storedUser;
   }
-});
+} else {
+  window.location.href = 'index.html';
+}
 
 // ===== 모달 열기/닫기 =====
 function openModal() {
