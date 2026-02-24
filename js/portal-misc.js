@@ -196,6 +196,48 @@ export async function refreshBuildingLedger() {
             if (matched) selectedResult = matched;
         }
         
+        // ★ [FIX] buildingInfo가 null이면 bCode/hCode로 상세 조회 시도
+        if (!selectedResult.buildingInfo && (selectedResult.bCode || selectedResult.hCode)) {
+            console.log('buildingInfo null → bCode 상세 조회 시도:', selectedResult.bCode);
+            try {
+                const detailParams = new URLSearchParams();
+                if (selectedResult.bCode) detailParams.set('bCode', selectedResult.bCode);
+                if (selectedResult.hCode) detailParams.set('hCode', selectedResult.hCode);
+                if (selectedResult.jibunAddress) detailParams.set('address', selectedResult.jibunAddress);
+                
+                // 후보 엔드포인트 순서대로 시도
+                const detailEndpoints = [
+                    `/api/building-register/detail?${detailParams}`,
+                    `/api/building-register/info?${detailParams}`,
+                    `/api/building-ledger?${detailParams}`,
+                    `/api/building-register/search?address=${encodeURIComponent(selectedResult.jibunAddress || '')}`
+                ];
+                
+                for (const endpoint of detailEndpoints) {
+                    try {
+                        const detailResp = await fetch(`${LEDGER_API_URL}${endpoint}`);
+                        if (detailResp.ok) {
+                            const detailData = await detailResp.json();
+                            console.log(`상세 조회 성공 (${endpoint}):`, detailData);
+                            // 응답 구조에 따라 buildingInfo 추출
+                            const detailInfo = detailData.buildingInfo
+                                || detailData.result?.buildingInfo
+                                || detailData.results?.[0]?.buildingInfo
+                                || detailData.data
+                                || null;
+                            if (detailInfo) {
+                                selectedResult = { ...selectedResult, buildingInfo: detailInfo };
+                                console.log('✅ 상세 buildingInfo 확보:', detailInfo);
+                                break;
+                            }
+                        }
+                    } catch(e) { /* 다음 엔드포인트 시도 */ }
+                }
+            } catch(e) {
+                console.warn('bCode 상세 조회 실패:', e);
+            }
+        }
+        
         const info = selectedResult.buildingInfo;
         console.log('건축물대장 buildingInfo:', info);
         console.log('=== API 응답 주요 필드 ===');
