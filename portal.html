@@ -1421,46 +1421,126 @@
     </div>
     
     <!-- ★ 공실 오염 진단/정정 모달 -->
-    <div id="vacancyContamModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:0; width:95%; max-width:1000px; z-index:1010; box-shadow:0 10px 40px rgba(0,0,0,0.3); max-height:90vh; overflow:hidden; flex-direction:column;">
+    <div id="vacancyContamModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:0; width:96%; max-width:1100px; z-index:1010; box-shadow:0 10px 40px rgba(0,0,0,0.3); max-height:92vh; overflow:hidden; flex-direction:column;">
+
         <!-- 헤더 -->
-        <div style="padding:18px 24px; background:linear-gradient(135deg,#7c3aed,#4f46e5); border-radius:12px 12px 0 0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+        <div style="padding:16px 24px; background:linear-gradient(135deg,#7c3aed,#4f46e5); border-radius:12px 12px 0 0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
             <div>
-                <div style="font-size:17px; font-weight:700; color:#fff;">🔍 공실 buildingName 오염 진단</div>
-                <div id="contamModalSubtitle" style="font-size:12px; color:rgba(255,255,255,0.8); margin-top:3px;">이관 시 buildingName이 원본 빌딩명으로 남은 항목을 검사·정정합니다</div>
+                <div style="font-size:16px; font-weight:700; color:#fff;">🧹 공실 오염 진단·정정 도구</div>
+                <div id="contamModalSubtitle" style="font-size:12px; color:rgba(255,255,255,0.8); margin-top:2px;">buildingName 오염 검사 / 정정 이력 롤백 / 페이지 매핑 재연결</div>
             </div>
-            <button onclick="closeVacancyContamModal()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:20px; width:34px; height:34px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center;">×</button>
+            <button onclick="closeVacancyContamModal()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:20px; width:34px; height:34px; border-radius:8px; cursor:pointer;">×</button>
         </div>
 
-        <!-- 툴바 -->
-        <div style="padding:12px 20px; background:var(--bg-secondary); border-bottom:1px solid var(--border-color); display:flex; gap:8px; align-items:center; flex-shrink:0; flex-wrap:wrap;">
-            <button id="contamScanBtn" onclick="scanVacancyContamination()" style="padding:7px 16px; background:#7c3aed; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">🔍 전수검사</button>
-            <button id="contamFixAllBtn" onclick="fixAllContamination()" style="padding:7px 16px; background:#dc2626; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; display:none;">⚡ 전체 일괄정정</button>
-            <button id="contamFixSelBtn" onclick="fixSelectedContamination()" style="padding:7px 16px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; display:none;">✅ 선택항목 정정</button>
-            <label style="display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; margin-left:8px;">
-                <input type="checkbox" id="contamSelectAll" onchange="toggleAllContamSelect(this.checked)" style="cursor:pointer;">
-                <span>전체선택</span>
-            </label>
-            <span id="contamSelCount" style="font-size:12px; color:var(--text-muted); margin-left:4px;"></span>
-            <div id="contamProgressWrap" style="display:none; margin-left:auto; display:flex; align-items:center; gap:10px;">
-                <div style="width:180px; height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden;">
-                    <div id="contamProgressBar" style="height:100%; width:0%; background:#7c3aed; border-radius:4px; transition:width 0.3s;"></div>
+        <!-- 탭 -->
+        <div style="display:flex; background:var(--bg-secondary); border-bottom:2px solid var(--border-color); flex-shrink:0;">
+            <button class="contam-tab active" id="ctab-scan" onclick="switchContamTab('scan')"
+                style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; color:#7c3aed; border-bottom:2px solid #7c3aed; margin-bottom:-2px;">
+                🔍 진단·정정
+            </button>
+            <button class="contam-tab" id="ctab-rollback" onclick="switchContamTab('rollback')"
+                style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">
+                ↩️ 정정 이력·롤백
+            </button>
+            <button class="contam-tab" id="ctab-remap" onclick="switchContamTab('remap')"
+                style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">
+                🔀 매핑 재연결 (케이스B)
+            </button>
+        </div>
+
+        <!-- ── TAB 1: 진단·정정 ── -->
+        <div id="cpanel-scan" style="display:flex; flex-direction:column; flex:1; overflow:hidden; min-height:0;">
+            <div style="padding:10px 18px; background:var(--bg-secondary); border-bottom:1px solid var(--border-color); display:flex; gap:8px; align-items:center; flex-shrink:0; flex-wrap:wrap;">
+                <button onclick="scanVacancyContamination()" style="padding:6px 14px; background:#7c3aed; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">🔍 전수검사</button>
+                <button id="contamFixAllBtn" onclick="fixAllContamination()" style="padding:6px 14px; background:#dc2626; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; display:none;">⚡ 전체 일괄정정</button>
+                <button id="contamFixSelBtn" onclick="fixSelectedContamination()" style="padding:6px 14px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; display:none;">✅ 선택항목 정정</button>
+                <label style="display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; margin-left:6px;">
+                    <input type="checkbox" id="contamSelectAll" onchange="toggleAllContamSelect(this.checked)">
+                    <span>전체선택</span>
+                </label>
+                <span id="contamSelCount" style="font-size:12px; color:var(--text-muted);"></span>
+                <div id="contamProgressWrap" style="display:none; margin-left:auto; align-items:center; gap:8px;">
+                    <div style="width:160px; height:7px; background:#e5e7eb; border-radius:4px; overflow:hidden;">
+                        <div id="contamProgressBar" style="height:100%; width:0%; background:#7c3aed; border-radius:4px; transition:width 0.25s;"></div>
+                    </div>
+                    <span id="contamProgressLabel" style="font-size:12px; color:var(--text-muted);"></span>
                 </div>
-                <span id="contamProgressLabel" style="font-size:12px; color:var(--text-muted);"></span>
+            </div>
+            <div style="overflow-y:auto; flex:1;">
+                <div id="contamResultArea" style="padding:40px; text-align:center; color:var(--text-muted); font-size:14px;">
+                    🔍 전수검사 버튼을 눌러 오염 항목을 확인하세요.
+                </div>
+            </div>
+            <div style="padding:10px 18px; background:var(--bg-secondary); border-top:1px solid var(--border-color); flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
+                <span id="contamFooterMsg" style="font-size:12px; color:var(--text-muted);"></span>
+                <span style="font-size:11px; color:#f59e0b;">⚠️ 정정 전 원본값(buildingNameBefore)이 Firebase에 자동 백업됩니다</span>
             </div>
         </div>
 
-        <!-- 결과 테이블 -->
-        <div style="overflow-y:auto; flex:1; padding:0;">
-            <div id="contamResultArea" style="padding:40px; text-align:center; color:var(--text-muted); font-size:14px;">
-                🔍 전수검사 버튼을 눌러 오염 항목을 확인하세요.
+        <!-- ── TAB 2: 정정 이력·롤백 ── -->
+        <div id="cpanel-rollback" style="display:none; flex-direction:column; flex:1; overflow:hidden; min-height:0;">
+            <div style="padding:10px 18px; background:var(--bg-secondary); border-bottom:1px solid var(--border-color); display:flex; gap:8px; align-items:center; flex-shrink:0; flex-wrap:wrap;">
+                <button onclick="loadRollbackHistory()" style="padding:6px 14px; background:#0891b2; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">📂 이력 불러오기</button>
+                <button id="rollbackSelBtn" onclick="rollbackSelected()" style="padding:6px 14px; background:#dc2626; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; display:none;">↩️ 선택항목 롤백</button>
+                <button id="rollbackAllBtn" onclick="rollbackAll()" style="padding:6px 14px; background:#92400e; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; display:none;">↩️ 전체 롤백</button>
+                <label style="display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; margin-left:6px;">
+                    <input type="checkbox" id="rollbackSelectAll" onchange="toggleAllRollbackSelect(this.checked)">
+                    <span>전체선택</span>
+                </label>
+                <span id="rollbackSelCount" style="font-size:12px; color:var(--text-muted);"></span>
+                <div id="rollbackProgressWrap" style="display:none; margin-left:auto; align-items:center; gap:8px;">
+                    <div style="width:160px; height:7px; background:#e5e7eb; border-radius:4px; overflow:hidden;">
+                        <div id="rollbackProgressBar" style="height:100%; width:0%; background:#dc2626; border-radius:4px; transition:width 0.25s;"></div>
+                    </div>
+                    <span id="rollbackProgressLabel" style="font-size:12px; color:var(--text-muted);"></span>
+                </div>
+            </div>
+            <div style="overflow-y:auto; flex:1;">
+                <div id="rollbackResultArea" style="padding:40px; text-align:center; color:var(--text-muted); font-size:14px;">
+                    📂 이력 불러오기를 눌러 정정된 항목을 확인하세요.
+                </div>
+            </div>
+            <div style="padding:10px 18px; background:var(--bg-secondary); border-top:1px solid var(--border-color); flex-shrink:0;">
+                <span id="rollbackFooterMsg" style="font-size:12px; color:var(--text-muted);"></span>
             </div>
         </div>
 
-        <!-- 푸터 -->
-        <div style="padding:12px 20px; background:var(--bg-secondary); border-top:1px solid var(--border-color); flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
-            <span id="contamFooterMsg" style="font-size:12px; color:var(--text-muted);"></span>
-            <button onclick="closeVacancyContamModal()" style="padding:7px 18px; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:6px; cursor:pointer; font-size:13px;">닫기</button>
+        <!-- ── TAB 3: 매핑 재연결 (케이스B) ── -->
+        <div id="cpanel-remap" style="display:none; flex-direction:column; flex:1; overflow:hidden; min-height:0;">
+            <div style="padding:10px 18px; background:var(--bg-secondary); border-bottom:1px solid var(--border-color); display:flex; gap:8px; align-items:center; flex-shrink:0; flex-wrap:wrap;">
+                <button onclick="scanRemapCandidates()" style="padding:6px 14px; background:#0891b2; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">🔍 재연결 후보 검색</button>
+                <span style="font-size:12px; color:var(--text-muted);">buildingName과 실제 매핑 빌딩이 다른 항목을 찾습니다</span>
+            </div>
+            <!-- 검색바 -->
+            <div style="padding:10px 18px; border-bottom:1px solid var(--border-color); display:flex; gap:8px; align-items:center; flex-shrink:0;">
+                <input id="remapSearchInput" placeholder="빌딩명 검색 (정확한 buildingName 입력)..." 
+                    style="flex:1; padding:7px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:13px; background:var(--bg-card); color:var(--text-primary);"
+                    oninput="filterRemapList(this.value)">
+                <span style="font-size:12px; color:var(--text-muted);" id="remapResultCount"></span>
+            </div>
+            <div style="overflow-y:auto; flex:1;">
+                <div id="remapResultArea" style="padding:40px; text-align:center; color:var(--text-muted); font-size:14px;">
+                    🔍 재연결 후보 검색을 눌러 케이스B 항목을 확인하세요.
+                </div>
+            </div>
+            <!-- 빌딩 선택 패널 (재연결 대상 선택 시 표시) -->
+            <div id="remapTargetPanel" style="display:none; padding:12px 18px; background:#fffbeb; border-top:2px solid #f59e0b; flex-shrink:0;">
+                <div style="font-size:13px; font-weight:600; color:#92400e; margin-bottom:8px;">
+                    🔀 선택한 <span id="remapSelInfo"></span> 항목을 어느 빌딩으로 이동할까요?
+                </div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input id="remapTargetSearch" placeholder="이동할 빌딩명 입력..."
+                        style="flex:1; padding:7px 12px; border:1px solid #f59e0b; border-radius:6px; font-size:13px;"
+                        oninput="searchRemapTargetBuilding(this.value)">
+                    <button onclick="closeRemapTargetPanel()" style="padding:6px 12px; background:#f3f4f6; border:1px solid #d1d5db; border-radius:6px; cursor:pointer; font-size:13px;">취소</button>
+                </div>
+                <div id="remapTargetList" style="margin-top:8px; max-height:140px; overflow-y:auto; border:1px solid #fcd34d; border-radius:6px; background:#fff;"></div>
+            </div>
+            <div style="padding:10px 18px; background:var(--bg-secondary); border-top:1px solid var(--border-color); flex-shrink:0;">
+                <span id="remapFooterMsg" style="font-size:12px; color:var(--text-muted);"></span>
+            </div>
         </div>
+
     </div>
 
     <!-- ★ 주소 수정 모달 -->
@@ -4904,25 +4984,49 @@
     })();
     </script>
 
-    <!-- ✅ [FIX 3] 공실 buildingName 오염 진단·정정 스크립트 -->
+    <!-- ✅ [FIX 3 v2] 공실 오염 진단·정정·롤백·매핑재연결 스크립트 -->
     <script>
     (function() {
-        // ── 모달 열기/닫기 ──────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════
+        //  공통 유틸
+        // ══════════════════════════════════════════════════════════
+        function getAllBuildings() {
+            return window.state?.allBuildings || window.state?.filteredBuildings || [];
+        }
+        async function firebaseModules() {
+            const fb = await import('./js/portal-firebase.js');
+            return fb; // .db .ref .update .set .remove .get
+        }
+
+        // ── 탭 전환 ────────────────────────────────────────────────
+        window.switchContamTab = function(tab) {
+            ['scan','rollback','remap'].forEach(t => {
+                document.getElementById(`cpanel-${t}`).style.display = 'none';
+                const btn = document.getElementById(`ctab-${t}`);
+                btn.style.color = 'var(--text-muted)';
+                btn.style.borderBottomColor = 'transparent';
+            });
+            document.getElementById(`cpanel-${tab}`).style.display = 'flex';
+            const active = document.getElementById(`ctab-${tab}`);
+            active.style.color = '#7c3aed';
+            active.style.borderBottomColor = '#7c3aed';
+        };
+
+        // ── 모달 열기/닫기 ────────────────────────────────────────
         window.openVacancyContamModal = function() {
-            const modal = document.getElementById('vacancyContamModal');
-            modal.style.display = 'flex';
+            document.getElementById('vacancyContamModal').style.display = 'flex';
         };
         window.closeVacancyContamModal = function() {
             document.getElementById('vacancyContamModal').style.display = 'none';
         };
 
-        // ── 전수검사 ────────────────────────────────────────────────
+        // ══════════════════════════════════════════════════════════
+        //  TAB 1 — 진단·정정
+        // ══════════════════════════════════════════════════════════
         window.scanVacancyContamination = function() {
-            const allBuildings = window.state?.filteredBuildings
-                || window.state?.allBuildings || [];
-
-            const contaminated = [];   // { buildingId, buildingCurrentName, vacancy }
-            allBuildings.forEach(b => {
+            const all = getAllBuildings();
+            const contaminated = [];
+            all.forEach(b => {
                 const bName = b.buildingName || b.name || '';
                 (b.vacancies || []).forEach(v => {
                     if (v.transferredFrom && v.buildingName && v.buildingName !== bName) {
@@ -4939,68 +5043,47 @@
                     }
                 });
             });
-
-            window._contamData = contaminated;   // 전역 보관
+            window._contamData = contaminated;
             renderContamTable(contaminated);
-
-            const fixAllBtn  = document.getElementById('contamFixAllBtn');
-            const fixSelBtn  = document.getElementById('contamFixSelBtn');
-            if (contaminated.length > 0) {
-                fixAllBtn.style.display  = 'inline-block';
-                fixSelBtn.style.display  = 'inline-block';
-            } else {
-                fixAllBtn.style.display  = 'none';
-                fixSelBtn.style.display  = 'none';
-            }
+            const hasData = contaminated.length > 0;
+            document.getElementById('contamFixAllBtn').style.display = hasData ? 'inline-block' : 'none';
+            document.getElementById('contamFixSelBtn').style.display = hasData ? 'inline-block' : 'none';
             document.getElementById('contamModalSubtitle').textContent =
-                contaminated.length > 0
-                ? `오염 항목 ${contaminated.length}건 발견 — 정정할 항목을 선택하세요`
-                : '✅ 오염 항목이 없습니다';
+                hasData ? `오염 항목 ${contaminated.length}건 발견` : '✅ 오염 항목 없음';
             document.getElementById('contamFooterMsg').textContent =
-                `총 검사 빌딩: ${allBuildings.length}개 | 오염 vacancy: ${contaminated.length}건`;
+                `검사 빌딩: ${all.length}개 | 오염 vacancy: ${contaminated.length}건`;
         };
 
-        // ── 테이블 렌더링 ────────────────────────────────────────────
         function renderContamTable(data) {
             const area = document.getElementById('contamResultArea');
-            if (data.length === 0) {
-                area.innerHTML = '<div style="padding:48px; text-align:center; color:#16a34a; font-size:15px; font-weight:600;">✅ 오염 항목이 없습니다.</div>';
+            if (!data.length) {
+                area.innerHTML = '<div style="padding:48px;text-align:center;color:#16a34a;font-size:15px;font-weight:600;">✅ 오염 항목이 없습니다.</div>';
                 return;
             }
-            // 빌딩별 그룹핑
             const groups = {};
             data.forEach((item, idx) => {
                 if (!groups[item.buildingId]) groups[item.buildingId] = { name: item.buildingCurrentName, items: [] };
                 groups[item.buildingId].items.push({ ...item, _idx: idx });
             });
-
-            let html = `<table style="width:100%; border-collapse:collapse; font-size:13px;">
-                <thead style="position:sticky; top:0; background:#f1f5f9; z-index:1;">
-                    <tr>
-                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0; width:36px;"></th>
-                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0;">대상 빌딩 (정정 후)</th>
-                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0;">오염된 buildingName (현재)</th>
-                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0;">층/출처/발행</th>
-                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0;">이관 원본</th>
-                    </tr>
-                </thead><tbody>`;
-
-            Object.entries(groups).forEach(([bid, group]) => {
-                html += `<tr style="background:#eff6ff;">
-                    <td colspan="5" style="padding:7px 12px; font-weight:700; color:#1e40af; font-size:12px; border-bottom:1px solid #dbeafe;">
-                        🏢 ${group.name} <span style="font-weight:400; color:#64748b;">(${bid}) — ${group.items.length}건</span>
-                    </td></tr>`;
-                group.items.forEach(item => {
+            let html = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead style="position:sticky;top:0;background:#f1f5f9;z-index:1;">
+                <tr>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;width:32px;"></th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">대상 빌딩 (정정 후)</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">현재 잘못된 buildingName</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">층 / 출처 / 발행</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">이관 원본 빌딩</th>
+                </tr></thead><tbody>`;
+            Object.entries(groups).forEach(([bid, g]) => {
+                html += `<tr style="background:#eff6ff;"><td colspan="5" style="padding:6px 10px;font-weight:700;color:#1e40af;font-size:12px;border-bottom:1px solid #dbeafe;">
+                    🏢 ${g.name} <span style="font-weight:400;color:#64748b;">(${bid}) — ${g.items.length}건</span></td></tr>`;
+                g.items.forEach(item => {
                     html += `<tr style="border-bottom:1px solid #f1f5f9;" id="contam-row-${item._idx}">
-                        <td style="padding:7px 12px; text-align:center;">
-                            <input type="checkbox" class="contam-check" data-idx="${item._idx}"
-                                onchange="updateContamSelCount()"
-                                style="cursor:pointer; width:15px; height:15px;">
-                        </td>
-                        <td style="padding:7px 12px; color:#16a34a; font-weight:600;">${item.buildingCurrentName}</td>
-                        <td style="padding:7px 12px; color:#dc2626;">${item.wrongName}</td>
-                        <td style="padding:7px 12px; color:#374151;">${item.floor || '-'} / ${item.source || '-'} / ${item.publishDate || '-'}</td>
-                        <td style="padding:7px 12px; color:#6b7280; font-size:11px;">${item.transferredFrom}</td>
+                        <td style="padding:6px 10px;text-align:center;"><input type="checkbox" class="contam-check" data-idx="${item._idx}" onchange="updateContamSelCount()" style="cursor:pointer;"></td>
+                        <td style="padding:6px 10px;color:#16a34a;font-weight:600;">${item.buildingCurrentName}</td>
+                        <td style="padding:6px 10px;color:#dc2626;">${item.wrongName}</td>
+                        <td style="padding:6px 10px;color:#374151;">${item.floor||'-'} / ${item.source||'-'} / ${item.publishDate||'-'}</td>
+                        <td style="padding:6px 10px;color:#6b7280;font-size:11px;">${item.transferredFrom}</td>
                     </tr>`;
                 });
             });
@@ -5009,9 +5092,8 @@
             updateContamSelCount();
         }
 
-        // ── 전체선택 토글 ──────────────────────────────────────────
         window.toggleAllContamSelect = function(checked) {
-            document.querySelectorAll('.contam-check').forEach(cb => { cb.checked = checked; });
+            document.querySelectorAll('.contam-check').forEach(cb => cb.checked = checked);
             updateContamSelCount();
         };
         window.updateContamSelCount = function() {
@@ -5019,75 +5101,350 @@
             const sel   = document.querySelectorAll('.contam-check:checked').length;
             document.getElementById('contamSelCount').textContent = total ? `(${sel}/${total} 선택)` : '';
         };
-
-        // ── 선택항목 정정 ─────────────────────────────────────────
         window.fixSelectedContamination = async function() {
-            const checked = [...document.querySelectorAll('.contam-check:checked')];
-            if (checked.length === 0) { alert('정정할 항목을 선택하세요.'); return; }
-            const indices = checked.map(cb => parseInt(cb.dataset.idx));
-            const targets = indices.map(i => window._contamData[i]).filter(Boolean);
-            if (!confirm(`선택한 ${targets.length}건의 buildingName을 정정하시겠습니까?\n이 작업은 Firebase에 직접 반영됩니다.`)) return;
+            const idxs = [...document.querySelectorAll('.contam-check:checked')].map(cb => parseInt(cb.dataset.idx));
+            if (!idxs.length) { alert('정정할 항목을 선택하세요.'); return; }
+            const targets = idxs.map(i => window._contamData[i]).filter(Boolean);
+            if (!confirm(`선택한 ${targets.length}건을 정정하시겠습니까?\n원본값이 Firebase에 백업됩니다.`)) return;
             await runFix(targets);
         };
-
-        // ── 전체 일괄정정 ─────────────────────────────────────────
         window.fixAllContamination = async function() {
             const all = window._contamData || [];
-            if (all.length === 0) { alert('정정할 항목이 없습니다.'); return; }
-            if (!confirm(`전체 ${all.length}건의 buildingName을 일괄 정정하시겠습니까?\n이 작업은 Firebase에 직접 반영됩니다.`)) return;
+            if (!all.length) { alert('정정할 항목이 없습니다.'); return; }
+            if (!confirm(`전체 ${all.length}건을 일괄 정정하시겠습니까?\n원본값이 Firebase에 백업됩니다.`)) return;
             await runFix(all);
         };
 
-        // ── 실제 Firebase 업데이트 ─────────────────────────────────
         async function runFix(targets) {
-            const { ref, update } = await import('./js/portal-firebase.js');
-            const { db } = await import('./js/portal-firebase.js');
+            const { ref, update, db } = await firebaseModules();
+            const pwrap = document.getElementById('contamProgressWrap');
+            const pbar  = document.getElementById('contamProgressBar');
+            const plbl  = document.getElementById('contamProgressLabel');
+            pwrap.style.display = 'flex';
+            let done = 0, failed = 0;
+            const fixedAt = new Date().toISOString();
+            for (const item of targets) {
+                try {
+                    const path = `vacancies/${item.buildingId}/${item.vacancyKey}`;
+                    await update(ref(db, path), {
+                        buildingName: item.buildingCurrentName,
+                        buildingNameBefore: item.wrongName,   // ★ 원본 백업
+                        fixedAt: fixedAt                      // ★ 정정 시각
+                    });
+                    // 로컬 state 동기화
+                    const bLocal = getAllBuildings().find(b => b.id === item.buildingId);
+                    if (bLocal?.vacancies) {
+                        const vLocal = bLocal.vacancies.find(v => v._key === item.vacancyKey);
+                        if (vLocal) { vLocal.buildingName = item.buildingCurrentName; vLocal.buildingNameBefore = item.wrongName; vLocal.fixedAt = fixedAt; }
+                    }
+                    const row = document.getElementById(`contam-row-${item._idx}`);
+                    if (row) row.style.background = '#f0fdf4';
+                    done++;
+                } catch(e) { console.error('[정정실패]', e); failed++; }
+                const pct = Math.round((done+failed)/targets.length*100);
+                pbar.style.width = pct+'%';
+                plbl.textContent = `${done+failed} / ${targets.length}`;
+            }
+            pwrap.style.display = 'none';
+            const msg = failed ? `✅ ${done}건 완료 / ⚠️ ${failed}건 실패` : `✅ ${done}건 모두 정정 완료`;
+            document.getElementById('contamFooterMsg').textContent = msg;
+            alert(msg);
+            scanVacancyContamination();
+        }
 
-            const progressWrap = document.getElementById('contamProgressWrap');
-            const progressBar  = document.getElementById('contamProgressBar');
-            const progressLbl  = document.getElementById('contamProgressLabel');
-            progressWrap.style.display = 'flex';
+        // ══════════════════════════════════════════════════════════
+        //  TAB 2 — 정정 이력·롤백
+        // ══════════════════════════════════════════════════════════
+        window.loadRollbackHistory = function() {
+            const all = getAllBuildings();
+            const history = [];
+            all.forEach(b => {
+                const bName = b.buildingName || b.name || '';
+                (b.vacancies || []).forEach(v => {
+                    if (v.buildingNameBefore && v.fixedAt) {
+                        history.push({
+                            buildingId: b.id,
+                            buildingName: bName,
+                            vacancyKey: v._key,
+                            currentName: v.buildingName,
+                            beforeName: v.buildingNameBefore,
+                            fixedAt: v.fixedAt,
+                            floor: v.floor,
+                            source: v.source,
+                            publishDate: v.publishDate
+                        });
+                    }
+                });
+            });
+            window._rollbackData = history;
+            renderRollbackTable(history);
+            document.getElementById('rollbackSelBtn').style.display = history.length ? 'inline-block' : 'none';
+            document.getElementById('rollbackAllBtn').style.display = history.length ? 'inline-block' : 'none';
+            document.getElementById('rollbackFooterMsg').textContent = `정정 이력: ${history.length}건`;
+        };
 
+        function renderRollbackTable(data) {
+            const area = document.getElementById('rollbackResultArea');
+            if (!data.length) {
+                area.innerHTML = '<div style="padding:48px;text-align:center;color:var(--text-muted);font-size:14px;">정정 이력이 없습니다. (buildingNameBefore 필드 있는 항목 없음)</div>';
+                return;
+            }
+            let html = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead style="position:sticky;top:0;background:#fef3c7;z-index:1;">
+                <tr>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #fcd34d;width:32px;"></th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #fcd34d;">빌딩</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #fcd34d;">현재 buildingName</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #fcd34d;">롤백 시 복원값</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #fcd34d;">층/출처/발행</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #fcd34d;">정정일시</th>
+                </tr></thead><tbody>`;
+            data.forEach((item, idx) => {
+                const dt = new Date(item.fixedAt);
+                const dtStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+                html += `<tr style="border-bottom:1px solid #fef3c7;" id="rb-row-${idx}">
+                    <td style="padding:6px 10px;text-align:center;"><input type="checkbox" class="rollback-check" data-idx="${idx}" onchange="updateRollbackSelCount()" style="cursor:pointer;"></td>
+                    <td style="padding:6px 10px;font-weight:600;color:#374151;">${item.buildingName}<br><span style="font-size:11px;color:#9ca3af;">${item.buildingId}</span></td>
+                    <td style="padding:6px 10px;color:#16a34a;">${item.currentName}</td>
+                    <td style="padding:6px 10px;color:#dc2626;">${item.beforeName}</td>
+                    <td style="padding:6px 10px;color:#374151;">${item.floor||'-'} / ${item.source||'-'} / ${item.publishDate||'-'}</td>
+                    <td style="padding:6px 10px;color:#6b7280;font-size:11px;">${dtStr}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            area.innerHTML = html;
+            updateRollbackSelCount();
+        }
+
+        window.toggleAllRollbackSelect = function(checked) {
+            document.querySelectorAll('.rollback-check').forEach(cb => cb.checked = checked);
+            updateRollbackSelCount();
+        };
+        window.updateRollbackSelCount = function() {
+            const total = document.querySelectorAll('.rollback-check').length;
+            const sel   = document.querySelectorAll('.rollback-check:checked').length;
+            document.getElementById('rollbackSelCount').textContent = total ? `(${sel}/${total} 선택)` : '';
+        };
+        window.rollbackSelected = async function() {
+            const idxs = [...document.querySelectorAll('.rollback-check:checked')].map(cb => parseInt(cb.dataset.idx));
+            if (!idxs.length) { alert('롤백할 항목을 선택하세요.'); return; }
+            const targets = idxs.map(i => window._rollbackData[i]).filter(Boolean);
+            if (!confirm(`선택한 ${targets.length}건을 원본값으로 롤백하시겠습니까?\nbuildingNameBefore, fixedAt 필드도 제거됩니다.`)) return;
+            await runRollback(targets);
+        };
+        window.rollbackAll = async function() {
+            const all = window._rollbackData || [];
+            if (!all.length) { alert('롤백할 항목이 없습니다.'); return; }
+            if (!confirm(`전체 ${all.length}건을 롤백하시겠습니까?`)) return;
+            await runRollback(all);
+        };
+
+        async function runRollback(targets) {
+            const { ref, update, db } = await firebaseModules();
+            const pwrap = document.getElementById('rollbackProgressWrap');
+            const pbar  = document.getElementById('rollbackProgressBar');
+            const plbl  = document.getElementById('rollbackProgressLabel');
+            pwrap.style.display = 'flex';
             let done = 0, failed = 0;
             for (const item of targets) {
                 try {
                     const path = `vacancies/${item.buildingId}/${item.vacancyKey}`;
-                    await update(ref(db, path), { buildingName: item.buildingCurrentName });
-
-                    // 로컬 state도 동기화
-                    const allBuildings = window.state?.filteredBuildings
-                        || window.state?.allBuildings || [];
-                    const bLocal = allBuildings.find(b => b.id === item.buildingId);
-                    if (bLocal && bLocal.vacancies) {
+                    await update(ref(db, path), {
+                        buildingName: item.beforeName,
+                        buildingNameBefore: null,  // 삭제
+                        fixedAt: null              // 삭제
+                    });
+                    const bLocal = getAllBuildings().find(b => b.id === item.buildingId);
+                    if (bLocal?.vacancies) {
                         const vLocal = bLocal.vacancies.find(v => v._key === item.vacancyKey);
-                        if (vLocal) vLocal.buildingName = item.buildingCurrentName;
+                        if (vLocal) { vLocal.buildingName = item.beforeName; delete vLocal.buildingNameBefore; delete vLocal.fixedAt; }
+                    }
+                    const row = document.getElementById(`rb-row-${window._rollbackData.indexOf(item)}`);
+                    if (row) row.style.background = '#fef2f2';
+                    done++;
+                } catch(e) { console.error('[롤백실패]', e); failed++; }
+                const pct = Math.round((done+failed)/targets.length*100);
+                pbar.style.width = pct+'%';
+                plbl.textContent = `${done+failed} / ${targets.length}`;
+            }
+            pwrap.style.display = 'none';
+            const msg = failed ? `↩️ ${done}건 롤백 완료 / ⚠️ ${failed}건 실패` : `↩️ ${done}건 모두 롤백 완료`;
+            document.getElementById('rollbackFooterMsg').textContent = msg;
+            alert(msg);
+            loadRollbackHistory();
+        }
+
+        // ══════════════════════════════════════════════════════════
+        //  TAB 3 — 매핑 재연결 (케이스B)
+        //  buildingName이 실제 맞는 값인데 엉뚱한 빌딩 아래 저장된 경우
+        //  → vacancy를 올바른 빌딩으로 이동
+        // ══════════════════════════════════════════════════════════
+        let _remapAllData = [];
+        let _remapSelected = [];   // 이동할 항목들
+
+        window.scanRemapCandidates = function() {
+            const all = getAllBuildings();
+            const candidates = [];
+            // buildingId명과 buildingName이 다른 항목 (transferredFrom 있는 것)
+            all.forEach(b => {
+                const bName = b.buildingName || b.name || '';
+                (b.vacancies || []).forEach(v => {
+                    if (v.transferredFrom && v.buildingName && v.buildingName !== bName) {
+                        candidates.push({
+                            hostBuildingId: b.id,
+                            hostBuildingName: bName,
+                            vacancyKey: v._key,
+                            vacancyBuildingName: v.buildingName,   // 원래 맞는 이름일 수 있음
+                            floor: v.floor,
+                            source: v.source,
+                            publishDate: v.publishDate,
+                            transferredFrom: v.transferredFrom,
+                            _rawVacancy: v
+                        });
+                    }
+                });
+            });
+            _remapAllData = candidates;
+            renderRemapTable(candidates);
+            document.getElementById('remapResultCount').textContent = `후보 ${candidates.length}건`;
+            document.getElementById('remapFooterMsg').textContent = `케이스B 후보: ${candidates.length}건 — buildingName이 실제로 맞는 항목만 재연결하세요`;
+        };
+
+        window.filterRemapList = function(q) {
+            if (!q.trim()) { renderRemapTable(_remapAllData); return; }
+            const filtered = _remapAllData.filter(item =>
+                item.vacancyBuildingName.toLowerCase().includes(q.toLowerCase()) ||
+                item.hostBuildingName.toLowerCase().includes(q.toLowerCase())
+            );
+            renderRemapTable(filtered);
+            document.getElementById('remapResultCount').textContent = `${filtered.length}건 (전체 ${_remapAllData.length}건)`;
+        };
+
+        function renderRemapTable(data) {
+            const area = document.getElementById('remapResultArea');
+            if (!data.length) {
+                area.innerHTML = '<div style="padding:48px;text-align:center;color:var(--text-muted);font-size:14px;">후보 항목이 없습니다.</div>';
+                return;
+            }
+            let html = `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead style="position:sticky;top:0;background:#ecfdf5;z-index:1;">
+                <tr>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #6ee7b7;width:32px;"></th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #6ee7b7;">현재 호스트 빌딩</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #6ee7b7;">vacancy의 buildingName (원래 빌딩?)</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #6ee7b7;">층 / 출처 / 발행</th>
+                  <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #6ee7b7;">재연결</th>
+                </tr></thead><tbody>`;
+            data.forEach((item, idx) => {
+                html += `<tr style="border-bottom:1px solid #f0fdf4;" id="remap-row-${idx}">
+                    <td style="padding:6px 10px;text-align:center;"><input type="checkbox" class="remap-check" data-idx="${idx}" onchange="updateRemapSel()" style="cursor:pointer;"></td>
+                    <td style="padding:6px 10px;color:#374151;">${item.hostBuildingName}<br><span style="font-size:11px;color:#9ca3af;">${item.hostBuildingId}</span></td>
+                    <td style="padding:6px 10px;color:#0891b2;font-weight:600;">${item.vacancyBuildingName}</td>
+                    <td style="padding:6px 10px;color:#374151;">${item.floor||'-'} / ${item.source||'-'} / ${item.publishDate||'-'}</td>
+                    <td style="padding:6px 10px;">
+                        <button onclick="openRemapTarget([${idx}], '${item.vacancyBuildingName.replace(/'/g,"&#39;")}')"
+                            style="padding:4px 10px;background:#0891b2;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">🔀 이동</button>
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            area.innerHTML = html;
+        }
+
+        window.updateRemapSel = function() {
+            const sel = document.querySelectorAll('.remap-check:checked').length;
+            if (sel > 0) {
+                // 여러 개 선택 시 일괄 이동 버튼 표시
+                document.getElementById('remapFooterMsg').textContent = `${sel}건 선택됨 — 아래 [선택 일괄 이동] 버튼을 누르세요`;
+            }
+        };
+
+        window.openRemapTarget = function(idxArr, hint) {
+            _remapSelected = idxArr.map(i => _remapAllData[i]).filter(Boolean);
+            if (!_remapSelected.length) return;
+            const panel = document.getElementById('remapTargetPanel');
+            panel.style.display = 'block';
+            document.getElementById('remapSelInfo').textContent =
+                `"${hint}" (${_remapSelected.length}건)`;
+            document.getElementById('remapTargetSearch').value = hint;
+            searchRemapTargetBuilding(hint);
+        };
+
+        window.closeRemapTargetPanel = function() {
+            document.getElementById('remapTargetPanel').style.display = 'none';
+            _remapSelected = [];
+        };
+
+        window.searchRemapTargetBuilding = function(q) {
+            const all = getAllBuildings();
+            const list = document.getElementById('remapTargetList');
+            if (!q.trim()) { list.innerHTML = ''; return; }
+            const matched = all.filter(b =>
+                (b.buildingName || b.name || '').toLowerCase().includes(q.toLowerCase())
+            ).slice(0, 12);
+            if (!matched.length) { list.innerHTML = '<div style="padding:10px;color:var(--text-muted);font-size:12px;">검색 결과 없음</div>'; return; }
+            list.innerHTML = matched.map(b => `
+                <div onclick="confirmRemapTo('${b.id}','${(b.buildingName||b.name||'').replace(/'/g,"&#39;")}')"
+                    style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #fef9c3;font-size:13px;hover:background:#fffbeb;"
+                    onmouseover="this.style.background='#fffde7'" onmouseout="this.style.background=''">
+                    <strong>${b.buildingName || b.name}</strong>
+                    <span style="font-size:11px;color:#9ca3af;margin-left:6px;">${b.id}</span>
+                </div>`).join('');
+        };
+
+        window.confirmRemapTo = async function(targetBuildingId, targetBuildingName) {
+            if (!_remapSelected.length) return;
+            const cnt = _remapSelected.length;
+            if (!confirm(`선택한 ${cnt}건을 "${targetBuildingName}"으로 이동하시겠습니까?\n- vacancy가 새 빌딩으로 복사 후 기존 위치에서 삭제됩니다.\n- buildingName도 "${targetBuildingName}"으로 업데이트됩니다.`)) return;
+
+            const { ref, set, remove, push, db } = await firebaseModules();
+            const allBuildings = getAllBuildings();
+            const targetBLocal = allBuildings.find(b => b.id === targetBuildingId);
+
+            let done = 0, failed = 0;
+            for (const item of _remapSelected) {
+                try {
+                    // 원본 vacancy 데이터 가져오기
+                    const srcVacancy = item._rawVacancy;
+                    const newData = {
+                        ...srcVacancy,
+                        buildingName: targetBuildingName,
+                        remappedFrom: item.hostBuildingId,
+                        remappedAt: new Date().toISOString()
+                    };
+                    delete newData._key;
+                    delete newData._vacancyId;
+
+                    // 새 빌딩에 추가
+                    const newRef = push(ref(db, `vacancies/${targetBuildingId}`));
+                    await set(newRef, newData);
+
+                    // 기존 위치에서 삭제
+                    await remove(ref(db, `vacancies/${item.hostBuildingId}/${item.vacancyKey}`));
+
+                    // 로컬 state 업데이트
+                    const srcBLocal = allBuildings.find(b => b.id === item.hostBuildingId);
+                    if (srcBLocal?.vacancies) {
+                        srcBLocal.vacancies = srcBLocal.vacancies.filter(v => v._key !== item.vacancyKey);
+                    }
+                    if (targetBLocal) {
+                        if (!targetBLocal.vacancies) targetBLocal.vacancies = [];
+                        targetBLocal.vacancies.push({ ...newData, _key: newRef.key });
                     }
 
-                    // 행 시각적 완료 표시
-                    const row = document.getElementById(`contam-row-${item._idx}`);
+                    const row = document.getElementById(`remap-row-${_remapAllData.indexOf(item)}`);
                     if (row) row.style.background = '#f0fdf4';
-
                     done++;
-                } catch (e) {
-                    console.error('[오염정정] 실패:', item, e);
-                    failed++;
-                }
-                const pct = Math.round((done + failed) / targets.length * 100);
-                progressBar.style.width = pct + '%';
-                progressLbl.textContent = `${done + failed} / ${targets.length}`;
+                } catch(e) { console.error('[재연결실패]', e); failed++; }
             }
 
-            progressWrap.style.display = 'none';
-            const msg = failed > 0
-                ? `✅ ${done}건 정정 완료 / ⚠️ ${failed}건 실패`
-                : `✅ ${done}건 모두 정정 완료`;
-            document.getElementById('contamFooterMsg').textContent = msg;
-            document.getElementById('contamModalSubtitle').textContent = msg;
-            alert(msg + '\n정정된 항목은 초록색으로 표시됩니다.');
-
-            // 완료 후 재검사
-            scanVacancyContamination();
-        }
+            document.getElementById('remapTargetPanel').style.display = 'none';
+            _remapSelected = [];
+            const msg = failed ? `🔀 ${done}건 재연결 완료 / ⚠️ ${failed}건 실패` : `🔀 ${done}건 재연결 완료`;
+            document.getElementById('remapFooterMsg').textContent = msg;
+            alert(msg);
+            scanRemapCandidates();
+        };
 
     })();
     </script>
