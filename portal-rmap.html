@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>맞춤형 리포트 | CRE Portal</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+<!-- 카카오 지도 -->
+<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=1ac6eee9b1e4c2e0cc6f1d1ca1a6a559&libraries=services"></script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- html2pdf -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+/* ===== CSS 변수 ===== */
+:root {
+  --primary:    #1a3c5e;
+  --accent:     #2e7dca;
+  --accent-lt:  #e8f2fb;
+  --success:    #1a8a5a;
+  --warning:    #d97706;
+  --danger:     #dc2626;
+  --bg:         #f4f6f9;
+  --surface:    #ffffff;
+  --border:     #dde3ea;
+  --text:       #1e293b;
+  --muted:      #64748b;
+  --radius:     8px;
+  --shadow:     0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg:  0 8px 32px rgba(0,0,0,.12);
+  --tr-color:   #1a3c5e;
+  --lr-color:   #7c3aed;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* ===== 헤더 ===== */
+.header {
+  background: var(--primary);
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+}
+.header-logo {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+}
+.header-nav { display: flex; gap: 4px; margin-left: auto; }
+.header-nav a {
+  color: rgba(255,255,255,.7);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  transition: all .15s;
+}
+.header-nav a:hover, .header-nav a.active {
+  color: #fff;
+  background: rgba(255,255,255,.15);
+}
+.header-user {
+  color: rgba(255,255,255,.8);
+  font-size: 13px;
+  margin-left: 8px;
+}
+
+/* ===== 메인 레이아웃 ===== */
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 24px;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.page-title h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--primary);
+}
+.page-title p {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* ===== 새 리포트 버튼 ===== */
+.btn-new-report {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  margin-left: auto;
+}
+.btn-new-report:hover { background: #1e6ab5; transform: translateY(-1px); }
+
+/* ===== 모달 오버레이 ===== */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: var(--surface);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 680px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: modalIn .2s ease;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(16px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.modal-header h2 { font-size: 17px; font-weight: 700; color: var(--primary); }
+.modal-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--muted);
+  line-height: 1;
+  padding: 4px;
+}
+.modal-close:hover { color: var(--text); }
+
+.modal-body { padding: 24px; }
+
+/* ===== 스텝 인디케이터 ===== */
+.steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 28px;
+}
+.step-item {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all .2s;
+}
+.step-label {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 6px;
+  white-space: nowrap;
+  transition: all .2s;
+}
+.step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  margin: 0 8px;
+  transition: background .2s;
+}
+.step-item.active .step-num   { background: var(--accent); color: #fff; }
+.step-item.active .step-label { color: var(--accent); font-weight: 600; }
+.step-item.done .step-num     { background: var(--success); color: #fff; }
+.step-item.done .step-line    { background: var(--success); }
+
+/* ===== 스텝 패널 ===== */
+.step-panel { display: none; }
+.step-panel.active { display: block; }
+
+/* ===== 모드 선택 카드 ===== */
+.mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 8px;
+}
+.mode-card {
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+}
+.mode-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
+.mode-card.selected { border-color: var(--accent); background: var(--accent-lt); }
+.mode-card.selected.lr-mode { border-color: var(--lr-color); background: #f5f0ff; }
+.mode-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  margin-bottom: 10px;
+}
+.tr-badge { background: var(--tr-color); color: #fff; }
+.lr-badge { background: var(--lr-color); color: #fff; }
+.mode-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.mode-card p  { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.mode-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.mode-card.selected .mode-check { display: flex; }
+.mode-card.selected.lr-mode .mode-check { background: var(--lr-color); }
+
+/* ===== 폼 요소 ===== */
+.form-group {
+  margin-bottom: 16px;
+}
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.form-label span { color: var(--danger); }
+.form-input, .form-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--surface);
+  transition: border-color .15s;
+  outline: none;
+}
+.form-input:focus, .form-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(46,125,202,.1); }
+.form-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ===== 주소 검색 ===== */
+.addr-search-wrap { position: relative; }
+.addr-search-wrap .form-input { padding-right: 80px; }
+.btn-addr-search {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.addr-result {
+  display: none;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--accent-lt);
+  border: 1px solid #c3d9f0;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.addr-result.show { display: block; }
+.addr-result .match-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+.match-full    { background: #dcfce7; color: #166534; }
+.match-similar { background: #fef3c7; color: #92400e; }
+.match-none    { background: #fee2e2; color: #991b1b; }
+
+/* ===== 반경 선택 ===== */
+.radius-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.radius-btn {
+  padding: 7px 16px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  background: var(--surface);
+  transition: all .15s;
+}
+.radius-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ===== 태그 입력 ===== */
+.tag-input-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 42px;
+  cursor: text;
+  transition: border-color .15s;
+}
+.tag-input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(46,125,202,.1); }
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-lt);
+  color: var(--accent);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.tag-remove { cursor: pointer; font-size: 14px; line-height: 1; color: var(--muted); }
+.tag-remove:hover { color: var(--danger); }
+.tag-input-field {
+  border: none;
+  outline: none;
+  font-size: 13px;
+  flex: 1;
+  min-width: 80px;
+  background: transparent;
+}
+
+/* ===== 모달 하단 버튼 ===== */
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+}
+.btn {
+  padding: 9px 20px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all .15s;
+}
+.btn-outline { background: none; border: 1px solid var(--border); color: var(--muted); }
+.btn-outline:hover { border-color: var(--text); color: var(--text); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: #1e6ab5; }
+.btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { background: #156b47; }
+
+/* ===== 로딩 상태 ===== */
+.generating-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,.92);
+  z-index: 300;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+.generating-overlay.show { display: flex; }
+.generating-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.generating-status {
+  font-size: 15px;
+  color: var(--primary);
+  font-weight: 600;
+}
+.generating-steps { display: flex; flex-direction: column; gap: 8px; min-width: 280px; }
+.gen-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 0;
+}
+.gen-step.done   { color: var(--success); }
+.gen-step.active { color: var(--accent); font-weight: 600; }
+.gen-step-icon { width: 18px; text-align: center; }
+
+/* ===== 리포트 목록 ===== */
+.report-list-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+.report-list-empty .icon { font-size: 48px; margin-bottom: 12px; }
+.report-list-empty p { font-size: 15px; }
+.report-list-empty small { font-size: 13px; margin-top: 4px; display: block; }
+
+.report-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+.report-card {
+  background: var(--surface);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 20px;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+}
+.report-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); }
+.report-card-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+.report-card-mode.tr { background: #e8eef5; color: var(--tr-color); }
+.report-card-mode.lr { background: #f0ebff; color: var(--lr-color); }
+.report-card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+.report-card .client {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+.report-card .meta {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.report-card-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity .15s;
+}
+.report-card:hover .report-card-actions { opacity: 1; }
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+}
+.btn-icon:hover { background: var(--bg); }
+
+/* ===== 리포트 뷰어 ===== */
+.report-viewer { display: none; }
+.report-viewer.show { display: block; }
+.report-list-view { display: block; }
+.report-list-view.hide { display: none; }
+
+.report-viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid var(--border);
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all .15s;
+}
+.btn-back:hover { border-color: var(--text); color: var(--text); }
+
+.btn-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all .15s;
+}
+.btn-pdf:hover { background: #b91c1c; }
+
+/* ===== 리포트 본문 ===== */
+#reportContent {
+  background: var(--surface);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.report-cover {
+  background: linear-gradient(135deg, var(--primary) 0%, #2a5298 100%);
+  padding: 48px 48px 40px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+.report-cover::after {
+  content: '';
+  position: absolute;
+  right: -40px;
+  top: -40px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.06);
+}
+.report-cover-mode {
+  display: inline-block;
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .8px;
+  margin-bottom: 20px;
+}
+.report-cover-mode.tr { background: rgba(255,255,255,.2); }
+.report-cover-mode.lr { background: rgba(180,140,255,.35); }
+.report-cover h1 { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+.report-cover .sub { font-size: 14px; opacity: .75; margin-bottom: 24px; }
+.report-cover-meta {
+  display: flex;
+  gap: 24px;
+  font-size: 12px;
+  opacity: .7;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,.2);
+}
+
+.report-section {
+  padding: 32px 40px;
+  border-bottom: 1px solid var(--border);
+}
+.report-section:last-child { border-bottom: none; }
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--accent-lt);
+}
+.section-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--accent-lt);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
+/* ===== 시장 통계 카드 ===== */
+.stat-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-card .label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.stat-card .value { font-size: 22px; font-weight: 800; color: var(--primary); }
+.stat-card .unit  { font-size: 11px; color: var(--muted); }
+.stat-card .change { font-size: 11px; margin-top: 4px; }
+.change.up   { color: var(--danger); }
+.change.down { color: var(--success); }
+
+/* ===== 뉴스 아이템 ===== */
+.news-list { display: flex; flex-direction: column; gap: 10px; }
+.news-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: background .15s;
+}
+.news-item:hover { background: var(--accent-lt); }
+.news-date {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-top: 2px;
+  min-width: 60px;
+}
+.news-source-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 6px;
+}
+.badge-naver  { background: #03C75A22; color: #03C75A; }
+.badge-google { background: #4285F422; color: #4285F4; }
+.badge-molit  { background: #ff6b6b22; color: #dc2626; }
+.news-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; line-height: 1.4; }
+.news-desc  { font-size: 12px; color: var(--muted); line-height: 1.4; }
+
+/* ===== AI 분석 ===== */
+.ai-analysis-box {
+  background: linear-gradient(135deg, #f0f7ff, #e8f4f8);
+  border: 1px solid #c3d9f0;
+  border-radius: 10px;
+  padding: 24px;
+  position: relative;
+}
+.ai-analysis-box::before {
+  content: '✦ AI';
+  position: absolute;
+  top: -10px;
+  left: 16px;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.ai-analysis-text {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+  white-space: pre-line;
+}
+
+/* ===== 공실 비교 테이블 ===== */
+.vacancy-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.vacancy-table th {
+  background: var(--primary);
+  color: #fff;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+}
+.vacancy-table th:first-child { border-radius: 6px 0 0 0; }
+.vacancy-table th:last-child  { border-radius: 0 6px 0 0; }
+.vacancy-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.vacancy-table tr:nth-child(even) td { background: var(--bg); }
+.vacancy-table tr:hover td { background: var(--accent-lt); }
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.pill-green  { background: #dcfce7; color: #166534; }
+.pill-yellow { background: #fef3c7; color: #92400e; }
+.pill-blue   { background: #dbeafe; color: #1e40af; }
+
+/* ===== 반응형 ===== */
+@media (max-width: 640px) {
+  .mode-cards       { grid-template-columns: 1fr; }
+  .form-row         { grid-template-columns: 1fr; }
+  .stat-cards       { grid-template-columns: 1fr 1fr; }
+  .report-section   { padding: 24px 20px; }
+  .report-cover     { padding: 32px 24px; }
+}
+
+/* ===== 알림 토스트 ===== */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--primary);
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 999;
+  transition: transform .3s ease;
+  white-space: nowrap;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+.toast.error { background: var(--danger); }
+.toast.success { background: var(--success); }
+</style>
+</head>
+<body>
+
+<!-- 헤더 -->
+<header class="header">
+  <span class="header-logo">🏢 CRE Portal</span>
+  <nav class="header-nav">
+    <a href="index.html">대시보드</a>
+    <a href="buildings.html">빌딩</a>
+    <a href="admin-leasing.html">임대안내문</a>
+    <a href="portal-rmap.html" class="active">맞춤 리포트</a>
+  </nav>
+  <span class="header-user" id="headerUser"></span>
+</header>
+
+<!-- 메인 -->
+<main class="page">
+  <div class="page-title">
+    <div>
+      <h1>📊 맞춤형 리포트</h1>
+      <p>TR / LR 관점의 시장 분석 리포트를 자동으로 생성합니다</p>
+    </div>
+    <button class="btn-new-report" onclick="openModal()">
+      ＋ 새 리포트 생성
+    </button>
+  </div>
+
+  <!-- 리포트 목록 -->
+  <div class="report-list-view" id="reportListView">
+    <div class="report-list-empty" id="emptyState">
+      <div class="icon">📋</div>
+      <p>아직 생성된 리포트가 없습니다</p>
+      <small>위의 버튼을 눌러 첫 리포트를 생성해보세요</small>
+    </div>
+    <div class="report-cards" id="reportCards"></div>
+  </div>
+
+  <!-- 리포트 뷰어 -->
+  <div class="report-viewer" id="reportViewer">
+    <div class="report-viewer-header">
+      <button class="btn-back" onclick="closeViewer()">← 목록으로</button>
+      <button class="btn-pdf" onclick="downloadPDF()">
+        📄 PDF 저장
+      </button>
+    </div>
+    <div id="reportContent"></div>
+  </div>
+</main>
+
+<!-- ===== 리포트 생성 모달 ===== -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="reportModal">
+    <div class="modal-header">
+      <span id="modalModeIcon">📊</span>
+      <h2>맞춤형 리포트 생성</h2>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- 스텝 인디케이터 -->
+      <div class="steps" id="stepsIndicator">
+        <div class="step-item active" id="step-ind-1">
+          <div class="step-num">1</div>
+          <span class="step-label">모드 선택</span>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-item" id="step-ind-2">
+          <div class="step-num">2</div>
+          <span class="step-label">기준 빌딩</span>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-item" id="step-ind-3">
+          <div class="step-num">3</div>
+          <span class="step-label">분석 범위</span>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-item" id="step-ind-4">
+          <div class="step-num">4</div>
+          <span class="step-label">고객사 정보</span>
+        </div>
+      </div>
+
+      <!-- STEP 1: 모드 선택 -->
+      <div class="step-panel active" id="step-panel-1">
+        <div class="mode-cards">
+          <div class="mode-card" id="card-TR" onclick="selectMode('TR')">
+            <div class="mode-check">✓</div>
+            <span class="mode-badge tr-badge">TR</span>
+            <h3>임차인 대리</h3>
+            <p>고객사(임차인)를 대리하여 최적의 이전 공간을 찾고 유리한 임대 조건을 협상합니다.</p>
+          </div>
+          <div class="mode-card" id="card-LR" onclick="selectMode('LR')">
+            <div class="mode-check">✓</div>
+            <span class="mode-badge lr-badge">LR</span>
+            <h3>임대인 대리</h3>
+            <p>건물주를 대리하여 공실을 채울 적합한 임차인을 유치하고 임대 전략을 수립합니다.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: 기준 빌딩 -->
+      <div class="step-panel" id="step-panel-2">
+        <div class="form-group">
+          <label class="form-label">기준 빌딩 주소 <span>*</span></label>
+          <div class="addr-search-wrap">
+            <input type="text" class="form-input" id="buildingAddress"
+              placeholder="예) 서울 강남구 테헤란로 152"
+              onkeydown="if(event.key==='Enter') searchBuilding()">
+            <button class="btn-addr-search" onclick="searchBuilding()">검색</button>
+          </div>
+          <p class="form-hint">도로명 주소를 입력하고 검색 버튼을 누르세요</p>
+        </div>
+        <div class="addr-result" id="addrResult"></div>
+        <div class="form-group" id="buildingNameGroup" style="display:none">
+          <label class="form-label">빌딩명 확인</label>
+          <input type="text" class="form-input" id="buildingNameInput" placeholder="빌딩명 입력">
+        </div>
+      </div>
+
+      <!-- STEP 3: 분석 범위 -->
+      <div class="step-panel" id="step-panel-3">
+        <div class="form-group">
+          <label class="form-label">분석 반경</label>
+          <div class="radius-btns" id="radiusBtns">
+            <button class="radius-btn active" data-val="500" onclick="selectRadius(this)">500m</button>
+            <button class="radius-btn" data-val="1000" onclick="selectRadius(this)">1km</button>
+            <button class="radius-btn" data-val="2000" onclick="selectRadius(this)">2km</button>
+            <button class="radius-btn" data-val="3000" onclick="selectRadius(this)">3km</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">권역</label>
+          <select class="form-select" id="districtSelect">
+            <option value="GBD">GBD (강남권역)</option>
+            <option value="CBD">CBD (도심권역)</option>
+            <option value="YBD">YBD (여의도권역)</option>
+            <option value="BBD">BBD (분당·기타)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">빌딩 규모 필터</label>
+          <select class="form-select" id="buildingGradeSelect">
+            <option value="">전체</option>
+            <option value="A">A급 이상</option>
+            <option value="B">B급 이상</option>
+            <option value="prime">프라임</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- STEP 4: 고객사 정보 -->
+      <div class="step-panel" id="step-panel-4">
+        <!-- TR 전용 -->
+        <div id="tr-fields">
+          <div class="form-group">
+            <label class="form-label">고객사명 <span>*</span></label>
+            <input type="text" class="form-input" id="clientCompany" placeholder="예) 토스뱅크">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">업종</label>
+              <input type="text" class="form-input" id="clientIndustry" placeholder="예) 핀테크">
+            </div>
+            <div class="form-group">
+              <label class="form-label">희망 면적 (평)</label>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input type="number" class="form-input" id="desiredAreaMin" placeholder="최소" style="width:80px">
+                <span style="color:var(--muted);font-size:13px">~</span>
+                <input type="number" class="form-input" id="desiredAreaMax" placeholder="최대" style="width:80px">
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">경쟁사 (Enter로 추가)</label>
+            <div class="tag-input-wrap" onclick="document.getElementById('competitorInput').focus()">
+              <div id="competitorTags"></div>
+              <input type="text" class="tag-input-field" id="competitorInput"
+                placeholder="회사명 입력 후 Enter"
+                onkeydown="handleTagInput(event, 'competitor')">
+            </div>
+          </div>
+        </div>
+        <!-- LR 전용 -->
+        <div id="lr-fields" style="display:none">
+          <div class="form-group">
+            <label class="form-label">빌딩 / 자산 담당자명 <span>*</span></label>
+            <input type="text" class="form-input" id="lrClientName" placeholder="예) 김철수 팀장">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">희망 임차 업종</label>
+              <input type="text" class="form-input" id="targetIndustry" placeholder="예) IT, 금융">
+            </div>
+            <div class="form-group">
+              <label class="form-label">목표 임대 기간</label>
+              <select class="form-select" id="targetLeaseTerm">
+                <option value="2">2년</option>
+                <option value="3" selected>3년</option>
+                <option value="5">5년</option>
+                <option value="0">제한 없음</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">경쟁 빌딩 (Enter로 추가)</label>
+            <div class="tag-input-wrap" onclick="document.getElementById('compBuildingInput').focus()">
+              <div id="compBuildingTags"></div>
+              <input type="text" class="tag-input-field" id="compBuildingInput"
+                placeholder="빌딩명 입력 후 Enter"
+                onkeydown="handleTagInput(event, 'compBuilding')">
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" id="btnPrev" onclick="prevStep()" style="display:none">← 이전</button>
+      <button class="btn btn-primary" id="btnNext" onclick="nextStep()">다음 →</button>
+      <button class="btn btn-success" id="btnGenerate" onclick="generateReport()" style="display:none">
+        🚀 리포트 생성
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 생성 중 오버레이 -->
+<div class="generating-overlay" id="generatingOverlay">
+  <div class="generating-spinner"></div>
+  <div class="generating-status" id="generatingStatus">리포트 생성 중...</div>
+  <div class="generating-steps">
+    <div class="gen-step" id="gen-step-1"><span class="gen-step-icon">○</span> 시장 통계 조회 (한국부동산원)</div>
+    <div class="gen-step" id="gen-step-2"><span class="gen-step-icon">○</span> 정책 뉴스 수집 (국토부)</div>
+    <div class="gen-step" id="gen-step-3"><span class="gen-step-icon">○</span> 업종·경쟁사 뉴스 수집</div>
+    <div class="gen-step" id="gen-step-4"><span class="gen-step-icon">○</span> AI 종합 분석 생성</div>
+    <div class="gen-step" id="gen-step-5"><span class="gen-step-icon">○</span> 리포트 조립 완료</div>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== Firebase 설정 =====
+const firebaseConfig = {
+  apiKey:            "AIzaSyBYo9EXAMPLE",   // TODO: 실제 Firebase 설정으로 교체
+  authDomain:        "cre-unified.firebaseapp.com",
+  databaseURL:       "https://cre-unified-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "cre-unified",
+  storageBucket:     "cre-unified.appspot.com",
+  messagingSenderId: "000000000000",
+  appId:             "1:000000000000:web:000000"
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.database();
+
+const BACKEND = 'https://portal-dsyl.onrender.com';
+
+// ===== 전역 상태 =====
+let currentStep   = 1;
+let selectedMode  = '';
+let selectedRadius = 500;
+let reportParams  = {};
+let reportHistory = [];   // 생성된 리포트 목록 (로컬 임시 저장)
+let currentReport = null;
+const tags = { competitor: [], compBuilding: [] };
+
+// ===== Auth =====
+auth.onAuthStateChanged(user => {
+  if (user) {
+    document.getElementById('headerUser').textContent = user.email;
+  } else {
+    window.location.href = 'index.html';
+  }
+});
+
+// ===== 모달 열기/닫기 =====
+function openModal() {
+  resetModal();
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function resetModal() {
+  currentStep  = 1;
+  selectedMode = '';
+  selectedRadius = 500;
+  reportParams = {};
+  tags.competitor  = [];
+  tags.compBuilding = [];
+
+  ['card-TR','card-LR'].forEach(id => document.getElementById(id).classList.remove('selected','lr-mode'));
+  document.getElementById('buildingAddress').value = '';
+  document.getElementById('addrResult').classList.remove('show');
+  document.getElementById('buildingNameGroup').style.display = 'none';
+  document.getElementById('clientCompany').value  = '';
+  document.getElementById('clientIndustry').value = '';
+  document.getElementById('desiredAreaMin').value = '';
+  document.getElementById('desiredAreaMax').value = '';
+  document.getElementById('lrClientName').value   = '';
+  document.getElementById('targetIndustry').value = '';
+  renderTags('competitor');
+  renderTags('compBuilding');
+
+  // 스텝 1로 초기화
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`step-panel-${i}`).classList.remove('active');
+    const ind = document.getElementById(`step-ind-${i}`);
+    ind.classList.remove('active','done');
+  }
+  document.getElementById('step-panel-1').classList.add('active');
+  document.getElementById('step-ind-1').classList.add('active');
+
+  document.getElementById('btnPrev').style.display     = 'none';
+  document.getElementById('btnNext').style.display     = '';
+  document.getElementById('btnGenerate').style.display = 'none';
+}
+
+// ===== 스텝 이동 =====
+function updateStepUI() {
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`step-panel-${i}`).classList.remove('active');
+    const ind = document.getElementById(`step-ind-${i}`);
+    ind.classList.remove('active','done');
+    if (i < currentStep) ind.classList.add('done');
+    if (i === currentStep) ind.classList.add('active');
+  }
+  document.getElementById(`step-panel-${currentStep}`).classList.add('active');
+
+  document.getElementById('btnPrev').style.display     = currentStep > 1 ? '' : 'none';
+  document.getElementById('btnNext').style.display     = currentStep < 4 ? '' : 'none';
+  document.getElementById('btnGenerate').style.display = currentStep === 4 ? '' : 'none';
+}
+
+function nextStep() {
+  if (!validateStep(currentStep)) return;
+  if (currentStep < 4) {
+    currentStep++;
+    updateStepUI();
+    if (currentStep === 4) updateStep4Fields();
+  }
+}
+
+function prevStep() {
+  if (currentStep > 1) {
+    currentStep--;
+    updateStepUI();
+  }
+}
+
+function validateStep(step) {
+  if (step === 1) {
+    if (!selectedMode) { showToast('모드를 선택해주세요', 'error'); return false; }
+  }
+  if (step === 2) {
+    if (!reportParams.buildingAddress) { showToast('기준 빌딩 주소를 입력해주세요', 'error'); return false; }
+  }
+  return true;
+}
+
+// ===== 모드 선택 =====
+function selectMode(mode) {
+  selectedMode = mode;
+  document.getElementById('card-TR').classList.remove('selected','lr-mode');
+  document.getElementById('card-LR').classList.remove('selected','lr-mode');
+  const card = document.getElementById(`card-${mode}`);
+  card.classList.add('selected');
+  if (mode === 'LR') card.classList.add('lr-mode');
+  document.getElementById('modalModeIcon').textContent = mode === 'TR' ? '🏢' : '🏛️';
+}
+
+// ===== 반경 선택 =====
+function selectRadius(btn) {
+  document.querySelectorAll('.radius-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedRadius = parseInt(btn.dataset.val);
+}
+
+// ===== STEP 4 필드 토글 =====
+function updateStep4Fields() {
+  document.getElementById('tr-fields').style.display = selectedMode === 'TR' ? '' : 'none';
+  document.getElementById('lr-fields').style.display = selectedMode === 'LR' ? '' : 'none';
+}
+
+// ===== 빌딩 주소 검색 (카카오) =====
+async function searchBuilding() {
+  const addr = document.getElementById('buildingAddress').value.trim();
+  if (!addr) return;
+
+  const geocoder = new kakao.maps.services.Geocoder();
+  geocoder.addressSearch(addr, async (result, status) => {
+    const resultEl = document.getElementById('addrResult');
+    if (status !== kakao.maps.services.Status.OK || !result.length) {
+      resultEl.className = 'addr-result show';
+      resultEl.innerHTML = `<span style="color:var(--danger)">⚠️ 주소를 찾을 수 없습니다. 다시 확인해주세요.</span>`;
+      return;
+    }
+
+    const r = result[0];
+    reportParams.buildingAddress = r.address_name;
+    reportParams.roadAddress      = r.road_address?.address_name || r.address_name;
+    reportParams.lat              = parseFloat(r.y);
+    reportParams.lng              = parseFloat(r.x);
+    reportParams.buildingName     = r.road_address?.building_name || '';
+
+    // CRE Portal DB 매칭 시도
+    let matchHtml = '';
+    try {
+      const matched = await matchWithPortalDB(r.road_address?.address_name || r.address_name);
+      if (matched) {
+        reportParams.buildingId   = matched.id;
+        reportParams.buildingName = matched.name || reportParams.buildingName;
+        reportParams.district     = matched.region || guessDistrict(r.address_name);
+        matchHtml = `<span class="match-badge match-full">✓ Portal 매칭</span>`;
+        document.getElementById('districtSelect').value = reportParams.district || 'GBD';
+      } else {
+        reportParams.district = guessDistrict(r.address_name);
+        matchHtml = `<span class="match-badge match-none">미등록 빌딩</span>`;
+        document.getElementById('buildingNameGroup').style.display = '';
+      }
+    } catch (e) {
+      reportParams.district = guessDistrict(r.address_name);
+    }
+
+    resultEl.className = 'addr-result show';
+    resultEl.innerHTML = `
+      <strong>${reportParams.buildingName || '빌딩명 미확인'}</strong>${matchHtml}<br>
+      <span style="color:var(--muted);font-size:12px">${reportParams.roadAddress}</span>
+    `;
+    document.getElementById('buildingNameInput').value = reportParams.buildingName;
+  });
+}
+
+async function matchWithPortalDB(address) {
+  try {
+    const snap = await db.ref('buildings').once('value');
+    const buildings = snap.val() || {};
+    const addrNorm = address.replace(/\s+/g,'').toLowerCase();
+
+    for (const [id, data] of Object.entries(buildings)) {
+      if (!data || typeof data !== 'object') continue;
+      const bAddr = ((data.address || '') + (data.addressJibun || '')).replace(/\s+/g,'').toLowerCase();
+      if (bAddr.includes(addrNorm) || addrNorm.includes(bAddr.slice(0,20))) {
+        return { id, ...data };
+      }
+    }
+    return null;
+  } catch { return null; }
+}
+
+function guessDistrict(address) {
+  if (/강남|서초|역삼|삼성|선릉/.test(address)) return 'GBD';
+  if (/여의도|영등포/.test(address)) return 'YBD';
+  if (/종로|중구|을지로|광화문/.test(address)) return 'CBD';
+  return 'GBD';
+}
+
+// ===== 태그 입력 =====
+function handleTagInput(event, type) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    const inputId = type === 'competitor' ? 'competitorInput' : 'compBuildingInput';
+    const val = document.getElementById(inputId).value.trim();
+    if (val && !tags[type].includes(val)) {
+      tags[type].push(val);
+      renderTags(type);
+    }
+    document.getElementById(inputId).value = '';
+  }
+}
+
+function removeTag(type, val) {
+  tags[type] = tags[type].filter(t => t !== val);
+  renderTags(type);
+}
+
+function renderTags(type) {
+  const containerId = type === 'competitor' ? 'competitorTags' : 'compBuildingTags';
+  const container   = document.getElementById(containerId);
+  container.innerHTML = tags[type].map(t => `
+    <span class="tag">${t}<span class="tag-remove" onclick="removeTag('${type}','${t}')">×</span></span>
+  `).join('');
+}
+
+// ===== 인근 빌딩 조회 =====
+async function fetchNearbyBuildings(lat, lng, radius) {
+  try {
+    const snap     = await db.ref('buildings').once('value');
+    const buildings = snap.val() || {};
+    const nearby   = [];
+
+    for (const [id, data] of Object.entries(buildings)) {
+      if (!data?.coordinates?.lat || !data?.coordinates?.lng) continue;
+      const dist = getDistance(lat, lng, data.coordinates.lat, data.coordinates.lng);
+      if (dist <= radius) nearby.push({ id, ...data, distanceM: Math.round(dist) });
+    }
+    return nearby.sort((a, b) => a.distanceM - b.distanceM).slice(0, 20);
+  } catch { return []; }
+}
+
+async function fetchNearbyVacancies(buildingIds) {
+  try {
+    const vacancies = [];
+    for (const id of buildingIds.slice(0, 10)) {
+      const snap = await db.ref(`rentrolls/${id}`).once('value');
+      const data = snap.val();
+      if (data) {
+        const entries = Array.isArray(data) ? data : Object.values(data);
+        entries.forEach(v => {
+          if (v && v.floor) vacancies.push({ buildingId: id, ...v });
+        });
+      }
+    }
+    return vacancies;
+  } catch { return []; }
+}
+
+function getDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// ===== 리포트 생성 =====
+async function generateReport() {
+  const district = document.getElementById('districtSelect').value;
+  const buildingName = document.getElementById('buildingNameInput').value.trim() || reportParams.buildingName || '기준 빌딩';
+
+  const body = {
+    mode:         selectedMode,
+    buildingId:   reportParams.buildingId || '',
+    buildingName: buildingName,
+    district:     district,
+    radius:       selectedRadius,
+  };
+
+  if (selectedMode === 'TR') {
+    body.clientCompany  = document.getElementById('clientCompany').value.trim();
+    body.clientIndustry = document.getElementById('clientIndustry').value.trim();
+    body.desiredAreaMin = parseInt(document.getElementById('desiredAreaMin').value) || 0;
+    body.desiredAreaMax = parseInt(document.getElementById('desiredAreaMax').value) || 0;
+    body.competitors    = tags.competitor;
+    if (!body.clientCompany) { showToast('고객사명을 입력해주세요', 'error'); return; }
+  } else {
+    body.clientName      = document.getElementById('lrClientName').value.trim();
+    body.targetIndustry  = document.getElementById('targetIndustry').value.trim();
+    body.leaseTerm       = parseInt(document.getElementById('targetLeaseTerm').value);
+    body.compBuildings   = tags.compBuilding;
+    if (!body.clientName) { showToast('담당자명을 입력해주세요', 'error'); return; }
+  }
+
+  closeModal();
+  showGenerating(true);
+
+  try {
+    // 인근 빌딩 조회 (Firebase)
+    setGenStep(1, 'active');
+    const nearbyBuildings = await fetchNearbyBuildings(reportParams.lat, reportParams.lng, selectedRadius);
+    const vacancyData     = await fetchNearbyVacancies(nearbyBuildings.map(b => b.id));
+    body.nearbyBuildings  = nearbyBuildings;
+    body.vacancyData      = vacancyData;
+    setGenStep(1, 'done');
+
+    // 백엔드 API 호출
+    setGenStep(2, 'active');
+    const resp = await fetch(`${BACKEND}/api/report/generate`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+    });
+
+    if (!resp.ok) throw new Error(`API 오류: ${resp.status}`);
+    const result = await resp.json();
+    if (!result.success) throw new Error(result.error || '생성 실패');
+
+    setGenStep(2, 'done');
+    setGenStep(3, 'done');
+    setGenStep(4, 'done');
+    setGenStep(5, 'active');
+
+    // 리포트 저장
+    const report = {
+      id:          Date.now().toString(),
+      mode:        selectedMode,
+      buildingName,
+      district,
+      clientName:  selectedMode === 'TR' ? body.clientCompany : body.clientName,
+      createdAt:   new Date().toISOString(),
+      params:      body,
+      result,
+      nearbyBuildings,
+      vacancyData,
+    };
+    reportHistory.unshift(report);
+    renderReportList();
+
+    setGenStep(5, 'done');
+    showGenerating(false);
+
+    // 뷰어로 바로 이동
+    viewReport(report);
+
+  } catch (err) {
+    showGenerating(false);
+    console.error(err);
+    showToast(`생성 실패: ${err.message}`, 'error');
+  }
+}
+
+function setGenStep(n, status) {
+  const el   = document.getElementById(`gen-step-${n}`);
+  const icon = el.querySelector('.gen-step-icon');
+  el.className = `gen-step ${status}`;
+  icon.textContent = status === 'done' ? '✓' : status === 'active' ? '●' : '○';
+}
+
+function showGenerating(show) {
+  const el = document.getElementById('generatingOverlay');
+  el.classList.toggle('show', show);
+  if (show) {
+    for (let i = 1; i <= 5; i++) setGenStep(i, '');
+  }
+}
+
+// ===== 리포트 목록 렌더링 =====
+function renderReportList() {
+  const cards = document.getElementById('reportCards');
+  const empty = document.getElementById('emptyState');
+
+  if (!reportHistory.length) {
+    empty.style.display = '';
+    cards.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+  cards.innerHTML = reportHistory.map(r => `
+    <div class="report-card" onclick="viewReport(reportHistory.find(x=>x.id==='${r.id}'))">
+      <div class="report-card-actions">
+        <button class="btn-icon" onclick="event.stopPropagation();downloadReportPDF('${r.id}')" title="PDF 저장">📄</button>
+        <button class="btn-icon" onclick="event.stopPropagation();deleteReport('${r.id}')" title="삭제" style="color:var(--danger)">🗑</button>
+      </div>
+      <div class="report-card-mode ${r.mode.toLowerCase()}">${r.mode === 'TR' ? '🏢 임차인 대리' : '🏛️ 임대인 대리'}</div>
+      <h3>${r.buildingName}</h3>
+      <div class="client">${r.clientName} · ${r.district}</div>
+      <div class="meta">
+        <span>📍 반경 ${(r.params.radius/1000).toFixed(1)}km</span>
+        <span>🏢 인근 ${r.nearbyBuildings?.length || 0}개 빌딩</span>
+        <span>📅 ${new Date(r.createdAt).toLocaleDateString('ko-KR')}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function deleteReport(id) {
+  reportHistory = reportHistory.filter(r => r.id !== id);
+  renderReportList();
+  showToast('리포트가 삭제되었습니다');
+}
+
+// ===== 리포트 뷰어 =====
+function viewReport(report) {
+  currentReport = report;
+  document.getElementById('reportListView').classList.add('hide');
+  document.getElementById('reportViewer').classList.add('show');
+  renderReportHTML(report);
+}
+
+function closeViewer() {
+  document.getElementById('reportListView').classList.remove('hide');
+  document.getElementById('reportViewer').classList.remove('show');
+  currentReport = null;
+}
+
+function renderReportHTML(report) {
+  const r        = report.result;
+  const sections = r.sections || {};
+  const mode     = report.mode;
+  const isLR     = mode === 'LR';
+
+  const marketStats  = sections.marketStats  || {};
+  const policyNews   = sections.policyNews   || [];
+  const industryNews = sections.industryNews || [];
+  const aiAnalysis   = sections.aiAnalysis   || '';
+
+  const vacancyRows = (report.vacancyData || []).slice(0, 10).map(v => `
+    <tr>
+      <td>${v.buildingName || '-'}</td>
+      <td>${v.floor || '-'}</td>
+      <td>${formatArea(v.rentArea || v.exclusiveArea)}평</td>
+      <td>${v.rentPy ? v.rentPy.toLocaleString() + '원' : '-'}</td>
+      <td>${v.maintenancePy ? v.maintenancePy.toLocaleString() + '원' : '-'}</td>
+      <td><span class="pill pill-green">${v.moveInDate || '즉시'}</span></td>
+    </tr>
+  `).join('');
+
+  const newsHTML = (items, maxItems=5) => items.slice(0, maxItems).map(n => `
+    <a class="news-item" href="${n.link}" target="_blank" rel="noopener">
+      <div>
+        <div class="news-title">${n.title}<span class="news-source-badge badge-${n.source}">${n.source}</span></div>
+        <div class="news-desc">${n.description || ''}</div>
+      </div>
+      <div class="news-date">${formatDate(n.pubDate)}</div>
+    </a>
+  `).join('');
+
+  // R-ONE 최신 수치
+  const vacancyData = marketStats.data?.vacancy || [];
+  const rentData    = marketStats.data?.rent || [];
+  const latestV     = vacancyData.length ? vacancyData[vacancyData.length - 1] : {};
+  const latestR     = rentData.length ? rentData[rentData.length - 1] : {};
+
+  document.getElementById('reportContent').innerHTML = `
+    <!-- 표지 -->
+    <div class="report-cover">
+      <div class="report-cover-mode ${mode.toLowerCase()}">${isLR ? 'LR — 임대인 대리' : 'TR — 임차인 대리'}</div>
+      <h1>${report.buildingName} 시장 분석 리포트</h1>
+      <div class="sub">${isLR ? report.clientName + '을 위한' : report.clientName + ' 이전 검토를 위한'} ${report.district} 오피스 마켓 분석</div>
+      <div class="report-cover-meta">
+        <span>📅 생성일: ${new Date(report.createdAt).toLocaleDateString('ko-KR')}</span>
+        <span>📍 분석 권역: ${report.district}</span>
+        <span>🏢 인근 빌딩: ${(report.nearbyBuildings||[]).length}개</span>
+        <span>출처: CRE Portal by S&I Corporation</span>
+      </div>
+    </div>
+
+    <!-- Section 1: 시장 현황 -->
+    <div class="report-section">
+      <div class="section-title">
+        <div class="section-icon">📈</div>
+        시장 현황 (한국부동산원 R-ONE)
+      </div>
+      <div class="stat-cards">
+        <div class="stat-card">
+          <div class="label">${report.district} 공실률</div>
+          <div class="value">${latestV.vacancy || 'N/A'}<span class="unit">%</span></div>
+          <div class="change">${latestV.period ? latestV.period + ' 기준' : ''}</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">임대가격지수</div>
+          <div class="value">${latestR.rentIndex || 'N/A'}</div>
+          <div class="change">${latestR.period || ''}</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">인근 공실 매물</div>
+          <div class="value">${report.vacancyData?.length || 0}<span class="unit">건</span></div>
+          <div class="change">반경 ${(report.params.radius/1000).toFixed(1)}km 이내</div>
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:8px">※ 출처: 한국부동산원 R-ONE Open API</p>
+    </div>
+
+    <!-- Section 2: 인근 공실 현황 -->
+    ${report.vacancyData?.length ? `
+    <div class="report-section">
+      <div class="section-title">
+        <div class="section-icon">🏢</div>
+        인근 공실 현황 (반경 ${(report.params.radius/1000).toFixed(1)}km)
+      </div>
+      <table class="vacancy-table">
+        <thead>
+          <tr>
+            <th>빌딩명</th><th>층</th><th>면적</th><th>임대료/평</th><th>관리비/평</th><th>입주</th>
+          </tr>
+        </thead>
+        <tbody>${vacancyRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    <!-- Section 3: 정책 뉴스 -->
+    ${policyNews.length ? `
+    <div class="report-section">
+      <div class="section-title">
+        <div class="section-icon">🏛️</div>
+        부동산 정책 동향 (국토교통부)
+      </div>
+      <div class="news-list">${newsHTML(policyNews)}</div>
+    </div>` : ''}
+
+    <!-- Section 4: 업종/경쟁사 뉴스 -->
+    ${industryNews.length ? `
+    <div class="report-section">
+      <div class="section-title">
+        <div class="section-icon">${isLR ? '🎯' : '🔍'}</div>
+        ${isLR ? '임차 수요 업종 동향' : '고객사 업종 및 경쟁사 동향'}
+      </div>
+      <div class="news-list">${newsHTML(industryNews)}</div>
+    </div>` : ''}
+
+    <!-- Section 5: AI 종합 분석 -->
+    ${aiAnalysis ? `
+    <div class="report-section">
+      <div class="section-title">
+        <div class="section-icon">🤖</div>
+        AI 종합 분석
+      </div>
+      <div class="ai-analysis-box">
+        <div class="ai-analysis-text">${aiAnalysis}</div>
+      </div>
+    </div>` : ''}
+  `;
+}
+
+// ===== PDF 저장 =====
+function downloadPDF() {
+  if (!currentReport) return;
+  downloadReportPDF(currentReport.id);
+}
+
+function downloadReportPDF(id) {
+  const report = reportHistory.find(r => r.id === id);
+  if (!report) return;
+
+  showToast('PDF 생성 중...');
+  const el       = document.getElementById('reportContent');
+  const filename = `[${report.clientName}]_${report.buildingName}_리포트_${new Date().toLocaleDateString('ko-KR').replace(/\./g,'-').replace(/ /g,'')}.pdf`;
+
+  html2pdf().set({
+    margin:     [10, 10, 10, 10],
+    filename,
+    image:      { type: 'jpeg', quality: 0.98 },
+    html2canvas:{ scale: 2, useCORS: true },
+    jsPDF:      { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak:  { mode: 'css', before: '.report-section' }
+  }).from(el).save().then(() => showToast('PDF 저장 완료', 'success'));
+}
+
+// ===== 유틸 =====
+function formatArea(area) {
+  if (!area) return '-';
+  return typeof area === 'number' ? area.toFixed(1) : area;
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    return `${d.getMonth()+1}/${d.getDate()}`;
+  } catch { return ''; }
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className   = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ===== 초기화 =====
+renderReportList();
+</script>
+</body>
+</html>
