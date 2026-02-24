@@ -47,6 +47,7 @@
                 <div class="nav-item"><span class="nav-icon">📊</span> 시계열</div>
                 <a href="admin-leasing.html" class="nav-item"><span class="nav-icon">⚙️</span> OCR관리</a>
                 <div class="nav-item" onclick="openDuplicateManager()" title="동일주소 빌딩 통합 관리"><span class="nav-icon">🔗</span> 중복관리</div>
+                <div class="nav-item" onclick="openVacancyContamModal()" title="이관된 공실의 buildingName 오염 진단·정정"><span class="nav-icon">🧹</span> 오염정정</div>
             </nav>
             <div class="header-right">
                 <button class="theme-btn" onclick="toggleTheme()" title="다크모드">🌙</button>
@@ -1419,6 +1420,49 @@
         </div>
     </div>
     
+    <!-- ★ 공실 오염 진단/정정 모달 -->
+    <div id="vacancyContamModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:0; width:95%; max-width:1000px; z-index:1010; box-shadow:0 10px 40px rgba(0,0,0,0.3); max-height:90vh; overflow:hidden; flex-direction:column;">
+        <!-- 헤더 -->
+        <div style="padding:18px 24px; background:linear-gradient(135deg,#7c3aed,#4f46e5); border-radius:12px 12px 0 0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+            <div>
+                <div style="font-size:17px; font-weight:700; color:#fff;">🔍 공실 buildingName 오염 진단</div>
+                <div id="contamModalSubtitle" style="font-size:12px; color:rgba(255,255,255,0.8); margin-top:3px;">이관 시 buildingName이 원본 빌딩명으로 남은 항목을 검사·정정합니다</div>
+            </div>
+            <button onclick="closeVacancyContamModal()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:20px; width:34px; height:34px; border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center;">×</button>
+        </div>
+
+        <!-- 툴바 -->
+        <div style="padding:12px 20px; background:var(--bg-secondary); border-bottom:1px solid var(--border-color); display:flex; gap:8px; align-items:center; flex-shrink:0; flex-wrap:wrap;">
+            <button id="contamScanBtn" onclick="scanVacancyContamination()" style="padding:7px 16px; background:#7c3aed; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600;">🔍 전수검사</button>
+            <button id="contamFixAllBtn" onclick="fixAllContamination()" style="padding:7px 16px; background:#dc2626; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; display:none;">⚡ 전체 일괄정정</button>
+            <button id="contamFixSelBtn" onclick="fixSelectedContamination()" style="padding:7px 16px; background:#2563eb; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:600; display:none;">✅ 선택항목 정정</button>
+            <label style="display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; margin-left:8px;">
+                <input type="checkbox" id="contamSelectAll" onchange="toggleAllContamSelect(this.checked)" style="cursor:pointer;">
+                <span>전체선택</span>
+            </label>
+            <span id="contamSelCount" style="font-size:12px; color:var(--text-muted); margin-left:4px;"></span>
+            <div id="contamProgressWrap" style="display:none; margin-left:auto; display:flex; align-items:center; gap:10px;">
+                <div style="width:180px; height:8px; background:#e5e7eb; border-radius:4px; overflow:hidden;">
+                    <div id="contamProgressBar" style="height:100%; width:0%; background:#7c3aed; border-radius:4px; transition:width 0.3s;"></div>
+                </div>
+                <span id="contamProgressLabel" style="font-size:12px; color:var(--text-muted);"></span>
+            </div>
+        </div>
+
+        <!-- 결과 테이블 -->
+        <div style="overflow-y:auto; flex:1; padding:0;">
+            <div id="contamResultArea" style="padding:40px; text-align:center; color:var(--text-muted); font-size:14px;">
+                🔍 전수검사 버튼을 눌러 오염 항목을 확인하세요.
+            </div>
+        </div>
+
+        <!-- 푸터 -->
+        <div style="padding:12px 20px; background:var(--bg-secondary); border-top:1px solid var(--border-color); flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
+            <span id="contamFooterMsg" style="font-size:12px; color:var(--text-muted);"></span>
+            <button onclick="closeVacancyContamModal()" style="padding:7px 18px; background:var(--bg-secondary); border:1px solid var(--border-color); border-radius:6px; cursor:pointer; font-size:13px;">닫기</button>
+        </div>
+    </div>
+
     <!-- ★ 주소 수정 모달 -->
     <div id="addressEditModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:24px; width:90%; max-width:550px; z-index:1001; box-shadow:0 10px 40px rgba(0,0,0,0.2);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -4857,6 +4901,194 @@
         // kakao SDK가 autoload=false이므로 kakao.maps.load() 이후에 패치
         // portal-main.js에서 kakao.maps.load()를 호출하므로 폴링으로 대기
         patchKakao();
+    })();
+    </script>
+
+    <!-- ✅ [FIX 3] 공실 buildingName 오염 진단·정정 스크립트 -->
+    <script>
+    (function() {
+        // ── 모달 열기/닫기 ──────────────────────────────────────────
+        window.openVacancyContamModal = function() {
+            const modal = document.getElementById('vacancyContamModal');
+            modal.style.display = 'flex';
+        };
+        window.closeVacancyContamModal = function() {
+            document.getElementById('vacancyContamModal').style.display = 'none';
+        };
+
+        // ── 전수검사 ────────────────────────────────────────────────
+        window.scanVacancyContamination = function() {
+            const allBuildings = window.state?.filteredBuildings
+                || window.state?.allBuildings || [];
+
+            const contaminated = [];   // { buildingId, buildingCurrentName, vacancy }
+            allBuildings.forEach(b => {
+                const bName = b.buildingName || b.name || '';
+                (b.vacancies || []).forEach(v => {
+                    if (v.transferredFrom && v.buildingName && v.buildingName !== bName) {
+                        contaminated.push({
+                            buildingId: b.id,
+                            buildingCurrentName: bName,
+                            wrongName: v.buildingName,
+                            vacancyKey: v._key,
+                            floor: v.floor,
+                            source: v.source,
+                            publishDate: v.publishDate,
+                            transferredFrom: v.transferredFrom
+                        });
+                    }
+                });
+            });
+
+            window._contamData = contaminated;   // 전역 보관
+            renderContamTable(contaminated);
+
+            const fixAllBtn  = document.getElementById('contamFixAllBtn');
+            const fixSelBtn  = document.getElementById('contamFixSelBtn');
+            if (contaminated.length > 0) {
+                fixAllBtn.style.display  = 'inline-block';
+                fixSelBtn.style.display  = 'inline-block';
+            } else {
+                fixAllBtn.style.display  = 'none';
+                fixSelBtn.style.display  = 'none';
+            }
+            document.getElementById('contamModalSubtitle').textContent =
+                contaminated.length > 0
+                ? `오염 항목 ${contaminated.length}건 발견 — 정정할 항목을 선택하세요`
+                : '✅ 오염 항목이 없습니다';
+            document.getElementById('contamFooterMsg').textContent =
+                `총 검사 빌딩: ${allBuildings.length}개 | 오염 vacancy: ${contaminated.length}건`;
+        };
+
+        // ── 테이블 렌더링 ────────────────────────────────────────────
+        function renderContamTable(data) {
+            const area = document.getElementById('contamResultArea');
+            if (data.length === 0) {
+                area.innerHTML = '<div style="padding:48px; text-align:center; color:#16a34a; font-size:15px; font-weight:600;">✅ 오염 항목이 없습니다.</div>';
+                return;
+            }
+            // 빌딩별 그룹핑
+            const groups = {};
+            data.forEach((item, idx) => {
+                if (!groups[item.buildingId]) groups[item.buildingId] = { name: item.buildingCurrentName, items: [] };
+                groups[item.buildingId].items.push({ ...item, _idx: idx });
+            });
+
+            let html = `<table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead style="position:sticky; top:0; background:#f1f5f9; z-index:1;">
+                    <tr>
+                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0; width:36px;"></th>
+                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0;">대상 빌딩 (정정 후)</th>
+                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0;">오염된 buildingName (현재)</th>
+                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0;">층/출처/발행</th>
+                        <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #e2e8f0;">이관 원본</th>
+                    </tr>
+                </thead><tbody>`;
+
+            Object.entries(groups).forEach(([bid, group]) => {
+                html += `<tr style="background:#eff6ff;">
+                    <td colspan="5" style="padding:7px 12px; font-weight:700; color:#1e40af; font-size:12px; border-bottom:1px solid #dbeafe;">
+                        🏢 ${group.name} <span style="font-weight:400; color:#64748b;">(${bid}) — ${group.items.length}건</span>
+                    </td></tr>`;
+                group.items.forEach(item => {
+                    html += `<tr style="border-bottom:1px solid #f1f5f9;" id="contam-row-${item._idx}">
+                        <td style="padding:7px 12px; text-align:center;">
+                            <input type="checkbox" class="contam-check" data-idx="${item._idx}"
+                                onchange="updateContamSelCount()"
+                                style="cursor:pointer; width:15px; height:15px;">
+                        </td>
+                        <td style="padding:7px 12px; color:#16a34a; font-weight:600;">${item.buildingCurrentName}</td>
+                        <td style="padding:7px 12px; color:#dc2626;">${item.wrongName}</td>
+                        <td style="padding:7px 12px; color:#374151;">${item.floor || '-'} / ${item.source || '-'} / ${item.publishDate || '-'}</td>
+                        <td style="padding:7px 12px; color:#6b7280; font-size:11px;">${item.transferredFrom}</td>
+                    </tr>`;
+                });
+            });
+            html += '</tbody></table>';
+            area.innerHTML = html;
+            updateContamSelCount();
+        }
+
+        // ── 전체선택 토글 ──────────────────────────────────────────
+        window.toggleAllContamSelect = function(checked) {
+            document.querySelectorAll('.contam-check').forEach(cb => { cb.checked = checked; });
+            updateContamSelCount();
+        };
+        window.updateContamSelCount = function() {
+            const total = document.querySelectorAll('.contam-check').length;
+            const sel   = document.querySelectorAll('.contam-check:checked').length;
+            document.getElementById('contamSelCount').textContent = total ? `(${sel}/${total} 선택)` : '';
+        };
+
+        // ── 선택항목 정정 ─────────────────────────────────────────
+        window.fixSelectedContamination = async function() {
+            const checked = [...document.querySelectorAll('.contam-check:checked')];
+            if (checked.length === 0) { alert('정정할 항목을 선택하세요.'); return; }
+            const indices = checked.map(cb => parseInt(cb.dataset.idx));
+            const targets = indices.map(i => window._contamData[i]).filter(Boolean);
+            if (!confirm(`선택한 ${targets.length}건의 buildingName을 정정하시겠습니까?\n이 작업은 Firebase에 직접 반영됩니다.`)) return;
+            await runFix(targets);
+        };
+
+        // ── 전체 일괄정정 ─────────────────────────────────────────
+        window.fixAllContamination = async function() {
+            const all = window._contamData || [];
+            if (all.length === 0) { alert('정정할 항목이 없습니다.'); return; }
+            if (!confirm(`전체 ${all.length}건의 buildingName을 일괄 정정하시겠습니까?\n이 작업은 Firebase에 직접 반영됩니다.`)) return;
+            await runFix(all);
+        };
+
+        // ── 실제 Firebase 업데이트 ─────────────────────────────────
+        async function runFix(targets) {
+            const { ref, update } = await import('./js/portal-firebase.js');
+            const { db } = await import('./js/portal-firebase.js');
+
+            const progressWrap = document.getElementById('contamProgressWrap');
+            const progressBar  = document.getElementById('contamProgressBar');
+            const progressLbl  = document.getElementById('contamProgressLabel');
+            progressWrap.style.display = 'flex';
+
+            let done = 0, failed = 0;
+            for (const item of targets) {
+                try {
+                    const path = `vacancies/${item.buildingId}/${item.vacancyKey}`;
+                    await update(ref(db, path), { buildingName: item.buildingCurrentName });
+
+                    // 로컬 state도 동기화
+                    const allBuildings = window.state?.filteredBuildings
+                        || window.state?.allBuildings || [];
+                    const bLocal = allBuildings.find(b => b.id === item.buildingId);
+                    if (bLocal && bLocal.vacancies) {
+                        const vLocal = bLocal.vacancies.find(v => v._key === item.vacancyKey);
+                        if (vLocal) vLocal.buildingName = item.buildingCurrentName;
+                    }
+
+                    // 행 시각적 완료 표시
+                    const row = document.getElementById(`contam-row-${item._idx}`);
+                    if (row) row.style.background = '#f0fdf4';
+
+                    done++;
+                } catch (e) {
+                    console.error('[오염정정] 실패:', item, e);
+                    failed++;
+                }
+                const pct = Math.round((done + failed) / targets.length * 100);
+                progressBar.style.width = pct + '%';
+                progressLbl.textContent = `${done + failed} / ${targets.length}`;
+            }
+
+            progressWrap.style.display = 'none';
+            const msg = failed > 0
+                ? `✅ ${done}건 정정 완료 / ⚠️ ${failed}건 실패`
+                : `✅ ${done}건 모두 정정 완료`;
+            document.getElementById('contamFooterMsg').textContent = msg;
+            document.getElementById('contamModalSubtitle').textContent = msg;
+            alert(msg + '\n정정된 항목은 초록색으로 표시됩니다.');
+
+            // 완료 후 재검사
+            scanVacancyContamination();
+        }
+
     })();
     </script>
 

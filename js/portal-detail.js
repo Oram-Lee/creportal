@@ -4912,6 +4912,8 @@ export async function executeVacancyTransfer() {
                 ...vacancy,
                 _key: undefined,
                 _vacancyId: undefined,
+                // ★ [FIX] 이관 시 buildingName을 대상 빌딩명으로 강제 업데이트
+                buildingName: targetBuilding.buildingName || targetBuilding.name || vacancy.buildingName,
                 transferredFrom: sourceBuildingId,
                 transferredAt: new Date().toISOString()
             };
