@@ -1573,18 +1573,27 @@ async function searchBuilding() {
 
   // 5) 결과 렌더링
   list.innerHTML = merged.map((item, idx) => {
-    const gradeClass = item.grade ? item.grade.toLowerCase() : '';
+    const gradeClass = (item.grade && typeof item.grade === 'string') ? item.grade.toLowerCase() : '';
     const sourceClass = item.source === 'portal' ? 'portal' : 'ledger';
     const sourceLabel = item.source === 'portal' ? 'Portal' : '건축물대장';
+    let floorsDisplay = '';
+    if (item.floors) {
+      if (typeof item.floors === 'object') {
+        floorsDisplay = `B${item.floors.underground || item.floors.ugrnd || 0}/F${item.floors.ground || item.floors.grnd || 0}`;
+      } else {
+        floorsDisplay = String(item.floors);
+      }
+    }
+    const gradeDisplay = item.grade && typeof item.grade === 'string' ? item.grade : (item.areaPy ? calcGrade(item.areaPy) : '');
     return `
       <div class="search-result-item" onclick="selectSearchResult(${idx})" data-idx="${idx}">
         <span class="sr-source ${sourceClass}">${sourceLabel}</span>
         <div class="sr-info">
           <div class="sr-name">${item.name || '빌딩명 미확인'}</div>
           <div class="sr-addr">${item.roadAddr || item.jibunAddr || '-'}</div>
-          ${item.areaPy ? `<div class="sr-meta">연면적 ${Number(item.areaPy).toLocaleString()}평 · ${item.floors || '-'}</div>` : ''}
+          ${item.areaPy ? `<div class="sr-meta">연면적 ${Number(item.areaPy).toLocaleString()}평 · ${floorsDisplay || '-'}</div>` : ''}
         </div>
-        ${item.grade ? `<span class="sr-grade ${gradeClass}">${item.grade}</span>` : ''}
+        ${gradeDisplay ? `<span class="sr-grade ${gradeDisplay.toLowerCase()}">${gradeDisplay}</span>` : ''}
       </div>
     `;
   }).join('');
@@ -1660,6 +1669,12 @@ async function searchPortalDB(query) {
         if (!areaPy && data.totalArea) areaPy = parseFloat(data.totalArea) / 3.3058;
         if (!areaPy && data.gfa) areaPy = parseFloat(data.gfa) / 3.3058;
 
+        // floors 안전 처리
+        let floors = data.floors || data.floorInfo || '';
+        if (typeof floors === 'object') {
+          floors = `B${floors.underground || floors.ugrnd || 0}/F${floors.ground || floors.grnd || 0}`;
+        }
+
         results.push({
           source: 'portal',
           id,
@@ -1670,8 +1685,8 @@ async function searchPortalDB(query) {
           lng: data.coordinates?.lng || 0,
           areaPy: areaPy ? Math.round(areaPy) : 0,
           areaSqm: data.totalArea || data.gfa || 0,
-          grade: areaPy ? calcGrade(areaPy) : (data.grade || ''),
-          floors: data.floors || data.floorInfo || '',
+          grade: areaPy ? calcGrade(areaPy) : (data.grade && typeof data.grade === 'string' ? data.grade : ''),
+          floors,
           region: data.region || '',
           score,
           raw: data
@@ -1819,15 +1834,29 @@ function selectSearchResult(idx) {
   // 선택된 빌딩 카드 표시
   const card = document.getElementById('selectedBuildingCard');
   card.style.display = '';
+
+  // floors가 객체일 수 있음
+  let floorsStr = '';
+  if (item.floors) {
+    if (typeof item.floors === 'object') {
+      floorsStr = `B${item.floors.underground || item.floors.ugrnd || 0}/F${item.floors.ground || item.floors.grnd || 0}`;
+    } else {
+      floorsStr = String(item.floors);
+    }
+  }
+
+  // grade가 객체일 수 있음
+  const gradeStr = item.grade && typeof item.grade === 'string' ? item.grade : (item.grade ? calcGrade(item.areaPy) : '');
+
   card.innerHTML = `
     <div class="selected-building-card">
       <div class="sbc-name">${item.name || '빌딩명 미확인'}</div>
       <div class="sbc-addr">📍 ${item.roadAddr || item.jibunAddr}</div>
       <div class="sbc-badges">
         ${item.source === 'portal' ? '<span class="sbc-badge" style="background:#dcfce7;color:#166534">✓ Portal 등록</span>' : ''}
-        ${item.grade ? `<span class="sbc-badge" style="background:#dbeafe;color:#1e40af">등급: ${item.grade}</span>` : ''}
+        ${gradeStr ? `<span class="sbc-badge" style="background:#dbeafe;color:#1e40af">등급: ${gradeStr}</span>` : ''}
         ${item.areaPy ? `<span class="sbc-badge" style="background:#f1f5f9;color:#334155">연면적: ${Number(item.areaPy).toLocaleString()}평</span>` : ''}
-        ${item.floors ? `<span class="sbc-badge" style="background:#fef3c7;color:#92400e">${item.floors}</span>` : ''}
+        ${floorsStr ? `<span class="sbc-badge" style="background:#fef3c7;color:#92400e">${floorsStr}</span>` : ''}
       </div>
     </div>
   `;
