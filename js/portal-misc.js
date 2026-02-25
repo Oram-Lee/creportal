@@ -164,28 +164,67 @@ export async function refreshBuildingLedger() {
     }
     
     const b = state.selectedBuilding;
-    const address = b.address || b.addressJibun || '';
+    const roadAddr  = (b.address || '').trim();
+    const jibunAddr = (b.addressJibun || '').trim();
     
-    if (!address) {
+    if (!roadAddr && !jibunAddr) {
         showToast('주소 정보가 없습니다', 'error');
         return;
     }
     
     showToast('건축물대장 정보를 조회 중...', 'info');
     
+    // ★ 도로명 → 지번 순서로 시도하는 헬퍼
+    async function trySearch(addr) {
+        const resp = await fetch(`${LEDGER_API_URL}/api/building-register/search?address=${encodeURIComponent(addr)}`);
+        return await resp.json();
+    }
+    
     try {
-        const response = await fetch(`${LEDGER_API_URL}/api/building-register/search?address=${encodeURIComponent(address)}`);
-        const data = await response.json();
+        // 1차: 도로명 주소로 시도
+        let data = null;
+        let usedAddress = '';
         
-        console.log('건축물대장 API 응답:', data);
+        if (roadAddr) {
+            data = await trySearch(roadAddr);
+            usedAddress = roadAddr;
+            console.log('건축물대장 API 응답 (도로명):', data);
+        }
         
-        if (!data.success || !data.results || data.results.length === 0) {
+        // 결과 없거나 buildingInfo가 null인 경우 → 지번 주소로 2차 시도
+        const hasValidResult = data?.success && data?.results?.length > 0 
+            && data.results.some(r => r.buildingInfo);
+        
+        if (!hasValidResult && jibunAddr && jibunAddr !== roadAddr) {
+            console.log('도로명 주소 결과 부족 → 지번 주소로 재시도:', jibunAddr);
+            const jibunData = await trySearch(jibunAddr);
+            console.log('건축물대장 API 응답 (지번):', jibunData);
+            
+            // 지번 결과가 더 나으면 교체
+            const jibunHasInfo = jibunData?.success && jibunData?.results?.length > 0
+                && jibunData.results.some(r => r.buildingInfo);
+            if (jibunHasInfo || (!data?.success || !data?.results?.length)) {
+                data = jibunData;
+                usedAddress = jibunAddr;
+                console.log('✅ 지번 주소 결과 사용');
+            }
+        }
+        
+        // 도로명도 없고 지번만 있는 경우
+        if (!data && jibunAddr) {
+            data = await trySearch(jibunAddr);
+            usedAddress = jibunAddr;
+            console.log('건축물대장 API 응답 (지번 only):', data);
+        }
+        
+        if (!data?.success || !data?.results || data.results.length === 0) {
             showToast('건축물대장 정보를 찾을 수 없습니다', 'warning');
             throw new Error('no results');
         }
         
         // 첫 번째 결과 사용 (또는 빌딩명이 일치하는 결과 찾기)
-        let selectedResult = data.results[0];
+        // ★ buildingInfo가 있는 결과를 우선 선택
+        let selectedResult = data.results.find(r => r.buildingInfo) || data.results[0];
         
         // 빌딩명으로 매칭 시도
         if (data.results.length > 1 && b.name) {
@@ -294,8 +333,11 @@ export async function refreshBuildingLedger() {
         showLedgerCompareModalPortal(changes, updateData, b.id);
         
     } catch (error) {
-        console.error('건축물대장 조회 오류:', error);
-        showToast('건축물대장 조회 중 오류가 발생했습니다', 'error');
+        const expectedErrors = ['no results', 'no changes', 'buildingInfo null — 로딩 오버레이 해제용'];
+        if (!expectedErrors.includes(error.message)) {
+            console.error('건축물대장 조회 오류:', error);
+            showToast('건축물대장 조회 중 오류가 발생했습니다', 'error');
+        }
     }
 }
 
