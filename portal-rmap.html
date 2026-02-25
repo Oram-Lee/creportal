@@ -910,16 +910,18 @@ body {
       <!-- STEP 2: 기준 빌딩 -->
       <div class="step-panel" id="step-panel-2">
         <div class="form-group">
-          <label class="form-label">기준 빌딩 주소 <span>*</span></label>
+          <label class="form-label">기준 빌딩 검색 <span>*</span></label>
           <div class="addr-search-wrap">
             <input type="text" class="form-input" id="buildingAddress"
-              placeholder="예) 서울 강남구 테헤란로 152"
+              placeholder="도로명 주소 또는 빌딩명 입력"
               onkeydown="if(event.key==='Enter') searchBuilding()">
             <button class="btn-addr-search" onclick="searchBuilding()">검색</button>
           </div>
-          <p class="form-hint">도로명 주소를 입력하고 검색 버튼을 누르세요</p>
+          <p class="form-hint">도로명 주소 또는 빌딩명을 입력하세요 (예: 강남파이낸스센터, 서울 강남구 테헤란로 152)</p>
         </div>
         <div class="addr-result" id="addrResult"></div>
+        <!-- 복수 후보 목록 -->
+        <div id="matchCandidates" style="display:none; margin-top:8px;"></div>
         <div class="form-group" id="buildingNameGroup" style="display:none">
           <label class="form-label">빌딩명 확인</label>
           <input type="text" class="form-input" id="buildingNameInput" placeholder="빌딩명 입력">
@@ -928,32 +930,77 @@ body {
 
       <!-- STEP 3: 분석 범위 -->
       <div class="step-panel" id="step-panel-3">
+        <!-- 범위 모드 토글 -->
         <div class="form-group">
-          <label class="form-label">분석 반경</label>
-          <div class="radius-btns" id="radiusBtns">
-            <button class="radius-btn active" data-val="500" onclick="selectRadius(this)">500m</button>
-            <button class="radius-btn" data-val="1000" onclick="selectRadius(this)">1km</button>
-            <button class="radius-btn" data-val="2000" onclick="selectRadius(this)">2km</button>
-            <button class="radius-btn" data-val="3000" onclick="selectRadius(this)">3km</button>
+          <label class="form-label">분석 범위</label>
+          <div class="radius-btns">
+            <button class="radius-btn active" data-scope="radius" onclick="selectScope(this,'radius')">📍 반경 기준</button>
+            <button class="radius-btn" data-scope="district" onclick="selectScope(this,'district')">🗺️ 권역 전체</button>
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">권역</label>
+
+        <!-- 반경 기준 옵션 -->
+        <div id="scopeRadiusPanel">
+          <div class="form-group">
+            <label class="form-label">반경 설정</label>
+            <div class="radius-btns" id="radiusBtns">
+              <button class="radius-btn active" data-val="500" onclick="selectRadius(this)">500m</button>
+              <button class="radius-btn" data-val="1000" onclick="selectRadius(this)">1km</button>
+              <button class="radius-btn" data-val="2000" onclick="selectRadius(this)">2km</button>
+              <button class="radius-btn" data-val="3000" onclick="selectRadius(this)">3km</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 권역 전체 옵션 -->
+        <div id="scopeDistrictPanel" style="display:none">
+          <div class="form-group">
+            <label class="form-label">권역 선택</label>
+            <div class="radius-btns" id="districtBtns">
+              <button class="radius-btn" data-val="GBD" onclick="selectDistrictBtn(this)">GBD (강남)</button>
+              <button class="radius-btn" data-val="CBD" onclick="selectDistrictBtn(this)">CBD (도심)</button>
+              <button class="radius-btn" data-val="YBD" onclick="selectDistrictBtn(this)">YBD (여의도)</button>
+              <button class="radius-btn" data-val="ETC" onclick="selectDistrictBtn(this)">기타 (분당·판교·기타)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 공통: 권역 (반경 모드일 때만 표시) -->
+        <div class="form-group" id="districtSelectGroup">
+          <label class="form-label">리포트 권역 (시장 분석 기준)</label>
           <select class="form-select" id="districtSelect">
             <option value="GBD">GBD (강남권역)</option>
             <option value="CBD">CBD (도심권역)</option>
             <option value="YBD">YBD (여의도권역)</option>
-            <option value="BBD">BBD (분당·기타)</option>
+            <option value="ETC">기타 (분당·판교·기타)</option>
           </select>
         </div>
+
+        <!-- 빌딩 등급 필터 -->
         <div class="form-group">
-          <label class="form-label">빌딩 규모 필터</label>
-          <select class="form-select" id="buildingGradeSelect">
-            <option value="">전체</option>
-            <option value="A">A급 이상</option>
-            <option value="B">B급 이상</option>
-            <option value="prime">프라임</option>
-          </select>
+          <label class="form-label">빌딩 등급</label>
+          <div class="radius-btns" id="gradeBtns">
+            <button class="radius-btn active" data-grade="all" onclick="toggleGrade(this)">전체</button>
+            <button class="radius-btn" data-grade="Prime" onclick="toggleGrade(this)">Prime</button>
+            <button class="radius-btn" data-grade="A" onclick="toggleGrade(this)">A</button>
+            <button class="radius-btn" data-grade="B" onclick="toggleGrade(this)">B</button>
+            <button class="radius-btn" data-grade="C" onclick="toggleGrade(this)">C</button>
+            <button class="radius-btn" data-grade="D" onclick="toggleGrade(this)">D</button>
+          </div>
+        </div>
+
+        <!-- 추가 빌딩 직접 선택 -->
+        <div class="form-group">
+          <label class="form-label">비교 빌딩 추가 <span style="font-weight:normal;color:var(--muted)">(선택)</span></label>
+          <p class="form-hint">다른 권역이나 반경 밖의 빌딩을 추가로 포함합니다</p>
+          <div class="addr-search-wrap">
+            <input type="text" class="form-input" id="addBuildingSearch"
+              placeholder="빌딩명 검색 (예: 파크원타워)"
+              onkeydown="if(event.key==='Enter') searchAddBuilding()">
+            <button class="btn-addr-search" onclick="searchAddBuilding()">추가</button>
+          </div>
+          <div id="addBuildingResults" style="margin-top:6px;"></div>
+          <div id="addedBuildingTags" style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;"></div>
         </div>
       </div>
 
@@ -1071,9 +1118,14 @@ const BACKEND = 'https://portal-dsyl.onrender.com';
 let currentStep   = 1;
 let selectedMode  = '';
 let selectedRadius = 500;
+let selectedScope  = 'radius';   // 'radius' or 'district'
+let selectedGrades = ['all'];    // ['all'] or ['Prime','A','B',...]
+let selectedDistrictBtn = '';     // 권역 전체 모드에서 선택한 권역
+let addedBuildings = [];          // 직접 추가한 빌딩 목록
 let reportParams  = {};
-let reportHistory = [];   // 생성된 리포트 목록 (로컬 임시 저장)
+let reportHistory = [];
 let currentReport = null;
+let _allBuildings = null;         // Firebase buildings 캐시
 const tags = { competitor: [], compBuilding: [] };
 
 // ===== Auth (crePortalUser 기반 — portal.html과 동일 방식) =====
@@ -1103,6 +1155,10 @@ function resetModal() {
   currentStep  = 1;
   selectedMode = '';
   selectedRadius = 500;
+  selectedScope  = 'radius';
+  selectedGrades = ['all'];
+  selectedDistrictBtn = '';
+  addedBuildings = [];
   reportParams = {};
   tags.competitor  = [];
   tags.compBuilding = [];
@@ -1110,6 +1166,9 @@ function resetModal() {
   ['card-TR','card-LR'].forEach(id => document.getElementById(id).classList.remove('selected','lr-mode'));
   document.getElementById('buildingAddress').value = '';
   document.getElementById('addrResult').classList.remove('show');
+  document.getElementById('addrResult').innerHTML = '';
+  document.getElementById('matchCandidates').style.display = 'none';
+  document.getElementById('matchCandidates').innerHTML = '';
   document.getElementById('buildingNameGroup').style.display = 'none';
   document.getElementById('clientCompany').value  = '';
   document.getElementById('clientIndustry').value = '';
@@ -1117,6 +1176,9 @@ function resetModal() {
   document.getElementById('desiredAreaMax').value = '';
   document.getElementById('lrClientName').value   = '';
   document.getElementById('targetIndustry').value = '';
+  document.getElementById('addBuildingSearch').value = '';
+  document.getElementById('addBuildingResults').innerHTML = '';
+  document.getElementById('addedBuildingTags').innerHTML = '';
   renderTags('competitor');
   renderTags('compBuilding');
 
@@ -1200,77 +1262,306 @@ function updateStep4Fields() {
   document.getElementById('lr-fields').style.display = selectedMode === 'LR' ? '' : 'none';
 }
 
-// ===== 빌딩 주소 검색 (카카오) =====
+// ===== Firebase buildings 캐시 로드 =====
+async function loadAllBuildings() {
+  if (_allBuildings) return _allBuildings;
+  try {
+    const snap = await db.ref('buildings').once('value');
+    _allBuildings = snap.val() || {};
+    return _allBuildings;
+  } catch { return {}; }
+}
+
+// ===== 빌딩 검색 (Firebase DB + 건축물대장 API 통합) =====
 async function searchBuilding() {
-  const addr = document.getElementById('buildingAddress').value.trim();
-  if (!addr) return;
+  const query = document.getElementById('buildingAddress').value.trim();
+  if (!query) return;
 
-  const geocoder = new kakao.maps.services.Geocoder();
-  geocoder.addressSearch(addr, async (result, status) => {
-    const resultEl = document.getElementById('addrResult');
-    if (status !== kakao.maps.services.Status.OK || !result.length) {
-      resultEl.className = 'addr-result show';
-      resultEl.innerHTML = `<span style="color:var(--danger)">⚠️ 주소를 찾을 수 없습니다. 다시 확인해주세요.</span>`;
-      return;
-    }
+  const resultEl = document.getElementById('addrResult');
+  const candidatesEl = document.getElementById('matchCandidates');
+  resultEl.className = 'addr-result show';
+  resultEl.innerHTML = '<span style="color:var(--muted)">🔍 검색 중...</span>';
+  candidatesEl.style.display = 'none';
 
-    const r = result[0];
-    reportParams.buildingAddress = r.address_name;
-    reportParams.roadAddress      = r.road_address?.address_name || r.address_name;
-    reportParams.lat              = parseFloat(r.y);
-    reportParams.lng              = parseFloat(r.x);
-    reportParams.buildingName     = r.road_address?.building_name || '';
+  // 1) Firebase DB 검색 + 건축물대장 API 검색 병행
+  const [dbMatches, apiResults] = await Promise.all([
+    searchPortalDB(query),
+    searchBuildingRegisterAPI(query)
+  ]);
 
-    // CRE Portal DB 매칭 시도
-    let matchHtml = '';
-    try {
-      const matched = await matchWithPortalDB(r.road_address?.address_name || r.address_name);
-      if (matched) {
-        reportParams.buildingId   = matched.id;
-        reportParams.buildingName = matched.name || reportParams.buildingName;
-        reportParams.district     = matched.region || guessDistrict(r.address_name);
-        matchHtml = `<span class="match-badge match-full">✓ Portal 매칭</span>`;
-        document.getElementById('districtSelect').value = reportParams.district || 'GBD';
-      } else {
-        reportParams.district = guessDistrict(r.address_name);
-        matchHtml = `<span class="match-badge match-none">미등록 빌딩</span>`;
-        document.getElementById('buildingNameGroup').style.display = '';
-      }
-    } catch (e) {
-      reportParams.district = guessDistrict(r.address_name);
-    }
+  // 2) 결과 합치기 (중복 제거 — 주소 기반)
+  const allCandidates = [];
+  const seenAddrs = new Set();
 
-    resultEl.className = 'addr-result show';
-    resultEl.innerHTML = `
-      <strong>${reportParams.buildingName || '빌딩명 미확인'}</strong>${matchHtml}<br>
-      <span style="color:var(--muted);font-size:12px">${reportParams.roadAddress}</span>
-    `;
-    document.getElementById('buildingNameInput').value = reportParams.buildingName;
-  });
+  // Firebase DB 결과 우선
+  for (const m of dbMatches) {
+    const key = (m.address || m.addressJibun || m.name || '').replace(/\s+/g,'');
+    if (key) seenAddrs.add(key);
+    allCandidates.push({ ...m, source: 'portal' });
+  }
+
+  // 건축물대장 API 결과 추가
+  for (const r of apiResults) {
+    const key = (r.roadAddress || r.jibunAddress || '').replace(/\s+/g,'');
+    if (key && seenAddrs.has(key)) continue;
+    seenAddrs.add(key);
+    allCandidates.push({
+      id: null,
+      name: r.buildingName || '',
+      address: r.roadAddress || '',
+      addressJibun: r.jibunAddress || '',
+      lat: r.lat,
+      lng: r.lng,
+      bCode: r.bCode,
+      buildingInfo: r.buildingInfo,
+      source: 'api',
+      // buildingInfo에서 기본 정보 추출
+      grade: '',
+      region: guessDistrict(r.roadAddress || r.jibunAddress || ''),
+      coordinates: r.lat ? { lat: r.lat, lng: r.lng } : null
+    });
+  }
+
+  // 3) 후보 표시
+  if (allCandidates.length === 1) {
+    selectCandidateObj(allCandidates[0]);
+    return;
+  }
+
+  if (allCandidates.length > 1) {
+    resultEl.innerHTML = `<span style="color:var(--accent)">📋 ${allCandidates.length}개 후보 빌딩. 선택해주세요.</span>`;
+    candidatesEl.style.display = '';
+    candidatesEl.innerHTML = allCandidates.slice(0, 10).map((m, i) => {
+      const srcBadge = m.source === 'portal'
+        ? '<span style="font-size:10px;background:#dcfce7;color:#166534;padding:1px 5px;border-radius:3px;margin-left:4px;">Portal</span>'
+        : '<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;margin-left:4px;">건축물대장</span>';
+      const gradeStr = m.grade ? `<span style="font-size:11px;color:var(--muted);margin-left:4px;">${m.grade}</span>` : '';
+      const infoStr = m.buildingInfo 
+        ? `<span style="font-size:11px;color:var(--muted);margin-left:6px;">B${m.buildingInfo.ugrndFlrCnt||0}/F${m.buildingInfo.grndFlrCnt||0} · ${Math.round(m.buildingInfo.totArea||0).toLocaleString()}㎡</span>` 
+        : '';
+      return `
+        <div style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;"
+             onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''"
+             onclick="selectCandidateIdx(${i})">
+          <div>
+            <strong>${m.name || '이름 미확인'}</strong>${srcBadge}${gradeStr}${infoStr}<br>
+            <span style="font-size:12px;color:var(--muted)">${m.address || m.addressJibun || ''}</span>
+          </div>
+          <span style="font-size:11px;color:var(--accent)">선택 →</span>
+        </div>`;
+    }).join('');
+    window._allCandidates = allCandidates;
+    return;
+  }
+
+  // 결과 없음
+  resultEl.innerHTML = `<span style="color:var(--danger)">⚠️ 검색 결과가 없습니다. 주소 또는 빌딩명을 확인해주세요.</span>`;
+}
+
+// ===== 건축물대장 API 검색 =====
+async function searchBuildingRegisterAPI(query) {
+  try {
+    const resp = await fetch(`${BACKEND}/api/building-register/search?address=${encodeURIComponent(query)}`);
+    const data = await resp.json();
+    if (data.success && data.results) return data.results;
+    return [];
+  } catch { return []; }
+}
+
+function selectCandidateIdx(idx) {
+  selectCandidateObj(window._allCandidates[idx]);
+  document.getElementById('matchCandidates').style.display = 'none';
+}
+
+function selectCandidateObj(m) {
+  const resultEl = document.getElementById('addrResult');
+  reportParams.buildingId      = m.id || '';
+  reportParams.buildingName    = m.name || '';
+  reportParams.buildingAddress = m.address || m.addressJibun || '';
+  reportParams.roadAddress     = m.address || m.roadAddress || '';
+  reportParams.lat  = m.coordinates?.lat || m.lat || 0;
+  reportParams.lng  = m.coordinates?.lng || m.lng || 0;
+  reportParams.district = m.region || guessDistrict(m.address || m.addressJibun || '');
+  reportParams.buildingInfo = m.buildingInfo || null;
+
+  document.getElementById('districtSelect').value = reportParams.district || 'GBD';
+  document.getElementById('buildingNameInput').value = reportParams.buildingName;
+
+  // Portal 매칭이면 빌딩명 수정 불필요, 미등록이면 수정 가능
+  if (m.source === 'portal' && m.id) {
+    document.getElementById('buildingNameGroup').style.display = 'none';
+  } else {
+    document.getElementById('buildingNameGroup').style.display = '';
+  }
+
+  const srcBadge = m.source === 'portal'
+    ? '<span class="match-badge match-full">✓ Portal 매칭</span>'
+    : '<span class="match-badge" style="background:#fef3c7;color:#92400e;">📋 건축물대장</span>';
+  const gradeStr = m.grade 
+    ? `<span style="font-size:11px;background:#e0e7ff;color:#3730a3;padding:2px 6px;border-radius:3px;margin-left:4px;">${m.grade}</span>` 
+    : '';
+  const infoStr = m.buildingInfo
+    ? `<br><span style="font-size:11px;color:var(--muted)">B${m.buildingInfo.ugrndFlrCnt||0}/F${m.buildingInfo.grndFlrCnt||0} · ${Math.round(m.buildingInfo.totArea||0).toLocaleString()}㎡ · ${m.buildingInfo.mainPurpose||''}</span>`
+    : '';
+
+  resultEl.className = 'addr-result show';
+  resultEl.innerHTML = `
+    <strong>${reportParams.buildingName || '빌딩명 미확인'}</strong>${srcBadge}${gradeStr}${infoStr}<br>
+    <span style="color:var(--muted);font-size:12px">${reportParams.roadAddress || reportParams.buildingAddress}</span>
+  `;
+  document.getElementById('matchCandidates').style.display = 'none';
+}
+
+function selectCandidate(idx) {
+  selectCandidateIdx(idx);
+}
+
+// ===== Portal DB 검색 (빌딩명 + 주소 통합) =====
+async function searchPortalDB(query) {
+  const buildings = await loadAllBuildings();
+  const q = query.replace(/\s+/g, '').toLowerCase();
+  const results = [];
+
+  for (const [id, data] of Object.entries(buildings)) {
+    if (!data || typeof data !== 'object') continue;
+    const name    = (data.name || '').replace(/\s+/g, '').toLowerCase();
+    const addr    = (data.address || '').replace(/\s+/g, '').toLowerCase();
+    const addrJ   = (data.addressJibun || '').replace(/\s+/g, '').toLowerCase();
+
+    let score = 0;
+    // 빌딩명 정확 일치
+    if (name && name === q) score = 100;
+    // 빌딩명 포함
+    else if (name && (name.includes(q) || q.includes(name))) score = 80;
+    // 도로명 주소 정확 포함 (최소 10자 이상 매칭)
+    else if (addr && q.length >= 10 && (addr.includes(q) || q.includes(addr))) score = 70;
+    // 지번 주소 포함
+    else if (addrJ && q.length >= 10 && (addrJ.includes(q) || q.includes(addrJ))) score = 60;
+    // 부분 매칭 (빌딩명이 쿼리에 포함되되, 2글자 이상)
+    else if (name && name.length >= 2 && q.includes(name)) score = 50;
+
+    if (score > 0) results.push({ id, score, ...data });
+  }
+
+  return results.sort((a, b) => b.score - a.score).slice(0, 8);
 }
 
 async function matchWithPortalDB(address) {
-  try {
-    const snap = await db.ref('buildings').once('value');
-    const buildings = snap.val() || {};
-    const addrNorm = address.replace(/\s+/g,'').toLowerCase();
-
-    for (const [id, data] of Object.entries(buildings)) {
-      if (!data || typeof data !== 'object') continue;
-      const bAddr = ((data.address || '') + (data.addressJibun || '')).replace(/\s+/g,'').toLowerCase();
-      if (bAddr.includes(addrNorm) || addrNorm.includes(bAddr.slice(0,20))) {
-        return { id, ...data };
-      }
-    }
-    return null;
-  } catch { return null; }
+  const results = await searchPortalDB(address);
+  return results.length > 0 ? results[0] : null;
 }
 
 function guessDistrict(address) {
-  if (/강남|서초|역삼|삼성|선릉/.test(address)) return 'GBD';
-  if (/여의도|영등포/.test(address)) return 'YBD';
-  if (/종로|중구|을지로|광화문/.test(address)) return 'CBD';
-  return 'GBD';
+  if (/강남|서초|역삼|삼성|선릉|대치|논현/.test(address)) return 'GBD';
+  if (/여의도|영등포|마포/.test(address)) return 'YBD';
+  if (/종로|중구|을지로|광화문|명동|충무/.test(address)) return 'CBD';
+  return 'ETC';
+}
+
+// ===== Step 3: 범위 모드 토글 =====
+function selectScope(btn, scope) {
+  selectedScope = scope;
+  document.querySelectorAll('[data-scope]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('scopeRadiusPanel').style.display   = scope === 'radius' ? '' : 'none';
+  document.getElementById('scopeDistrictPanel').style.display  = scope === 'district' ? '' : 'none';
+  document.getElementById('districtSelectGroup').style.display = scope === 'radius' ? '' : 'none';
+}
+
+function selectDistrictBtn(btn) {
+  document.querySelectorAll('#districtBtns .radius-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedDistrictBtn = btn.dataset.val;
+}
+
+// ===== Step 3: 등급 토글 =====
+function toggleGrade(btn) {
+  const grade = btn.dataset.grade;
+  if (grade === 'all') {
+    selectedGrades = ['all'];
+    document.querySelectorAll('#gradeBtns .radius-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  } else {
+    // 'all' 해제
+    selectedGrades = selectedGrades.filter(g => g !== 'all');
+    document.querySelector('#gradeBtns [data-grade="all"]').classList.remove('active');
+    // 토글
+    if (selectedGrades.includes(grade)) {
+      selectedGrades = selectedGrades.filter(g => g !== grade);
+      btn.classList.remove('active');
+    } else {
+      selectedGrades.push(grade);
+      btn.classList.add('active');
+    }
+    // 아무것도 없으면 다시 전체
+    if (selectedGrades.length === 0) {
+      selectedGrades = ['all'];
+      document.querySelector('#gradeBtns [data-grade="all"]').classList.add('active');
+    }
+  }
+}
+
+// ===== Step 3: 비교 빌딩 추가 =====
+async function searchAddBuilding() {
+  const q = document.getElementById('addBuildingSearch').value.trim();
+  if (!q) return;
+  const el = document.getElementById('addBuildingResults');
+  el.innerHTML = '<span style="font-size:12px;color:var(--muted)">🔍 검색 중...</span>';
+
+  const [dbResults, apiResults] = await Promise.all([
+    searchPortalDB(q),
+    searchBuildingRegisterAPI(q)
+  ]);
+
+  // 합치기
+  const all = [];
+  const seen = new Set();
+  for (const r of dbResults) {
+    all.push({ id: r.id, name: r.name || '', address: r.address || '', grade: r.grade || '', source: 'portal' });
+    seen.add(r.id);
+  }
+  for (const r of apiResults) {
+    const key = (r.roadAddress || r.jibunAddress || '').replace(/\s+/g,'');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    all.push({ id: `api_${key}`, name: r.buildingName || '', address: r.roadAddress || r.jibunAddress || '', grade: '', source: 'api' });
+  }
+
+  if (!all.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--muted)">검색 결과가 없습니다</span>';
+    return;
+  }
+  el.innerHTML = all.slice(0, 5).map(r => {
+    const srcLabel = r.source === 'portal' ? '🟢' : '📋';
+    return `
+    <div style="padding:6px 10px;border:1px solid var(--border);border-radius:4px;margin-bottom:3px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;"
+         onclick="addBuildingToList('${r.id}','${(r.name||'').replace(/'/g,"\\'")}')">
+      <span>${srcLabel} <strong>${r.name || '?'}</strong> <span style="color:var(--muted)">${r.grade || ''} ${r.address || ''}</span></span>
+      <span style="color:var(--accent)">+ 추가</span>
+    </div>`;
+  }).join('');
+}
+
+function addBuildingToList(id, name) {
+  if (addedBuildings.find(b => b.id === id)) {
+    showToast('이미 추가된 빌딩입니다', 'info');
+    return;
+  }
+  addedBuildings.push({ id, name });
+  renderAddedBuildings();
+  document.getElementById('addBuildingSearch').value = '';
+  document.getElementById('addBuildingResults').innerHTML = '';
+}
+
+function removeAddedBuilding(id) {
+  addedBuildings = addedBuildings.filter(b => b.id !== id);
+  renderAddedBuildings();
+}
+
+function renderAddedBuildings() {
+  document.getElementById('addedBuildingTags').innerHTML = addedBuildings.map(b => `
+    <span class="tag">${b.name}<span class="tag-remove" onclick="removeAddedBuilding('${b.id}')">×</span></span>
+  `).join('');
 }
 
 // ===== 태그 입력 =====
@@ -1301,18 +1592,45 @@ function renderTags(type) {
 }
 
 // ===== 인근 빌딩 조회 =====
-async function fetchNearbyBuildings(lat, lng, radius) {
+async function fetchNearbyBuildings(lat, lng, radius, options = {}) {
   try {
-    const snap     = await db.ref('buildings').once('value');
-    const buildings = snap.val() || {};
-    const nearby   = [];
+    const buildings = await loadAllBuildings();
+    const { grades = ['all'], scope = 'radius', district = '', addedIds = [] } = options;
+    const nearby = [];
 
     for (const [id, data] of Object.entries(buildings)) {
-      if (!data?.coordinates?.lat || !data?.coordinates?.lng) continue;
-      const dist = getDistance(lat, lng, data.coordinates.lat, data.coordinates.lng);
-      if (dist <= radius) nearby.push({ id, ...data, distanceM: Math.round(dist) });
+      if (!data || typeof data !== 'object') continue;
+
+      // 등급 필터
+      if (!grades.includes('all') && grades.length > 0) {
+        const bGrade = (data.grade || '').toUpperCase();
+        const matchGrade = grades.some(g => {
+          if (g === 'Prime') return /PRIME|프라임/.test(bGrade);
+          return bGrade.startsWith(g.toUpperCase());
+        });
+        if (!matchGrade && !addedIds.includes(id)) continue;
+      }
+
+      if (scope === 'district') {
+        // 권역 전체 모드: 주소 기반으로 권역 판별
+        const bDistrict = data.region || guessDistrict(data.address || '');
+        if (bDistrict !== district && !addedIds.includes(id)) continue;
+        const dist = (data.coordinates?.lat && lat) 
+          ? getDistance(lat, lng, data.coordinates.lat, data.coordinates.lng) : 99999;
+        nearby.push({ id, ...data, distanceM: Math.round(dist) });
+      } else {
+        // 반경 모드
+        if (!data.coordinates?.lat || !data.coordinates?.lng) {
+          if (addedIds.includes(id)) nearby.push({ id, ...data, distanceM: 99999 });
+          continue;
+        }
+        const dist = getDistance(lat, lng, data.coordinates.lat, data.coordinates.lng);
+        if (dist <= radius || addedIds.includes(id)) {
+          nearby.push({ id, ...data, distanceM: Math.round(dist) });
+        }
+      }
     }
-    return nearby.sort((a, b) => a.distanceM - b.distanceM).slice(0, 20);
+    return nearby.sort((a, b) => a.distanceM - b.distanceM).slice(0, 30);
   } catch { return []; }
 }
 
@@ -1343,15 +1661,21 @@ function getDistance(lat1, lng1, lat2, lng2) {
 
 // ===== 리포트 생성 =====
 async function generateReport() {
-  const district = document.getElementById('districtSelect').value;
+  const district = selectedScope === 'district' 
+    ? selectedDistrictBtn 
+    : document.getElementById('districtSelect').value;
   const buildingName = document.getElementById('buildingNameInput').value.trim() || reportParams.buildingName || '기준 빌딩';
+
+  if (!district) { showToast('권역을 선택해주세요', 'error'); return; }
 
   const body = {
     mode:         selectedMode,
     buildingId:   reportParams.buildingId || '',
     buildingName: buildingName,
     district:     district,
-    radius:       selectedRadius,
+    radius:       selectedScope === 'radius' ? selectedRadius : 0,
+    scope:        selectedScope,
+    grades:       selectedGrades,
   };
 
   if (selectedMode === 'TR') {
@@ -1373,12 +1697,16 @@ async function generateReport() {
   showGenerating(true);
 
   try {
-    // 인근 빌딩 조회 (Firebase)
+    // 인근 빌딩 조회 (Firebase) — 등급/범위 옵션 적용
     setGenStep(1, 'active');
-    const nearbyBuildings = await fetchNearbyBuildings(reportParams.lat, reportParams.lng, selectedRadius);
-    const vacancyData     = await fetchNearbyVacancies(nearbyBuildings.map(b => b.id));
-    body.nearbyBuildings  = nearbyBuildings;
-    body.vacancyData      = vacancyData;
+    const addedIds = addedBuildings.map(b => b.id);
+    const nearbyBuildings = await fetchNearbyBuildings(
+      reportParams.lat, reportParams.lng, selectedRadius,
+      { grades: selectedGrades, scope: selectedScope, district, addedIds }
+    );
+    const vacancyData = await fetchNearbyVacancies(nearbyBuildings.map(b => b.id));
+    body.nearbyBuildings = nearbyBuildings;
+    body.vacancyData     = vacancyData;
     setGenStep(1, 'done');
 
     // 백엔드 API 호출
