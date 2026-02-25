@@ -1866,10 +1866,11 @@ async function searchPortalDB(query) {
     for (const [id, data] of Object.entries(buildings)) {
       if (!data || typeof data !== 'object') continue;
 
-      const name = (data.buildingName || data.name || '').toLowerCase();
+      const name = (data.buildingName || data.name || '').replace(/\s+/g, '').toLowerCase();
       const addr = (data.address || '').replace(/\s+/g, '').toLowerCase();
       const addrJ = (data.addressJibun || '').replace(/\s+/g, '').toLowerCase();
       const combined = name + addr + addrJ;
+      const nameRaw = (data.buildingName || data.name || '');  // 원본 이름 (표시용)
 
       let score = 0;
       // 빌딩명 매칭
@@ -1897,7 +1898,7 @@ async function searchPortalDB(query) {
         results.push({
           source: 'portal',
           id,
-          name: data.buildingName || data.name || '',
+          name: nameRaw || '',
           roadAddr: data.address || '',
           jibunAddr: data.addressJibun || '',
           lat: data.coordinates?.lat || 0,
