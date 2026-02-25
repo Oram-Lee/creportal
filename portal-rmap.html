@@ -778,6 +778,46 @@ body {
 .pill-yellow { background: #fef3c7; color: #92400e; }
 .pill-blue   { background: #dbeafe; color: #1e40af; }
 
+/* ===== 자동완성 드롭다운 ===== */
+.autocomplete-wrap { position: relative; }
+.autocomplete-list {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: var(--shadow);
+}
+.autocomplete-list.show { display: block; }
+.ac-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  border-bottom: 1px solid #f5f5f5;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ac-item:hover, .ac-item.focused { background: var(--accent-lt); }
+.ac-item .ac-name { font-weight: 600; }
+.ac-item .ac-addr { font-size: 11px; color: var(--muted); }
+.ac-item .ac-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  background: #dcfce7;
+  color: #166534;
+}
+
 /* ===== 검색 결과 리스트 ===== */
 .search-results {
   margin-top: 8px;
@@ -797,7 +837,26 @@ body {
 }
 .search-result-item:last-child { border-bottom: none; }
 .search-result-item:hover { background: var(--accent-lt); }
-.search-result-item.selected { background: #e0f0ff; border-left: 3px solid var(--accent); }
+.search-result-item.selected { background: #e0f0ff; }
+.sr-check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: transparent;
+  transition: all .15s;
+}
+.search-result-item.selected .sr-check {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 .sr-source {
   flex-shrink: 0;
   padding: 2px 6px;
@@ -892,16 +951,20 @@ body {
 .scope-content.active { display: block; }
 
 /* ===== 선택된 빌딩 정보 카드 ===== */
+.selected-buildings-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .selected-building-card {
-  margin-top: 12px;
-  padding: 14px;
+  padding: 12px;
   background: #f0f7ff;
   border: 1px solid #c3d9f0;
   border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.sbc-name { font-size: 14px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
-.sbc-addr { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-.sbc-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.sbc-main { flex: 1; min-width: 0; }
+.sbc-name { font-size: 14px; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+.sbc-addr { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.sbc-badges { display: flex; gap: 4px; flex-wrap: wrap; }
 .sbc-badge {
   display: inline-block;
   padding: 2px 8px;
@@ -909,6 +972,35 @@ body {
   font-size: 11px;
   font-weight: 600;
 }
+.sbc-actions { flex-shrink: 0; display: flex; gap: 6px; }
+.btn-register {
+  padding: 5px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: none;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn-register:hover { background: var(--accent); color: #fff; }
+.btn-remove-selected {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid #e0e0e0;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+}
+.btn-remove-selected:hover { background: #fee2e2; color: var(--danger); border-color: var(--danger); }
 
 /* ===== 반응형 ===== */
 @media (max-width: 640px) {
@@ -1043,21 +1135,27 @@ body {
       <div class="step-panel" id="step-panel-2">
         <div class="form-group">
           <label class="form-label">기준 빌딩 주소 또는 빌딩명 <span>*</span></label>
-          <div class="addr-search-wrap">
-            <input type="text" class="form-input" id="buildingAddress"
-              placeholder="예) 서울 강남구 테헤란로 152 또는 강남파이낸스센터"
-              onkeydown="if(event.key==='Enter') searchBuilding()">
-            <button class="btn-addr-search" onclick="searchBuilding()">검색</button>
+          <div class="autocomplete-wrap">
+            <div class="addr-search-wrap">
+              <input type="text" class="form-input" id="buildingAddress"
+                placeholder="예) 서울 강남구 테헤란로 152 또는 강남파이낸스센터"
+                oninput="onSearchInput()"
+                onkeydown="onSearchKeydown(event)"
+                autocomplete="off">
+              <button class="btn-addr-search" onclick="searchBuilding()">검색</button>
+            </div>
+            <!-- 자동완성 드롭다운 -->
+            <div class="autocomplete-list" id="autocompleteList"></div>
           </div>
           <p class="form-hint">도로명/지번 주소 또는 빌딩명을 입력하세요. CRE Portal DB와 건축물대장을 동시에 검색합니다.</p>
         </div>
-        <!-- 검색 결과 리스트 -->
+        <!-- 검색 결과 리스트 (복수 선택 가능) -->
         <div id="searchResultsWrap" style="display:none">
-          <label class="form-label" style="margin-bottom:4px">검색 결과 — 기준 빌딩을 선택하세요</label>
+          <label class="form-label" style="margin-bottom:4px">검색 결과 — 빌딩을 선택하세요 (복수 선택 가능)</label>
           <div class="search-results" id="searchResults"></div>
         </div>
-        <!-- 선택된 빌딩 정보 -->
-        <div id="selectedBuildingCard" style="display:none"></div>
+        <!-- 선택된 빌딩 목록 -->
+        <div class="selected-buildings-list" id="selectedBuildingsList" style="display:none"></div>
       </div>
 
       <!-- STEP 3: 분석 범위 -->
@@ -1290,7 +1388,43 @@ let reportParams  = {};
 let reportHistory = [];
 let currentReport = null;
 let _allBuildings = null;  // Firebase buildings 캐시
+let _acTimer = null;       // 자동완성 debounce 타이머
+let _acFocusIdx = -1;      // 자동완성 포커스 인덱스
+let selectedBuildings = []; // 복수 선택된 빌딩 목록
 const tags = { competitor: [], compBuilding: [] };
+
+// ===== 층수 안전 파싱 (모든 Firebase 패턴 대응) =====
+function parseFloors(data) {
+  if (!data) return '';
+
+  // 이미 문자열이면 그대로
+  if (typeof data === 'string') return data;
+  if (typeof data === 'number') return `F${data}`;
+
+  // 객체인 경우 — 모든 가능한 키 패턴 탐색
+  const keys = Object.keys(data);
+  let below = 0, above = 0;
+
+  for (const k of keys) {
+    const v = parseInt(data[k]) || 0;
+    const kl = k.toLowerCase();
+    if (/under|ugrnd|below|basement|지하|b\d*$/i.test(kl)) below = v;
+    else if (/ground|grnd|above|upper|지상|f\d*$|floor/i.test(kl)) above = v;
+    else if (keys.length === 2) {
+      // 키 2개뿐이면 첫 번째=지하, 두 번째=지상으로 추정
+      if (k === keys[0]) below = v;
+      else above = v;
+    }
+  }
+
+  // 값이 둘 다 0이면 키/값을 raw로 표시
+  if (!below && !above) {
+    const raw = keys.map(k => `${k}:${data[k]}`).join(', ');
+    return raw || '';
+  }
+
+  return below ? `B${below}/F${above}` : `F${above}`;
+}
 
 // ===== 빌딩 등급 계산 (연면적 평 기준) =====
 function calcGrade(areaPy) {
@@ -1387,6 +1521,7 @@ function resetModal() {
   selectedScope  = 'radius';
   selectedAreas  = [];
   selectedGrades = ['all'];
+  selectedBuildings = [];
   reportParams = {};
   tags.competitor  = [];
   tags.compBuilding = [];
@@ -1394,7 +1529,9 @@ function resetModal() {
   ['card-TR','card-LR'].forEach(id => document.getElementById(id).classList.remove('selected','lr-mode'));
   document.getElementById('buildingAddress').value = '';
   document.getElementById('searchResultsWrap').style.display = 'none';
-  document.getElementById('selectedBuildingCard').style.display = 'none';
+  document.getElementById('selectedBuildingsList').style.display = 'none';
+  document.getElementById('selectedBuildingsList').innerHTML = '';
+  document.getElementById('autocompleteList').classList.remove('show');
   document.getElementById('clientCompany').value  = '';
   document.getElementById('clientIndustry').value = '';
   document.getElementById('desiredAreaMin').value = '';
@@ -1469,8 +1606,8 @@ function validateStep(step) {
     if (!selectedMode) { showToast('모드를 선택해주세요', 'error'); return false; }
   }
   if (step === 2) {
-    if (!reportParams.lat || !reportParams.lng) { 
-      showToast('기준 빌딩을 검색하고 선택해주세요', 'error'); return false; 
+    if (!selectedBuildings.length) { 
+      showToast('기준 빌딩을 검색하고 1개 이상 선택해주세요', 'error'); return false; 
     }
   }
   if (step === 3) {
@@ -1515,16 +1652,107 @@ async function loadAllBuildings() {
   } catch { return {}; }
 }
 
+// ===== 자동완성 =====
+function onSearchInput() {
+  clearTimeout(_acTimer);
+  const q = document.getElementById('buildingAddress').value.trim();
+  if (q.length < 2) {
+    document.getElementById('autocompleteList').classList.remove('show');
+    return;
+  }
+  _acTimer = setTimeout(() => runAutocomplete(q), 300);
+}
+
+function onSearchKeydown(event) {
+  const list = document.getElementById('autocompleteList');
+  const items = list.querySelectorAll('.ac-item');
+
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    if (_acFocusIdx >= 0 && items[_acFocusIdx]) {
+      items[_acFocusIdx].click();
+    } else {
+      list.classList.remove('show');
+      searchBuilding();
+    }
+    return;
+  }
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    _acFocusIdx = Math.min(_acFocusIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('focused', i === _acFocusIdx));
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    _acFocusIdx = Math.max(_acFocusIdx - 1, -1);
+    items.forEach((el, i) => el.classList.toggle('focused', i === _acFocusIdx));
+  }
+  if (event.key === 'Escape') {
+    list.classList.remove('show');
+  }
+}
+
+async function runAutocomplete(q) {
+  const buildings = await loadAllBuildings();
+  const qNorm = q.replace(/\s+/g, '').toLowerCase();
+  const matches = [];
+
+  for (const [id, data] of Object.entries(buildings)) {
+    if (!data || typeof data !== 'object') continue;
+    const name = (data.buildingName || data.name || '');
+    const addr = (data.address || '');
+    const nameNorm = name.replace(/\s+/g, '').toLowerCase();
+    const addrNorm = addr.replace(/\s+/g, '').toLowerCase();
+
+    if ((nameNorm && nameNorm.includes(qNorm)) || (addrNorm.length > 5 && addrNorm.includes(qNorm))) {
+      matches.push({ id, name, addr });
+      if (matches.length >= 8) break;
+    }
+  }
+
+  const list = document.getElementById('autocompleteList');
+  _acFocusIdx = -1;
+
+  if (!matches.length) {
+    list.classList.remove('show');
+    return;
+  }
+
+  list.innerHTML = matches.map(m => `
+    <div class="ac-item" onclick="selectAutocomplete('${m.name || m.addr}')">
+      <span class="ac-badge">Portal</span>
+      <div>
+        <div class="ac-name">${m.name || '빌딩명 없음'}</div>
+        <div class="ac-addr">${m.addr}</div>
+      </div>
+    </div>
+  `).join('');
+  list.classList.add('show');
+}
+
+function selectAutocomplete(value) {
+  document.getElementById('buildingAddress').value = value;
+  document.getElementById('autocompleteList').classList.remove('show');
+  searchBuilding();
+}
+
+// 자동완성 외부 클릭 시 닫기
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.autocomplete-wrap')) {
+    document.getElementById('autocompleteList')?.classList.remove('show');
+  }
+});
+
 // ===== 빌딩 주소 검색 (크로스체크: Firebase + 건축물대장) =====
 async function searchBuilding() {
   const query = document.getElementById('buildingAddress').value.trim();
   if (!query) return;
 
+  document.getElementById('autocompleteList').classList.remove('show');
   const wrap = document.getElementById('searchResultsWrap');
   const list = document.getElementById('searchResults');
   wrap.style.display = '';
   list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted)">🔍 검색 중...</div>';
-  document.getElementById('selectedBuildingCard').style.display = 'none';
 
   // 1) 카카오 주소 검색
   const kakaoResults = await kakaoAddressSearch(query);
@@ -1537,13 +1765,11 @@ async function searchBuilding() {
     const fullAddr = kakaoResults[0].road_address?.address_name || kakaoResults[0].address_name;
     if (fullAddr && fullAddr !== query) {
       const portalResults2 = await searchPortalDB(fullAddr);
-      // 기존 결과와 병합 (중복 제거)
       const existingIds = new Set(portalResults.map(r => r.id));
       portalResults2.forEach(r => {
         if (!existingIds.has(r.id)) portalResults.push(r);
       });
     }
-    // 지번 주소로도 재검색
     const jibunAddr = kakaoResults[0].address_name;
     if (jibunAddr && jibunAddr !== query && jibunAddr !== (kakaoResults[0].road_address?.address_name || '')) {
       const portalResults3 = await searchPortalDB(jibunAddr);
@@ -1552,7 +1778,6 @@ async function searchBuilding() {
         if (!existingIds2.has(r.id)) portalResults.push(r);
       });
     }
-    // 재정렬 후 상위만
     portalResults.sort((a, b) => b.score - a.score);
     portalResults = portalResults.slice(0, 10);
   }
@@ -1571,38 +1796,35 @@ async function searchBuilding() {
     return;
   }
 
-  // 5) 결과 렌더링
-  list.innerHTML = merged.map((item, idx) => {
-    const gradeClass = (item.grade && typeof item.grade === 'string') ? item.grade.toLowerCase() : '';
+  // 5) 결과 렌더링 (복수 선택 가능, 체크박스)
+  window._searchResults = merged;
+  renderSearchResults(merged);
+
+  // 1개만 있으면 자동 선택
+  if (merged.length === 1) toggleSearchResult(0);
+}
+
+function renderSearchResults(items) {
+  const list = document.getElementById('searchResults');
+  list.innerHTML = items.map((item, idx) => {
     const sourceClass = item.source === 'portal' ? 'portal' : 'ledger';
-    const sourceLabel = item.source === 'portal' ? 'Portal' : '건축물대장';
-    let floorsDisplay = '';
-    if (item.floors) {
-      if (typeof item.floors === 'object') {
-        floorsDisplay = `B${item.floors.underground || item.floors.ugrnd || 0}/F${item.floors.ground || item.floors.grnd || 0}`;
-      } else {
-        floorsDisplay = String(item.floors);
-      }
-    }
+    const sourceLabel = item.source === 'portal' ? 'Portal' : (item.source === 'ledger' ? '건축물대장' : '주소');
+    const floorsStr = parseFloors(item.floors);
     const gradeDisplay = item.grade && typeof item.grade === 'string' ? item.grade : (item.areaPy ? calcGrade(item.areaPy) : '');
+    const isSelected = selectedBuildings.some(b => b._searchIdx === idx);
     return `
-      <div class="search-result-item" onclick="selectSearchResult(${idx})" data-idx="${idx}">
+      <div class="search-result-item ${isSelected ? 'selected' : ''}" onclick="toggleSearchResult(${idx})" data-idx="${idx}">
+        <div class="sr-check">✓</div>
         <span class="sr-source ${sourceClass}">${sourceLabel}</span>
         <div class="sr-info">
           <div class="sr-name">${item.name || '빌딩명 미확인'}</div>
           <div class="sr-addr">${item.roadAddr || item.jibunAddr || '-'}</div>
-          ${item.areaPy ? `<div class="sr-meta">연면적 ${Number(item.areaPy).toLocaleString()}평 · ${floorsDisplay || '-'}</div>` : ''}
+          ${item.areaPy ? `<div class="sr-meta">연면적 ${Number(item.areaPy).toLocaleString()}평 · ${floorsStr || '-'}</div>` : ''}
         </div>
         ${gradeDisplay ? `<span class="sr-grade ${gradeDisplay.toLowerCase()}">${gradeDisplay}</span>` : ''}
       </div>
     `;
   }).join('');
-
-  // 검색 결과를 전역에 저장
-  window._searchResults = merged;
-
-  // 1개만 있으면 자동 선택
-  if (merged.length === 1) selectSearchResult(0);
 }
 
 // ===== 카카오 주소 검색 =====
@@ -1670,10 +1892,7 @@ async function searchPortalDB(query) {
         if (!areaPy && data.gfa) areaPy = parseFloat(data.gfa) / 3.3058;
 
         // floors 안전 처리
-        let floors = data.floors || data.floorInfo || '';
-        if (typeof floors === 'object') {
-          floors = `B${floors.underground || floors.ugrnd || 0}/F${floors.ground || floors.grnd || 0}`;
-        }
+        const floors = parseFloors(data.floors || data.floorInfo);
 
         results.push({
           source: 'portal',
@@ -1733,7 +1952,7 @@ async function searchBuildingLedger(kakaoResult) {
       areaPy,
       areaSqm: Math.round(areaSqm),
       grade: areaPy ? calcGrade(areaPy) : '',
-      floors: info.floors || (info.grndFlrCnt ? `B${info.ugrndFlrCnt || 0}/F${info.grndFlrCnt}` : ''),
+      floors: parseFloors(info.floors) || (info.grndFlrCnt ? `B${info.ugrndFlrCnt || 0}/F${info.grndFlrCnt}` : ''),
       region: '',
       score: 50,
       raw: info
@@ -1803,63 +2022,115 @@ function mergeSearchResults(portalResults, ledgerResults, kakaoResults) {
   return merged.sort((a, b) => b.score - a.score);
 }
 
-// ===== 검색 결과 선택 =====
-function selectSearchResult(idx) {
+// ===== 검색 결과 토글 선택 (복수 선택 가능) =====
+function toggleSearchResult(idx) {
   const item = window._searchResults[idx];
   if (!item) return;
 
-  // 선택 표시
-  document.querySelectorAll('.search-result-item').forEach(el => el.classList.remove('selected'));
-  document.querySelector(`.search-result-item[data-idx="${idx}"]`)?.classList.add('selected');
-
-  // reportParams에 저장
-  reportParams.buildingId      = item.id || '';
-  reportParams.buildingName    = item.name || '';
-  reportParams.buildingAddress = item.jibunAddr || item.roadAddr;
-  reportParams.roadAddress     = item.roadAddr;
-  reportParams.lat             = item.lat;
-  reportParams.lng             = item.lng;
-  reportParams.areaPy          = item.areaPy;
-  reportParams.grade           = item.grade;
-  reportParams.district        = item.region || guessDistrict(item.roadAddr || item.jibunAddr);
-
-  // 권역 자동 설정
-  if (reportParams.district) {
-    const sel = document.getElementById('districtSelect');
-    if ([...sel.options].some(o => o.value === reportParams.district)) {
-      sel.value = reportParams.district;
-    }
+  const existIdx = selectedBuildings.findIndex(b => b._searchIdx === idx);
+  if (existIdx >= 0) {
+    // 선택 해제
+    selectedBuildings.splice(existIdx, 1);
+  } else {
+    // 선택 추가
+    selectedBuildings.push({ ...item, _searchIdx: idx });
   }
 
-  // 선택된 빌딩 카드 표시
-  const card = document.getElementById('selectedBuildingCard');
-  card.style.display = '';
+  // 첫 번째 선택된 빌딩을 기준 빌딩으로 설정
+  if (selectedBuildings.length > 0) {
+    const primary = selectedBuildings[0];
+    reportParams.buildingId      = primary.id || '';
+    reportParams.buildingName    = primary.name || '';
+    reportParams.buildingAddress = primary.jibunAddr || primary.roadAddr;
+    reportParams.roadAddress     = primary.roadAddr;
+    reportParams.lat             = primary.lat;
+    reportParams.lng             = primary.lng;
+    reportParams.areaPy          = primary.areaPy;
+    reportParams.grade           = primary.grade;
+    reportParams.district        = primary.region || guessDistrict(primary.roadAddr || primary.jibunAddr);
 
-  // floors가 객체일 수 있음
-  let floorsStr = '';
-  if (item.floors) {
-    if (typeof item.floors === 'object') {
-      floorsStr = `B${item.floors.underground || item.floors.ugrnd || 0}/F${item.floors.ground || item.floors.grnd || 0}`;
+    if (reportParams.district) {
+      const sel = document.getElementById('districtSelect');
+      if ([...sel.options].some(o => o.value === reportParams.district)) {
+        sel.value = reportParams.district;
+      }
+    }
+  } else {
+    reportParams = {};
+  }
+
+  // 검색 결과 리스트 체크 상태 업데이트
+  renderSearchResults(window._searchResults);
+  renderSelectedBuildings();
+}
+
+function removeSelectedBuilding(idx) {
+  const bIdx = selectedBuildings.findIndex(b => b._searchIdx === idx);
+  if (bIdx >= 0) {
+    selectedBuildings.splice(bIdx, 1);
+    if (selectedBuildings.length > 0) {
+      const primary = selectedBuildings[0];
+      reportParams.buildingId   = primary.id || '';
+      reportParams.buildingName = primary.name || '';
+      reportParams.lat          = primary.lat;
+      reportParams.lng          = primary.lng;
     } else {
-      floorsStr = String(item.floors);
+      reportParams = {};
     }
+    renderSearchResults(window._searchResults || []);
+    renderSelectedBuildings();
   }
+}
 
-  // grade가 객체일 수 있음
-  const gradeStr = item.grade && typeof item.grade === 'string' ? item.grade : (item.grade ? calcGrade(item.areaPy) : '');
-
-  card.innerHTML = `
-    <div class="selected-building-card">
-      <div class="sbc-name">${item.name || '빌딩명 미확인'}</div>
-      <div class="sbc-addr">📍 ${item.roadAddr || item.jibunAddr}</div>
-      <div class="sbc-badges">
-        ${item.source === 'portal' ? '<span class="sbc-badge" style="background:#dcfce7;color:#166534">✓ Portal 등록</span>' : ''}
-        ${gradeStr ? `<span class="sbc-badge" style="background:#dbeafe;color:#1e40af">등급: ${gradeStr}</span>` : ''}
-        ${item.areaPy ? `<span class="sbc-badge" style="background:#f1f5f9;color:#334155">연면적: ${Number(item.areaPy).toLocaleString()}평</span>` : ''}
-        ${floorsStr ? `<span class="sbc-badge" style="background:#fef3c7;color:#92400e">${floorsStr}</span>` : ''}
+function renderSelectedBuildings() {
+  const container = document.getElementById('selectedBuildingsList');
+  if (!selectedBuildings.length) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+    return;
+  }
+  container.style.display = '';
+  container.innerHTML = selectedBuildings.map((item, i) => {
+    const floorsStr = parseFloors(item.floors);
+    const gradeStr = item.grade && typeof item.grade === 'string' ? item.grade : (item.areaPy ? calcGrade(item.areaPy) : '');
+    const isPortal = item.source === 'portal';
+    return `
+      <div class="selected-building-card">
+        <div class="sbc-main">
+          <div class="sbc-name">${i === 0 ? '⭐ ' : ''}${item.name || '빌딩명 미확인'}${i === 0 ? ' (기준)' : ''}</div>
+          <div class="sbc-addr">📍 ${item.roadAddr || item.jibunAddr}</div>
+          <div class="sbc-badges">
+            ${isPortal ? '<span class="sbc-badge" style="background:#dcfce7;color:#166534">✓ Portal 등록</span>' : '<span class="sbc-badge" style="background:#fee2e2;color:#991b1b">미등록</span>'}
+            ${gradeStr ? `<span class="sbc-badge" style="background:#dbeafe;color:#1e40af">${gradeStr}</span>` : ''}
+            ${item.areaPy ? `<span class="sbc-badge" style="background:#f1f5f9;color:#334155">${Number(item.areaPy).toLocaleString()}평</span>` : ''}
+            ${floorsStr ? `<span class="sbc-badge" style="background:#fef3c7;color:#92400e">${floorsStr}</span>` : ''}
+          </div>
+        </div>
+        <div class="sbc-actions">
+          ${!isPortal ? `<button class="btn-register" onclick="event.stopPropagation(); openRegisterBuilding(${item._searchIdx})" title="CRE Portal에 등록">+ 등록</button>` : ''}
+          <button class="btn-remove-selected" onclick="event.stopPropagation(); removeSelectedBuilding(${item._searchIdx})" title="선택 해제">×</button>
+        </div>
       </div>
-    </div>
-  `;
+    `;
+  }).join('');
+}
+
+// ===== 미등록 빌딩 → CRE Portal 등록 (새 탭) =====
+function openRegisterBuilding(searchIdx) {
+  const item = window._searchResults[searchIdx];
+  if (!item) return;
+  // 빌딩 등록 페이지로 새 탭 오픈 (주소, 빌딩명 파라미터 전달)
+  const params = new URLSearchParams({
+    action: 'register',
+    name: item.name || '',
+    address: item.roadAddr || '',
+    addressJibun: item.jibunAddr || '',
+    areaSqm: item.areaSqm || '',
+    floors: parseFloors(item.floors) || '',
+    source: item.source || ''
+  });
+  window.open(`portal.html?${params.toString()}`, '_blank');
+  showToast('빌딩 등록 페이지가 새 탭에서 열렸습니다');
 }
 
 function guessDistrict(address) {
@@ -1996,6 +2267,9 @@ async function generateReport() {
     grades:       selectedGrades,
     areas:        selectedAreas,
     sortBy:       document.getElementById('sortBy')?.value || 'distance',
+    selectedBuildings: selectedBuildings.map(b => ({
+      id: b.id, name: b.name, roadAddr: b.roadAddr, areaPy: b.areaPy, grade: b.grade, source: b.source
+    })),
   };
 
   if (selectedMode === 'TR') {
