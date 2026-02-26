@@ -2904,79 +2904,127 @@
         function mergeMultiPageBuildings(pages) {
             if (!pages || pages.length === 0) return pages;
             
-            console.log('=== MULTI-PAGE MERGE STARTED ===');
-            const merged = [];
-            let i = 0;
+            console.log('=== MULTI-PAGE MERGE v3 (경계 기반) ===');
             
-            while (i < pages.length) {
-                const current = pages[i];
-                const currentName = current.buildingName || '';
-                const currentVacancies = current.vacancies || [];
-                const hasVacancies = currentVacancies.length > 0;
+            // ★ Step 1: 빌딩명이 있는 페이지를 경계점(boundary)으로 식별
+            // 경계점 = 새로운 빌딩이 시작되는 페이지
+            const boundaries = []; // [{startIdx, buildingName, ...}]
+            
+            for (let i = 0; i < pages.length; i++) {
+                const page = pages[i];
+                const name = page.buildingName || '';
                 
-                // 다음 페이지 확인
-                if (i + 1 < pages.length) {
-                    const next = pages[i + 1];
-                    const nextName = next.buildingName || '';
-                    const nextVacancies = next.vacancies || [];
-                    const nextHasVacancies = nextVacancies.length > 0;
-                    
-                    // 빌딩명 유사도 체크
-                    const namesSimilar = areBuildingNamesSimilar(currentName, nextName);
-                    
-                    // 병합 조건:
-                    // 1. 현재 공실 없고, 다음에 공실 있고, 빌딩명 유사
-                    // 2. 같은 빌딩명의 연속 페이지
-                    let shouldMerge = false;
-                    
-                    if (currentName && !hasVacancies && nextHasVacancies && namesSimilar) {
-                        shouldMerge = true;
-                        console.log(`[Merge Case A] P${current.pageNum} (0 vacancies) + P${next.pageNum} (${nextVacancies.length} vacancies)`);
-                    } else if (currentName && nextName && namesSimilar && nextHasVacancies) {
-                        shouldMerge = true;
-                        console.log(`[Merge Case B] P${current.pageNum} + P${next.pageNum} (same building: ${currentName})`);
-                    } else if (currentName && !nextName && nextHasVacancies) {
-                        shouldMerge = true;
-                        console.log(`[Merge Case C] P${current.pageNum} + P${next.pageNum} (next has no name)`);
-                    }
-                    
-                    if (shouldMerge) {
-                        // 병합 실행
-                        const mergedPage = { ...current };
-                        
-                        // 주소 보완
-                        if (!mergedPage.address && next.address) {
-                            mergedPage.address = next.address;
-                        }
-                        
-                        // 공실 합치기
-                        const existingFloors = new Set((mergedPage.vacancies || []).map(v => v.floor));
-                        mergedPage.vacancies = [...(mergedPage.vacancies || [])];
-                        
-                        for (const vacancy of nextVacancies) {
-                            if (!existingFloors.has(vacancy.floor)) {
-                                mergedPage.vacancies.push(vacancy);
-                            }
-                        }
-                        
-                        mergedPage.mergedPages = [current.pageNum, next.pageNum];
-                        merged.push(mergedPage);
-                        i += 2; // 두 페이지 건너뛰기
+                if (!name) continue;
+                
+                // 이전 경계의 빌딩과 같은 이름이면 경계가 아님 (같은 빌딩의 추가 페이지)
+                if (boundaries.length > 0) {
+                    const lastBoundary = boundaries[boundaries.length - 1];
+                    if (areBuildingNamesSimilar(lastBoundary.name, name)) {
+                        // 같은 빌딩 — 경계 추가 안 함
+                        console.log(`  P${page.pageNum}: "${name}" → 이전 경계 "${lastBoundary.name}"와 동일, 스킵`);
                         continue;
                     }
                 }
                 
-                // 병합 없이 그대로 추가
-                merged.push(current);
-                i++;
+                boundaries.push({ startIdx: i, name, pageNum: page.pageNum });
+                console.log(`  경계 #${boundaries.length}: P${page.pageNum} "${name}" (idx=${i})`);
+            }
+            
+            // 경계가 없으면 원본 그대로 반환
+            if (boundaries.length === 0) {
+                console.log('  경계점 없음 → 원본 반환');
+                return pages;
+            }
+            
+            // ★ Step 2: 각 경계 구간의 페이지를 그룹으로 묶기
+            const merged = [];
+            
+            for (let b = 0; b < boundaries.length; b++) {
+                const startIdx = boundaries[b].startIdx;
+                const endIdx = (b + 1 < boundaries.length) ? boundaries[b + 1].startIdx : pages.length;
+                
+                // 경계 빌딩의 기본 데이터 (첫 페이지)
+                const basePage = { ...pages[startIdx] };
+                basePage.vacancies = [...(basePage.vacancies || [])];
+                const mergedPageNums = [basePage.pageNum];
+                const existingFloors = new Set(basePage.vacancies.map(v => v.floor));
+                
+                // 경계 구간 내 나머지 페이지들을 병합
+                for (let j = startIdx + 1; j < endIdx; j++) {
+                    const page = pages[j];
+                    const pageVacancies = page.vacancies || [];
+                    
+                    // ★ 안전장치: 연속 페이지이고 공실 테이블이 있는 경우만 병합
+                    const prevPageNum = pages[j - 1]?.pageNum || 0;
+                    const isConsecutive = Math.abs((page.pageNum || 0) - prevPageNum) <= 1;
+                    
+                    if (!isConsecutive) {
+                        // 연속이 아니면 병합하지 않고 독립 항목으로 추가
+                        console.log(`  P${page.pageNum}: 비연속 → 독립 처리`);
+                        if (pageVacancies.length > 0 || page.buildingName) {
+                            merged.push(page);
+                        }
+                        continue;
+                    }
+                    
+                    if (pageVacancies.length === 0 && !page.address) {
+                        // 공실도 없고 주소 정보도 없는 페이지 → 스킵 (광고/목차 등)
+                        console.log(`  P${page.pageNum}: 공실0 + 주소없음 → 스킵`);
+                        continue;
+                    }
+                    
+                    // 주소 보완
+                    if (!basePage.address && page.address) {
+                        basePage.address = page.address;
+                    }
+                    if (!basePage.addressRoad && page.addressRoad) {
+                        basePage.addressRoad = page.addressRoad;
+                    }
+                    
+                    // 빌딩 정보 보완 (기준층, 전용률 등)
+                    if (!basePage.exclusiveRate && page.exclusiveRate) basePage.exclusiveRate = page.exclusiveRate;
+                    if (!basePage.typicalFloorArea && page.typicalFloorArea) basePage.typicalFloorArea = page.typicalFloorArea;
+                    if (!basePage.nearbyStation && page.nearbyStation) basePage.nearbyStation = page.nearbyStation;
+                    
+                    // 공실 합치기 (층 중복 방지)
+                    for (const vacancy of pageVacancies) {
+                        if (!existingFloors.has(vacancy.floor)) {
+                            basePage.vacancies.push(vacancy);
+                            existingFloors.add(vacancy.floor);
+                        }
+                    }
+                    
+                    // basePricing 보완
+                    if (!basePage.basePricing?.single?.rentPy && page.basePricing?.single?.rentPy) {
+                        basePage.basePricing = page.basePricing;
+                    }
+                    
+                    mergedPageNums.push(page.pageNum);
+                }
+                
+                if (mergedPageNums.length > 1) {
+                    basePage.mergedPages = mergedPageNums;
+                    console.log(`  ✅ 병합: "${basePage.buildingName}" ← P${mergedPageNums.join(',')} (${basePage.vacancies.length}개 공실)`);
+                }
+                
+                merged.push(basePage);
+            }
+            
+            // ★ Step 3: 첫 번째 경계 이전의 이름없는 페이지 처리 (독립 항목으로)
+            for (let i = 0; i < boundaries[0].startIdx; i++) {
+                const page = pages[i];
+                if ((page.vacancies || []).length > 0) {
+                    console.log(`  P${page.pageNum}: 첫 경계 이전 페이지 (이름없음) → 독립 처리`);
+                    merged.unshift(page);
+                }
             }
             
             console.log(`[Result] ${pages.length} pages → ${merged.length} buildings`);
-            console.log('=== MULTI-PAGE MERGE DONE ===');
+            console.log('=== MULTI-PAGE MERGE v3 DONE ===');
             return merged;
         }
         
-        // 빌딩명 유사도 체크
+        // 빌딩명 유사도 체크 (v2 - 강화)
         function areBuildingNamesSimilar(name1, name2) {
             if (!name1 || !name2) return false;
             
@@ -2994,27 +3042,36 @@
             // 완전 일치
             if (n1 === n2) return true;
             
-            // 한쪽이 다른 쪽을 포함
-            if (n1.includes(n2) || n2.includes(n1)) return true;
+            // ★ v2: includes 체크 — 포함되는 쪽이 최소 4자 이상이어야 함
+            // "타워"(2자)가 "XX타워"를 포함하는 거짓 매칭 방지
+            const shorter = n1.length <= n2.length ? n1 : n2;
+            const longer = n1.length > n2.length ? n1 : n2;
+            if (shorter.length >= 4 && longer.includes(shorter)) return true;
             
-            // 핵심 키워드 추출
-            const extractKeywords = (name) => {
-                const keywords = [];
-                // 영문
-                const eng = name.match(/[a-zA-Z]+/g) || [];
-                keywords.push(...eng.filter(w => w.length > 2).map(w => w.toLowerCase()));
-                // 한글 (타워, 빌딩 앞)
-                const kor = name.match(/([가-힣]+)(타워|빌딩|센터|플라자)/);
-                if (kor) keywords.push(kor[1]);
-                return keywords;
+            // ★ v2: 핵심 고유명사 추출 (공통 일반명사 제외)
+            const COMMON_SUFFIXES = new Set(['타워', '빌딩', '센터', '플라자', '스퀘어', '파크', '오피스', 'tower', 'building', 'center', 'plaza', 'square', 'park', 'office']);
+            
+            const extractUniqueParts = (name) => {
+                let n = normalize(name);
+                // 공통 접미사 제거
+                for (const suffix of COMMON_SUFFIXES) {
+                    n = n.replace(new RegExp(suffix + '$', 'i'), '');
+                    n = n.replace(new RegExp(suffix, 'gi'), ' ');
+                }
+                return n.trim().replace(/\s+/g, '');
             };
             
-            const kw1 = extractKeywords(name1);
-            const kw2 = extractKeywords(name2);
+            const unique1 = extractUniqueParts(name1);
+            const unique2 = extractUniqueParts(name2);
             
-            // 키워드 겹침
-            for (const k of kw1) {
-                if (kw2.includes(k)) return true;
+            // 고유명사 부분이 3자 이상이고 일치하면 같은 빌딩
+            if (unique1.length >= 3 && unique2.length >= 3 && unique1 === unique2) return true;
+            
+            // 고유명사 포함 관계 (최소 3자)
+            if (unique1.length >= 3 && unique2.length >= 3) {
+                const uShorter = unique1.length <= unique2.length ? unique1 : unique2;
+                const uLonger = unique1.length > unique2.length ? unique1 : unique2;
+                if (uShorter.length >= 3 && uLonger.includes(uShorter)) return true;
             }
             
             return false;
