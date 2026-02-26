@@ -2976,21 +2976,12 @@ export function showStatsVacancyPopup(el, source, publishDate) {
     popup.style.left = left + 'px';
     popup.style.top = top + 'px';
     
-    // 이전 closeHandler 제거 후 새로 등록 (재오픈 버그 수정)
-    if (window._statsPopupCloseHandler) {
-        document.removeEventListener('click', window._statsPopupCloseHandler);
-    }
-    // 현재 클릭 이벤트의 timestamp 기록 — 같은 이벤트 버블링에서 닫히지 않도록
-    const openTime = Date.now();
-    window._statsPopupCloseHandler = (e) => {
-        if (Date.now() - openTime < 50) return; // 동일 이벤트 사이클 무시
-        if (!popup.contains(e.target) && !e.target.closest('td[onclick*="showStatsVacancyPopup"]')) {
-            popup.style.display = 'none';
-            document.removeEventListener('click', window._statsPopupCloseHandler);
-            window._statsPopupCloseHandler = null;
-        }
-    };
-    document.addEventListener('click', window._statsPopupCloseHandler);
+    setTimeout(() => {
+        const closeHandler = (e) => {
+            if (!popup.contains(e.target) && e.target !== el) { popup.style.display = 'none'; document.removeEventListener('click', closeHandler); }
+        };
+        document.addEventListener('click', closeHandler);
+    }, 10);
 }
 
 
@@ -3000,6 +2991,16 @@ export function refreshStatsSection() {
     showToast('통계가 갱신되었습니다', 'success');
 }
 
+
+// 외부 클릭 시 팝업 닫기 (1회 등록)
+if (!window._statsPopupListenerAdded) {
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.stats-vacancy-detail')) {
+            document.querySelectorAll('.stats-popup').forEach(p => p.style.display = 'none');
+        }
+    });
+    window._statsPopupListenerAdded = true;
+}
 
 // 탭 전환 헬퍼 (바로가기 버튼용)
 export function switchToTab(sectionName) {
