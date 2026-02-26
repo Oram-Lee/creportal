@@ -3090,6 +3090,7 @@ export function registerDetailGlobals() {
     window.openVacancyEditModal = openVacancyEditModal;
     window.closeVacancyEditModal = closeVacancyEditModal;
     window.saveVacancyEditFromModal = saveVacancyEditFromModal;
+    window.bulkUpdateVacancyPricing = bulkUpdateVacancyPricing;
     window.deleteVacancyByIdx = deleteVacancyByIdx;
     window.deleteSelectedVacancies = deleteSelectedVacancies;
     window.openTransferVacancyModalByIdx = openTransferVacancyModalByIdx;
@@ -4914,6 +4915,15 @@ export function openVacancyEditModal(idx) {
     
     state.editingVacancyIdx = idx;
     
+    // ★ 같은 출처/발행일 그룹의 공실 목록 (일괄 적용용)
+    const sameGroup = vacancies.filter(v => v.source === vacancy.source && v.publishDate === vacancy.publishDate);
+    const sameGroupCount = sameGroup.length;
+    const sameGroupFloors = sameGroup.map(v => v.floor || '-').sort((a, b) => {
+        const numA = parseInt(a.replace(/[^\d-]/g, '')) || 0;
+        const numB = parseInt(b.replace(/[^\d-]/g, '')) || 0;
+        return numA - numB;
+    });
+    
     const modalHtml = `
         <div class="modal-overlay show" id="vacancyEditModalOverlay" onclick="if(event.target===this)closeVacancyEditModal()"></div>
         <div class="modal show" id="vacancyEditModal" style="max-width: 480px; z-index: 10001;">
@@ -4975,6 +4985,61 @@ export function openVacancyEditModal(idx) {
                 <div style="margin-top: 16px; padding: 12px; background: #f8fafc; border-radius: 8px; font-size: 12px; color: #64748b;">
                     <div><strong>출처:</strong> ${vacancy.source || '-'}</div>
                     <div><strong>발행일:</strong> ${vacancy.publishDate || '-'}</div>
+                </div>
+                
+                <!-- ★ 일괄 적용 섹션 -->
+                <div style="margin-top: 16px; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                    <button onclick="document.getElementById('bulkApplySection').style.display = document.getElementById('bulkApplySection').style.display === 'none' ? 'block' : 'none'"
+                            style="width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: none; cursor: pointer; font-size: 12px; font-weight: 600; color: #92400e; text-align: left; display: flex; align-items: center; gap: 6px;">
+                        ⚡ 보증금·임대료·관리비 일괄 적용 (같은 출처/발행일 ${sameGroupCount}개층)
+                        <span style="margin-left: auto; font-size: 10px;">▼</span>
+                    </button>
+                    <div id="bulkApplySection" style="display: none; padding: 14px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px;">
+                            <div>
+                                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">보증금/평</label>
+                                <input type="text" id="bulkDeposit" placeholder="현재값 유지" 
+                                       style="width: 100%; padding: 8px; border: 1px solid #fbbf24; border-radius: 6px; font-size: 13px; box-sizing: border-box; background: #fffbeb;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">임대료/평</label>
+                                <input type="text" id="bulkRent" placeholder="현재값 유지"
+                                       style="width: 100%; padding: 8px; border: 1px solid #fbbf24; border-radius: 6px; font-size: 13px; box-sizing: border-box; background: #fffbeb;">
+                            </div>
+                            <div>
+                                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 4px;">관리비/평</label>
+                                <input type="text" id="bulkMaintenance" placeholder="현재값 유지"
+                                       style="width: 100%; padding: 8px; border: 1px solid #fbbf24; border-radius: 6px; font-size: 13px; box-sizing: border-box; background: #fffbeb;">
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 12px;">
+                            <div style="display: flex; gap: 12px; align-items: center; font-size: 12px;">
+                                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                    <input type="radio" name="bulkRange" value="all" checked onchange="document.getElementById('bulkFloorRange').style.display='none'"> 
+                                    전체 ${sameGroupCount}개층 적용
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                                    <input type="radio" name="bulkRange" value="range" onchange="document.getElementById('bulkFloorRange').style.display='flex'"> 
+                                    층 범위 지정
+                                </label>
+                            </div>
+                            <div id="bulkFloorRange" style="display: none; margin-top: 8px; align-items: center; gap: 6px;">
+                                <select id="bulkFloorFrom" style="padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
+                                    ${sameGroupFloors.map(f => `<option value="${f}">${f}</option>`).join('')}
+                                </select>
+                                <span style="font-size: 12px; color: #6b7280;">~</span>
+                                <select id="bulkFloorTo" style="padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px;">
+                                    ${sameGroupFloors.map((f, i) => `<option value="${f}" ${i === sameGroupFloors.length - 1 ? 'selected' : ''}>${f}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <button onclick="bulkUpdateVacancyPricing('${(vacancy.source || '').replace(/'/g, "\\'")}', '${vacancy.publishDate || ''}')"
+                                style="width: 100%; padding: 8px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600;">
+                            ⚡ 일괄 적용
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="form-actions" style="padding: 16px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
@@ -5099,6 +5164,108 @@ export async function saveVacancyEditFromModal() {
     } catch (error) {
         console.error('공실 수정 오류:', error);
         showToast('수정 중 오류가 발생했습니다: ' + error.message, 'error');
+    }
+}
+
+/**
+ * ★ 보증금/임대료/관리비 일괄 적용
+ */
+export async function bulkUpdateVacancyPricing(source, publishDate) {
+    const bulkDeposit = document.getElementById('bulkDeposit')?.value?.trim();
+    const bulkRent = document.getElementById('bulkRent')?.value?.trim();
+    const bulkMaintenance = document.getElementById('bulkMaintenance')?.value?.trim();
+    
+    if (!bulkDeposit && !bulkRent && !bulkMaintenance) {
+        showToast('적용할 값을 1개 이상 입력하세요', 'error');
+        return;
+    }
+    
+    const rangeMode = document.querySelector('input[name="bulkRange"]:checked')?.value || 'all';
+    const buildingId = state.selectedBuilding?.id;
+    if (!buildingId) return;
+    
+    // 같은 출처/발행일 그룹의 공실 필터
+    let targets = (state.currentDisplayedVacancies || []).filter(
+        v => v.source === source && v.publishDate === publishDate
+    );
+    
+    // 층 범위 필터
+    if (rangeMode === 'range') {
+        const fromFloor = document.getElementById('bulkFloorFrom')?.value;
+        const toFloor = document.getElementById('bulkFloorTo')?.value;
+        
+        const allFloors = targets.map(v => v.floor || '-').sort((a, b) => {
+            const numA = parseInt(a.replace(/[^\d-]/g, '')) || 0;
+            const numB = parseInt(b.replace(/[^\d-]/g, '')) || 0;
+            return numA - numB;
+        });
+        
+        const fromIdx = allFloors.indexOf(fromFloor);
+        const toIdx = allFloors.indexOf(toFloor);
+        const minIdx = Math.min(fromIdx, toIdx);
+        const maxIdx = Math.max(fromIdx, toIdx);
+        const selectedFloors = new Set(allFloors.slice(minIdx, maxIdx + 1));
+        
+        targets = targets.filter(v => selectedFloors.has(v.floor || '-'));
+    }
+    
+    if (targets.length === 0) {
+        showToast('적용 대상이 없습니다', 'error');
+        return;
+    }
+    
+    // 적용할 값 구성
+    const updateFields = {};
+    if (bulkDeposit) updateFields.depositPy = bulkDeposit;
+    if (bulkRent) updateFields.rentPy = bulkRent;
+    if (bulkMaintenance) updateFields.maintenancePy = bulkMaintenance;
+    updateFields.updatedAt = new Date().toISOString();
+    updateFields.bulkUpdated = true;
+    
+    const fieldNames = [];
+    if (bulkDeposit) fieldNames.push(`보증금 ${bulkDeposit}`);
+    if (bulkRent) fieldNames.push(`임대료 ${bulkRent}`);
+    if (bulkMaintenance) fieldNames.push(`관리비 ${bulkMaintenance}`);
+    
+    if (!confirm(`${targets.length}개층에 다음 값을 일괄 적용합니다:\n${fieldNames.join(', ')}\n\n대상층: ${targets.map(v => v.floor).join(', ')}\n\n적용하시겠습니까?`)) return;
+    
+    try {
+        const updates = {};
+        const building = state.allBuildings.find(b => b.id === buildingId);
+        
+        for (const vac of targets) {
+            let vacKey = vac._key;
+            if (!vacKey) {
+                const floor = (vac.floor || 'UNK').replace(/[\/\s\.]/g, '_');
+                const src = (vac.source || 'UNKNOWN').replace(/[\/\s\.]/g, '_');
+                const pd = (vac.publishDate || '').replace(/[\/\s\.]/g, '_');
+                vacKey = `${src}_${pd}_${floor}`;
+            }
+            
+            // Firebase 배치 업데이트 경로 구성
+            Object.entries(updateFields).forEach(([field, val]) => {
+                updates[`vacancies/${buildingId}/${vacKey}/${field}`] = val;
+            });
+            
+            // 로컬 상태도 업데이트
+            Object.assign(vac, updateFields);
+            if (building?.vacancies) {
+                const localV = building.vacancies.find(v => v._key === vacKey ||
+                    (v.source === vac.source && v.publishDate === vac.publishDate && v.floor === vac.floor));
+                if (localV) Object.assign(localV, updateFields);
+            }
+        }
+        
+        // Firebase 일괄 업데이트 (단일 네트워크 호출)
+        await update(ref(db), updates);
+        
+        showToast(`${targets.length}개층 일괄 적용 완료`, 'success');
+        closeVacancyEditModal();
+        renderDocumentSection();
+        
+    } catch (error) {
+        console.error('일괄 적용 오류:', error);
+        showToast('일괄 적용 실패: ' + error.message, 'error');
     }
 }
 
