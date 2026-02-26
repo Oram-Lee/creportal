@@ -5830,6 +5830,12 @@
             
             if (tabName === 'starred') {
                 loadFavoriteGroups().then(() => filterStarredByGroup());
+            } else {
+                // ★ 전체/지도영역 탭 복귀 시 filteredBuildings 복원
+                if (window.state) {
+                    window.state.filteredBuildings = [...(window.state.allBuildings || [])];
+                    applyListSort();
+                }
             }
         });
     });
@@ -5843,7 +5849,11 @@
         return await import('./js/portal-firebase.js');
     }
     function _currentUid() {
-        return window.state?.currentUser?.uid || window.state?.currentUser?.email || 'anonymous';
+        // ★ uid 우선, email은 Firebase 경로용으로 점(.) 치환
+        const user = window.state?.currentUser;
+        if (user?.uid) return user.uid;
+        if (user?.email) return user.email.replace(/\./g, ',');
+        return 'anonymous';
     }
     
     // 그룹 데이터 캐시
