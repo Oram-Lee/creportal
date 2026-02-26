@@ -1461,9 +1461,9 @@ function renderContactCard(c, typeIcons, typeLabels, isOurManager) {
                         ${c.notes ? `<div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; font-style: italic;">${c.notes}</div>` : ''}
                     </div>
                 </div>
-                <div class="row-actions" style="display: flex; gap: 4px;">
-                    <button class="row-action-btn" onclick="editContact('${c.id}', '${buildingId}')" title="수정">✏️</button>
-                    <button class="row-action-btn delete" onclick="deleteContact('${c.id}', '${buildingId}', '${contactName}')" title="삭제">🗑️</button>
+                <div class="contact-actions" style="display: flex; gap: 4px; flex-direction: row;">
+                    <button class="contact-action-btn edit" onclick="editContact('${c.id}', '${buildingId}')" title="수정">✏️</button>
+                    <button class="contact-action-btn delete" onclick="deleteContact('${c.id}', '${buildingId}', '${contactName}')" title="삭제">🗑️</button>
                 </div>
             </div>
         </div>
@@ -2767,7 +2767,7 @@ export function renderStatsSection() {
             const stats = calcStats(data.vacancies);
             const prevStats = data.prevVacancies.length > 0 ? calcStats(data.prevVacancies) : null;
             let vacancyRateChange = null;
-            if (stats.vacancyRate !== null && prevStats?.vacancyRate !== null) {
+            if (stats.vacancyRate !== null && prevStats && prevStats.vacancyRate !== null) {
                 vacancyRateChange = stats.vacancyRate - prevStats.vacancyRate;
             }
             companyRows.push({ source: src, publishDate: data.publishDate, prevPublishDate: data.prevPublishDate, vacancyRateChange, ...stats });
@@ -2950,10 +2950,19 @@ export function showStatsVacancyPopup(el, source, publishDate) {
         </tr>`;
     }).join('');
     
+    // 원본 이미지 URL 찾기 (pageImageUrl 또는 pdfUrl)
+    const sampleVac = filtered[0];
+    const pageImageUrl = sampleVac?.pageImageUrl || filtered.find(v => v.pageImageUrl)?.pageImageUrl || '';
+    const pdfUrl = sampleVac?.pdfUrl || filtered.find(v => v.pdfUrl)?.pdfUrl || '';
+    const originalUrl = pageImageUrl || pdfUrl;
+    
     popup.innerHTML = `
         <div style="padding:12px 14px; background:var(--bg-secondary); border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
             <div><div style="font-size:13px; font-weight:600;">${source}</div><div style="font-size:11px; color:var(--text-muted);">${publishDate} · ${filtered.length}개층</div></div>
-            <button onclick="document.getElementById('statsVacancyPopup').style.display='none'" style="background:none; border:none; cursor:pointer; font-size:16px; color:var(--text-muted);">✕</button>
+            <div style="display:flex; align-items:center; gap:6px;">
+                ${originalUrl ? `<button onclick="window.open('${originalUrl.replace(/'/g, "\\'")}', '_blank')" style="padding:3px 8px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; cursor:pointer; font-size:11px; color:#2563eb; white-space:nowrap;" title="원본 이미지 보기">📄 원본</button>` : ''}
+                <button onclick="document.getElementById('statsVacancyPopup').style.display='none'" style="background:none; border:none; cursor:pointer; font-size:16px; color:var(--text-muted);">✕</button>
+            </div>
         </div>
         <div style="overflow-y:auto; max-height:calc(60vh - 50px);">
             <table style="width:100%; border-collapse:collapse; font-size:13px;">
@@ -2980,10 +2989,9 @@ export function showStatsVacancyPopup(el, source, publishDate) {
     if (window._statsPopupCloseHandler) {
         document.removeEventListener('click', window._statsPopupCloseHandler);
     }
-    // 현재 클릭 이벤트의 timestamp 기록 — 같은 이벤트 버블링에서 닫히지 않도록
     const openTime = Date.now();
     window._statsPopupCloseHandler = (e) => {
-        if (Date.now() - openTime < 50) return; // 동일 이벤트 사이클 무시
+        if (Date.now() - openTime < 50) return;
         if (!popup.contains(e.target) && !e.target.closest('td[onclick*="showStatsVacancyPopup"]')) {
             popup.style.display = 'none';
             document.removeEventListener('click', window._statsPopupCloseHandler);
