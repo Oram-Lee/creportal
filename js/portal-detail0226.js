@@ -53,9 +53,6 @@ function formatFloorDisplay(floor) {
 if (typeof state.showDecimalArea === 'undefined') {
     state.showDecimalArea = false;
 }
-if (typeof state.showWeightedAvg === 'undefined') {
-    state.showWeightedAvg = false;
-}
 
 // ===== ★ v3.11: 공실 리스트 정렬 상태 =====
 // 기본값: 오름차순 (asc), 내림차순 (desc)
@@ -2659,7 +2656,6 @@ export function renderStatsSection() {
     const b = state.selectedBuilding;
     if (!b) return;
     
-    const showWeighted = state.showWeightedAvg || false;
     const grossFloorPy = parseFloat(b.area?.grossFloorPy || b.grossFloorPy || 0);
     let vacancies = [...(b.vacancies || [])];
     const leasingGuideVacancies = b.leasingGuideVacancies || [];
@@ -2687,34 +2683,29 @@ export function renderStatsSection() {
         });
     }
     
-    // --- 회사별 전체 기간 추출 (최신+직전 비교용) ---
-    const sourceAllPeriods = {};
+    // --- 회사별 최신월만 추출 ---
+    const sourceLatest = {};  // { source: { publishDate, vacancies: [] } }
     vacancies.forEach(v => {
         const src = v.source || '기타';
         const pd = v.publishDate || '';
-        if (!sourceAllPeriods[src]) sourceAllPeriods[src] = {};
-        if (!sourceAllPeriods[src][pd]) sourceAllPeriods[src][pd] = [];
-        sourceAllPeriods[src][pd].push(v);
+        if (!sourceLatest[src] || pd > sourceLatest[src].publishDate) {
+            sourceLatest[src] = { publishDate: pd, vacancies: [] };
+        }
     });
-    
-    const sourceLatest = {};
-    Object.entries(sourceAllPeriods).forEach(([src, periods]) => {
-        const sorted = Object.keys(periods).sort().reverse();
-        const latest = sorted[0] || '';
-        const prev = sorted[1] || null;
-        sourceLatest[src] = { 
-            publishDate: latest, 
-            vacancies: periods[latest] || [],
-            prevPublishDate: prev,
-            prevVacancies: prev ? (periods[prev] || []) : []
-        };
+    // 최신월 공실만 필터
+    vacancies.forEach(v => {
+        const src = v.source || '기타';
+        const pd = v.publishDate || '';
+        if (sourceLatest[src] && pd === sourceLatest[src].publishDate) {
+            sourceLatest[src].vacancies.push(v);
+        }
     });
     
     // _meta에서 공실없음인데 vacancies에 없는 회사도 추가
     Object.entries(vacancyMetas).forEach(([key, meta]) => {
         const src = meta.source || key.split('_')[0];
         if (meta.noVacancy && !sourceLatest[src]) {
-            sourceLatest[src] = { publishDate: meta.publishDate || '', vacancies: [], noVacancy: true, prevVacancies: [] };
+            sourceLatest[src] = { publishDate: meta.publishDate || '', vacancies: [], noVacancy: true };
         }
     });
     
@@ -2722,301 +2713,263 @@ export function renderStatsSection() {
     function calcStats(vacList) {
         const totalRentArea = vacList.reduce((sum, v) => sum + (parseFloat(v.rentArea) || 0), 0);
         const floorCount = vacList.length;
+        
+        // 공실률
         const vacancyRate = grossFloorPy > 0 ? (totalRentArea / grossFloorPy * 100) : null;
         
+        // 임대료 있는 공실만
         const withRent = vacList.filter(v => {
             const r = parseFloat(String(v.rentPy || '').replace(/[^\d.]/g, ''));
             return r > 0;
         });
         
+        // 단순평균 임대가
         let simpleAvgRent = null;
         if (withRent.length > 0) {
             const rentSum = withRent.reduce((sum, v) => sum + parseFloat(String(v.rentPy || '').replace(/[^\d.]/g, '')), 0);
             simpleAvgRent = rentSum / withRent.length;
         }
         
+        // 면적가중평균 임대가
         let weightedAvgRent = null;
         const withRentAndArea = withRent.filter(v => parseFloat(v.rentArea) > 0);
         if (withRentAndArea.length > 0) {
             const weightedSum = withRentAndArea.reduce((sum, v) => {
-                return sum + (parseFloat(String(v.rentPy || '').replace(/[^\d.]/g, '')) * parseFloat(v.rentArea));
+                const rent = parseFloat(String(v.rentPy || '').replace(/[^\d.]/g, ''));
+                const area = parseFloat(v.rentArea);
+                return sum + (rent * area);
             }, 0);
             const totalWeightArea = withRentAndArea.reduce((sum, v) => sum + parseFloat(v.rentArea), 0);
             if (totalWeightArea > 0) weightedAvgRent = weightedSum / totalWeightArea;
         }
         
-        return { totalRentArea, floorCount, vacancyRate, simpleAvgRent, weightedAvgRent, vacList };
-    }
-    
-    // --- 증감 표기 헬퍼 ---
-    function renderChange(change) {
-        if (change === null || change === undefined) return '';
-        const sign = change > 0 ? '+' : '';
-        const color = change > 0 ? '#dc2626' : change < 0 ? '#2563eb' : '#6b7280';
-        const arrow = change > 0 ? '▲' : change < 0 ? '▼' : '';
-        return `<div style="font-size: 10px; color: ${color}; margin-top: 1px;">${arrow} ${sign}${change.toFixed(2)}%p</div>`;
+        return { totalRentArea, floorCount, vacancyRate, simpleAvgRent, weightedAvgRent };
     }
     
     // --- 회사별 통계 ---
     const companyRows = [];
+    const allLatestVacancies = [];
     
     Object.entries(sourceLatest).sort((a, b) => a[0].localeCompare(b[0])).forEach(([src, data]) => {
         if (data.noVacancy) {
             companyRows.push({ source: src, publishDate: data.publishDate, noVacancy: true });
         } else {
             const stats = calcStats(data.vacancies);
-            const prevStats = data.prevVacancies.length > 0 ? calcStats(data.prevVacancies) : null;
-            let vacancyRateChange = null;
-            if (stats.vacancyRate !== null && prevStats?.vacancyRate !== null) {
-                vacancyRateChange = stats.vacancyRate - prevStats.vacancyRate;
-            }
-            companyRows.push({ source: src, publishDate: data.publishDate, prevPublishDate: data.prevPublishDate, vacancyRateChange, ...stats });
+            companyRows.push({ source: src, publishDate: data.publishDate, ...stats });
+            allLatestVacancies.push(...data.vacancies);
         }
     });
     
-    // --- 전체 평균 (회사별 수치의 산술평균) ---
-    const dataRows = companyRows.filter(r => !r.noVacancy);
-    const avgVacancyRate = dataRows.length > 0 && dataRows.some(r => r.vacancyRate !== null)
-        ? dataRows.filter(r => r.vacancyRate !== null).reduce((s, r) => s + r.vacancyRate, 0) / dataRows.filter(r => r.vacancyRate !== null).length : null;
-    const avgSimpleRent = dataRows.length > 0 && dataRows.some(r => r.simpleAvgRent !== null)
-        ? dataRows.filter(r => r.simpleAvgRent !== null).reduce((s, r) => s + r.simpleAvgRent, 0) / dataRows.filter(r => r.simpleAvgRent !== null).length : null;
-    const avgWeightedRent = dataRows.length > 0 && dataRows.some(r => r.weightedAvgRent !== null)
-        ? dataRows.filter(r => r.weightedAvgRent !== null).reduce((s, r) => s + r.weightedAvgRent, 0) / dataRows.filter(r => r.weightedAvgRent !== null).length : null;
+    // 전체 통합 통계
+    const totalStats = calcStats(allLatestVacancies);
     
     // --- 연면적 경고 ---
     const areaWarningHtml = grossFloorPy <= 0 ? `
-        <div style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-radius: 8px; border-left: 4px solid #ef4444; margin-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border-radius: 8px; border-left: 4px solid #ef4444; margin-bottom: 16px;">
             <span style="font-size: 20px;">⚠️</span>
             <div style="flex: 1;">
                 <div style="font-size: 13px; font-weight: 600; color: #991b1b;">연면적 미등록 — 공실률 계산 불가</div>
                 <div style="font-size: 12px; color: #b91c1c; margin-top: 2px;">건축물대장을 조회하여 연면적을 갱신해 주세요</div>
             </div>
             <div style="display: flex; gap: 6px;">
-                <button onclick="refreshBuildingLedger()" style="padding: 6px 14px; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap;">🔍 건축물대장 조회</button>
+                <button onclick="refreshBuildingLedger()" style="padding: 6px 14px; background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 4px;">🔍 건축물대장 조회</button>
                 <button onclick="switchToTab('info')" style="padding: 6px 14px; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; white-space: nowrap;">기본정보</button>
             </div>
         </div>
-    ` : '';
+    ` : `
+        <div style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 16px; border-left: 4px solid #3b82f6;">
+            <span style="font-size: 12px; color: var(--text-muted);">📐 연면적 기준:</span>
+            <span style="font-size: 14px; font-weight: 600; color: var(--text-primary);">${formatNumber(grossFloorPy)}평</span>
+            <span style="font-size: 11px; color: var(--text-muted);">(건축물대장)</span>
+        </div>
+    `;
     
-    // --- 가중평균 컬럼 ---
-    const weightedColHeader = showWeighted ? `<th style="padding: 10px 6px; text-align: right; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); white-space: nowrap; font-size: 12px;">임대가 평균<br><span style="font-size: 10px; font-weight: 400;">(가중평균)</span></th>` : '';
-    const colCount = showWeighted ? 4 : 3;
-    
-    // --- 테이블 행 ---
+    // --- 테이블 행 생성 ---
     const allNoVacancy = companyRows.length > 0 && companyRows.every(r => r.noVacancy);
     const hasAnyData = companyRows.length > 0;
     const docCount = (b.documents || []).length;
     
     const tableRowsHtml = hasAnyData ? companyRows.map(row => {
         if (row.noVacancy) {
-            return `<tr style="border-bottom: 1px solid var(--border-color); background: #f0fdf4;">
-                <td style="padding: 10px 8px;"><div style="font-weight: 600;">${row.source}</div><div style="font-size: 11px; color: var(--text-muted);">${row.publishDate || '-'}</div></td>
-                <td colspan="${colCount}" style="padding: 10px 8px; text-align: center;"><span style="padding: 4px 12px; background: #dcfce7; color: #166534; border-radius: 12px; font-size: 12px; font-weight: 600;">🏢 공실없음</span></td>
-            </tr>`;
+            return `
+                <tr style="border-bottom: 1px solid var(--border-color); background: #f0fdf4;">
+                    <td style="padding: 10px 8px;">
+                        <div style="font-weight: 600; color: var(--text-primary);">${row.source}</div>
+                        <div style="font-size: 11px; color: var(--text-muted);">${row.publishDate || '-'}</div>
+                    </td>
+                    <td colspan="4" style="padding: 10px 8px; text-align: center;">
+                        <span style="padding: 4px 12px; background: #dcfce7; color: #166534; border-radius: 12px; font-size: 12px; font-weight: 600;">🏢 공실없음</span>
+                    </td>
+                </tr>
+            `;
         }
-        return `<tr style="border-bottom: 1px solid var(--border-color);">
-            <td style="padding: 10px 8px;"><div style="font-weight: 600;">${row.source}</div><div style="font-size: 11px; color: var(--text-muted);">${row.publishDate || '-'}</div></td>
-            <td style="padding: 10px 8px; text-align: center; cursor: pointer; position: relative;" onclick="showStatsVacancyPopup(this, '${row.source.replace(/'/g, "\\'")}', '${row.publishDate}')" title="클릭: 층별 상세">
-                <div style="font-weight: 600; color: var(--accent-color); text-decoration: underline; text-decoration-style: dotted;">${row.floorCount}개층</div>
-                <div style="font-size: 11px; color: var(--text-muted);">${formatNumber(Math.round(row.totalRentArea))}평</div>
-            </td>
-            <td style="padding: 10px 8px; text-align: center;">
-                ${row.vacancyRate !== null ? `<span style="font-weight: 700; font-size: 15px; color: ${row.vacancyRate > 10 ? '#dc2626' : row.vacancyRate > 5 ? '#d97706' : '#16a34a'};">${row.vacancyRate.toFixed(2)}%</span>${renderChange(row.vacancyRateChange)}` : '<span style="color: var(--text-muted);">-</span>'}
-            </td>
-            <td style="padding: 10px 8px; text-align: right;">
-                ${row.simpleAvgRent !== null ? `<div style="font-weight: 600;">${formatNumber(Math.round(row.simpleAvgRent))}<span style="font-size: 11px; color: var(--text-muted);"> 원/평</span></div>` : '<span style="color: var(--text-muted);">-</span>'}
-            </td>
-            ${showWeighted ? `<td style="padding: 10px 8px; text-align: right;">
-                ${row.weightedAvgRent !== null ? `<div style="font-weight: 600; color: var(--accent-color);">${formatNumber(Math.round(row.weightedAvgRent))}<span style="font-size: 11px; color: var(--text-muted);"> 원/평</span></div>` : '<span style="color: var(--text-muted);">-</span>'}
-            </td>` : ''}
-        </tr>`;
+        return `
+            <tr style="border-bottom: 1px solid var(--border-color);">
+                <td style="padding: 10px 8px;">
+                    <div style="font-weight: 600; color: var(--text-primary);">${row.source}</div>
+                    <div style="font-size: 11px; color: var(--text-muted);">${row.publishDate || '-'}</div>
+                </td>
+                <td style="padding: 10px 8px; text-align: center;">
+                    <div style="font-weight: 600; color: var(--accent-color);">${row.floorCount}개층</div>
+                    <div style="font-size: 11px; color: var(--text-muted);">${formatNumber(Math.round(row.totalRentArea))}평</div>
+                </td>
+                <td style="padding: 10px 8px; text-align: center;">
+                    ${row.vacancyRate !== null 
+                        ? `<span style="font-weight: 700; font-size: 15px; color: ${row.vacancyRate > 10 ? '#dc2626' : row.vacancyRate > 5 ? '#d97706' : '#16a34a'};">${row.vacancyRate.toFixed(2)}%</span>` 
+                        : '<span style="color: var(--text-muted);">-</span>'}
+                </td>
+                <td style="padding: 10px 8px; text-align: right;">
+                    ${row.simpleAvgRent !== null 
+                        ? `<div style="font-weight: 600;">${formatNumber(Math.round(row.simpleAvgRent))}<span style="font-size: 11px; color: var(--text-muted);"> 원/평</span></div>` 
+                        : '<span style="color: var(--text-muted);">-</span>'}
+                </td>
+                <td style="padding: 10px 8px; text-align: right;">
+                    ${row.weightedAvgRent !== null 
+                        ? `<div style="font-weight: 600; color: var(--accent-color);">${formatNumber(Math.round(row.weightedAvgRent))}<span style="font-size: 11px; color: var(--text-muted);"> 원/평</span></div>` 
+                        : '<span style="color: var(--text-muted);">-</span>'}
+                </td>
+            </tr>
+        `;
     }).join('') : (() => {
+        // 3가지 상태 구분
         if (docCount > 0) {
-            return `<tr><td colspan="${colCount + 1}" style="padding: 30px; text-align: center;"><div style="font-size: 24px; margin-bottom: 8px;">📄</div><div style="color: #d97706; font-weight: 600; margin-bottom: 4px;">안내문은 있지만 공실 데이터가 없습니다</div><div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">안내문 탭에서 공실 정보를 확인하거나 "공실없음 처리"를 해주세요</div><button onclick="switchToTab('document')" style="padding: 6px 14px; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📄 안내문 탭 이동</button></td></tr>`;
+            // 문서는 있지만 공실 데이터 없음 → 추출 안 됨 또는 공실없음 미처리
+            return `<tr><td colspan="5" style="padding: 30px; text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 8px;">📄</div>
+                <div style="color: #d97706; font-weight: 600; margin-bottom: 4px;">안내문은 있지만 공실 데이터가 없습니다</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">안내문 탭에서 공실 정보를 확인하거나<br>"공실없음 처리"를 해주세요</div>
+                <div style="display: flex; gap: 8px; justify-content: center;">
+                    <button onclick="switchToTab('document')" style="padding: 6px 14px; background: var(--accent-color); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">📄 안내문 탭 이동</button>
+                </div>
+            </td></tr>`;
         }
-        return `<tr><td colspan="${colCount + 1}" style="padding: 30px; text-align: center;"><div style="font-size: 24px; margin-bottom: 8px;">📭</div><div style="color: var(--text-muted); font-weight: 600; margin-bottom: 4px;">수집된 임대안내문이 없습니다</div><div style="font-size: 12px; color: var(--text-muted);">OCR 또는 수동으로 안내문을 등록하면 통계가 자동으로 계산됩니다</div></td></tr>`;
+        // 문서도 공실도 없음 → 완전 미수집
+        return `<tr><td colspan="5" style="padding: 30px; text-align: center;">
+            <div style="font-size: 24px; margin-bottom: 8px;">📭</div>
+            <div style="color: var(--text-muted); font-weight: 600; margin-bottom: 4px;">수집된 임대안내문이 없습니다</div>
+            <div style="font-size: 12px; color: var(--text-muted);">OCR 또는 수동으로 안내문을 등록하면<br>통계가 자동으로 계산됩니다</div>
+        </td></tr>`;
     })();
     
-    // --- 전체 평균 행 ---
+    // 전체 종합 행
     const noVacancyCompanyCount = companyRows.filter(r => r.noVacancy).length;
-    let avgRowHtml = '';
+    const dataCompanyCount = companyRows.filter(r => !r.noVacancy).length;
+    
+    let totalRowHtml = '';
     if (allNoVacancy && companyRows.length > 0) {
-        avgRowHtml = `<tr style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-top: 2px solid #16a34a;">
-            <td style="padding: 12px 8px;"><div style="font-weight: 700; color: #166534;">📊 전체 평균</div><div style="font-size: 11px; color: #16a34a;">${companyRows.length}개 회사</div></td>
-            <td colspan="${colCount}" style="padding: 12px 8px; text-align: center;"><div style="font-weight: 700; font-size: 16px; color: #166534;">공실률 0%</div><div style="font-size: 11px; color: #16a34a;">전 회사 공실없음</div></td>
+        // 모든 회사가 공실없음
+        totalRowHtml = `
+        <tr style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-top: 2px solid #16a34a;">
+            <td style="padding: 12px 8px;">
+                <div style="font-weight: 700; color: #166534;">📊 전체 종합</div>
+                <div style="font-size: 11px; color: #16a34a;">${companyRows.length}개 회사 확인</div>
+            </td>
+            <td colspan="2" style="padding: 12px 8px; text-align: center;">
+                <div style="font-weight: 700; font-size: 16px; color: #166534;">공실률 0%</div>
+                <div style="font-size: 11px; color: #16a34a; margin-top: 2px;">전 회사 공실없음</div>
+            </td>
+            <td colspan="2" style="padding: 12px 8px; text-align: center; color: var(--text-muted);">-</td>
         </tr>`;
-    } else if (dataRows.length > 0) {
-        avgRowHtml = `<tr style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-top: 2px solid #3b82f6;">
-            <td style="padding: 12px 8px;"><div style="font-weight: 700; color: #1e40af;">📊 전체 평균</div><div style="font-size: 11px; color: #3b82f6;">${dataRows.length}개 회사${noVacancyCompanyCount > 0 ? ` (+${noVacancyCompanyCount} 공실없음)` : ''}</div></td>
-            <td style="padding: 12px 8px; text-align: center; color: #3b82f6; font-size: 12px;">-</td>
-            <td style="padding: 12px 8px; text-align: center;">${avgVacancyRate !== null ? `<span style="font-weight: 700; font-size: 16px; color: ${avgVacancyRate > 10 ? '#dc2626' : avgVacancyRate > 5 ? '#d97706' : '#1e40af'};">${avgVacancyRate.toFixed(2)}%</span>` : '-'}</td>
-            <td style="padding: 12px 8px; text-align: right;">${avgSimpleRent !== null ? `<div style="font-weight: 700; color: #1e40af;">${formatNumber(Math.round(avgSimpleRent))}<span style="font-size: 11px; color: #3b82f6;"> 원/평</span></div>` : '-'}</td>
-            ${showWeighted ? `<td style="padding: 12px 8px; text-align: right;">${avgWeightedRent !== null ? `<div style="font-weight: 700; color: #1e40af;">${formatNumber(Math.round(avgWeightedRent))}<span style="font-size: 11px; color: #3b82f6;"> 원/평</span></div>` : '-'}</td>` : ''}
+    } else if (allLatestVacancies.length > 0) {
+        // 공실 데이터가 있는 경우
+        totalRowHtml = `
+        <tr style="background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border-top: 2px solid #3b82f6;">
+            <td style="padding: 12px 8px;">
+                <div style="font-weight: 700; color: #1e40af;">📊 전체 종합</div>
+                <div style="font-size: 11px; color: #3b82f6;">${dataCompanyCount}개 회사 기준${noVacancyCompanyCount > 0 ? ` (+${noVacancyCompanyCount}개 공실없음)` : ''}</div>
+            </td>
+            <td style="padding: 12px 8px; text-align: center;">
+                <div style="font-weight: 700; color: #1e40af;">${totalStats.floorCount}개층</div>
+                <div style="font-size: 11px; color: #3b82f6;">${formatNumber(Math.round(totalStats.totalRentArea))}평</div>
+            </td>
+            <td style="padding: 12px 8px; text-align: center;">
+                ${totalStats.vacancyRate !== null 
+                    ? `<span style="font-weight: 700; font-size: 16px; color: ${totalStats.vacancyRate > 10 ? '#dc2626' : totalStats.vacancyRate > 5 ? '#d97706' : '#1e40af'};">${totalStats.vacancyRate.toFixed(2)}%</span>` 
+                    : '-'}
+            </td>
+            <td style="padding: 12px 8px; text-align: right;">
+                ${totalStats.simpleAvgRent !== null 
+                    ? `<div style="font-weight: 700; color: #1e40af;">${formatNumber(Math.round(totalStats.simpleAvgRent))}<span style="font-size: 11px; color: #3b82f6;"> 원/평</span></div>` 
+                    : '-'}
+            </td>
+            <td style="padding: 12px 8px; text-align: right;">
+                ${totalStats.weightedAvgRent !== null 
+                    ? `<div style="font-weight: 700; color: #1e40af;">${formatNumber(Math.round(totalStats.weightedAvgRent))}<span style="font-size: 11px; color: #3b82f6;"> 원/평</span></div>` 
+                    : '-'}
+            </td>
         </tr>`;
     }
     
     document.getElementById('sectionStats').innerHTML = `
-        <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <span>📊 공실/임대가 통계</span>
-            <button onclick="refreshStatsSection()" style="padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">🔄 새로고침</button>
+            <button onclick="refreshStatsSection()" 
+                    style="padding: 4px 10px; font-size: 11px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 4px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                🔄 새로고침
+            </button>
         </div>
         
         ${areaWarningHtml}
         
-        ${grossFloorPy > 0 ? `
-        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-secondary); border-radius: 8px; margin-bottom: 12px; flex-wrap: wrap;">
-            <span style="font-size: 12px; color: var(--text-muted);">📐 연면적:</span>
-            <span style="font-size: 13px; font-weight: 600;">${formatNumber(grossFloorPy)}평</span>
-            <span style="font-size: 11px; color: var(--text-muted);">(건축물대장)</span>
-            <span style="margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                <span style="font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 3px;"><span style="display: inline-block; width: 7px; height: 7px; background: #16a34a; border-radius: 50%;"></span>~5%</span>
-                <span style="font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 3px;"><span style="display: inline-block; width: 7px; height: 7px; background: #d97706; border-radius: 50%;"></span>5~10%</span>
-                <span style="font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 3px;"><span style="display: inline-block; width: 7px; height: 7px; background: #dc2626; border-radius: 50%;"></span>10%~</span>
-                <span style="font-size: 10px; color: var(--text-muted);">| 최신월</span>
-            </span>
-        </div>` : ''}
-        
-        <div style="border: 1px solid var(--border-color); border-radius: 10px; overflow: hidden;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed;">
-                <thead><tr style="background: var(--bg-secondary);">
-                    <th style="padding: 10px 8px; text-align: left; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); width: 25%;">출처</th>
-                    <th style="padding: 10px 8px; text-align: center; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); width: 18%;">공실</th>
-                    <th style="padding: 10px 8px; text-align: center; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); width: 22%;">공실률</th>
-                    <th style="padding: 10px 8px; text-align: right; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary);">임대가 평균</th>
-                    ${weightedColHeader}
-                </tr></thead>
-                <tbody>${tableRowsHtml}${avgRowHtml}</tbody>
-            </table>
-        </div>
-        
-        <div style="margin-top: 10px; display: flex; align-items: center; gap: 6px;">
-            <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none;">
-                <input type="checkbox" ${showWeighted ? 'checked' : ''} onchange="toggleWeightedAvg(this.checked)" style="width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent-color);">
-                가중평균 임대가 보기
-            </label>
-        </div>
-        
-        <div style="margin-top: 12px; padding: 10px 14px; background: #fefce8; border-radius: 8px; border: 1px solid #fde68a;">
-            <div style="font-size: 11px; font-weight: 600; color: #92400e; margin-bottom: 4px;">📌 산출 기준</div>
-            <div style="font-size: 11px; color: #78350f; line-height: 1.6;">
-                • <strong>공실률</strong> = 공실 임대면적 합계 ÷ 연면적(${grossFloorPy > 0 ? formatNumber(grossFloorPy) + '평' : '미등록'}) × 100<br>
-                • <strong>임대가 평균</strong> = 임대료 합계 ÷ 공실 건수 (임대료 있는 건만)<br>
-                ${showWeighted ? '• <strong>가중평균 임대가</strong> = Σ(임대료 × 임대면적) ÷ Σ(임대면적)<br>' : ''}
-                • <strong>전체 평균</strong> = 각 회사별 수치의 산술 평균<br>
-                • 전월 대비 증감은 동일 회사의 직전 발행월 기준
+        <!-- 범례 -->
+        <div style="display: flex; gap: 12px; margin-bottom: 12px; padding: 8px 12px; background: #fafafa; border-radius: 6px; flex-wrap: wrap;">
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                <span style="display: inline-block; width: 8px; height: 8px; background: #16a34a; border-radius: 50%;"></span> ~5%
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                <span style="display: inline-block; width: 8px; height: 8px; background: #d97706; border-radius: 50%;"></span> 5~10%
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                <span style="display: inline-block; width: 8px; height: 8px; background: #dc2626; border-radius: 50%;"></span> 10%~
+            </div>
+            <div style="margin-left: auto; font-size: 11px; color: var(--text-muted);">
+                💡 각 회사 <strong>최신월</strong> 기준
             </div>
         </div>
         
-        <div style="margin-top: 12px; padding: 20px; border: 2px dashed var(--border-color); border-radius: 10px; text-align: center; color: var(--text-muted);">
-            <div style="font-size: 24px; margin-bottom: 6px;">📈</div>
-            <div style="font-size: 13px; font-weight: 500;">추이 그래프 (예정)</div>
-            <div style="font-size: 11px; margin-top: 4px;">회사별 공실률 · 임대가 변동 추이</div>
+        <!-- 통계 테이블 -->
+        <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 10px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                    <tr style="background: var(--bg-secondary);">
+                        <th style="padding: 10px 8px; text-align: left; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); min-width: 80px;">출처</th>
+                        <th style="padding: 10px 8px; text-align: center; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); white-space: nowrap;">공실</th>
+                        <th style="padding: 10px 8px; text-align: center; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); white-space: nowrap;">공실률</th>
+                        <th style="padding: 10px 8px; text-align: right; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); white-space: nowrap;">단순평균<br><span style="font-size: 10px; font-weight: 400;">임대가</span></th>
+                        <th style="padding: 10px 8px; text-align: right; border-bottom: 2px solid var(--border-color); font-weight: 600; color: var(--text-secondary); white-space: nowrap;">가중평균<br><span style="font-size: 10px; font-weight: 400;">임대가</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${tableRowsHtml}
+                    ${totalRowHtml}
+                </tbody>
+            </table>
         </div>
         
-        <div id="statsVacancyPopup" style="display:none; position:fixed; z-index:10500; background:white; border:1px solid #e2e8f0; border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,0.15); padding:0; max-width:380px; min-width:280px; max-height:60vh; overflow:hidden;"></div>
+        <!-- 산출 기준 안내 -->
+        <div style="margin-top: 16px; padding: 12px 16px; background: #fefce8; border-radius: 8px; border: 1px solid #fde68a;">
+            <div style="font-size: 11px; font-weight: 600; color: #92400e; margin-bottom: 6px;">📌 산출 기준</div>
+            <div style="font-size: 11px; color: #78350f; line-height: 1.6;">
+                • <strong>공실률</strong> = 공실 임대면적 합계 ÷ 연면적(${grossFloorPy > 0 ? formatNumber(grossFloorPy) + '평' : '미등록'}) × 100<br>
+                • <strong>단순평균 임대가</strong> = 임대료 합계 ÷ 공실 건수 (임대료 있는 건만)<br>
+                • <strong>가중평균 임대가</strong> = Σ(임대료 × 임대면적) ÷ Σ(임대면적)<br>
+                • 같은 빌딩이라도 회사별로 공실 정보가 다를 수 있습니다
+            </div>
+        </div>
+        
+        <!-- 추후 차트 영역 예약 -->
+        <div style="margin-top: 16px; padding: 24px; border: 2px dashed var(--border-color); border-radius: 10px; text-align: center; color: var(--text-muted);">
+            <div style="font-size: 24px; margin-bottom: 8px;">📈</div>
+            <div style="font-size: 13px; font-weight: 500;">추이 그래프 (예정)</div>
+            <div style="font-size: 11px; margin-top: 4px;">회사별 공실률 · 임대가 변동 추이 차트가 추가될 예정입니다</div>
+        </div>
     `;
 }
-
-// 가중평균 토글
-export function toggleWeightedAvg(checked) {
-    state.showWeightedAvg = checked;
-    renderStatsSection();
-}
-
-// 공실 상세 팝업
-export function showStatsVacancyPopup(el, source, publishDate) {
-    const b = state.selectedBuilding;
-    if (!b) return;
-    
-    let vacs = [...(b.vacancies || [])].filter(v => !v._key?.endsWith('_meta'));
-    const lgv = b.leasingGuideVacancies || [];
-    lgv.forEach(l => {
-        if (!vacs.some(v => v.floor === l.floor && v.source === l.source && v.publishDate === l.publishDate)) vacs.push(l);
-    });
-    
-    const filtered = vacs.filter(v => v.source === source && v.publishDate === publishDate);
-    if (filtered.length === 0) return;
-    
-    const popup = document.getElementById('statsVacancyPopup');
-    const rows = filtered.map(v => {
-        const rentPy = v.rentPy ? formatNumber(parseFloat(String(v.rentPy).replace(/[^\d.]/g, ''))) : '-';
-        const rentArea = v.rentArea ? Math.round(parseFloat(v.rentArea)).toLocaleString() + '평' : '-';
-        const excArea = v.exclusiveArea ? Math.round(parseFloat(v.exclusiveArea)).toLocaleString() + '평' : '-';
-        return `<tr style="border-bottom:1px solid #f1f5f9;">
-            <td style="padding:6px 8px; font-weight:600; color:var(--accent-color);">${v.floor || '-'}</td>
-            <td style="padding:6px 8px; text-align:right; font-size:12px;">${rentArea}</td>
-            <td style="padding:6px 8px; text-align:right; font-size:12px;">${excArea}</td>
-            <td style="padding:6px 8px; text-align:right; font-size:12px; font-weight:500;">${rentPy}</td>
-        </tr>`;
-    }).join('');
-    
-    popup.innerHTML = `
-        <div style="padding:12px 14px; background:var(--bg-secondary); border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-            <div><div style="font-size:13px; font-weight:600;">${source}</div><div style="font-size:11px; color:var(--text-muted);">${publishDate} · ${filtered.length}개층</div></div>
-            <button onclick="document.getElementById('statsVacancyPopup').style.display='none'" style="background:none; border:none; cursor:pointer; font-size:16px; color:var(--text-muted);">✕</button>
-        </div>
-        <div style="overflow-y:auto; max-height:calc(60vh - 50px);">
-            <table style="width:100%; border-collapse:collapse; font-size:13px;">
-                <thead><tr style="background:#f8fafc;">
-                    <th style="padding:6px 8px; text-align:left; font-size:11px; color:var(--text-muted);">층</th>
-                    <th style="padding:6px 8px; text-align:right; font-size:11px; color:var(--text-muted);">임대면적</th>
-                    <th style="padding:6px 8px; text-align:right; font-size:11px; color:var(--text-muted);">전용면적</th>
-                    <th style="padding:6px 8px; text-align:right; font-size:11px; color:var(--text-muted);">임대료/평</th>
-                </tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-        </div>`;
-    
-    const rect = el.getBoundingClientRect();
-    popup.style.display = 'block';
-    let left = rect.left, top = rect.bottom + 4;
-    const pr = popup.getBoundingClientRect();
-    if (left + pr.width > window.innerWidth - 10) left = window.innerWidth - pr.width - 10;
-    if (top + pr.height > window.innerHeight - 10) top = rect.top - pr.height - 4;
-    popup.style.left = left + 'px';
-    popup.style.top = top + 'px';
-    
-    setTimeout(() => {
-        const closeHandler = (e) => {
-            if (!popup.contains(e.target) && e.target !== el) { popup.style.display = 'none'; document.removeEventListener('click', closeHandler); }
-        };
-        document.addEventListener('click', closeHandler);
-    }, 10);
-}
-
 
 // 통계 섹션 새로고침
 export function refreshStatsSection() {
     renderStatsSection();
     showToast('통계가 갱신되었습니다', 'success');
-}
-
-// 가중평균 토글
-export function toggleWeightedAvg() {
-    state.showWeightedAvg = !state.showWeightedAvg;
-    renderStatsSection();
-}
-
-// 공실 상세 팝업 토글
-export function toggleStatsPopup(el) {
-    // 다른 팝업 닫기
-    document.querySelectorAll('.stats-popup').forEach(p => {
-        if (!el.contains(p)) p.style.display = 'none';
-    });
-    const popup = el.querySelector('.stats-popup');
-    if (popup) {
-        popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
-    }
-}
-
-// 외부 클릭 시 팝업 닫기 (1회 등록)
-if (!window._statsPopupListenerAdded) {
-    document.addEventListener('click', (e) => {
-        if (!e.target.closest('.stats-vacancy-detail')) {
-            document.querySelectorAll('.stats-popup').forEach(p => p.style.display = 'none');
-        }
-    });
-    window._statsPopupListenerAdded = true;
 }
 
 // 탭 전환 헬퍼 (바로가기 버튼용)
@@ -3054,6 +3007,11 @@ export function setupDetailTabs() {
                     return;
                 }
                 await refreshMemoSection();
+            }
+            
+            // ★ 통계 탭 클릭 시 최신 데이터로 렌더링
+            if (tab.dataset.section === 'stats' && state.selectedBuilding) {
+                renderStatsSection();
             }
         });
     });
@@ -3133,10 +3091,6 @@ export function registerDetailGlobals() {
     window.renderStatsSection = renderStatsSection;
     window.refreshStatsSection = refreshStatsSection;
     window.switchToTab = switchToTab;
-    window.toggleWeightedAvg = toggleWeightedAvg;
-    window.showStatsVacancyPopup = showStatsVacancyPopup;
-    window.toggleWeightedAvg = toggleWeightedAvg;
-    window.toggleStatsPopup = toggleStatsPopup;
     
     // ★ 공실없음 처리 관련
     window.markNoVacancy = markNoVacancy;
