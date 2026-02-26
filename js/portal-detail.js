@@ -2991,23 +2991,6 @@ export function refreshStatsSection() {
     showToast('통계가 갱신되었습니다', 'success');
 }
 
-// 가중평균 토글
-export function toggleWeightedAvg() {
-    state.showWeightedAvg = !state.showWeightedAvg;
-    renderStatsSection();
-}
-
-// 공실 상세 팝업 토글
-export function toggleStatsPopup(el) {
-    // 다른 팝업 닫기
-    document.querySelectorAll('.stats-popup').forEach(p => {
-        if (!el.contains(p)) p.style.display = 'none';
-    });
-    const popup = el.querySelector('.stats-popup');
-    if (popup) {
-        popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
-    }
-}
 
 // 외부 클릭 시 팝업 닫기 (1회 등록)
 if (!window._statsPopupListenerAdded) {
@@ -3135,8 +3118,6 @@ export function registerDetailGlobals() {
     window.switchToTab = switchToTab;
     window.toggleWeightedAvg = toggleWeightedAvg;
     window.showStatsVacancyPopup = showStatsVacancyPopup;
-    window.toggleWeightedAvg = toggleWeightedAvg;
-    window.toggleStatsPopup = toggleStatsPopup;
     
     // ★ 공실없음 처리 관련
     window.markNoVacancy = markNoVacancy;
