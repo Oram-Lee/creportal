@@ -442,8 +442,13 @@ export function processBuildings() {
                 hasLeasingGuide: leasingGuideVacancies.length > 0,
                 hasDocument: documents.length > 0 || leasingGuideVacancies.length > 0,
                 hasData: rentrolls.length > 0 || memos.length > 0 || incentives.length > 0 || vacancies.length > 0,
-                // 신규 빌딩 체크
-                isNew: b.isNew && b.newUntil && new Date(b.newUntil) > new Date(),
+                // ★ 신규 빌딩 체크 — 등록 후 3일간 NEW 표시
+                isNew: (() => {
+                    const regAt = b.registeredAt || b.createdAt;
+                    if (!regAt) return false;
+                    const diff = Date.now() - new Date(regAt).getTime();
+                    return diff < 3 * 24 * 60 * 60 * 1000; // 3일
+                })(),
                 registeredAt: b.registeredAt
             };
         })
@@ -459,7 +464,10 @@ export function processBuildings() {
             if (a.status !== 'hidden' && b.status === 'hidden') return -1;
             if (a.isNew && !b.isNew) return -1;
             if (!a.isNew && b.isNew) return 1;
-            return b.hasData - a.hasData || (a.name || '').localeCompare(b.name || '');
+            // ★ 기본 정렬: 면적(연면적) 내림차순
+            const areaA = parseFloat(a.grossFloorPy) || 0;
+            const areaB = parseFloat(b.grossFloorPy) || 0;
+            return areaB - areaA || (a.name || '').localeCompare(b.name || '');
         });
     
     state.filteredBuildings = [...state.allBuildings];
