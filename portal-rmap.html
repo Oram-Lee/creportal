@@ -359,6 +359,168 @@ body {
 }
 .radius-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
+/* ===== 분석 모드 카드 (Step 3) ===== */
+.analysis-mode-cards { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+.analysis-mode-card {
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all .18s;
+  background: var(--surface);
+  position: relative;
+}
+.analysis-mode-card:hover { border-color: var(--accent); background: var(--accent-lt); }
+.analysis-mode-card.selected { border-color: var(--accent); background: var(--accent-lt); }
+.analysis-mode-card .amc-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 4px;
+}
+.amc-badge {
+  font-size: 11px; font-weight: 700; padding: 2px 8px;
+  border-radius: 12px; background: var(--accent); color: #fff;
+}
+.amc-badge.b { background: #7c3aed; }
+.amc-badge.c { background: #059669; }
+.amc-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.amc-desc { font-size: 12px; color: var(--muted); line-height: 1.5; margin-left: 2px; }
+.amc-check {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: transparent;
+  transition: all .15s;
+}
+.analysis-mode-card.selected .amc-check {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+/* 선택된 모드에 따른 조건 패널 */
+.analysis-sub-panel {
+  margin-top: 14px; padding: 14px 16px;
+  background: #f8fafc; border: 1px solid var(--border);
+  border-radius: 8px; display: none;
+}
+.analysis-sub-panel.show { display: block; }
+
+/* 빌딩 등급 멀티 체크 */
+.grade-checks { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.grade-check-btn {
+  padding: 5px 12px;
+  border: 1.5px solid var(--border); border-radius: 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  background: var(--surface); color: var(--muted);
+  transition: all .15s;
+}
+.grade-check-btn.active {
+  border-color: #059669; background: #d1fae5; color: #065f46;
+}
+
+/* 분석 빌딩 수 상한 */
+.count-btns { display: flex; gap: 8px; margin-top: 6px; }
+.count-btn {
+  padding: 5px 14px; border: 1.5px solid var(--border); border-radius: 6px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  background: var(--surface); color: var(--muted); transition: all .15s;
+}
+.count-btn.active { border-color: var(--accent); background: var(--accent-lt); color: var(--accent); }
+
+/* ===== DART 자동완성 (Step 4) ===== */
+.autocomplete-wrap { position: relative; }
+.autocomplete-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 0 0 8px 8px; box-shadow: var(--shadow-lg);
+  max-height: 220px; overflow-y: auto; display: none;
+}
+.autocomplete-dropdown.show { display: block; }
+.ac-item {
+  padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border);
+  transition: background .1s;
+}
+.ac-item:last-child { border-bottom: none; }
+.ac-item:hover, .ac-item.focused { background: var(--accent-lt); }
+.ac-item-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.ac-item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.ac-item-meta .stock-badge {
+  display: inline-block; padding: 1px 5px; border-radius: 3px;
+  background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 700; margin-left: 4px;
+}
+.dart-loading { padding: 10px 14px; font-size: 12px; color: var(--muted); text-align: center; }
+
+/* 기업 확정 후 뱃지 */
+.company-confirmed {
+  display: none; align-items: center; gap: 8px; margin-top: 8px;
+  padding: 8px 12px; background: #dcfce7; border-radius: 6px; border: 1px solid #bbf7d0;
+}
+.company-confirmed.show { display: flex; }
+.company-confirmed .corp-name { font-size: 13px; font-weight: 700; color: #166534; }
+.company-confirmed .corp-meta { font-size: 12px; color: #15803d; }
+.company-confirmed .corp-clear {
+  margin-left: auto; cursor: pointer; color: #6b7280; font-size: 14px;
+}
+.company-confirmed .corp-clear:hover { color: var(--danger); }
+
+/* AI 인텔리전스 패널 */
+.intel-trigger-btn {
+  width: 100%; padding: 10px 16px; margin-top: 12px;
+  background: linear-gradient(135deg, #1a3c5e, #2e7dca);
+  color: #fff; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: opacity .15s;
+}
+.intel-trigger-btn:hover { opacity: .88; }
+.intel-trigger-btn:disabled { opacity: .5; cursor: not-allowed; }
+.intel-trigger-btn .pulse { width: 8px; height: 8px; border-radius: 50%; background: #7dd3fc; }
+
+.intel-panel {
+  margin-top: 10px; border: 1px solid #bfdbfe;
+  border-radius: 8px; overflow: hidden; display: none;
+}
+.intel-panel.show { display: block; }
+.intel-panel-header {
+  padding: 10px 14px; background: #eff6ff;
+  font-size: 12px; font-weight: 700; color: #1e40af;
+  display: flex; align-items: center; gap: 6px;
+}
+.intel-items { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.intel-check-row {
+  display: flex; align-items: flex-start; gap: 8px; cursor: pointer;
+}
+.intel-check-row input[type=checkbox] {
+  margin-top: 2px; accent-color: var(--accent); width: 14px; height: 14px; flex-shrink: 0;
+}
+.intel-check-label { font-size: 12px; color: var(--text); line-height: 1.4; }
+.intel-check-label .ic-sub { font-size: 11px; color: var(--muted); display: block; margin-top: 1px; }
+.intel-collect-btn {
+  margin: 10px 14px 12px;
+  width: calc(100% - 28px);
+  padding: 8px; border: none; border-radius: 6px;
+  background: var(--accent); color: #fff;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  transition: opacity .15s;
+}
+.intel-collect-btn:hover { opacity: .85; }
+.intel-collect-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 인텔리전스 수집 결과 */
+.intel-result-panel {
+  margin-top: 8px; padding: 12px 14px;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;
+  display: none; font-size: 12px; line-height: 1.6;
+}
+.intel-result-panel.show { display: block; }
+.intel-result-panel h4 { font-size: 12px; font-weight: 700; color: #166534; margin-bottom: 6px; }
+.intel-result-panel .ir-item {
+  padding: 5px 0; border-bottom: 1px solid #dcfce7;
+  color: var(--text);
+}
+.intel-result-panel .ir-item:last-child { border-bottom: none; }
+.intel-result-panel .ir-source {
+  font-size: 10px; color: var(--muted); margin-top: 2px;
+}
+.intel-spinner { text-align: center; padding: 12px; color: var(--muted); font-size: 12px; }
+
 /* ===== 태그 입력 ===== */
 .tag-input-wrap {
   border: 1px solid var(--border);
@@ -806,6 +968,163 @@ body {
 .toast.show { transform: translateX(-50%) translateY(0); }
 .toast.error { background: var(--danger); }
 .toast.success { background: var(--success); }
+
+/* ===== 이슈 선택 카드 (Step 4) ===== */
+.issue-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.issue-card {
+  border: 2px solid var(--border); border-radius: 10px;
+  padding: 11px 14px; cursor: pointer; transition: all .18s;
+  background: var(--surface); display: flex; align-items: center; gap: 12px;
+  position: relative;
+}
+.issue-card:hover { border-color: var(--accent); background: var(--accent-lt); }
+.issue-card.selected { border-color: var(--accent); background: var(--accent-lt); }
+.issue-icon { font-size: 20px; flex-shrink: 0; }
+.issue-info .issue-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.issue-info .issue-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.issue-radio {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--border); margin-left: auto; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.issue-card.selected .issue-radio {
+  border-color: var(--accent); background: var(--accent);
+}
+.issue-card.selected .issue-radio::after {
+  content: ''; width: 6px; height: 6px; border-radius: 50%; background: #fff;
+}
+
+/* 신규 사무실 서브 패널 */
+.issue-sub-panel {
+  padding: 12px 14px; background: #f8fafc;
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-top: -4px; display: none;
+}
+.issue-sub-panel.show { display: block; }
+
+/* 지역 선택 탭 */
+.area-scope-tabs { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 10px; }
+.area-scope-tab {
+  flex: 1; padding: 7px; font-size: 12px; font-weight: 600;
+  border: none; cursor: pointer; background: var(--surface); color: var(--muted);
+  transition: all .15s;
+}
+.area-scope-tab.active { background: var(--accent); color: #fff; }
+
+/* 시군구 검색 */
+.sigungu-wrap { position: relative; }
+.sigungu-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 0 0 8px 8px; box-shadow: var(--shadow-lg);
+  max-height: 180px; overflow-y: auto; display: none;
+}
+.sigungu-dropdown.show { display: block; }
+.sigungu-item {
+  padding: 8px 12px; cursor: pointer; font-size: 12px;
+  border-bottom: 1px solid var(--border); transition: background .1s;
+}
+.sigungu-item:hover { background: var(--accent-lt); }
+.sigungu-selected-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--accent-lt); color: var(--accent);
+  padding: 3px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;
+  margin: 4px 4px 0 0;
+}
+.sigungu-selected-tag .rm { cursor: pointer; color: var(--muted); }
+.sigungu-selected-tag .rm:hover { color: var(--danger); }
+
+/* 물건 리스트 미리보기 */
+.vacancy-preview {
+  margin-top: 10px; border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; display: none;
+}
+.vacancy-preview.show { display: block; }
+.vp-header {
+  padding: 8px 12px; background: #f1f5f9;
+  font-size: 12px; font-weight: 700; color: var(--text);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.vp-scroll { max-height: 220px; overflow-y: auto; }
+.vp-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.vp-table th {
+  padding: 6px 8px; background: #e2e8f0; text-align: center;
+  font-weight: 700; color: #475569; white-space: nowrap;
+  position: sticky; top: 0; z-index: 1;
+}
+.vp-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #f1f5f9; }
+.vp-table tr:hover td { background: var(--accent-lt); }
+.vp-empty {
+  padding: 16px; text-align: center; color: var(--muted); font-size: 12px;
+}
+.vp-search-btn {
+  margin-top: 8px; padding: 8px; width: 100%; border: none; border-radius: 6px;
+  background: #0f172a; color: #fff; font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: opacity .15s;
+}
+.vp-search-btn:hover { opacity: .85; }
+.vp-search-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* AI 인사이트 박스 (Step 4 내부) */
+.ai-insight-mini {
+  margin-top: 8px; padding: 12px 14px;
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  border: 1px solid #bae6fd; border-radius: 8px; display: none;
+}
+.ai-insight-mini.show { display: block; }
+.ai-insight-mini .aim-title {
+  font-size: 12px; font-weight: 700; color: #0369a1; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.ai-insight-mini .aim-body { font-size: 12px; line-height: 1.7; color: #1e293b; }
+
+/* ===== 임대료 현황 도표 섹션 (리포트 내부) ===== */
+.rent-chart-section { margin-top: 20px; }
+.rent-chart-wrap {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;
+}
+@media (max-width: 640px) { .rent-chart-wrap { grid-template-columns: 1fr; } }
+.chart-card {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px; background: var(--surface);
+}
+.chart-card .cc-title {
+  font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 10px;
+}
+canvas.mini-chart { width: 100% !important; }
+
+/* 임대료 요약 테이블 */
+.rent-summary-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
+.rent-summary-table th {
+  padding: 8px 10px; background: var(--primary); color: #fff;
+  font-weight: 600; text-align: center; white-space: nowrap;
+}
+.rent-summary-table td {
+  padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--border);
+}
+.rent-summary-table tr:nth-child(even) td { background: #f8fafc; }
+.rent-summary-table tr:hover td { background: var(--accent-lt); }
+.rent-summary-table .highlight { font-weight: 700; color: var(--accent); }
+
+/* AI 시사점 카드 */
+.ai-insight-card {
+  margin-top: 16px; padding: 16px 20px;
+  background: linear-gradient(135deg, #1a3c5e 0%, #2e7dca 100%);
+  border-radius: 10px; color: #fff;
+}
+.ai-insight-card .aic-header {
+  font-size: 13px; font-weight: 700; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.ai-insight-card .aic-body { font-size: 12px; line-height: 1.8; opacity: .92; }
+.ai-insight-card .aic-points { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.ai-insight-card .aic-point {
+  display: flex; gap: 8px; align-items: flex-start;
+  background: rgba(255,255,255,.08); border-radius: 6px; padding: 8px 10px;
+  font-size: 12px;
+}
+.ai-insight-card .aic-point .dot { flex-shrink: 0; margin-top: 2px; font-size: 14px; }
+
 </style>
 </head>
 <body>
@@ -928,32 +1247,93 @@ body {
 
       <!-- STEP 3: 분석 범위 -->
       <div class="step-panel" id="step-panel-3">
-        <div class="form-group">
-          <label class="form-label">분석 반경</label>
-          <div class="radius-btns" id="radiusBtns">
-            <button class="radius-btn active" data-val="500" onclick="selectRadius(this)">500m</button>
-            <button class="radius-btn" data-val="1000" onclick="selectRadius(this)">1km</button>
-            <button class="radius-btn" data-val="2000" onclick="selectRadius(this)">2km</button>
-            <button class="radius-btn" data-val="3000" onclick="selectRadius(this)">3km</button>
+        <div class="form-group" style="margin-bottom:4px">
+          <label class="form-label">분석 방식 선택 <span>*</span></label>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">어떤 범위의 경쟁 빌딩을 분석에 포함할지 선택하세요</p>
+          <div class="analysis-mode-cards">
+
+            <!-- 모드 A: 반경 분석 -->
+            <div class="analysis-mode-card" id="amc-A" onclick="selectAnalysisMode('A')">
+              <div class="amc-header">
+                <span class="amc-badge a">A</span>
+                <span class="amc-title">반경 분석</span>
+              </div>
+              <div class="amc-desc">기준 빌딩 중심 특정 반경 내 경쟁 빌딩만 분석합니다. 인접 경쟁군 파악에 적합합니다.</div>
+              <div class="amc-check">✓</div>
+            </div>
+            <div class="analysis-sub-panel" id="sub-A">
+              <label class="form-label" style="font-size:12px;margin-bottom:8px">분석 반경</label>
+              <div class="radius-btns" id="radiusBtns">
+                <button class="radius-btn active" data-val="500" onclick="selectRadius(this)">500m</button>
+                <button class="radius-btn" data-val="1000" onclick="selectRadius(this)">1km</button>
+                <button class="radius-btn" data-val="2000" onclick="selectRadius(this)">2km</button>
+                <button class="radius-btn" data-val="3000" onclick="selectRadius(this)">3km</button>
+              </div>
+            </div>
+
+            <!-- 모드 B: 권역 전체 분석 -->
+            <div class="analysis-mode-card" id="amc-B" onclick="selectAnalysisMode('B')">
+              <div class="amc-header">
+                <span class="amc-badge b">B</span>
+                <span class="amc-title">권역 전체 분석</span>
+              </div>
+              <div class="amc-desc">기준 빌딩이 속한 권역(GBD/CBD/YBD 등) 전체를 분석합니다. 권역 시장 전체를 조망할 때 적합합니다.</div>
+              <div class="amc-check">✓</div>
+            </div>
+            <div class="analysis-sub-panel" id="sub-B">
+              <label class="form-label" style="font-size:12px;margin-bottom:8px">권역 (자동 감지됨 — 수동 변경 가능)</label>
+              <select class="form-select" id="districtSelect">
+                <option value="GBD">GBD (강남권역)</option>
+                <option value="CBD">CBD (도심권역)</option>
+                <option value="YBD">YBD (여의도권역)</option>
+                <option value="BBD">BBD (분당·기타)</option>
+              </select>
+            </div>
+
+            <!-- 모드 C: 권역 + 등급 필터 -->
+            <div class="analysis-mode-card" id="amc-C" onclick="selectAnalysisMode('C')">
+              <div class="amc-header">
+                <span class="amc-badge c">C</span>
+                <span class="amc-title">권역 × 빌딩 등급 필터</span>
+              </div>
+              <div class="amc-desc">권역 내 특정 등급 빌딩만 선별하여 분석합니다. 동일 등급 경쟁 빌딩 간 정밀 비교에 적합합니다.</div>
+              <div class="amc-check">✓</div>
+            </div>
+            <div class="analysis-sub-panel" id="sub-C">
+              <div style="display:flex;gap:16px;flex-wrap:wrap">
+                <div style="flex:1;min-width:140px">
+                  <label class="form-label" style="font-size:12px;margin-bottom:6px">권역</label>
+                  <select class="form-select" id="districtSelectC">
+                    <option value="GBD">GBD (강남권역)</option>
+                    <option value="CBD">CBD (도심권역)</option>
+                    <option value="YBD">YBD (여의도권역)</option>
+                    <option value="BBD">BBD (분당·기타)</option>
+                  </select>
+                </div>
+                <div style="flex:1;min-width:160px">
+                  <label class="form-label" style="font-size:12px;margin-bottom:6px">빌딩 등급 (복수 선택)</label>
+                  <div class="grade-checks">
+                    <button class="grade-check-btn active" data-grade="Prime" onclick="toggleGrade(this)">Prime</button>
+                    <button class="grade-check-btn active" data-grade="A" onclick="toggleGrade(this)">A급</button>
+                    <button class="grade-check-btn" data-grade="B" onclick="toggleGrade(this)">B급</button>
+                    <button class="grade-check-btn" data-grade="C" onclick="toggleGrade(this)">C급</button>
+                    <button class="grade-check-btn" data-grade="D" onclick="toggleGrade(this)">D급</button>
+                    <button class="grade-check-btn" data-grade="E" onclick="toggleGrade(this)">E급</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">권역</label>
-          <select class="form-select" id="districtSelect">
-            <option value="GBD">GBD (강남권역)</option>
-            <option value="CBD">CBD (도심권역)</option>
-            <option value="YBD">YBD (여의도권역)</option>
-            <option value="BBD">BBD (분당·기타)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">빌딩 규모 필터</label>
-          <select class="form-select" id="buildingGradeSelect">
-            <option value="">전체</option>
-            <option value="A">A급 이상</option>
-            <option value="B">B급 이상</option>
-            <option value="prime">프라임</option>
-          </select>
+        <div class="form-group" style="margin-top:14px">
+          <label class="form-label" style="font-size:12px">분석 빌딩 수 상한</label>
+          <div class="count-btns" id="countBtns">
+            <button class="count-btn" data-val="5" onclick="selectCount(this)">5개</button>
+            <button class="count-btn active" data-val="10" onclick="selectCount(this)">10개</button>
+            <button class="count-btn" data-val="20" onclick="selectCount(this)">20개</button>
+            <button class="count-btn" data-val="0" onclick="selectCount(this)">전체</button>
+          </div>
         </div>
       </div>
 
@@ -961,26 +1341,168 @@ body {
       <div class="step-panel" id="step-panel-4">
         <!-- TR 전용 -->
         <div id="tr-fields">
+
+          <!-- 고객사명 + DART 자동완성 -->
           <div class="form-group">
             <label class="form-label">고객사명 <span>*</span></label>
-            <input type="text" class="form-input" id="clientCompany" placeholder="예) 토스뱅크">
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">업종</label>
-              <input type="text" class="form-input" id="clientIndustry" placeholder="예) 핀테크">
+            <div class="autocomplete-wrap">
+              <input type="text" class="form-input" id="clientCompany"
+                placeholder="기업명 입력 (자동완성)"
+                autocomplete="off"
+                oninput="onClientCompanyInput(this.value)"
+                onkeydown="onClientCompanyKeydown(event)">
+              <div class="autocomplete-dropdown" id="dartDropdown">
+                <div class="dart-loading" id="dartLoading">검색 중...</div>
+              </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">희망 면적 (평)</label>
-              <div style="display:flex;gap:6px;align-items:center">
-                <input type="number" class="form-input" id="desiredAreaMin" placeholder="최소" style="width:80px">
-                <span style="color:var(--muted);font-size:13px">~</span>
-                <input type="number" class="form-input" id="desiredAreaMax" placeholder="최대" style="width:80px">
+            <!-- 기업 확정 뱃지 -->
+            <div class="company-confirmed" id="companyConfirmed">
+              <div>
+                <div class="corp-name" id="confirmedName">-</div>
+                <div class="corp-meta" id="confirmedMeta">-</div>
+              </div>
+              <span class="corp-clear" onclick="clearConfirmedCompany()" title="기업 선택 초기화">✕</span>
+            </div>
+          </div>
+
+          <!-- 업종 -->
+          <div class="form-group">
+            <label class="form-label">업종</label>
+            <input type="text" class="form-input" id="clientIndustry"
+              placeholder="기업 선택 시 자동 입력">
+          </div>
+
+          <!-- 당면 이슈 선택 -->
+          <div class="form-group">
+            <label class="form-label">현재 고객사가 당면한 이슈 <span>*</span></label>
+            <div class="issue-cards">
+
+              <div class="issue-card" id="issue-expand" onclick="selectIssue('expand')">
+                <span class="issue-icon">📈</span>
+                <div class="issue-info">
+                  <div class="issue-title">사옥 이전 — 확장</div>
+                  <div class="issue-sub">더 넓은 공간이 필요한 성장 기업 · 이전 후 임대면적 증가</div>
+                </div>
+                <div class="issue-radio"></div>
+              </div>
+
+              <div class="issue-card" id="issue-shrink" onclick="selectIssue('shrink')">
+                <span class="issue-icon">📉</span>
+                <div class="issue-info">
+                  <div class="issue-title">사옥 이전 — 축소</div>
+                  <div class="issue-sub">비용 절감·재택 전환으로 공간 효율화 · 이전 후 임대면적 감소</div>
+                </div>
+                <div class="issue-radio"></div>
+              </div>
+
+              <div class="issue-card" id="issue-new" onclick="selectIssue('new')">
+                <span class="issue-icon">🏗️</span>
+                <div class="issue-info">
+                  <div class="issue-title">신규 사무실 검토</div>
+                  <div class="issue-sub">기존 사무실 유지 + 추가 공간 확보 · 지점·팀실·R&amp;D 센터 등</div>
+                </div>
+                <div class="issue-radio"></div>
+              </div>
+
+            </div>
+
+            <!-- 신규/확장/축소 공통 — 면적 + 지역 서브 패널 -->
+            <div class="issue-sub-panel" id="issue-sub-panel">
+              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+                <div style="flex:1;min-width:100px">
+                  <label class="form-label" style="font-size:12px;margin-bottom:6px">희망 전용면적 (평)</label>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <input type="number" class="form-input" id="desiredAreaMin" placeholder="최소" style="width:74px">
+                    <span style="color:var(--muted);font-size:13px">~</span>
+                    <input type="number" class="form-input" id="desiredAreaMax" placeholder="최대" style="width:74px">
+                  </div>
+                </div>
+                <div style="flex:1;min-width:120px">
+                  <label class="form-label" style="font-size:12px;margin-bottom:6px">현재 면적 (평, 선택)</label>
+                  <input type="number" class="form-input" id="currentArea" placeholder="예) 500">
+                </div>
+              </div>
+
+              <!-- 지역 범위 선택 -->
+              <label class="form-label" style="font-size:12px;margin-bottom:6px">희망 입주 지역</label>
+              <div class="area-scope-tabs">
+                <button class="area-scope-tab active" id="scopeTab-district" onclick="selectAreaScope('district')">권역 선택</button>
+                <button class="area-scope-tab" id="scopeTab-sigungu" onclick="selectAreaScope('sigungu')">시·군·구 직접 선택</button>
+              </div>
+
+              <!-- 권역 선택 -->
+              <div id="scopePanel-district">
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <button class="grade-check-btn" data-scope="GBD" onclick="toggleScopeDistrict(this)">GBD 강남</button>
+                  <button class="grade-check-btn" data-scope="CBD" onclick="toggleScopeDistrict(this)">CBD 도심</button>
+                  <button class="grade-check-btn" data-scope="YBD" onclick="toggleScopeDistrict(this)">YBD 여의도</button>
+                  <button class="grade-check-btn" data-scope="BBD" onclick="toggleScopeDistrict(this)">BBD 분당·판교</button>
+                  <button class="grade-check-btn" data-scope="ETC" onclick="toggleScopeDistrict(this)">기타 서울</button>
+                </div>
+              </div>
+
+              <!-- 시군구 선택 -->
+              <div id="scopePanel-sigungu" style="display:none">
+                <div class="sigungu-wrap">
+                  <input type="text" class="form-input" id="sigunguInput"
+                    placeholder="예) 강남구, 마포구, 성남시 분당구"
+                    autocomplete="off"
+                    oninput="onSigunguInput(this.value)">
+                  <div class="sigungu-dropdown" id="sigunguDropdown"></div>
+                </div>
+                <div id="sigunguTags" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div>
+              </div>
+
+              <!-- 물건 검색 버튼 -->
+              <button type="button" class="vp-search-btn" id="vacancySearchBtn"
+                onclick="searchVacancyByArea()" style="margin-top:12px">
+                🔍 해당 조건 공실 물건 검색
+              </button>
+
+              <!-- 물건 리스트 미리보기 -->
+              <div class="vacancy-preview" id="vacancyPreview">
+                <div class="vp-header">
+                  <span id="vpHeaderText">검색 결과</span>
+                  <span id="vpCount" style="color:var(--accent)"></span>
+                </div>
+                <div class="vp-scroll">
+                  <table class="vp-table">
+                    <thead>
+                      <tr>
+                        <th>빌딩명</th>
+                        <th>층</th>
+                        <th>전용률</th>
+                        <th>임대면적</th>
+                        <th>전용면적</th>
+                        <th>공실</th>
+                        <th>보증금/평</th>
+                        <th>임대료/평</th>
+                        <th>관리비/평</th>
+                      </tr>
+                    </thead>
+                    <tbody id="vpTableBody"></tbody>
+                  </table>
+                </div>
+                <div class="vp-empty" id="vpEmpty" style="display:none">해당 조건의 공실이 없습니다</div>
+              </div>
+
+              <!-- AI 인사이트 (물건 없을 때 또는 항상) -->
+              <div class="ai-insight-mini" id="areaInsightBox">
+                <div class="aim-title">🤖 AI 입지 분석</div>
+                <div class="aim-body" id="areaInsightBody">분석 중...</div>
               </div>
             </div>
           </div>
+
+          <!-- 경쟁사 태그 입력 -->
           <div class="form-group">
-            <label class="form-label">경쟁사 (Enter로 추가)</label>
+            <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+              <span>경쟁사 (Enter로 추가)</span>
+              <button type="button" style="font-size:11px;padding:2px 8px;border:1px solid var(--accent);border-radius:4px;background:var(--accent-lt);color:var(--accent);cursor:pointer"
+                onclick="autoInferCompetitors()" id="inferCompBtn">
+                ✨ AI 자동 추론
+              </button>
+            </label>
             <div class="tag-input-wrap" onclick="document.getElementById('competitorInput').focus()">
               <div id="competitorTags"></div>
               <input type="text" class="tag-input-field" id="competitorInput"
@@ -988,6 +1510,72 @@ body {
                 onkeydown="handleTagInput(event, 'competitor')">
             </div>
           </div>
+
+          <!-- AI 인텔리전스 수집 -->
+          <div class="form-group" style="margin-top:4px;margin-bottom:0">
+            <label class="form-label" style="display:flex;align-items:center;gap:6px">
+              <span>고객사 인텔리전스 수집</span>
+              <span style="font-size:11px;color:var(--muted);font-weight:400">(선택)</span>
+            </label>
+            <p style="font-size:12px;color:var(--muted);margin-bottom:6px">
+              리포트에 포함할 정보를 AI가 자동으로 수집합니다
+            </p>
+            <button type="button" class="intel-trigger-btn" id="intelTriggerBtn"
+              onclick="toggleIntelPanel()">
+              <span class="pulse"></span>
+              🔍 인텔리전스 수집 항목 선택
+            </button>
+
+            <!-- 인텔리전스 항목 선택 패널 -->
+            <div class="intel-panel" id="intelPanel">
+              <div class="intel-panel-header">📋 리포트에 포함할 항목 선택</div>
+              <div class="intel-items">
+                <label class="intel-check-row">
+                  <input type="checkbox" id="ic-policy" checked>
+                  <div class="intel-check-label">
+                    🏛️ 부동산 정책 동향
+                    <span class="ic-sub">국토교통부 최신 정책·고시 (RSS 연동)</span>
+                  </div>
+                </label>
+                <label class="intel-check-row">
+                  <input type="checkbox" id="ic-client-news" checked>
+                  <div class="intel-check-label">
+                    🏢 고객사 사옥·이전 관련 뉴스
+                    <span class="ic-sub">고객사의 사무실 이전·확장·계약 소식</span>
+                  </div>
+                </label>
+                <label class="intel-check-row">
+                  <input type="checkbox" id="ic-competitor-news" checked>
+                  <div class="intel-check-label">
+                    🔍 경쟁사 오피스 동향
+                    <span class="ic-sub">경쟁사 사옥 이전·확장·축소·지점 개설 소식</span>
+                  </div>
+                </label>
+                <label class="intel-check-row">
+                  <input type="checkbox" id="ic-industry" checked>
+                  <div class="intel-check-label">
+                    📊 업계 오피스 수요 동향
+                    <span class="ic-sub">동종 업계의 사무실 이전·확장 트렌드 분석</span>
+                  </div>
+                </label>
+                <label class="intel-check-row">
+                  <input type="checkbox" id="ic-market">
+                  <div class="intel-check-label">
+                    💼 임차 시장 이슈
+                    <span class="ic-sub">임대차보호법, 계약갱신, 임대료 분쟁 등 최신 이슈</span>
+                  </div>
+                </label>
+              </div>
+              <button type="button" class="intel-collect-btn" id="intelCollectBtn"
+                onclick="collectIntelligence()">
+                ⚡ 지금 수집하기
+              </button>
+            </div>
+
+            <!-- 수집 결과 -->
+            <div class="intel-result-panel" id="intelResultPanel"></div>
+          </div>
+
         </div>
         <!-- LR 전용 -->
         <div id="lr-fields" style="display:none">
@@ -1068,13 +1656,53 @@ const db   = firebase.database();
 const BACKEND = 'https://portal-dsyl.onrender.com';
 
 // ===== 전역 상태 =====
-let currentStep   = 1;
-let selectedMode  = '';
+let currentStep    = 1;
+let selectedMode   = '';
 let selectedRadius = 500;
+let selectedAnalysisMode = '';   // 'A' | 'B' | 'C'
+let selectedBuildingCount = 10;
+let selectedGrades = ['Prime','A'];  // 모드 C 등급 필터
+let dartConfirmedCorp = null;        // DART 기업 확정 객체
+let selectedClientIssue = '';         // 'expand' | 'shrink' | 'new'
+let selectedAreaScope   = 'district'; // 'district' | 'sigungu'
+let selectedScopeDistricts = [];      // 권역 복수 선택
+let selectedSigungu     = [];         // 시군구 태그 목록
+window._lastVacancyResult = null;     // 물건 검색 결과 캐시
+
+// ===== 서울시 시군구 목록 =====
+const SIGUNGU_LIST = [
+  '강남구','강동구','강북구','강서구','관악구','광진구','구로구','금천구',
+  '노원구','도봉구','동대문구','동작구','마포구','서대문구','서초구',
+  '성동구','성북구','송파구','양천구','영등포구','용산구','은평구',
+  '종로구','중구','중랑구',
+  '수원시','성남시 분당구','성남시 수정구','성남시 중원구','고양시','용인시',
+  '부천시','안산시','안양시','남양주시','화성시','의정부시','평택시',
+  '파주시','광주시','하남시','의왕시','과천시','인천 연수구','인천 남동구'
+];
+let intelCollected = null;           // 수집된 인텔리전스
+let dartDebounceTimer = null;
+let dartACIndex = -1;                // 자동완성 키보드 포커스
 let reportParams  = {};
-let reportHistory = [];   // 생성된 리포트 목록 (로컬 임시 저장)
+let reportHistory = [];
 let currentReport = null;
 const tags = { competitor: [], compBuilding: [] };
+
+// ===== 업종코드 → 업종명 매핑 (DART 기준 주요 코드) =====
+const INDUTY_MAP = {
+  'J': '정보통신업', 'K': '금융 및 보험업', 'L': '부동산업',
+  'M': '전문·과학·기술 서비스업', 'N': '사업시설관리·사업지원서비스업',
+  'C': '제조업', 'G': '도매 및 소매업', 'H': '운수 및 창고업',
+  'I': '숙박 및 음식점업', 'P': '교육 서비스업', 'Q': '보건업',
+  'R': '예술·스포츠·여가 관련 서비스업', 'S': '협회 및 단체',
+  'A': '농업·임업·어업', 'B': '광업', 'D': '전기·가스·수도',
+  'E': '하수·폐기물처리·환경복원업', 'F': '건설업',
+};
+function getIndustryName(code) {
+  if (!code) return '';
+  // DART induty_code 형태: 첫글자 대분류
+  const c = String(code).toUpperCase().charAt(0);
+  return INDUTY_MAP[c] || code;
+}
 
 // ===== Auth (crePortalUser 기반 — portal.html과 동일 방식) =====
 const storedUser = localStorage.getItem('crePortalUser');
@@ -1100,12 +1728,53 @@ function closeModal() {
 }
 
 function resetModal() {
-  currentStep  = 1;
-  selectedMode = '';
+  currentStep    = 1;
+  selectedMode   = '';
   selectedRadius = 500;
+  selectedAnalysisMode  = '';
+  selectedBuildingCount = 10;
+  selectedGrades = ['Prime','A'];
+  dartConfirmedCorp = null;
+  intelCollected    = null;
+  dartACIndex       = -1;
   reportParams = {};
   tags.competitor  = [];
   tags.compBuilding = [];
+
+  // DART/인텔리전스 UI 초기화
+  document.getElementById('clientCompany').value = '';
+  document.getElementById('dartDropdown').classList.remove('show');
+  document.getElementById('companyConfirmed').classList.remove('show');
+  document.getElementById('inferCompBtn') && (document.getElementById('inferCompBtn').disabled = false);
+  document.getElementById('intelPanel').classList.remove('show');
+  document.getElementById('intelResultPanel').classList.remove('show');
+  document.getElementById('intelResultPanel').innerHTML = '';
+
+  // 이슈 패널 초기화
+  selectedClientIssue    = '';
+  selectedAreaScope      = 'district';
+  selectedScopeDistricts = [];
+  selectedSigungu        = [];
+  window._lastVacancyResult = null;
+  ['expand','shrink','new'].forEach(t => document.getElementById('issue-'+t)?.classList.remove('selected'));
+  document.getElementById('issue-sub-panel').classList.remove('show');
+  document.getElementById('vacancyPreview').classList.remove('show');
+  document.getElementById('areaInsightBox').classList.remove('show');
+  document.getElementById('desiredAreaMin').value = '';
+  document.getElementById('desiredAreaMax').value = '';
+  const ca = document.getElementById('currentArea'); if (ca) ca.value = '';
+  document.querySelectorAll('.grade-check-btn[data-scope]').forEach(b => b.classList.remove('active'));
+  const si = document.getElementById('sigunguInput'); if (si) si.value = '';
+  const st = document.getElementById('sigunguTags'); if (st) st.innerHTML = '';
+
+  // Step3 분석모드 초기화
+  ['A','B','C'].forEach(m => {
+    document.getElementById('amc-' + m)?.classList.remove('selected');
+    document.getElementById('sub-' + m)?.classList.remove('show');
+  });
+  document.querySelectorAll('.count-btn').forEach(b => b.classList.remove('active'));
+  const def10 = document.querySelector('.count-btn[data-val="10"]');
+  if (def10) def10.classList.add('active');
 
   ['card-TR','card-LR'].forEach(id => document.getElementById(id).classList.remove('selected','lr-mode'));
   document.getElementById('buildingAddress').value = '';
@@ -1173,7 +1842,491 @@ function validateStep(step) {
   if (step === 2) {
     if (!reportParams.buildingAddress) { showToast('기준 빌딩 주소를 입력해주세요', 'error'); return false; }
   }
+  if (step === 3) {
+    if (!selectedAnalysisMode) { showToast('분석 방식을 선택해주세요', 'error'); return false; }
+  }
   return true;
+}
+
+// ===== Step3 분석모드 선택 =====
+function selectAnalysisMode(mode) {
+  selectedAnalysisMode = mode;
+  ['A','B','C'].forEach(m => {
+    document.getElementById('amc-' + m).classList.toggle('selected', m === mode);
+    document.getElementById('sub-' + m).classList.toggle('show', m === mode);
+  });
+  // 모드 B/C에서 권역 동기화
+  if (mode === 'C') {
+    const dB = document.getElementById('districtSelect');
+    const dC = document.getElementById('districtSelectC');
+    if (dB && dC) dC.value = dB.value;
+  }
+}
+
+function selectCount(btn) {
+  document.querySelectorAll('.count-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedBuildingCount = parseInt(btn.dataset.val);
+}
+
+function toggleGrade(btn) {
+  btn.classList.toggle('active');
+  const g = btn.dataset.grade;
+  if (btn.classList.contains('active')) {
+    if (!selectedGrades.includes(g)) selectedGrades.push(g);
+  } else {
+    selectedGrades = selectedGrades.filter(x => x !== g);
+  }
+}
+
+// ===== DART 기업명 자동완성 =====
+function onClientCompanyInput(val) {
+  clearTimeout(dartDebounceTimer);
+  dartACIndex = -1;
+  if (!dartConfirmedCorp) {
+    // 확정 전 입력 중이면 업종 초기화
+    document.getElementById('clientIndustry').value = '';
+  }
+  if (val.length < 2) {
+    document.getElementById('dartDropdown').classList.remove('show');
+    return;
+  }
+  dartDebounceTimer = setTimeout(() => searchDartCompany(val), 350);
+}
+
+async function searchDartCompany(q) {
+  const dropdown = document.getElementById('dartDropdown');
+  const loading  = document.getElementById('dartLoading');
+  dropdown.innerHTML = '<div class="dart-loading">검색 중...</div>';
+  dropdown.classList.add('show');
+
+  try {
+    const res = await fetch(`${BACKEND}/api/dart/search?q=${encodeURIComponent(q)}&n=8`);
+    if (!res.ok) throw new Error('API 오류');
+    const data = await res.json();
+    const list = data.companies || [];
+
+    if (!list.length) {
+      dropdown.innerHTML = '<div class="dart-loading">검색 결과 없음</div>';
+      return;
+    }
+    dropdown.innerHTML = list.map((c, i) => `
+      <div class="ac-item" data-idx="${i}"
+        onclick="confirmDartCompany(${JSON.stringify(c).replace(/"/g,'&quot;')})"
+        onmouseover="setACFocus(${i})">
+        <div class="ac-item-name">${c.corp_name}
+          ${c.stock_code ? `<span class="stock-badge">KOSPI</span>` : ''}
+          ${c.market_name === 'KOSDAQ' ? `<span class="stock-badge" style="background:#e0f2fe;color:#0369a1">KOSDAQ</span>` : ''}
+        </div>
+        <div class="ac-item-meta">
+          ${getIndustryName(c.induty_code) || '업종 미상'}
+          ${c.adres ? '· ' + c.adres.substring(0, 20) : ''}
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    dropdown.innerHTML = '<div class="dart-loading" style="color:var(--danger)">연결 오류 — 직접 입력하세요</div>';
+    setTimeout(() => dropdown.classList.remove('show'), 2000);
+  }
+}
+
+function setACFocus(idx) {
+  dartACIndex = idx;
+  document.querySelectorAll('#dartDropdown .ac-item').forEach((el, i) => {
+    el.classList.toggle('focused', i === idx);
+  });
+}
+
+function onClientCompanyKeydown(e) {
+  const dropdown = document.getElementById('dartDropdown');
+  const items = dropdown.querySelectorAll('.ac-item');
+  if (!dropdown.classList.contains('show') || !items.length) return;
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    dartACIndex = Math.min(dartACIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('focused', i === dartACIndex));
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    dartACIndex = Math.max(dartACIndex - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('focused', i === dartACIndex));
+  } else if (e.key === 'Enter' && dartACIndex >= 0) {
+    e.preventDefault();
+    items[dartACIndex]?.click();
+  } else if (e.key === 'Escape') {
+    dropdown.classList.remove('show');
+  }
+}
+
+function confirmDartCompany(corp) {
+  dartConfirmedCorp = corp;
+  document.getElementById('clientCompany').value = corp.corp_name;
+  document.getElementById('dartDropdown').classList.remove('show');
+
+  // 업종 자동 입력
+  const industry = getIndustryName(corp.induty_code);
+  document.getElementById('clientIndustry').value = industry;
+
+  // 확정 뱃지 표시
+  const meta = [
+    corp.stock_code ? `종목코드 ${corp.stock_code}` : '',
+    industry || '',
+    corp.adres ? corp.adres.substring(0, 25) + '…' : ''
+  ].filter(Boolean).join(' · ');
+
+  document.getElementById('confirmedName').textContent = corp.corp_name;
+  document.getElementById('confirmedMeta').textContent = meta;
+  document.getElementById('companyConfirmed').classList.add('show');
+
+  // AI 경쟁사 추론 버튼 활성화
+  document.getElementById('inferCompBtn').disabled = false;
+}
+
+function clearConfirmedCompany() {
+  dartConfirmedCorp = null;
+  document.getElementById('clientCompany').value = '';
+  document.getElementById('clientIndustry').value = '';
+  document.getElementById('companyConfirmed').classList.remove('show');
+  document.getElementById('clientCompany').focus();
+}
+
+// 외부 클릭 시 드롭다운 닫기
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.autocomplete-wrap')) {
+    document.getElementById('dartDropdown')?.classList.remove('show');
+  }
+});
+
+// ===== AI 경쟁사 자동 추론 =====
+async function autoInferCompetitors() {
+  const company  = document.getElementById('clientCompany').value.trim();
+  const industry = document.getElementById('clientIndustry').value.trim();
+  if (!company) { showToast('고객사명을 먼저 입력해주세요', 'error'); return; }
+
+  const btn = document.getElementById('inferCompBtn');
+  btn.disabled = true; btn.textContent = '⏳ 추론 중...';
+
+  try {
+    const res = await fetch(`${BACKEND}/api/dart/competitors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company, industry })
+    });
+    const data = await res.json();
+    const list = data.competitors || [];
+
+    if (list.length) {
+      list.forEach(c => {
+        if (!tags.competitor.includes(c)) tags.competitor.push(c);
+      });
+      renderTags('competitor');
+      showToast(`경쟁사 ${list.length}개 자동 추론 완료`, 'success');
+    } else {
+      showToast('경쟁사를 추론할 수 없습니다 — 직접 입력해주세요', 'error');
+    }
+  } catch (e) {
+    showToast('추론 중 오류 발생', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '✨ AI 자동 추론';
+  }
+}
+
+// ===== 인텔리전스 패널 토글 =====
+function toggleIntelPanel() {
+  document.getElementById('intelPanel').classList.toggle('show');
+}
+
+// ===== 인텔리전스 수집 =====
+async function collectIntelligence() {
+  const company    = document.getElementById('clientCompany').value.trim();
+  const industry   = document.getElementById('clientIndustry').value.trim();
+  const competitors = tags.competitor;
+
+  if (!company) { showToast('고객사명을 먼저 입력해주세요', 'error'); return; }
+
+  const items = {
+    policy:          document.getElementById('ic-policy').checked,
+    clientNews:      document.getElementById('ic-client-news').checked,
+    competitorNews:  document.getElementById('ic-competitor-news').checked,
+    industryTrend:   document.getElementById('ic-industry').checked,
+    marketIssues:    document.getElementById('ic-market').checked,
+  };
+
+  const btn = document.getElementById('intelCollectBtn');
+  btn.disabled = true; btn.textContent = '⏳ 수집 중...';
+
+  const resultPanel = document.getElementById('intelResultPanel');
+  resultPanel.innerHTML = '<div class="intel-spinner">🔍 정보 수집 중...</div>';
+  resultPanel.classList.add('show');
+
+  try {
+    const res = await fetch(`${BACKEND}/api/intelligence/collect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company, industry, competitors, items })
+    });
+    const data = await res.json();
+    intelCollected = data;
+
+    // 결과 렌더링
+    const sections = [];
+    if (data.policy?.length)         sections.push({ title: '🏛️ 부동산 정책', items: data.policy });
+    if (data.clientNews?.length)      sections.push({ title: '🏢 고객사 뉴스', items: data.clientNews });
+    if (data.competitorNews?.length)  sections.push({ title: '🔍 경쟁사 동향', items: data.competitorNews });
+    if (data.industryTrend?.length)   sections.push({ title: '📊 업계 동향', items: data.industryTrend });
+    if (data.marketIssues?.length)    sections.push({ title: '💼 임차 이슈', items: data.marketIssues });
+
+    if (!sections.length) {
+      resultPanel.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:8px">수집된 정보가 없습니다</div>';
+      return;
+    }
+
+    resultPanel.innerHTML = sections.map(s => `
+      <h4>${s.title} (${s.items.length}건)</h4>
+      ${s.items.slice(0, 3).map(n => `
+        <div class="ir-item">
+          <a href="${n.link || '#'}" target="_blank" style="color:var(--text);text-decoration:none;font-weight:600">${n.title}</a>
+          <div class="ir-source">${n.pubDate ? formatDate(n.pubDate) + ' · ' : ''}${n.source || ''}</div>
+        </div>
+      `).join('')}
+    `).join('');
+
+    showToast('인텔리전스 수집 완료 — 리포트에 자동 반영됩니다', 'success');
+  } catch (e) {
+    resultPanel.innerHTML = '<div style="color:var(--danger);font-size:12px">수집 중 오류 발생 — 리포트 생성 시 백엔드에서 처리됩니다</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = '⚡ 지금 수집하기';
+  }
+}
+
+// ===== 이슈 선택 =====
+function selectIssue(type) {
+  selectedClientIssue = type;
+  ['expand','shrink','new'].forEach(t => {
+    document.getElementById('issue-'+t).classList.toggle('selected', t === type);
+  });
+  document.getElementById('issue-sub-panel').classList.add('show');
+}
+
+// ===== 지역 범위 탭 =====
+function selectAreaScope(scope) {
+  selectedAreaScope = scope;
+  ['district','sigungu'].forEach(s => {
+    document.getElementById('scopeTab-'+s).classList.toggle('active', s === scope);
+    document.getElementById('scopePanel-'+s).style.display = s === scope ? '' : 'none';
+  });
+}
+
+// ===== 권역 토글 =====
+function toggleScopeDistrict(btn) {
+  btn.classList.toggle('active');
+  const v = btn.dataset.scope;
+  if (btn.classList.contains('active')) {
+    if (!selectedScopeDistricts.includes(v)) selectedScopeDistricts.push(v);
+  } else {
+    selectedScopeDistricts = selectedScopeDistricts.filter(x => x !== v);
+  }
+}
+
+// ===== 시군구 자동완성 =====
+function onSigunguInput(val) {
+  const dd = document.getElementById('sigunguDropdown');
+  if (!val.trim()) { dd.classList.remove('show'); return; }
+  const filtered = SIGUNGU_LIST.filter(s => s.includes(val.trim())).slice(0, 10);
+  if (!filtered.length) { dd.classList.remove('show'); return; }
+  dd.innerHTML = filtered.map(s =>
+    `<div class="sigungu-item" onclick="addSigungu('${s}')">${s}</div>`
+  ).join('');
+  dd.classList.add('show');
+}
+
+function addSigungu(name) {
+  if (!selectedSigungu.includes(name)) {
+    selectedSigungu.push(name);
+    renderSigunguTags();
+  }
+  document.getElementById('sigunguInput').value = '';
+  document.getElementById('sigunguDropdown').classList.remove('show');
+}
+
+function removeSigungu(name) {
+  selectedSigungu = selectedSigungu.filter(x => x !== name);
+  renderSigunguTags();
+}
+
+function renderSigunguTags() {
+  document.getElementById('sigunguTags').innerHTML = selectedSigungu.map(s =>
+    `<span class="sigungu-selected-tag">${s}<span class="rm" onclick="removeSigungu('${s}')">×</span></span>`
+  ).join('');
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.sigungu-wrap')) {
+    document.getElementById('sigunguDropdown')?.classList.remove('show');
+  }
+});
+
+// ===== 공실 물건 검색 (Firebase) =====
+async function searchVacancyByArea() {
+  const areaMin = parseInt(document.getElementById('desiredAreaMin').value) || 0;
+  const areaMax = parseInt(document.getElementById('desiredAreaMax').value) || 9999;
+  if (!areaMin) { showToast('희망 면적을 입력해주세요', 'error'); return; }
+
+  const scope     = selectedAreaScope;
+  const districts = selectedScopeDistricts;
+  const sigungu   = selectedSigungu;
+
+  if (scope === 'district' && !districts.length) {
+    showToast('권역을 하나 이상 선택해주세요', 'error'); return;
+  }
+  if (scope === 'sigungu' && !sigungu.length) {
+    showToast('시·군·구를 하나 이상 선택해주세요', 'error'); return;
+  }
+
+  const btn = document.getElementById('vacancySearchBtn');
+  btn.disabled = true; btn.textContent = '⏳ 검색 중...';
+
+  try {
+    // Firebase buildings 전체 로드
+    const snap = await db.ref('buildings').once('value');
+    const buildings = snap.val() || {};
+
+    // 지역 필터링
+    const filteredIds = Object.entries(buildings)
+      .filter(([id, b]) => {
+        if (!b) return false;
+        const region  = b.region || '';
+        const address = b.address || '';
+        if (scope === 'district') return districts.includes(region);
+        // 시군구 — 주소 포함 여부로 판단
+        return sigungu.some(sg => address.includes(sg));
+      })
+      .map(([id]) => id);
+
+    if (!filteredIds.length) {
+      showEmptyVacancy(areaMin, areaMax, districts, sigungu);
+      return;
+    }
+
+    // rentrolls 조회
+    const matched = [];
+    for (const bid of filteredIds.slice(0, 40)) {
+      const rSnap = await db.ref(`rentrolls/${bid}`).once('value');
+      const rData = rSnap.val();
+      if (!rData) continue;
+      const entries = Array.isArray(rData) ? rData : Object.values(rData);
+      entries.forEach(v => {
+        if (!v || !v.floor) return;
+        // 전용 면적 계산 (임대면적 × 전용률, 또는 exclusiveArea 직접)
+        const rentArea  = parseFloat(v.rentArea || v.exclusiveArea || 0);
+        const excRate   = parseFloat(v.exclusiveRate || 0.6);
+        const exclusive = v.exclusiveArea ? parseFloat(v.exclusiveArea) : rentArea * excRate;
+        if (exclusive >= areaMin && exclusive <= areaMax) {
+          matched.push({
+            buildingId:   bid,
+            buildingName: buildings[bid]?.buildingName || buildings[bid]?.name || bid,
+            address:      buildings[bid]?.address || '',
+            floor:        v.floor,
+            rentArea:     rentArea.toFixed(1),
+            exclusiveArea: exclusive.toFixed(1),
+            exclusiveRate: v.exclusiveRate || (excRate * 100).toFixed(0) + '%',
+            vacantArea:   v.vacantArea || rentArea,
+            deposit:      v.deposit || v.depositPy || '',
+            rentPy:       v.rentPy   || '',
+            maintenancePy: v.maintenancePy || '',
+          });
+        }
+      });
+    }
+
+    window._lastVacancyResult = matched;
+    renderVacancyPreview(matched, areaMin, areaMax);
+
+    // 검색 결과 적더라도 AI 인사이트 표시
+    if (matched.length < 3) {
+      fetchAreaInsight(areaMin, areaMax, scope, districts, sigungu, matched);
+    }
+
+  } catch (e) {
+    showToast('검색 중 오류: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 해당 조건 공실 물건 검색';
+  }
+}
+
+function renderVacancyPreview(list, areaMin, areaMax) {
+  const preview = document.getElementById('vacancyPreview');
+  const tbody   = document.getElementById('vpTableBody');
+  const empty   = document.getElementById('vpEmpty');
+  const count   = document.getElementById('vpCount');
+  const header  = document.getElementById('vpHeaderText');
+
+  header.textContent = `전용 ${areaMin}~${areaMax}평 공실`;
+  preview.classList.add('show');
+
+  if (!list.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    count.textContent = '0건';
+    return;
+  }
+
+  empty.style.display = 'none';
+  count.textContent = list.length + '건';
+  tbody.innerHTML = list.slice(0, 30).map(v => `
+    <tr>
+      <td style="text-align:left;font-weight:600">${v.buildingName}</td>
+      <td>${v.floor}</td>
+      <td>${v.exclusiveRate}</td>
+      <td>${v.rentArea}평</td>
+      <td class="highlight">${v.exclusiveArea}평</td>
+      <td>${v.vacantArea}평</td>
+      <td>${v.deposit ? Number(v.deposit).toLocaleString() + '원' : '-'}</td>
+      <td>${v.rentPy ? Number(v.rentPy).toLocaleString() + '원' : '-'}</td>
+      <td>${v.maintenancePy ? Number(v.maintenancePy).toLocaleString() + '원' : '-'}</td>
+    </tr>
+  `).join('');
+}
+
+function showEmptyVacancy(areaMin, areaMax, districts, sigungu) {
+  const preview = document.getElementById('vacancyPreview');
+  const tbody   = document.getElementById('vpTableBody');
+  const empty   = document.getElementById('vpEmpty');
+  preview.classList.add('show');
+  tbody.innerHTML = '';
+  empty.style.display = '';
+  document.getElementById('vpHeaderText').textContent = `전용 ${areaMin}~${areaMax}평 공실`;
+  document.getElementById('vpCount').textContent = '0건';
+  fetchAreaInsight(areaMin, areaMax, selectedAreaScope, districts, sigungu, []);
+}
+
+async function fetchAreaInsight(areaMin, areaMax, scope, districts, sigungu, vacancies) {
+  const box  = document.getElementById('areaInsightBox');
+  const body = document.getElementById('areaInsightBody');
+  box.classList.add('show');
+  body.innerHTML = '<span style="color:var(--muted)">🤖 분석 중...</span>';
+
+  const locationDesc = scope === 'district'
+    ? districts.join('·') + ' 권역'
+    : sigungu.join(', ');
+
+  try {
+    const res = await fetch(`${BACKEND}/api/intelligence/area-insight`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        areaMin, areaMax, locationDesc,
+        vacancyCount: vacancies.length,
+        vacancySample: vacancies.slice(0, 5),
+        clientIssue: selectedClientIssue,
+        industry: document.getElementById('clientIndustry').value.trim()
+      })
+    });
+    const data = await res.json();
+    body.innerHTML = (data.insight || '분석 결과를 가져올 수 없습니다').replace(/\n/g, '<br>');
+  } catch {
+    body.innerHTML = `${locationDesc} 내 전용 ${areaMin}~${areaMax}평 규모의 오피스 공간에 대한 AI 분석을 제공합니다.<br>리포트 생성 시 상세 분석이 포함됩니다.`;
+  }
 }
 
 // ===== 모드 선택 =====
@@ -1231,6 +2384,8 @@ async function searchBuilding() {
         reportParams.district     = matched.region || guessDistrict(r.address_name);
         matchHtml = `<span class="match-badge match-full">✓ Portal 매칭</span>`;
         document.getElementById('districtSelect').value = reportParams.district || 'GBD';
+        const dC = document.getElementById('districtSelectC');
+        if (dC) dC.value = reportParams.district || 'GBD';
       } else {
         reportParams.district = guessDistrict(r.address_name);
         matchHtml = `<span class="match-badge match-none">미등록 빌딩</span>`;
@@ -1255,15 +2410,33 @@ async function matchWithPortalDB(address) {
     const buildings = snap.val() || {};
     const addrNorm = address.replace(/\s+/g,'').toLowerCase();
 
+    let bestMatch = null;
+    let bestScore = 0;
+
     for (const [id, data] of Object.entries(buildings)) {
       if (!data || typeof data !== 'object') continue;
-      const bAddr = ((data.address || '') + (data.addressJibun || '')).replace(/\s+/g,'').toLowerCase();
-      if (bAddr.includes(addrNorm) || addrNorm.includes(bAddr.slice(0,20))) {
-        return { id, ...data };
+      const bRoad   = (data.address    || '').replace(/\s+/g,'').toLowerCase();
+      const bJibun  = (data.addressJibun || '').replace(/\s+/g,'').toLowerCase();
+
+      // 완전 일치 (도로명 또는 지번)
+      if (bRoad === addrNorm || bJibun === addrNorm) return { id, ...data };
+
+      // 점수 기반 매칭 — 최소 15자 이상 공통 prefix 필요
+      const matchLen = commonPrefixLen(addrNorm, bRoad);
+      const minLen   = Math.min(addrNorm.length, bRoad.length);
+      if (minLen > 10 && matchLen >= Math.min(15, minLen * 0.8)) {
+        const score = matchLen;
+        if (score > bestScore) { bestScore = score; bestMatch = { id, ...data }; }
       }
     }
-    return null;
+    return bestScore >= 15 ? bestMatch : null;
   } catch { return null; }
+}
+
+function commonPrefixLen(a, b) {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
 }
 
 function guessDistrict(address) {
@@ -1346,19 +2519,44 @@ async function generateReport() {
   const district = document.getElementById('districtSelect').value;
   const buildingName = document.getElementById('buildingNameInput').value.trim() || reportParams.buildingName || '기준 빌딩';
 
+  // 분석 모드별 범위 파라미터 구성
+  let analysisDistrict = district;
+  let analysisGrades   = [];
+  let analysisRadius   = selectedRadius;
+
+  if (selectedAnalysisMode === 'B') {
+    analysisDistrict = document.getElementById('districtSelect').value;
+    analysisRadius   = 0;  // 반경 미사용
+  } else if (selectedAnalysisMode === 'C') {
+    analysisDistrict = document.getElementById('districtSelectC').value;
+    analysisGrades   = selectedGrades;
+    analysisRadius   = 0;
+  }
+
   const body = {
-    mode:         selectedMode,
-    buildingId:   reportParams.buildingId || '',
-    buildingName: buildingName,
-    district:     district,
-    radius:       selectedRadius,
+    mode:          selectedMode,
+    buildingId:    reportParams.buildingId || '',
+    buildingName:  buildingName,
+    district:      analysisDistrict,
+    radius:        analysisRadius,
+    analysisMode:  selectedAnalysisMode,
+    grades:        analysisGrades,
+    buildingLimit: selectedBuildingCount,
+    dartCorp:      dartConfirmedCorp || null,
+    intelData:     intelCollected    || null,
   };
 
   if (selectedMode === 'TR') {
     body.clientCompany  = document.getElementById('clientCompany').value.trim();
     body.clientIndustry = document.getElementById('clientIndustry').value.trim();
+    body.clientIssue    = selectedClientIssue;
     body.desiredAreaMin = parseInt(document.getElementById('desiredAreaMin').value) || 0;
     body.desiredAreaMax = parseInt(document.getElementById('desiredAreaMax').value) || 0;
+    body.currentArea    = parseInt(document.getElementById('currentArea')?.value) || 0;
+    body.areaScope      = selectedAreaScope;
+    body.scopeDistricts = selectedScopeDistricts;
+    body.scopeSigungu   = selectedSigungu;
+    body.vacancySearchResult = window._lastVacancyResult || null;
     body.competitors    = tags.competitor;
     if (!body.clientCompany) { showToast('고객사명을 입력해주세요', 'error'); return; }
   } else {
@@ -1463,7 +2661,7 @@ function renderReportList() {
       <h3>${r.buildingName}</h3>
       <div class="client">${r.clientName} · ${r.district}</div>
       <div class="meta">
-        <span>📍 반경 ${(r.params.radius/1000).toFixed(1)}km</span>
+        <span>${r.params.analysisMode === 'A' ? '📍 반경 ' + (r.params.radius/1000).toFixed(1) + 'km' : r.params.analysisMode === 'B' ? '🗺️ 권역 전체' : '🎯 권역×등급 필터'}</span>
         <span>🏢 인근 ${r.nearbyBuildings?.length || 0}개 빌딩</span>
         <span>📅 ${new Date(r.createdAt).toLocaleDateString('ko-KR')}</span>
       </div>
@@ -1634,7 +2832,238 @@ function renderReportHTML(report) {
         <div class="ai-analysis-text">${aiAnalysis}</div>
       </div>
     </div>` : ''}
-  `;
+
+    <!-- Section 6: 인근 빌딩 임대료 현황 표 + 도표 -->
+    ${(report.nearbyBuildings?.length || report.vacancyData?.length) ? `
+    <div class="report-section rent-chart-section">
+      <div class="section-title">
+        <div class="section-icon">💰</div>
+        권역 빌딩 임대료 현황
+      </div>
+
+      <!-- 임대료 요약 테이블 -->
+      <table class="rent-summary-table" id="rentSummaryTable_${report.id}">
+        <thead>
+          <tr>
+            <th>빌딩명</th>
+            <th>등급</th>
+            <th>거리</th>
+            <th>임대면적 (평)</th>
+            <th>임대료/평 (원)</th>
+            <th>관리비/평 (원)</th>
+            <th>보증금배수</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${buildRentTableRows(report)}
+        </tbody>
+      </table>
+
+      <!-- 차트 2종 -->
+      <div class="rent-chart-wrap">
+        <div class="chart-card">
+          <div class="cc-title">📊 빌딩별 임대료/평 비교 (원)</div>
+          <canvas class="mini-chart" id="rentBarChart_${report.id}" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="cc-title">🥧 빌딩 등급 분포</div>
+          <canvas class="mini-chart" id="gradeDonutChart_${report.id}" height="200"></canvas>
+        </div>
+      </div>
+    </div>` : ''}
+
+    <!-- Section 7: 물건 검색 결과 (신규/확장/축소 이슈) -->
+    ${report.params.vacancySearchResult?.length ? `
+    <div class="report-section">
+      <div class="section-title">
+        <div class="section-icon">🏗️</div>
+        조건 충족 공실 물건 목록 (전용 ${report.params.desiredAreaMin}~${report.params.desiredAreaMax}평)
+      </div>
+      <table class="vacancy-table">
+        <thead>
+          <tr><th>빌딩명</th><th>층</th><th>전용률</th><th>임대면적</th><th>전용면적</th><th>보증금/평</th><th>임대료/평</th><th>관리비/평</th></tr>
+        </thead>
+        <tbody>
+          ${(report.params.vacancySearchResult||[]).slice(0,20).map(v => `
+            <tr>
+              <td>${v.buildingName}</td><td>${v.floor}</td>
+              <td>${v.exclusiveRate}</td>
+              <td>${v.rentArea}평</td><td>${v.exclusiveArea}평</td>
+              <td>${v.deposit ? Number(v.deposit).toLocaleString()+'원' : '-'}</td>
+              <td>${v.rentPy ? Number(v.rentPy).toLocaleString()+'원' : '-'}</td>
+              <td>${v.maintenancePy ? Number(v.maintenancePy).toLocaleString()+'원' : '-'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}
+
+    <!-- Section 8: AI 종합 시사점 슬라이드 -->
+    <div class="report-section" id="aiInsightSlide_${report.id}">
+      <div class="section-title">
+        <div class="section-icon">🎯</div>
+        S&amp;I CRE 전략 시사점
+      </div>
+      <div class="ai-insight-card">
+        <div class="aic-header">
+          🤖 AI 분석 요약
+          <span style="font-size:11px;opacity:.7;font-weight:400">— ${report.district} 오피스 마켓 · ${new Date(report.createdAt).toLocaleDateString('ko-KR')} 기준</span>
+        </div>
+        <div class="aic-points" id="aiInsightPoints_${report.id}">
+          <div class="aic-point"><span class="dot">⏳</span><span>시사점 생성 중...</span></div>
+        </div>
+      </div>
+    </div>
+  \`;
+
+  // 차트 렌더링 (비동기)
+  setTimeout(() => renderRentCharts(report), 100);
+  // AI 시사점 생성 (비동기)
+  setTimeout(() => generateInsightPoints(report), 300);
+}
+
+function buildRentTableRows(report) {
+  const buildings = report.nearbyBuildings || [];
+  const vacancies = report.vacancyData    || [];
+
+  if (!buildings.length) return '<tr><td colspan="7" style="text-align:center;color:var(--muted)">데이터 없음</td></tr>';
+
+  return buildings.slice(0, 15).map(b => {
+    // 해당 빌딩 임대료 평균
+    const bVacs = vacancies.filter(v => v.buildingId === b.id);
+    const avgRent = bVacs.length
+      ? Math.round(bVacs.reduce((s,v) => s + (v.rentPy||0), 0) / bVacs.length)
+      : null;
+    const avgMaint = bVacs.length
+      ? Math.round(bVacs.reduce((s,v) => s + (v.maintenancePy||0), 0) / bVacs.length)
+      : null;
+    const avgDeposit = bVacs.length && bVacs[0].rentPy
+      ? Math.round((bVacs[0].deposit||0) / (bVacs[0].rentPy||1))
+      : null;
+    const totalArea = bVacs.reduce((s,v) => s + parseFloat(v.rentArea||0), 0);
+
+    return `<tr>
+      <td style="text-align:left;font-weight:600">${b.buildingName || b.name || '-'}</td>
+      <td><span class="pill pill-blue">${b.grade || '-'}</span></td>
+      <td>${b.distanceM ? b.distanceM+'m' : '-'}</td>
+      <td>${totalArea ? totalArea.toFixed(0)+'평' : '-'}</td>
+      <td class="highlight">${avgRent ? avgRent.toLocaleString() : '-'}</td>
+      <td>${avgMaint ? avgMaint.toLocaleString() : '-'}</td>
+      <td>${avgDeposit ? avgDeposit+'개월' : '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderRentCharts(report) {
+  const buildings = (report.nearbyBuildings || []).slice(0, 10);
+  const vacancies = report.vacancyData || [];
+
+  // ── 막대 차트: 빌딩별 임대료/평 ──
+  const barCtx = document.getElementById(`rentBarChart_${report.id}`);
+  if (barCtx && buildings.length) {
+    const labels = buildings.map(b => (b.buildingName||b.name||'').substring(0,8));
+    const rentData = buildings.map(b => {
+      const bVacs = vacancies.filter(v => v.buildingId === b.id);
+      if (!bVacs.length) return 0;
+      return Math.round(bVacs.reduce((s,v) => s+(v.rentPy||0),0) / bVacs.length);
+    });
+    new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: '임대료/평(원)',
+          data: rentData,
+          backgroundColor: rentData.map((v,i) =>
+            i === 0 ? 'rgba(30,96,202,0.85)' : 'rgba(30,96,202,0.35)'
+          ),
+          borderColor: 'rgba(30,96,202,1)',
+          borderWidth: 1,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { ticks: { callback: v => v ? v.toLocaleString() : 0, font: { size: 10 } } },
+          x: { ticks: { font: { size: 10 } } }
+        }
+      }
+    });
+  }
+
+  // ── 도넛 차트: 등급 분포 ──
+  const donutCtx = document.getElementById(`gradeDonutChart_${report.id}`);
+  if (donutCtx && buildings.length) {
+    const gradeCounts = {};
+    buildings.forEach(b => {
+      const g = b.grade || 'ETC';
+      gradeCounts[g] = (gradeCounts[g] || 0) + 1;
+    });
+    const gradeColors = { Prime:'#1a3c5e', A:'#2e7dca', B:'#3b82f6', C:'#93c5fd', D:'#bfdbfe', E:'#e2e8f0', ETC:'#94a3b8' };
+    new Chart(donutCtx, {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(gradeCounts),
+        datasets: [{
+          data: Object.values(gradeCounts),
+          backgroundColor: Object.keys(gradeCounts).map(g => gradeColors[g] || '#94a3b8'),
+          borderWidth: 2,
+          borderColor: '#fff',
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'right', labels: { font: { size: 10 }, boxWidth: 12 } }
+        }
+      }
+    });
+  }
+}
+
+async function generateInsightPoints(report) {
+  const el = document.getElementById(`aiInsightPoints_${report.id}`);
+  if (!el) return;
+
+  try {
+    const res = await fetch(`${BACKEND}/api/intelligence/insight-points`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        district:      report.district,
+        buildingName:  report.buildingName,
+        clientName:    report.clientName,
+        clientIssue:   report.params.clientIssue,
+        industry:      report.params.clientIndustry,
+        nearbyCount:   (report.nearbyBuildings||[]).length,
+        vacancyCount:  (report.vacancyData||[]).length,
+        desiredMin:    report.params.desiredAreaMin,
+        desiredMax:    report.params.desiredAreaMax,
+        analysisMode:  report.params.analysisMode,
+        mode:          report.mode,
+      })
+    });
+    const data = await res.json();
+    const points = data.points || [];
+
+    if (!points.length) {
+      el.innerHTML = '<div class="aic-point"><span class="dot">ℹ️</span><span>리포트 생성 시 상세 시사점이 포함됩니다.</span></div>';
+      return;
+    }
+    el.innerHTML = points.map(p => `
+      <div class="aic-point">
+        <span class="dot">${p.icon || '•'}</span>
+        <span><strong>${p.title || ''}</strong>${p.title ? ' — ' : ''}${p.body}</span>
+      </div>
+    `).join('');
+  } catch {
+    el.innerHTML = '<div class="aic-point"><span class="dot">📋</span><span>시사점을 불러오는 중 오류가 발생했습니다. 리포트 생성 시 자동 포함됩니다.</span></div>';
+  }
+}
+
+
 }
 
 // ===== PDF 저장 =====
