@@ -2914,7 +2914,7 @@ function renderReportHTML(report) {
         </div>
       </div>
     </div>
-  \`;
+  `;
 
   // 차트 렌더링 (비동기)
   setTimeout(() => renderRentCharts(report), 100);
@@ -3061,9 +3061,6 @@ async function generateInsightPoints(report) {
   } catch {
     el.innerHTML = '<div class="aic-point"><span class="dot">📋</span><span>시사점을 불러오는 중 오류가 발생했습니다. 리포트 생성 시 자동 포함됩니다.</span></div>';
   }
-}
-
-
 }
 
 // ===== PDF 저장 =====
