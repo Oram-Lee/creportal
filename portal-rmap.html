@@ -899,10 +899,12 @@ body {
   font-weight: 700;
 }
 .ai-analysis-text {
-  font-size: 14px;
-  line-height: 1.8;
+  font-size: 13.5px;
+  line-height: 1.9;
   color: var(--text);
   white-space: pre-line;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 /* ===== 공실 비교 테이블 ===== */
@@ -1896,38 +1898,95 @@ function onClientCompanyInput(val) {
 
 async function searchDartCompany(q) {
   const dropdown = document.getElementById('dartDropdown');
-  const loading  = document.getElementById('dartLoading');
   dropdown.innerHTML = '<div class="dart-loading">검색 중...</div>';
   dropdown.classList.add('show');
 
-  try {
-    const res = await fetch(`${BACKEND}/api/dart/search?q=${encodeURIComponent(q)}&n=8`);
-    if (!res.ok) throw new Error('API 오류');
-    const data = await res.json();
-    const list = data.companies || [];
+  let list = [];
 
-    if (!list.length) {
-      dropdown.innerHTML = '<div class="dart-loading">검색 결과 없음</div>';
-      return;
+  // 1차: 백엔드 프록시 시도 (DART API 키 보호)
+  try {
+    const res = await fetch(
+      `${BACKEND}/api/dart/search?q=${encodeURIComponent(q)}&n=8`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      list = data.companies || [];
     }
-    dropdown.innerHTML = list.map((c, i) => `
+  } catch (_) { /* 백엔드 미배포 또는 타임아웃 → fallback으로 진행 */ }
+
+  // 2차 fallback: DART Open API 직접 호출 (프록시 없이)
+  if (!list.length) {
+    try {
+      const DART_KEY = '416dbd4f88fd71c98204eec5b5502a4daf8045cd';
+      const res = await fetch(
+        `https://opendart.fss.or.kr/api/company.json?crtfc_key=${DART_KEY}&corp_name=${encodeURIComponent(q)}&page_no=1&page_count=8`,
+        { signal: AbortSignal.timeout(6000) }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === '000' && data.list) {
+          list = data.list.map(c => ({
+            corp_code:    c.corp_code,
+            corp_name:    c.corp_name,
+            stock_code:   (c.stock_code || '').trim() || null,
+            market_name:  c.corp_cls === 'Y' ? 'KOSPI' : c.corp_cls === 'K' ? 'KOSDAQ' : '',
+            induty_code:  c.induty_code,
+            industry_name: getIndustryName(c.induty_code),
+            adres:        c.adres || '',
+          }));
+        }
+      }
+    } catch (_) { /* DART 직접 호출도 실패 */ }
+  }
+
+  // 3차 fallback: Firebase 빌딩명 검색 (회사=빌딩명 케이스)
+  if (!list.length) {
+    try {
+      const snap = await db.ref('buildings').once('value');
+      const buildings = snap.val() || {};
+      const qLow = q.toLowerCase();
+      const fbList = [];
+      for (const [id, data] of Object.entries(buildings)) {
+        if (!data) continue;
+        const bn = (data.buildingName || data.name || '').toLowerCase();
+        if (bn.includes(qLow)) {
+          fbList.push({
+            corp_code: id, corp_name: data.buildingName || data.name,
+            stock_code: null, market_name: '',
+            induty_code: '', industry_name: '부동산업',
+            adres: data.address || '',
+            _fromFirebase: true,
+          });
+        }
+      }
+      list = fbList.slice(0, 6);
+    } catch (_) { }
+  }
+
+  if (!list.length) {
+    dropdown.innerHTML = '<div class="dart-loading">검색 결과가 없습니다. 직접 입력해주세요.</div>';
+    return;
+  }
+
+  dropdown.innerHTML = list.map((c, i) => {
+    const corpJson = JSON.stringify(c).replace(/"/g, '&quot;');
+    return `
       <div class="ac-item" data-idx="${i}"
-        onclick="confirmDartCompany(${JSON.stringify(c).replace(/"/g,'&quot;')})"
+        onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
+        data-corp="${corpJson}"
         onmouseover="setACFocus(${i})">
         <div class="ac-item-name">${c.corp_name}
-          ${c.stock_code ? `<span class="stock-badge">KOSPI</span>` : ''}
-          ${c.market_name === 'KOSDAQ' ? `<span class="stock-badge" style="background:#e0f2fe;color:#0369a1">KOSDAQ</span>` : ''}
+          ${c.stock_code ? `<span class="stock-badge">${c.market_name || 'KOSPI'}</span>` : ''}
+          ${c._fromFirebase ? `<span class="stock-badge" style="background:#dcfce7;color:#166534">Portal</span>` : ''}
         </div>
         <div class="ac-item-meta">
-          ${getIndustryName(c.induty_code) || '업종 미상'}
-          ${c.adres ? '· ' + c.adres.substring(0, 20) : ''}
+          ${c.industry_name || getIndustryName(c.induty_code) || '업종 미상'}
+          ${c.adres ? ' · ' + c.adres.substring(0, 22) : ''}
         </div>
       </div>
-    `).join('');
-  } catch (e) {
-    dropdown.innerHTML = '<div class="dart-loading" style="color:var(--danger)">연결 오류 — 직접 입력하세요</div>';
-    setTimeout(() => dropdown.classList.remove('show'), 2000);
-  }
+    `;
+  }).join('');
 }
 
 function setACFocus(idx) {
@@ -1958,7 +2017,9 @@ function onClientCompanyKeydown(e) {
   }
 }
 
-function confirmDartCompany(corp) {
+function confirmDartCompany(corpOrEl) {
+  // onclick="confirmDartCompany(JSON.parse(this.dataset.corp))" 방식 지원
+  const corp = (typeof corpOrEl === 'string') ? JSON.parse(corpOrEl) : corpOrEl;
   dartConfirmedCorp = corp;
   document.getElementById('clientCompany').value = corp.corp_name;
   document.getElementById('dartDropdown').classList.remove('show');
@@ -2195,9 +2256,26 @@ async function searchVacancyByArea() {
     const filteredIds = Object.entries(buildings)
       .filter(([id, b]) => {
         if (!b) return false;
-        const region  = b.region || '';
+        const region  = (b.region || '').toUpperCase();
         const address = b.address || '';
-        if (scope === 'district') return districts.includes(region);
+        if (scope === 'district') {
+          // region 직접 매칭
+          if (districts.includes(region)) return true;
+          // ETC 선택 시 GBD/CBD/YBD/BBD 아닌 서울 빌딩 포함
+          if (districts.includes('ETC')) {
+            const isMainDistrict = ['GBD','CBD','YBD','BBD'].includes(region);
+            if (!isMainDistrict && address.includes('서울')) return true;
+          }
+          // 주소 기반 fallback (region 미설정 빌딩 구제)
+          const districtAddrMap = {
+            'GBD': /강남구|서초구/,
+            'CBD': /종로구|중구/,
+            'YBD': /영등포구|마포구/,
+            'BBD': /성남시|분당구|판교/,
+            'ETC': /송파구|강동구|강서구|강북구|노원구|도봉구|동작구|관악구|구로구|금천구|광진구|동대문구|서대문구|성동구|성북구|양천구|용산구|은평구|중랑구/
+          };
+          return districts.some(d => districtAddrMap[d] && districtAddrMap[d].test(address));
+        }
         // 시군구 — 주소 포함 여부로 판단
         return sigungu.some(sg => address.includes(sg));
       })
@@ -2395,6 +2473,21 @@ async function searchBuilding() {
       reportParams.district = guessDistrict(r.address_name);
     }
 
+    // 주소 매칭 실패 시 빌딩명으로 재시도
+    if (!matched && reportParams.buildingName) {
+      const byName = await searchBuildingByName(reportParams.buildingName);
+      if (byName) {
+        reportParams.buildingId   = byName.id;
+        reportParams.buildingName = byName.buildingName || byName.name || reportParams.buildingName;
+        reportParams.district     = byName.region || guessDistrict(r.address_name);
+        matchHtml = `<span class="match-badge match-similar">✓ 빌딩명 매칭</span>`;
+        const dB = document.getElementById('districtSelect');
+        const dC = document.getElementById('districtSelectC');
+        if (dB) dB.value = reportParams.district || 'GBD';
+        if (dC) dC.value = reportParams.district || 'GBD';
+      }
+    }
+
     resultEl.className = 'addr-result show';
     resultEl.innerHTML = `
       <strong>${reportParams.buildingName || '빌딩명 미확인'}</strong>${matchHtml}<br>
@@ -2408,41 +2501,101 @@ async function matchWithPortalDB(address) {
   try {
     const snap = await db.ref('buildings').once('value');
     const buildings = snap.val() || {};
-    const addrNorm = address.replace(/\s+/g,'').toLowerCase();
+
+    // 주소 정규화: 특별시/광역시/도 제거, 공백 제거, 소문자
+    const normalizeAddr = (addr) => addr
+      .replace(/서울특별시|서울시|경기도|인천광역시|부산광역시/g, '')
+      .replace(/\s+/g, '').toLowerCase();
+
+    const queryNorm = normalizeAddr(address);
+
+    // 번지/번지수 추출 (예: "155", "155-3")
+    const numMatch = queryNorm.match(/(\d+(?:-\d+)?)$/);
+    const queryNum = numMatch ? numMatch[1] : '';
 
     let bestMatch = null;
     let bestScore = 0;
 
     for (const [id, data] of Object.entries(buildings)) {
       if (!data || typeof data !== 'object') continue;
-      const bRoad   = (data.address    || '').replace(/\s+/g,'').toLowerCase();
-      const bJibun  = (data.addressJibun || '').replace(/\s+/g,'').toLowerCase();
 
-      // 완전 일치 (도로명 또는 지번)
-      if (bRoad === addrNorm || bJibun === addrNorm) return { id, ...data };
+      const bRoad  = normalizeAddr(data.address || '');
+      const bJibun = normalizeAddr(data.addressJibun || '');
 
-      // 점수 기반 매칭 — 최소 15자 이상 공통 prefix 필요
-      const matchLen = commonPrefixLen(addrNorm, bRoad);
-      const minLen   = Math.min(addrNorm.length, bRoad.length);
-      if (minLen > 10 && matchLen >= Math.min(15, minLen * 0.8)) {
-        const score = matchLen;
-        if (score > bestScore) { bestScore = score; bestMatch = { id, ...data }; }
+      for (const bAddr of [bRoad, bJibun]) {
+        if (!bAddr) continue;
+
+        // ① 완전 일치
+        if (bAddr === queryNorm) return { id, ...data };
+
+        // ② 한쪽이 다른쪽을 포함 (긴 쪽 기준)
+        const contains = bAddr.includes(queryNorm) || queryNorm.includes(bAddr);
+        if (contains) {
+          const score = 100 + Math.min(bAddr.length, queryNorm.length);
+          if (score > bestScore) { bestScore = score; bestMatch = { id, ...data }; }
+          continue;
+        }
+
+        // ③ 구(區) + 도로명 + 번지 핵심 토큰 매칭
+        // 예: "송파구송파대로155" 와 "송파구송파대로155" 비교
+        const stripCity = (s) => s.replace(/^(서울|경기|인천|부산|대구|광주|대전|울산)/g,'');
+        const q2 = stripCity(queryNorm);
+        const b2 = stripCity(bAddr);
+
+        if (q2.length >= 8 && b2.length >= 8) {
+          // 앞 8자 일치 (구+도로명 기준)
+          if (q2.substring(0,8) === b2.substring(0,8)) {
+            const score = 80;
+            if (score > bestScore) { bestScore = score; bestMatch = { id, ...data }; }
+          }
+          // 번지수 + 도로명 뒷부분 조합 일치
+          else if (queryNum && bAddr.includes(queryNum)) {
+            // 도로명 부분 비교 (구 제외한 뒷부분)
+            const roadPart = (s) => s.replace(/^[가-힣]{2,3}구/, '');
+            if (roadPart(q2).substring(0,6) === roadPart(b2).substring(0,6)) {
+              const score = 70;
+              if (score > bestScore) { bestScore = score; bestMatch = { id, ...data }; }
+            }
+          }
+        }
       }
     }
-    return bestScore >= 15 ? bestMatch : null;
+    return bestScore >= 70 ? bestMatch : null;
+  } catch (e) {
+    console.warn('[matchWithPortalDB] 오류:', e);
+    return null;
+  }
+}
+
+// Firebase 빌딩명으로 직접 검색 (주소 매칭 실패 시 fallback)
+async function searchBuildingByName(name) {
+  try {
+    if (!name || name.length < 2) return null;
+    const snap = await db.ref('buildings').once('value');
+    const buildings = snap.val() || {};
+    const q = name.replace(/\s+/g,'').toLowerCase();
+    let best = null, bestScore = 0;
+    for (const [id, data] of Object.entries(buildings)) {
+      if (!data) continue;
+      const bn = (data.buildingName || data.name || '').replace(/\s+/g,'').toLowerCase();
+      if (!bn) continue;
+      if (bn === q) return { id, ...data };
+      if (bn.includes(q) || q.includes(bn)) {
+        const score = Math.min(bn.length, q.length);
+        if (score > bestScore) { bestScore = score; best = { id, ...data }; }
+      }
+    }
+    return bestScore >= 2 ? best : null;
   } catch { return null; }
 }
 
-function commonPrefixLen(a, b) {
-  let i = 0;
-  while (i < a.length && i < b.length && a[i] === b[i]) i++;
-  return i;
-}
-
 function guessDistrict(address) {
-  if (/강남|서초|역삼|삼성|선릉/.test(address)) return 'GBD';
-  if (/여의도|영등포/.test(address)) return 'YBD';
-  if (/종로|중구|을지로|광화문/.test(address)) return 'CBD';
+  if (/강남구|서초구|역삼|삼성동|선릉|도곡|개포|논현|반포/.test(address)) return 'GBD';
+  if (/여의도|영등포구|마포구|공덕|합정/.test(address)) return 'YBD';
+  if (/종로구|중구|을지로|광화문|시청|청계천/.test(address)) return 'CBD';
+  if (/분당|판교|수지|성남시/.test(address)) return 'BBD';
+  // 서울 기타 구 — ETC로 분류
+  if (/서울|송파|강동|강서|강북|노원|도봉|동작|관악|구로|금천|광진|동대문|서대문|성동|성북|양천|용산|은평/.test(address)) return 'ETC';
   return 'GBD';
 }
 
