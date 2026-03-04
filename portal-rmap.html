@@ -2454,38 +2454,47 @@ async function searchBuilding() {
 
     // CRE Portal DB 매칭 시도
     let matchHtml = '';
+    let matched = null;  // try 블록 밖에서 접근 가능하도록 선언
     try {
-      const matched = await matchWithPortalDB(r.road_address?.address_name || r.address_name);
+      matched = await matchWithPortalDB(r.road_address?.address_name || r.address_name);
       if (matched) {
         reportParams.buildingId   = matched.id;
-        reportParams.buildingName = matched.name || reportParams.buildingName;
+        reportParams.buildingName = matched.buildingName || matched.name || reportParams.buildingName;
         reportParams.district     = matched.region || guessDistrict(r.address_name);
         matchHtml = `<span class="match-badge match-full">✓ Portal 매칭</span>`;
         document.getElementById('districtSelect').value = reportParams.district || 'GBD';
         const dC = document.getElementById('districtSelectC');
         if (dC) dC.value = reportParams.district || 'GBD';
-      } else {
-        reportParams.district = guessDistrict(r.address_name);
-        matchHtml = `<span class="match-badge match-none">미등록 빌딩</span>`;
-        document.getElementById('buildingNameGroup').style.display = '';
       }
     } catch (e) {
-      reportParams.district = guessDistrict(r.address_name);
+      console.warn('[searchBuilding] matchWithPortalDB 오류:', e);
     }
 
-    // 주소 매칭 실패 시 빌딩명으로 재시도
+    // 주소 매칭 실패 시 → 빌딩명으로 재시도
     if (!matched && reportParams.buildingName) {
-      const byName = await searchBuildingByName(reportParams.buildingName);
-      if (byName) {
-        reportParams.buildingId   = byName.id;
-        reportParams.buildingName = byName.buildingName || byName.name || reportParams.buildingName;
-        reportParams.district     = byName.region || guessDistrict(r.address_name);
-        matchHtml = `<span class="match-badge match-similar">✓ 빌딩명 매칭</span>`;
-        const dB = document.getElementById('districtSelect');
-        const dC = document.getElementById('districtSelectC');
-        if (dB) dB.value = reportParams.district || 'GBD';
-        if (dC) dC.value = reportParams.district || 'GBD';
+      try {
+        const byName = await searchBuildingByName(reportParams.buildingName);
+        if (byName) {
+          matched = byName;
+          reportParams.buildingId   = byName.id;
+          reportParams.buildingName = byName.buildingName || byName.name || reportParams.buildingName;
+          reportParams.district     = byName.region || guessDistrict(r.address_name);
+          matchHtml = `<span class="match-badge match-similar">✓ 빌딩명 매칭</span>`;
+          const dB = document.getElementById('districtSelect');
+          const dC = document.getElementById('districtSelectC');
+          if (dB) dB.value = reportParams.district || 'GBD';
+          if (dC) dC.value = reportParams.district || 'GBD';
+        }
+      } catch (e) {
+        console.warn('[searchBuilding] searchBuildingByName 오류:', e);
       }
+    }
+
+    // 최종 매칭 실패 처리
+    if (!matched) {
+      reportParams.district = guessDistrict(r.address_name);
+      matchHtml = `<span class="match-badge match-none">미등록 빌딩</span>`;
+      document.getElementById('buildingNameGroup').style.display = '';
     }
 
     resultEl.className = 'addr-result show';
