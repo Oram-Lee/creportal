@@ -3076,41 +3076,40 @@ function renderReportHTML(report) {
       </div>
     </div>` : ''}
 
-    <!-- Section 6: 인근 빌딩 임대료 현황 표 + 도표 -->
-    ${(report.nearbyBuildings?.length || report.vacancyData?.length) ? `
+    <!-- Section 6: 인근 빌딩 임대료 현황 -->
+    ${report.nearbyBuildings?.length ? `
     <div class="report-section rent-chart-section">
       <div class="section-title">
         <div class="section-icon">💰</div>
-        권역 빌딩 임대료 현황
+        인근 빌딩 임대 조건 비교 (반경 ${(report.params.radius/1000).toFixed(1)}km · ${(report.nearbyBuildings||[]).length}개 빌딩)
       </div>
 
       <!-- 임대료 요약 테이블 -->
+      <div style="overflow-x:auto">
       <table class="rent-summary-table" id="rentSummaryTable_${report.id}">
         <thead>
           <tr>
-            <th>빌딩명</th>
+            <th style="text-align:left">빌딩명</th>
             <th>등급</th>
             <th>거리</th>
-            <th>임대면적 (평)</th>
-            <th>임대료/평 (원)</th>
-            <th>관리비/평 (원)</th>
-            <th>보증금배수</th>
+            <th>연면적</th>
+            <th>임대료/평</th>
+            <th>관리비/평</th>
+            <th>보증금</th>
+            <th>공실</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="rentTableBody_${report.id}">
           ${buildRentTableRows(report)}
         </tbody>
       </table>
+      </div>
 
-      <!-- 차트 2종 -->
-      <div class="rent-chart-wrap">
-        <div class="chart-card">
-          <div class="cc-title">📊 빌딩별 임대료/평 비교 (원)</div>
-          <canvas class="mini-chart" id="rentBarChart_${report.id}" height="200"></canvas>
-        </div>
-        <div class="chart-card">
-          <div class="cc-title">🥧 빌딩 등급 분포</div>
-          <canvas class="mini-chart" id="gradeDonutChart_${report.id}" height="200"></canvas>
+      <!-- 막대 차트 1개 (풀 width) -->
+      <div style="margin-top:20px">
+        <div class="cc-title" style="font-size:13px;font-weight:600;margin-bottom:8px">📊 빌딩별 임대료/평 비교 (원, 기준가 기준)</div>
+        <div style="position:relative;height:220px">
+          <canvas id="rentBarChart_${report.id}"></canvas>
         </div>
       </div>
     </div>` : ''}
@@ -3124,17 +3123,19 @@ function renderReportHTML(report) {
       </div>
       <table class="vacancy-table">
         <thead>
-          <tr><th>빌딩명</th><th>층</th><th>전용률</th><th>임대면적</th><th>전용면적</th><th>보증금/평</th><th>임대료/평</th><th>관리비/평</th></tr>
+          <tr><th>빌딩명</th><th>층</th><th>전용률</th><th>임대면적</th><th>전용면적</th><th>보증금/평</th><th>임대료/평</th><th>관리비/평</th><th>입주가능</th></tr>
         </thead>
         <tbody>
           ${(report.params.vacancySearchResult||[]).slice(0,20).map(v => `
             <tr>
               <td>${v.buildingName}</td><td>${v.floor}</td>
-              <td>${v.exclusiveRate}</td>
-              <td>${v.rentArea}평</td><td>${v.exclusiveArea}평</td>
-              <td>${v.deposit ? Number(v.deposit).toLocaleString()+'원' : '-'}</td>
+              <td>${v.exclusiveRate || '-'}</td>
+              <td>${v.rentArea && v.rentArea !== '-' ? v.rentArea+'평' : '-'}</td>
+              <td>${v.exclusiveArea && v.exclusiveArea !== '-' ? v.exclusiveArea+'평' : '-'}</td>
+              <td>${v.depositPy ? Number(v.depositPy).toLocaleString()+'원' : '-'}</td>
               <td>${v.rentPy ? Number(v.rentPy).toLocaleString()+'원' : '-'}</td>
               <td>${v.maintenancePy ? Number(v.maintenancePy).toLocaleString()+'원' : '-'}</td>
+              <td>${v.moveInDate || '즉시'}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -3170,105 +3171,127 @@ function renderReportHTML(report) {
   }
 }
 
+// 숫자 파싱 헬퍼 (문자열 "68,519" → 68519)
+function parseNum(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = parseFloat(String(v).replace(/[,원]/g, ''));
+  return isNaN(n) || n === 0 ? null : n;
+}
+
 function buildRentTableRows(report) {
   const buildings = report.nearbyBuildings || [];
   const vacancies = report.vacancyData    || [];
 
-  if (!buildings.length) return '<tr><td colspan="7" style="text-align:center;color:var(--muted)">데이터 없음</td></tr>';
+  if (!buildings.length) {
+    return '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">데이터 없음</td></tr>';
+  }
 
-  return buildings.slice(0, 15).map(b => {
-    // 해당 빌딩 임대료 평균
-    const bVacs = vacancies.filter(v => v.buildingId === b.id);
-    const avgRent = bVacs.length
-      ? Math.round(bVacs.reduce((s,v) => s + (v.rentPy||0), 0) / bVacs.length)
-      : null;
-    const avgMaint = bVacs.length
-      ? Math.round(bVacs.reduce((s,v) => s + (v.maintenancePy||0), 0) / bVacs.length)
-      : null;
-    const avgDeposit = bVacs.length && bVacs[0].rentPy
-      ? Math.round((bVacs[0].deposit||0) / (bVacs[0].rentPy||1))
-      : null;
-    const totalArea = bVacs.reduce((s,v) => s + parseFloat(v.rentArea||0), 0);
+  return buildings.slice(0, 15).map((b, i) => {
+    const isBase = i === 0; // 기준 빌딩
 
-    return `<tr>
-      <td style="text-align:left;font-weight:600">${b.buildingName || b.name || '-'}</td>
-      <td><span class="pill pill-blue">${b.grade || '-'}</span></td>
-      <td>${b.distanceM ? b.distanceM+'m' : '-'}</td>
-      <td>${totalArea ? totalArea.toFixed(0)+'평' : '-'}</td>
-      <td class="highlight">${avgRent ? avgRent.toLocaleString() : '-'}</td>
-      <td>${avgMaint ? avgMaint.toLocaleString() : '-'}</td>
-      <td>${avgDeposit ? avgDeposit+'개월' : '-'}</td>
+    // 빌딩 자체 기준가 사용 (가장 신뢰도 높음)
+    const rentPy   = parseNum(b.rentPy)   || parseNum(b.pricing?.rentPy);
+    const maintPy  = parseNum(b.maintenancePy) || parseNum(b.pricing?.maintenancePy);
+    const depositPy = parseNum(b.depositPy) || parseNum(b.pricing?.depositPy);
+
+    // 공실 수 (vacancyData에서 매칭)
+    const bVacs    = vacancies.filter(v => v.buildingId === b.id);
+    const vacCount = bVacs.length;
+
+    // 연면적
+    const grossPy  = parseNum(b.grossFloorPy);
+
+    // 보증금 배수 (depositPy / rentPy)
+    const depMult  = (depositPy && rentPy) ? (depositPy / rentPy).toFixed(0) + '개월' : '-';
+
+    const gradeClass = { Prime:'pill-gold', A:'pill-blue', B:'pill-blue', C:'pill-gray', D:'pill-gray' };
+    const grade = b.grade || '-';
+
+        return `<tr style="${isBase ? 'background:#f0f7ff;font-weight:700' : ''}">
+      <td style="text-align:left;font-weight:${isBase?700:400};${isBase?'color:var(--accent)':''}">
+        ${isBase ? '🏠 ' : ''}${b.buildingName || b.name || '-'}
+      </td>
+      <td><span class="pill ${gradeClass[grade]||'pill-gray'}">${grade}</span></td>
+      <td>${b.distanceM != null ? b.distanceM + 'm' : '-'}</td>
+      <td>${grossPy ? grossPy.toLocaleString() + '평' : '-'}</td>
+      <td class="highlight">${rentPy ? rentPy.toLocaleString() + '원' : '-'}</td>
+      <td>${maintPy ? maintPy.toLocaleString() + '원' : '-'}</td>
+      <td>${depMult}</td>
+      <td>${vacCount > 0 ? vacCount + '건' : '-'}</td>
     </tr>`;
   }).join('');
 }
 
 function renderRentCharts(report) {
-  const buildings = (report.nearbyBuildings || []).slice(0, 10);
-  const vacancies = report.vacancyData || [];
+  const buildings = (report.nearbyBuildings || []).slice(0, 12);
+  if (!buildings.length) return;
 
-  // ── 막대 차트: 빌딩별 임대료/평 ──
   const barCtx = document.getElementById(`rentBarChart_${report.id}`);
-  if (barCtx && buildings.length) {
-    const labels = buildings.map(b => (b.buildingName||b.name||'').substring(0,8));
-    const rentData = buildings.map(b => {
-      const bVacs = vacancies.filter(v => v.buildingId === b.id);
-      if (!bVacs.length) return 0;
-      return Math.round(bVacs.reduce((s,v) => s+(v.rentPy||0),0) / bVacs.length);
-    });
-    new Chart(barCtx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: '임대료/평(원)',
+  if (!barCtx) return;
+
+  // 빌딩 자체 기준가 사용 (parseNum 헬퍼로 문자열/숫자 모두 처리)
+  const labels   = buildings.map((b,i) => (i===0?'🏠 ':'') + (b.buildingName||b.name||'').substring(0,9));
+  const rentData = buildings.map(b =>
+    parseNum(b.rentPy) || parseNum(b.pricing?.rentPy) || 0
+  );
+  const maintData = buildings.map(b =>
+    parseNum(b.maintenancePy) || parseNum(b.pricing?.maintenancePy) || 0
+  );
+
+  // 데이터가 모두 0이면 차트 숨김
+  if (rentData.every(v => v === 0) && maintData.every(v => v === 0)) {
+    barCtx.closest('div').previousElementSibling &&
+      (barCtx.parentElement.parentElement.style.display = 'none');
+    return;
+  }
+
+  new Chart(barCtx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '임대료/평 (원)',
           data: rentData,
           backgroundColor: rentData.map((v,i) =>
-            i === 0 ? 'rgba(30,96,202,0.85)' : 'rgba(30,96,202,0.35)'
+            i === 0 ? 'rgba(30,96,202,0.9)' : 'rgba(30,96,202,0.45)'
           ),
-          borderColor: 'rgba(30,96,202,1)',
-          borderWidth: 1,
           borderRadius: 4,
-        }]
+          order: 1,
+        },
+        {
+          label: '관리비/평 (원)',
+          data: maintData,
+          backgroundColor: maintData.map((v,i) =>
+            i === 0 ? 'rgba(16,185,129,0.85)' : 'rgba(16,185,129,0.35)'
+          ),
+          borderRadius: 4,
+          order: 2,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw ? ctx.raw.toLocaleString() + '원' : '-'}`
+          }
+        }
       },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          y: { ticks: { callback: v => v ? v.toLocaleString() : 0, font: { size: 10 } } },
-          x: { ticks: { font: { size: 10 } } }
+      scales: {
+        x: { ticks: { font: { size: 10 }, maxRotation: 30 } },
+        y: {
+          ticks: {
+            font: { size: 10 },
+            callback: v => v >= 1000 ? (v/1000).toFixed(0)+'K' : v
+          }
         }
       }
-    });
-  }
-
-  // ── 도넛 차트: 등급 분포 ──
-  const donutCtx = document.getElementById(`gradeDonutChart_${report.id}`);
-  if (donutCtx && buildings.length) {
-    const gradeCounts = {};
-    buildings.forEach(b => {
-      const g = b.grade || 'ETC';
-      gradeCounts[g] = (gradeCounts[g] || 0) + 1;
-    });
-    const gradeColors = { Prime:'#1a3c5e', A:'#2e7dca', B:'#3b82f6', C:'#93c5fd', D:'#bfdbfe', E:'#e2e8f0', ETC:'#94a3b8' };
-    new Chart(donutCtx, {
-      type: 'doughnut',
-      data: {
-        labels: Object.keys(gradeCounts),
-        datasets: [{
-          data: Object.values(gradeCounts),
-          backgroundColor: Object.keys(gradeCounts).map(g => gradeColors[g] || '#94a3b8'),
-          borderWidth: 2,
-          borderColor: '#fff',
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'right', labels: { font: { size: 10 }, boxWidth: 12 } }
-        }
-      }
-    });
-  }
+    }
+  });
 }
 
 async function generateInsightPoints(report) {
