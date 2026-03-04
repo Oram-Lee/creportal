@@ -1127,6 +1127,14 @@ canvas.mini-chart { width: 100% !important; }
 }
 .ai-insight-card .aic-point .dot { flex-shrink: 0; margin-top: 2px; font-size: 14px; }
 
+
+/* 직접 입력 옵션 */
+.ac-item-manual {
+  border-top: 1px dashed var(--border) !important;
+  background: #f8fafc !important;
+}
+.ac-item-manual:hover { background: #f1f5f9 !important; }
+
 </style>
 </head>
 <body>
@@ -1881,112 +1889,139 @@ function toggleGrade(btn) {
   }
 }
 
-// ===== DART 기업명 자동완성 =====
+// ===== 고객사명 자동완성 (Claude AI 기업 검색) =====
 function onClientCompanyInput(val) {
   clearTimeout(dartDebounceTimer);
   dartACIndex = -1;
-  if (!dartConfirmedCorp) {
-    // 확정 전 입력 중이면 업종 초기화
-    document.getElementById('clientIndustry').value = '';
-  }
-  if (val.length < 2) {
-    document.getElementById('dartDropdown').classList.remove('show');
+  if (!dartConfirmedCorp) document.getElementById('clientIndustry').value = '';
+  const dropdown = document.getElementById('dartDropdown');
+
+  if (val.length < 1) {
+    dropdown.classList.remove('show');
     return;
   }
-  dartDebounceTimer = setTimeout(() => searchDartCompany(val), 350);
+
+  // 1자 이상이면 타이핑 중 수동 확정 옵션 항상 노출
+  _showManualOption(val, dropdown);
+
+  // 2자 이상이면 AI 검색 시작
+  if (val.length >= 2) {
+    dartDebounceTimer = setTimeout(() => searchDartCompany(val), 400);
+  }
+}
+
+// 입력값을 직접 확정하는 옵션 (항상 드롭다운 최하단에 노출)
+function _showManualOption(val, dropdown) {
+  const manualCorp = { corp_name: val, industry_name: '', adres: '', _source: 'manual' };
+  const corpJson = JSON.stringify(manualCorp).replace(/"/g, '&quot;');
+  const manualHtml = `
+    <div class="ac-item ac-item-manual" data-idx="99"
+      onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
+      data-corp="${corpJson}">
+      <div class="ac-item-name">✏️ "${val}" 직접 입력</div>
+      <div class="ac-item-meta">업종을 직접 입력할 수 있습니다</div>
+    </div>`;
+  // 현재 내용이 검색결과면 유지, 로딩/빈 상태면 교체
+  const cur = dropdown.innerHTML;
+  if (cur.includes('dart-loading') || !cur.trim()) {
+    dropdown.innerHTML = manualHtml;
+    dropdown.classList.add('show');
+  }
 }
 
 async function searchDartCompany(q) {
   const dropdown = document.getElementById('dartDropdown');
-  dropdown.innerHTML = '<div class="dart-loading">검색 중...</div>';
+
+  // 로딩 표시 (기존 수동 옵션 위에 추가)
+  const manualCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
+  const manualJson = JSON.stringify(manualCorp).replace(/"/g, '&quot;');
+  dropdown.innerHTML = `
+    <div class="dart-loading">🔍 기업 정보 검색 중...</div>
+    <div class="ac-item ac-item-manual" data-idx="99"
+      onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
+      data-corp="${manualJson}">
+      <div class="ac-item-name">✏️ "${q}" 직접 입력</div>
+      <div class="ac-item-meta">업종을 직접 입력할 수 있습니다</div>
+    </div>`;
   dropdown.classList.add('show');
 
-  let list = [];
-
-  // 1차: 백엔드 프록시 시도 (DART API 키 보호)
+  // Claude API로 기업 목록 조회
   try {
-    const res = await fetch(
-      `${BACKEND}/api/dart/search?q=${encodeURIComponent(q)}&n=8`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (res.ok) {
-      const data = await res.json();
-      list = data.companies || [];
-    }
-  } catch (_) { /* 백엔드 미배포 또는 타임아웃 → fallback으로 진행 */ }
+    const controller = new AbortController();
+    const timeoutId  = setTimeout(() => controller.abort(), 9000);
 
-  // 2차 fallback: DART Open API 직접 호출 (프록시 없이)
-  if (!list.length) {
-    try {
-      const DART_KEY = '416dbd4f88fd71c98204eec5b5502a4daf8045cd';
-      const res = await fetch(
-        `https://opendart.fss.or.kr/api/company.json?crtfc_key=${DART_KEY}&corp_name=${encodeURIComponent(q)}&page_no=1&page_count=8`,
-        { signal: AbortSignal.timeout(6000) }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data.status === '000' && data.list) {
-          list = data.list.map(c => ({
-            corp_code:    c.corp_code,
-            corp_name:    c.corp_name,
-            stock_code:   (c.stock_code || '').trim() || null,
-            market_name:  c.corp_cls === 'Y' ? 'KOSPI' : c.corp_cls === 'K' ? 'KOSDAQ' : '',
-            induty_code:  c.induty_code,
-            industry_name: getIndustryName(c.induty_code),
-            adres:        c.adres || '',
-          }));
-        }
-      }
-    } catch (_) { /* DART 직접 호출도 실패 */ }
-  }
+    const res = await fetch(`${BACKEND}/api/claude-proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: `"${q}"이(가) 포함된 실제 한국 기업 목록을 JSON으로만 반환하세요. 다른 텍스트, 마크다운, 설명 없이 오직 JSON만:
+[{"name":"기업명","industry":"업종","type":"KOSPI/KOSDAQ/비상장"}]
+최대 6개. "${q}"과 관련없는 기업은 절대 포함하지 마세요.`
+        }]
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
 
-  // 3차 fallback: Firebase 빌딩명 검색 (회사=빌딩명 케이스)
-  if (!list.length) {
-    try {
-      const snap = await db.ref('buildings').once('value');
-      const buildings = snap.val() || {};
-      const qLow = q.toLowerCase();
-      const fbList = [];
-      for (const [id, data] of Object.entries(buildings)) {
-        if (!data) continue;
-        const bn = (data.buildingName || data.name || '').toLowerCase();
-        if (bn.includes(qLow)) {
-          fbList.push({
-            corp_code: id, corp_name: data.buildingName || data.name,
-            stock_code: null, market_name: '',
-            induty_code: '', industry_name: '부동산업',
-            adres: data.address || '',
-            _fromFirebase: true,
-          });
-        }
-      }
-      list = fbList.slice(0, 6);
-    } catch (_) { }
-  }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  if (!list.length) {
-    dropdown.innerHTML = '<div class="dart-loading">검색 결과가 없습니다. 직접 입력해주세요.</div>';
-    return;
-  }
+    const data   = await res.json();
+    const rawText = (data.content?.[0]?.text || '').trim();
 
-  dropdown.innerHTML = list.map((c, i) => {
-    const corpJson = JSON.stringify(c).replace(/"/g, '&quot;');
-    return `
-      <div class="ac-item" data-idx="${i}"
+    // JSON 추출 — 배열 [ ... ] 부분만
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error('JSON 배열 없음');
+
+    const companies = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(companies) || companies.length === 0) throw new Error('빈 배열');
+
+    // 정상 결과 렌더링
+    const resultHtml = companies.map((c, i) => {
+      const corp     = { corp_name: c.name, industry_name: c.industry || '', adres: c.type || '', _source: 'ai' };
+      const corpJson = JSON.stringify(corp).replace(/"/g, '&quot;');
+      const badge    = c.type === 'KOSPI'  ? `<span class="stock-badge">KOSPI</span>`
+                     : c.type === 'KOSDAQ' ? `<span class="stock-badge" style="background:#e0f2fe;color:#0369a1">KOSDAQ</span>`
+                     : '';
+      return `
+        <div class="ac-item" data-idx="${i}"
+          onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
+          data-corp="${corpJson}"
+          onmouseover="setACFocus(${i})">
+          <div class="ac-item-name">${c.name} ${badge}</div>
+          <div class="ac-item-meta">${c.industry || '업종 미상'}</div>
+        </div>`;
+    }).join('');
+
+    // 직접 입력 옵션은 맨 아래 항상 유지
+    const directCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
+    const directJson = JSON.stringify(directCorp).replace(/"/g, '&quot;');
+    dropdown.innerHTML = resultHtml + `
+      <div class="ac-item ac-item-manual" data-idx="99"
         onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
-        data-corp="${corpJson}"
-        onmouseover="setACFocus(${i})">
-        <div class="ac-item-name">${c.corp_name}
-          ${c.stock_code ? `<span class="stock-badge">${c.market_name || 'KOSPI'}</span>` : ''}
-          ${c._fromFirebase ? `<span class="stock-badge" style="background:#dcfce7;color:#166534">Portal</span>` : ''}
-        </div>
-        <div class="ac-item-meta">
-          ${c.industry_name || getIndustryName(c.induty_code) || '업종 미상'}
-          ${c.adres ? ' · ' + c.adres.substring(0, 22) : ''}
-        </div>
+        data-corp="${directJson}">
+        <div class="ac-item-name" style="color:var(--muted)">✏️ "${q}" 직접 입력</div>
+      </div>`;
+
+  } catch (err) {
+    console.warn('[기업검색] Claude API 실패:', err.message);
+    // 실패 시 수동 입력 옵션만 표시 (빌딩명 절대 보여주지 않음)
+    const fallbackCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
+    const fallbackJson = JSON.stringify(fallbackCorp).replace(/"/g, '&quot;');
+    dropdown.innerHTML = `
+      <div class="dart-loading" style="color:#92400e;background:#fffbeb;border-radius:6px;margin:4px">
+        ⚠️ 자동검색 실패 — 아래에서 직접 입력을 선택하세요
       </div>
-    `;
-  }).join('');
+      <div class="ac-item ac-item-manual" data-idx="99"
+        onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
+        data-corp="${fallbackJson}">
+        <div class="ac-item-name">✏️ "${q}" (으)로 직접 등록</div>
+        <div class="ac-item-meta">업종은 아래에서 직접 입력 가능합니다</div>
+      </div>`;
+  }
 }
 
 function setACFocus(idx) {
@@ -2018,15 +2053,18 @@ function onClientCompanyKeydown(e) {
 }
 
 function confirmDartCompany(corpOrEl) {
-  // onclick="confirmDartCompany(JSON.parse(this.dataset.corp))" 방식 지원
   const corp = (typeof corpOrEl === 'string') ? JSON.parse(corpOrEl) : corpOrEl;
   dartConfirmedCorp = corp;
   document.getElementById('clientCompany').value = corp.corp_name;
   document.getElementById('dartDropdown').classList.remove('show');
 
   // 업종 자동 입력
-  const industry = getIndustryName(corp.induty_code);
+  const industry = corp.industry_name || getIndustryName(corp.induty_code) || '';
   document.getElementById('clientIndustry').value = industry;
+  // 직접 입력한 경우 업종 필드에 커서 이동
+  if (corp._source === 'manual' && !industry) {
+    setTimeout(() => document.getElementById('clientIndustry').focus(), 100);
+  }
 
   // 확정 뱃지 표시
   const meta = [
@@ -2286,32 +2324,62 @@ async function searchVacancyByArea() {
       return;
     }
 
-    // rentrolls 조회
+    // rentrolls 조회 — 다양한 Firebase 필드명 지원
     const matched = [];
-    for (const bid of filteredIds.slice(0, 40)) {
+    for (const bid of filteredIds.slice(0, 60)) {
       const rSnap = await db.ref(`rentrolls/${bid}`).once('value');
       const rData = rSnap.val();
       if (!rData) continue;
       const entries = Array.isArray(rData) ? rData : Object.values(rData);
       entries.forEach(v => {
-        if (!v || !v.floor) return;
-        // 전용 면적 계산 (임대면적 × 전용률, 또는 exclusiveArea 직접)
-        const rentArea  = parseFloat(v.rentArea || v.exclusiveArea || 0);
-        const excRate   = parseFloat(v.exclusiveRate || 0.6);
-        const exclusive = v.exclusiveArea ? parseFloat(v.exclusiveArea) : rentArea * excRate;
-        if (exclusive >= areaMin && exclusive <= areaMax) {
+        if (!v) return;
+        // ── 층 정보 (다양한 필드명 지원) ──
+        const floor = v.floor || v.floorNo || v.floorNumber || v.층 || '';
+        if (!floor) return;
+
+        // ── 임대면적 (평) — 가능한 모든 필드명 시도 ──
+        const rentAreaRaw =
+          v.rentArea ?? v.leasableArea ?? v.leaseArea ?? v.totalArea ??
+          v.rentPyeong ?? v.임대면적 ?? v.area ?? 0;
+        const rentArea = parseFloat(rentAreaRaw) || 0;
+
+        // ── 전용면적 (평) ──
+        const exclusiveRaw =
+          v.exclusiveArea ?? v.netArea ?? v.privateArea ??
+          v.exclusivePyeong ?? v.전용면적 ?? null;
+        const exclusive = exclusiveRaw !== null
+          ? parseFloat(exclusiveRaw)
+          : rentArea * parseFloat(v.exclusiveRate ?? v.netRate ?? 0.6);
+
+        // ── 전용률 ──
+        const excRateRaw = v.exclusiveRate ?? v.netRate ?? v.전용률 ?? null;
+        const excRatePct = excRateRaw !== null
+          ? (parseFloat(excRateRaw) > 1 ? parseFloat(excRateRaw).toFixed(0) + '%' : (parseFloat(excRateRaw)*100).toFixed(0) + '%')
+          : Math.round((exclusive / (rentArea || 1)) * 100) + '%';
+
+        // ── 공실면적 ──
+        const vacantRaw = v.vacantArea ?? v.emptyArea ?? v.공실면적 ?? v.vacant ?? rentArea;
+        const vacantArea = parseFloat(vacantRaw) || rentArea;
+
+        // ── 면적 기준: 임대면적 또는 전용면적 중 areaMin~areaMax 범위 해당 시 포함 ──
+        const mainArea = exclusive > 0 ? exclusive : rentArea;  // 전용면적 우선
+        const inRange  = (mainArea >= areaMin && mainArea <= areaMax)
+                      || (rentArea >= areaMin && rentArea <= areaMax); // 임대면적도 체크
+
+        if (inRange && (rentArea > 0 || exclusive > 0)) {
           matched.push({
-            buildingId:   bid,
-            buildingName: buildings[bid]?.buildingName || buildings[bid]?.name || bid,
-            address:      buildings[bid]?.address || '',
-            floor:        v.floor,
-            rentArea:     rentArea.toFixed(1),
-            exclusiveArea: exclusive.toFixed(1),
-            exclusiveRate: v.exclusiveRate || (excRate * 100).toFixed(0) + '%',
-            vacantArea:   v.vacantArea || rentArea,
-            deposit:      v.deposit || v.depositPy || '',
-            rentPy:       v.rentPy   || '',
-            maintenancePy: v.maintenancePy || '',
+            buildingId:    bid,
+            buildingName:  buildings[bid]?.buildingName || buildings[bid]?.name || bid,
+            address:       buildings[bid]?.address || '',
+            floor,
+            rentArea:      rentArea > 0 ? rentArea.toFixed(0) : '-',
+            exclusiveArea: exclusive > 0 ? exclusive.toFixed(0) : '-',
+            exclusiveRate: excRatePct,
+            vacantArea:    vacantArea > 0 ? vacantArea.toFixed(0) : '-',
+            deposit:       v.deposit ?? v.depositPerPy ?? v.depositPy ?? v.보증금 ?? '',
+            rentPy:        v.rentPy ?? v.monthlyRent ?? v.임대료 ?? v.rent ?? '',
+            maintenancePy: v.maintenancePy ?? v.maintenance ?? v.관리비 ?? '',
+            moveIn:        v.moveInDate ?? v.availableDate ?? v.입주가능일 ?? '즉시',
           });
         }
       });
@@ -2353,12 +2421,12 @@ function renderVacancyPreview(list, areaMin, areaMax) {
   count.textContent = list.length + '건';
   tbody.innerHTML = list.slice(0, 30).map(v => `
     <tr>
-      <td style="text-align:left;font-weight:600">${v.buildingName}</td>
+      <td style="text-align:left;font-weight:600;white-space:nowrap">${v.buildingName}</td>
       <td>${v.floor}</td>
       <td>${v.exclusiveRate}</td>
-      <td>${v.rentArea}평</td>
-      <td class="highlight">${v.exclusiveArea}평</td>
-      <td>${v.vacantArea}평</td>
+      <td>${v.rentArea !== '-' ? v.rentArea + '평' : '-'}</td>
+      <td class="highlight">${v.exclusiveArea !== '-' ? v.exclusiveArea + '평' : '-'}</td>
+      <td>${v.vacantArea !== '-' ? v.vacantArea + '평' : '-'}</td>
       <td>${v.deposit ? Number(v.deposit).toLocaleString() + '원' : '-'}</td>
       <td>${v.rentPy ? Number(v.rentPy).toLocaleString() + '원' : '-'}</td>
       <td>${v.maintenancePy ? Number(v.maintenancePy).toLocaleString() + '원' : '-'}</td>
@@ -3082,6 +3150,11 @@ function renderReportHTML(report) {
   setTimeout(() => renderRentCharts(report), 100);
   // AI 시사점 생성 (비동기)
   setTimeout(() => generateInsightPoints(report), 300);
+  // AI 종합 분석 보완 — 백엔드 응답이 짧거나 없을 때 프론트에서 직접 생성
+  const aiBox = document.querySelector(`#report-${report.id} .ai-analysis-text`);
+  if (aiBox && (!aiBox.textContent.trim() || aiBox.textContent.trim().length < 100)) {
+    setTimeout(() => fillAiAnalysisIfEmpty(report, aiBox), 500);
+  }
 }
 
 function buildRentTableRows(report) {
@@ -3189,43 +3262,96 @@ async function generateInsightPoints(report) {
   const el = document.getElementById(`aiInsightPoints_${report.id}`);
   if (!el) return;
 
+  const issueMap = { expand:'사옥 이전(확장)', shrink:'사옥 이전(축소)', new:'신규 사무실 확보' };
+  const distMap  = { GBD:'강남권역(GBD)', CBD:'도심권역(CBD)', YBD:'여의도권역(YBD)', BBD:'분당·판교(BBD)', ETC:'기타 서울' };
+
+  const prompt = `당신은 S&I Corporation CRE팀 상업용 부동산 전문 컨설턴트입니다.
+다음 조건 기반 전략 시사점을 JSON으로만 반환하세요 (마크다운 없이):
+
+기준빌딩: ${report.buildingName}, 권역: ${distMap[report.district]||report.district}
+고객사: ${report.params?.clientCompany||''}, 업종: ${report.params?.clientIndustry||''}
+당면이슈: ${issueMap[report.params?.clientIssue]||'오피스 검토'}
+분석모드: ${report.mode==='TR'?'임차인대리':'임대인대리'}
+인근빌딩: ${(report.nearbyBuildings||[]).length}개, 공실: ${(report.vacancyData||[]).length}건
+희망면적: ${report.params?.desiredAreaMin||0}~${report.params?.desiredAreaMax||0}평
+
+[{"icon":"이모지","title":"10자이내제목","body":"1~2문장 시사점"}] 형태로 4~5개:`;
+
   try {
-    const res = await fetch(`${BACKEND}/api/intelligence/insight-points`, {
+    const res = await fetch(`${BACKEND}/api/claude-proxy`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        district:      report.district,
-        buildingName:  report.buildingName,
-        clientName:    report.clientName,
-        clientIssue:   report.params.clientIssue,
-        industry:      report.params.clientIndustry,
-        nearbyCount:   (report.nearbyBuildings||[]).length,
-        vacancyCount:  (report.vacancyData||[]).length,
-        desiredMin:    report.params.desiredAreaMin,
-        desiredMax:    report.params.desiredAreaMax,
-        analysisMode:  report.params.analysisMode,
-        mode:          report.mode,
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 800,
+        messages: [{ role: 'user', content: prompt }]
       })
     });
     const data = await res.json();
-    const points = data.points || [];
-
-    if (!points.length) {
-      el.innerHTML = '<div class="aic-point"><span class="dot">ℹ️</span><span>리포트 생성 시 상세 시사점이 포함됩니다.</span></div>';
-      return;
-    }
+    const raw  = (data.content?.[0]?.text || '').replace(/```json|```/g,'').trim();
+    const points = JSON.parse(raw);
     el.innerHTML = points.map(p => `
       <div class="aic-point">
-        <span class="dot">${p.icon || '•'}</span>
-        <span><strong>${p.title || ''}</strong>${p.title ? ' — ' : ''}${p.body}</span>
-      </div>
-    `).join('');
-  } catch {
-    el.innerHTML = '<div class="aic-point"><span class="dot">📋</span><span>시사점을 불러오는 중 오류가 발생했습니다. 리포트 생성 시 자동 포함됩니다.</span></div>';
+        <span class="dot">${p.icon||'•'}</span>
+        <span><strong>${p.title||''}</strong>${p.title?' — ':''}${p.body}</span>
+      </div>`).join('');
+  } catch (e) {
+    el.innerHTML = `
+      <div class="aic-point"><span class="dot">📊</span><span><strong>시장 공실 현황</strong> — 인근 ${(report.vacancyData||[]).length}건 공실 기준 협상 레버리지 확보가 가능합니다.</span></div>
+      <div class="aic-point"><span class="dot">💰</span><span><strong>임대 협상 포인트</strong> — 렌트프리 및 인테리어 지원 조건을 우선 협상 어젠다로 설정하세요.</span></div>
+      <div class="aic-point"><span class="dot">⏰</span><span><strong>검토 타이밍</strong> — 이전 검토 시 6~12개월의 준비 기간을 확보하는 것이 유리합니다.</span></div>`;
   }
 }
 
 // ===== PDF 저장 =====
+async function fillAiAnalysisIfEmpty(report, el) {
+  const existing = (report.result?.sections?.aiAnalysis || '').trim();
+  if (existing.length > 200) { el.textContent = existing; return; }
+
+  el.innerHTML = '<span style="color:var(--muted);font-size:12px">🤖 AI 분석 생성 중...</span>';
+
+  const distMap = { GBD:'강남권역(GBD)', CBD:'도심권역(CBD)', YBD:'여의도권역(YBD)', BBD:'분당·판교(BBD)', ETC:'기타 서울' };
+  const mode    = report.mode === 'TR' ? '임차인 대리(TR)' : '임대인 대리(LR)';
+  const vacRows = (report.vacancyData||[]).slice(0,5).map(v =>
+    `- ${v.buildingName||''} ${v.floor||''}층: 임대 ${v.rentArea||'-'}평, 임대료 ${v.rentPy||'-'}원/평`
+  ).join('\n');
+
+  const prompt = `당신은 한국 상업용 부동산 전문 컨설턴트입니다.
+
+[분석 조건]
+- 모드: ${mode}
+- 기준 빌딩: ${report.buildingName} (${distMap[report.district]||report.district})
+- 고객사: ${report.params?.clientCompany||'미지정'} / ${report.params?.clientIndustry||'업종 미지정'}
+- 당면 이슈: ${report.params?.clientIssue==='expand'?'사옥이전(확장)':report.params?.clientIssue==='shrink'?'사옥이전(축소)':report.params?.clientIssue==='new'?'신규사무실':'오피스 검토'}
+- 희망 면적: ${report.params?.desiredAreaMin||0}~${report.params?.desiredAreaMax||0}평
+- 인근 빌딩 수: ${(report.nearbyBuildings||[]).length}개 / 확인 공실: ${(report.vacancyData||[]).length}건
+${vacRows ? '[인근 공실]\n' + vacRows : ''}
+
+3~5문단으로 전문 분석을 작성하세요:
+1. 현재 시장 상황 평가 (임차인/임대인에게 유리 여부)
+2. 협상 레버리지 및 주요 조건 분석
+3. 고객사에 유리한 포인트
+4. 추천 전략과 최적 타이밍`;
+
+  try {
+    const res = await fetch(`${BACKEND}/api/claude-proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '';
+    el.textContent = text || existing || '분석을 불러올 수 없습니다.';
+  } catch {
+    el.textContent = existing || '네트워크 오류 — 백엔드 리포트 생성 후 확인해주세요.';
+  }
+}
+
+
 function downloadPDF() {
   if (!currentReport) return;
   downloadReportPDF(currentReport.id);
