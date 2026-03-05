@@ -447,6 +447,42 @@ body {
 }
 .dart-loading { padding: 10px 14px; font-size: 12px; color: var(--muted); text-align: center; }
 
+/* 기업 검색 소스 배지 */
+.corp-src-badge {
+  display: inline-block; font-size: 10px; padding: 1px 5px;
+  border-radius: 3px; margin-left: 4px; font-weight: 600; vertical-align: middle;
+}
+.src-dart  { background: #e0f2fe; color: #0369a1; }
+.src-fsc   { background: #fef3c7; color: #92400e; }
+.src-nps   { background: #d1fae5; color: #065f46; }
+.src-perp  { background: #ede9fe; color: #5b21b6; }
+
+/* ── 기업 검색 출처 배지 ── */
+.corp-src-badge {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  padding: 1px 5px; border-radius: 3px; vertical-align: middle;
+  margin-left: 4px; letter-spacing: 0.3px;
+}
+.src-dart { background: #dbeafe; color: #1e40af; }
+.src-fsc  { background: #d1fae5; color: #065f46; }
+.src-perp { background: #ede9fe; color: #5b21b6; }
+
+/* ── 기업 검색 로딩 박스 ── */
+.dart-loading-box {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: #f8faff;
+  border-bottom: 1px solid var(--border);
+}
+.dart-spinner {
+  width: 18px; height: 18px; flex-shrink: 0;
+  border: 2.5px solid #dbeafe;
+  border-top-color: var(--accent, #1e60ca);
+  border-radius: 50%;
+  animation: dartSpin 0.75s linear infinite;
+}
+@keyframes dartSpin { to { transform: rotate(360deg); } }
+
 /* 기업 확정 후 뱃지 */
 .company-confirmed {
   display: none; align-items: center; gap: 8px; margin-top: 8px;
@@ -1904,139 +1940,169 @@ function toggleGrade(btn) {
   }
 }
 
-// ===== 고객사명 자동완성 (Claude AI 기업 검색) =====
+// ===== 고객사명 자동완성 =====
+// 진행 중인 검색 취소용
+let _searchAbort = null;
+
 function onClientCompanyInput(val) {
   clearTimeout(dartDebounceTimer);
   dartACIndex = -1;
   if (!dartConfirmedCorp) document.getElementById('clientIndustry').value = '';
-  const dropdown = document.getElementById('dartDropdown');
 
-  if (val.length < 1) {
-    dropdown.classList.remove('show');
+  // 진행 중인 검색 즉시 취소
+  if (_searchAbort) { _searchAbort.abort(); _searchAbort = null; }
+
+  const dropdown = document.getElementById('dartDropdown');
+  if (val.length < 1) { dropdown.classList.remove('show'); return; }
+
+  // 2자 미만이면 직접 입력 옵션만
+  if (val.length < 2) {
+    _renderManualOnly(val, dropdown, '2자 이상 입력하면 자동 검색합니다');
     return;
   }
 
-  // 1자 이상이면 타이핑 중 수동 확정 옵션 항상 노출
-  _showManualOption(val, dropdown);
-
-  // 2자 이상이면 AI 검색 시작
-  if (val.length >= 2) {
-    dartDebounceTimer = setTimeout(() => searchDartCompany(val), 400);
-  }
+  // 타이핑 멈추면 검색 시작
+  dartDebounceTimer = setTimeout(() => searchDartCompany(val), 400);
 }
 
-// 입력값을 직접 확정하는 옵션 (항상 드롭다운 최하단에 노출)
-function _showManualOption(val, dropdown) {
-  const manualCorp = { corp_name: val, industry_name: '', adres: '', _source: 'manual' };
-  const corpJson = JSON.stringify(manualCorp).replace(/"/g, '&quot;');
-  const manualHtml = `
-    <div class="ac-item ac-item-manual" data-idx="99"
-      onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
-      data-corp="${corpJson}">
+// 직접 입력 옵션만 표시 (검색 불필요할 때)
+function _renderManualOnly(val, dropdown, hint) {
+  const corp = { corp_name: val, industry_name: '', adres: '', _source: 'manual' };
+  const json = JSON.stringify(corp).replace(/"/g, '&quot;');
+  dropdown.innerHTML = `
+    ${hint ? `<div class="dart-loading" style="color:var(--muted);font-size:11px">${hint}</div>` : ''}
+    <div class="ac-item ac-item-manual" onclick="confirmDartCompany(JSON.parse(this.dataset.corp))" data-corp="${json}">
       <div class="ac-item-name">✏️ "${val}" 직접 입력</div>
-      <div class="ac-item-meta">업종을 직접 입력할 수 있습니다</div>
+      <div class="ac-item-meta">업종을 아래에서 직접 입력할 수 있습니다</div>
     </div>`;
-  // 현재 내용이 검색결과면 유지, 로딩/빈 상태면 교체
-  const cur = dropdown.innerHTML;
-  if (cur.includes('dart-loading') || !cur.trim()) {
-    dropdown.innerHTML = manualHtml;
-    dropdown.classList.add('show');
-  }
+  dropdown.classList.add('show');
+}
+
+// 로딩 상태 메시지 표시 (직접 입력 옵션 유지하면서)
+function _renderLoading(q, dropdown, msg, submsg) {
+  const corp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
+  const json = JSON.stringify(corp).replace(/"/g, '&quot;');
+  dropdown.innerHTML = `
+    <div class="dart-loading-box">
+      <span class="dart-spinner"></span>
+      <div>
+        <div style="font-weight:600;font-size:13px;color:var(--text)">${msg}</div>
+        ${submsg ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${submsg}</div>` : ''}
+      </div>
+    </div>
+    <div class="ac-item ac-item-manual" onclick="confirmDartCompany(JSON.parse(this.dataset.corp))" data-corp="${json}">
+      <div class="ac-item-name" style="color:var(--muted)">✏️ "${q}" 직접 입력</div>
+    </div>`;
+  dropdown.classList.add('show');
 }
 
 async function searchDartCompany(q) {
   const dropdown = document.getElementById('dartDropdown');
 
-  // 로딩 표시 (기존 수동 옵션 위에 추가)
-  const manualCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
-  const manualJson = JSON.stringify(manualCorp).replace(/"/g, '&quot;');
-  dropdown.innerHTML = `
-    <div class="dart-loading">🔍 기업 정보 검색 중...</div>
-    <div class="ac-item ac-item-manual" data-idx="99"
-      onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
-      data-corp="${manualJson}">
-      <div class="ac-item-name">✏️ "${q}" 직접 입력</div>
-      <div class="ac-item-meta">업종을 직접 입력할 수 있습니다</div>
-    </div>`;
-  dropdown.classList.add('show');
+  // 이전 검색 취소
+  if (_searchAbort) _searchAbort.abort();
+  const abortCtrl = new AbortController();
+  _searchAbort = abortCtrl;
 
-  // Claude API로 기업 목록 조회
-  try {
-    const controller = new AbortController();
-    const timeoutId  = setTimeout(() => controller.abort(), 28000); // Render cold start 대응 (최대 30초)
+  // 단계별 상태 메시지
+  const steps = [
+    { msg: 'DART 공시 DB에서 기업 검색 중…',   sub: '금융감독원 전자공시 · 상장·비상장 전체 조회' },
+    { msg: '서버 연결 중… 잠시만 기다려주세요', sub: '처음 접속 시 서버 준비에 최대 30초 소요됩니다' },
+    { msg: 'AI 보완 검색 중…',                  sub: 'DART 미등록 기업은 AI로 보완 조회합니다' },
+  ];
 
-    const res = await fetch(`${BACKEND}/api/claude-proxy`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
-        messages: [{
-          role: 'user',
-          content: `"${q}"이(가) 포함된 실제 한국 기업 목록을 JSON으로만 반환하세요. 다른 텍스트, 마크다운, 설명 없이 오직 JSON만:
-[{"name":"기업명","industry":"업종","type":"KOSPI/KOSDAQ/비상장"}]
-최대 6개. "${q}"과 관련없는 기업은 절대 포함하지 마세요.`
-        }]
-      }),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
+  let stepIdx = 0;
+  _renderLoading(q, dropdown, steps[0].msg, steps[0].sub);
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // 5초마다 상태 메시지 자동 전환 (사용자가 기다리는 이유를 알 수 있도록)
+  const stepTimer = setInterval(() => {
+    if (abortCtrl.signal.aborted) { clearInterval(stepTimer); return; }
+    stepIdx = Math.min(stepIdx + 1, steps.length - 1);
+    _renderLoading(q, dropdown, steps[stepIdx].msg, steps[stepIdx].sub);
+  }, 5000);
 
-    const data   = await res.json();
-    const rawText = (data.content?.[0]?.text || '').trim();
+  // 자동 재시도 최대 3회
+  const MAX_RETRY = 3;
+  let lastErr = null;
 
-    // JSON 추출 — 배열 [ ... ] 부분만
-    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) throw new Error('JSON 배열 없음');
+  // ── 검색 실행 함수 (결과 배열 반환, 실패 시 throw) ──
+  // ── 통합 검색 엔드포인트 호출 (DART → 금융위 → Perplexity 백엔드에서 처리) ──
+  for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+    if (abortCtrl.signal.aborted) break;
+    try {
+      const res = await fetch(
+        `${BACKEND}/api/corp/unified?q=${encodeURIComponent(q)}&n=8`,
+        { signal: abortCtrl.signal }
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data      = await res.json();
+      const companies = data.companies || [];
+      if (!companies.length) throw new Error('결과 없음');
 
-    const companies = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(companies) || companies.length === 0) throw new Error('빈 배열');
+      clearInterval(stepTimer);
+      _searchAbort = null;
 
-    // 정상 결과 렌더링
-    const resultHtml = companies.map((c, i) => {
-      const corp     = { corp_name: c.name, industry_name: c.industry || '', adres: c.type || '', _source: 'ai' };
-      const corpJson = JSON.stringify(corp).replace(/"/g, '&quot;');
-      const badge    = c.type === 'KOSPI'  ? `<span class="stock-badge">KOSPI</span>`
-                     : c.type === 'KOSDAQ' ? `<span class="stock-badge" style="background:#e0f2fe;color:#0369a1">KOSDAQ</span>`
-                     : '';
-      return `
-        <div class="ac-item" data-idx="${i}"
-          onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
-          data-corp="${corpJson}"
-          onmouseover="setACFocus(${i})">
-          <div class="ac-item-name">${c.name} ${badge}</div>
-          <div class="ac-item-meta">${c.industry || '업종 미상'}</div>
-        </div>`;
-    }).join('');
+      const srcBadge = (sources) => {
+        const s = (sources || [])[0] || '';
+        if (s === 'dart')       return '<span class="corp-src-badge src-dart">DART</span>';
+        if (s === 'fsc')        return '<span class="corp-src-badge src-fsc">금융위</span>';
+        if (s === 'perplexity') return '<span class="corp-src-badge src-perp">AI</span>';
+        return '';
+      };
+      const mktBadge = (mkt) => {
+        if (mkt === 'KOSPI')  return '<span class="stock-badge">KOSPI</span>';
+        if (mkt === 'KOSDAQ') return '<span class="stock-badge" style="background:#e0f2fe;color:#0369a1">KOSDAQ</span>';
+        return '';
+      };
 
-    // 직접 입력 옵션은 맨 아래 항상 유지
-    const directCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
-    const directJson = JSON.stringify(directCorp).replace(/"/g, '&quot;');
-    dropdown.innerHTML = resultHtml + `
-      <div class="ac-item ac-item-manual" data-idx="99"
-        onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
-        data-corp="${directJson}">
-        <div class="ac-item-name" style="color:var(--muted)">✏️ "${q}" 직접 입력</div>
-      </div>`;
+      const directCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
+      const directJson = JSON.stringify(directCorp).replace(/"/g, '&quot;');
 
-  } catch (err) {
-    console.warn('[기업검색] Claude API 실패:', err.message);
-    // 실패 시 수동 입력 옵션만 표시 (빌딩명 절대 보여주지 않음)
-    const fallbackCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
-    const fallbackJson = JSON.stringify(fallbackCorp).replace(/"/g, '&quot;');
-    dropdown.innerHTML = `
-      <div class="dart-loading" style="color:#92400e;background:#fffbeb;border-radius:6px;margin:4px">
-        ⚠️ 자동검색 실패 — 아래에서 직접 입력을 선택하세요
-      </div>
-      <div class="ac-item ac-item-manual" data-idx="99"
-        onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"
-        data-corp="${fallbackJson}">
-        <div class="ac-item-name">✏️ "${q}" (으)로 직접 등록</div>
-        <div class="ac-item-meta">업종은 아래에서 직접 입력 가능합니다</div>
-      </div>`;
+      dropdown.innerHTML = companies.map((c, i) => {
+        const corp = {
+          corp_name:     c.corp_name,
+          corp_code:     c.corp_code     || '',
+          industry_name: c.industry_name || '',
+          market_name:   c.market_name   || '',
+          adres:         c.adres         || '',
+          ceo_name:      c.ceo_name      || '',
+          homepage:      c.homepage      || '',
+          phone:         c.phone         || '',
+          _source:       (c._sources || [c._source])[0] || 'unknown',
+          _sources:      c._sources || [c._source || 'unknown'],
+        };
+        const cj   = JSON.stringify(corp).replace(/"/g, '&quot;');
+        const meta = [
+          c.industry_name || '업종 미상',
+          c.ceo_name ? '대표 ' + c.ceo_name : '',
+          c.adres ? c.adres.substring(0,18) + '…' : '',
+        ].filter(Boolean).join(' · ');
+        return '<div class="ac-item" data-idx="' + i + '"'
+          + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
+          + ' data-corp="' + cj + '" onmouseover="setACFocus(' + i + ')">'
+          + '<div class="ac-item-name">' + c.corp_name + ' ' + mktBadge(c.market_name) + ' ' + srcBadge(c._sources) + '</div>'
+          + '<div class="ac-item-meta">' + meta + '</div>'
+          + '</div>';
+      }).join('')
+      + '<div class="ac-item ac-item-manual"'
+      + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
+      + ' data-corp="' + directJson + '">'
+      + '<div class="ac-item-name" style="color:var(--muted)">✏️ "' + q + '" 직접 입력</div>'
+      + '</div>';
+      return;
+
+    } catch (err) {
+      if (abortCtrl.signal.aborted) break;
+      lastErr = err;
+      console.warn('[기업검색] ' + attempt + '차 실패:', err.message);
+      if (attempt < MAX_RETRY) await new Promise(r => setTimeout(r, 3000));
+    }
   }
+  // ── 최종 실패 ──
+  clearInterval(stepTimer);
+  if (abortCtrl.signal.aborted) return;
+  _searchAbort = null;
+  _renderManualOnly(q, dropdown, '자동 검색을 완료하지 못했습니다. 직접 입력해주세요.');
 }
 
 function setACFocus(idx) {
@@ -2076,24 +2142,78 @@ function confirmDartCompany(corpOrEl) {
   // 업종 자동 입력
   const industry = corp.industry_name || getIndustryName(corp.induty_code) || '';
   document.getElementById('clientIndustry').value = industry;
-  // 직접 입력한 경우 업종 필드에 커서 이동
   if (corp._source === 'manual' && !industry) {
     setTimeout(() => document.getElementById('clientIndustry').focus(), 100);
   }
 
   // 확정 뱃지 표시
-  const meta = [
-    corp.stock_code ? `종목코드 ${corp.stock_code}` : '',
+  const metaParts = [
+    corp.market_name && corp.market_name !== '비상장' ? corp.market_name : '',
     industry || '',
-    corp.adres ? corp.adres.substring(0, 25) + '…' : ''
-  ].filter(Boolean).join(' · ');
+    corp.ceo_name ? '대표 ' + corp.ceo_name : '',
+    corp.adres ? corp.adres.substring(0, 20) + '…' : '',
+  ].filter(Boolean);
 
   document.getElementById('confirmedName').textContent = corp.corp_name;
-  document.getElementById('confirmedMeta').textContent = meta;
+  document.getElementById('confirmedMeta').textContent = metaParts.join(' · ');
   document.getElementById('companyConfirmed').classList.add('show');
-
-  // AI 경쟁사 추론 버튼 활성화
   document.getElementById('inferCompBtn').disabled = false;
+
+  // ── 국민연금 상세 조회 (임직원 수 → 적정 면적 자동 제안) ──
+  if (corp._source !== 'manual') {
+    _fetchCorpDetail(corp.corp_name);
+  }
+}
+
+async function _fetchCorpDetail(corpName) {
+  try {
+    const res  = await fetch(`${BACKEND}/api/corp/detail?name=${encodeURIComponent(corpName)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.found || !data.employee_count) return;
+
+    const emp  = data.employee_count;
+    const area = data.area_suggest || {};
+
+    // 업종 보완 (국민연금에서 왔으면 덮어쓰기)
+    if (data.industry_name && !document.getElementById('clientIndustry').value) {
+      document.getElementById('clientIndustry').value = data.industry_name;
+    }
+
+    // 면적 자동 입력 (비어 있을 때만)
+    const minEl = document.getElementById('desiredAreaMin');
+    const maxEl = document.getElementById('desiredAreaMax');
+    if (area.min && area.max && !minEl.value && !maxEl.value) {
+      minEl.value = area.min;
+      maxEl.value = area.max;
+      // 제안 안내 토스트
+      showToast(
+        `👥 임직원 ${emp.toLocaleString()}명 기준 적정 면적 ${area.min}~${area.max}평 자동 입력됨 (${area.basis})`,
+        'info',
+        5000
+      );
+    }
+
+    // 확정 뱃지에 임직원 수 추가
+    const metaEl = document.getElementById('confirmedMeta');
+    if (metaEl && emp > 0) {
+      const cur = metaEl.textContent;
+      if (!cur.includes('임직원')) {
+        metaEl.textContent = cur + ' · 임직원 ' + emp.toLocaleString() + '명';
+      }
+    }
+
+    // dartConfirmedCorp에 상세 정보 병합 (리포트 생성 시 활용)
+    if (dartConfirmedCorp) {
+      dartConfirmedCorp.employee_count = emp;
+      dartConfirmedCorp.area_suggest   = area;
+      if (data.nps_address && !dartConfirmedCorp.adres) {
+        dartConfirmedCorp.adres = data.nps_address;
+      }
+    }
+  } catch (e) {
+    console.warn('[Corp Detail]', e.message);
+  }
 }
 
 function clearConfirmedCompany() {
@@ -3425,11 +3545,11 @@ function formatDate(dateStr) {
   } catch { return ''; }
 }
 
-function showToast(msg, type='') {
+function showToast(msg, type='', duration=3000) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className   = `toast ${type} show`;
-  setTimeout(() => t.classList.remove('show'), 3000);
+  setTimeout(() => t.classList.remove('show'), duration);
 }
 
 // ===== 초기화 =====
