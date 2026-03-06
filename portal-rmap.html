@@ -1057,6 +1057,7 @@ body {
 .toast.show { transform: translateX(-50%) translateY(0); }
 .toast.error { background: var(--danger); }
 .toast.success { background: var(--success); }
+.toast.warn { background: #d97706; }
 
 /* ===== 이슈 선택 카드 (Step 4) ===== */
 .issue-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
@@ -1785,19 +1786,41 @@ const db   = firebase.database();
 const BACKEND = 'https://portal-dsyl.onrender.com';
 
 // ── Render.com Cold Start 대응 ──
-// 페이지 로드 시 백엔드를 미리 깨워둠 (15~30초 cold start 방지)
+let _backendReady     = false;   // 서버 준비 완료 여부
+let _backendReadyTime = null;    // 준비 완료 시각
+
 (function wakeUpBackend() {
-  fetch(BACKEND + '/api/status', { method: 'GET', cache: 'no-store' })
-    .then(() => console.log('[Backend] 서버 활성화 확인'))
-    .catch(() => {
-      // 실패 시 15초 후 재시도 (cold start 완료 대기)
-      setTimeout(() => {
-        fetch(BACKEND + '/api/status', { method: 'GET', cache: 'no-store' })
-          .then(() => console.log('[Backend] 서버 재시도 성공'))
-          .catch(() => console.warn('[Backend] 서버 응답 없음 — 첫 요청이 느릴 수 있습니다'));
-      }, 15000);
-    });
+  const _ping = (attempt) => {
+    fetch(BACKEND + '/api/status', { method: 'GET', cache: 'no-store' })
+      .then(r => {
+        if (r.ok) {
+          _backendReady = true;
+          _backendReadyTime = Date.now();
+          console.log(`[Backend] 서버 활성화 확인 (${attempt}차 시도)`);
+        } else { throw new Error('status ' + r.status); }
+      })
+      .catch(() => {
+        const delay = attempt <= 2 ? 10000 : 20000;
+        if (attempt < 5) setTimeout(() => _ping(attempt + 1), delay);
+        else console.warn('[Backend] 서버 응답 없음 — 첫 검색이 느릴 수 있습니다');
+      });
+  };
+  _ping(1);
 })();
+
+// ── 기업 검색 메모리 캐시 (Map, TTL 30분) ──
+const _corpCache = new Map();
+const _CORP_CACHE_TTL = 30 * 60 * 1000;
+
+function _corpCacheGet(q) {
+  const entry = _corpCache.get(q.toLowerCase());
+  if (!entry) return null;
+  if (Date.now() - entry.ts > _CORP_CACHE_TTL) { _corpCache.delete(q.toLowerCase()); return null; }
+  return entry.data;
+}
+function _corpCacheSet(q, data) {
+  _corpCache.set(q.toLowerCase(), { ts: Date.now(), data });
+}
 
 // ===== 전역 상태 =====
 let currentStep    = 1;
@@ -2045,7 +2068,7 @@ function onClientCompanyInput(val) {
   }
 
   // 타이핑 멈추면 검색 시작
-  dartDebounceTimer = setTimeout(() => searchDartCompany(val), 400);
+  dartDebounceTimer = setTimeout(() => searchDartCompany(val), 300);
 }
 
 // 직접 입력 옵션만 표시 (검색 불필요할 때)
@@ -2082,110 +2105,159 @@ function _renderLoading(q, dropdown, msg, submsg) {
 async function searchDartCompany(q) {
   const dropdown = document.getElementById('dartDropdown');
 
-  // 이전 검색 취소
+  // ── 메모리 캐시 히트 ──
+  const cached = _corpCacheGet(q);
+  if (cached) {
+    _renderCorpResults(q, cached, dropdown);
+    return;
+  }
+
+  // 이전 요청 취소
   if (_searchAbort) _searchAbort.abort();
   const abortCtrl = new AbortController();
   _searchAbort = abortCtrl;
 
-  // 단계별 상태 메시지
-  const steps = [
-    { msg: 'DART 공시 DB에서 기업 검색 중…',   sub: '금융감독원 전자공시 · 상장·비상장 전체 조회' },
-    { msg: '서버 연결 중… 잠시만 기다려주세요', sub: '처음 접속 시 서버 준비에 최대 30초 소요됩니다' },
-    { msg: 'AI 보완 검색 중…',                  sub: 'DART 미등록 기업은 AI로 보완 조회합니다' },
-  ];
+  // ── 상태 메시지 순환 (서버 준비 상황에 따라 다른 메시지) ──
+  const steps = _backendReady
+    ? [
+        { msg: '기업 검색 중…',          sub: 'DART · 금융위 · Perplexity 병렬 조회' },
+        { msg: 'AI 보완 검색 중…',        sub: '스타트업·외국계 기업 실시간 검색' },
+      ]
+    : [
+        { msg: '서버 연결 중…',           sub: 'Render 서버 준비 중 (최초 접속 시 15~30초 소요)' },
+        { msg: 'DART · 금융위 검색 중…', sub: '상장·비상장 기업 공식 DB 조회' },
+        { msg: 'AI 보완 검색 중…',        sub: 'DART 미등록 기업 Perplexity 실시간 검색' },
+      ];
 
   let stepIdx = 0;
   _renderLoading(q, dropdown, steps[0].msg, steps[0].sub);
 
-  // 5초마다 상태 메시지 자동 전환 (사용자가 기다리는 이유를 알 수 있도록)
   const stepTimer = setInterval(() => {
     if (abortCtrl.signal.aborted) { clearInterval(stepTimer); return; }
     stepIdx = Math.min(stepIdx + 1, steps.length - 1);
     _renderLoading(q, dropdown, steps[stepIdx].msg, steps[stepIdx].sub);
-  }, 5000);
+  }, _backendReady ? 4000 : 8000);
 
-  // 자동 재시도 최대 3회
+  // ── 재시도 전략: cold start 감지 후 즉시 1회 재시도 ──
   const MAX_RETRY = 3;
-  let lastErr = null;
+  const RETRY_DELAYS = [0, 2000, 4000];  // 즉시 → 2초 → 4초
 
-  // ── 검색 실행 함수 (결과 배열 반환, 실패 시 throw) ──
-  // ── 통합 검색 엔드포인트 호출 (DART → 금융위 → Perplexity 백엔드에서 처리) ──
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     if (abortCtrl.signal.aborted) break;
     try {
+      const controller = new AbortController();
+      // 전체 타임아웃 25초 (병렬 처리로 충분)
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      // 두 신호 합성 (사용자 취소 OR 타임아웃)
+      const signal = abortCtrl.signal.aborted ? abortCtrl.signal : controller.signal;
+
       const res = await fetch(
         `${BACKEND}/api/corp/unified?q=${encodeURIComponent(q)}&n=8`,
-        { signal: abortCtrl.signal }
+        { signal }
       );
+      clearTimeout(timeoutId);
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data      = await res.json();
       const companies = data.companies || [];
-      if (!companies.length) throw new Error('결과 없음');
 
       clearInterval(stepTimer);
       _searchAbort = null;
 
-      const srcBadge = (sources) => {
-        const s = (sources || [])[0] || '';
-        if (s === 'dart')       return '<span class="corp-src-badge src-dart">DART</span>';
-        if (s === 'fsc')        return '<span class="corp-src-badge src-fsc">금융위</span>';
-        if (s === 'perplexity') return '<span class="corp-src-badge src-perp">AI</span>';
-        return '';
-      };
-      const mktBadge = (mkt) => {
-        if (mkt === 'KOSPI')  return '<span class="stock-badge">KOSPI</span>';
-        if (mkt === 'KOSDAQ') return '<span class="stock-badge" style="background:#e0f2fe;color:#0369a1">KOSDAQ</span>';
-        return '';
-      };
+      if (!companies.length) {
+        _renderManualOnly(q, dropdown, `"${q}" 검색 결과가 없습니다. 직접 입력하세요.`);
+        return;
+      }
 
-      const directCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
-      const directJson = JSON.stringify(directCorp).replace(/"/g, '&quot;');
+      // 서버 준비 상태 갱신
+      _backendReady = true;
+      _backendReadyTime = Date.now();
 
-      dropdown.innerHTML = companies.map((c, i) => {
-        const corp = {
-          corp_name:     c.corp_name,
-          corp_code:     c.corp_code     || '',
-          industry_name: c.industry_name || '',
-          market_name:   c.market_name   || '',
-          adres:         c.adres         || '',
-          ceo_name:      c.ceo_name      || '',
-          homepage:      c.homepage      || '',
-          phone:         c.phone         || '',
-          _source:       (c._sources || [c._source])[0] || 'unknown',
-          _sources:      c._sources || [c._source || 'unknown'],
-        };
-        const cj   = JSON.stringify(corp).replace(/"/g, '&quot;');
-        const meta = [
-          c.industry_name || '업종 미상',
-          c.ceo_name ? '대표 ' + c.ceo_name : '',
-          c.adres ? c.adres.substring(0,18) + '…' : '',
-        ].filter(Boolean).join(' · ');
-        return '<div class="ac-item" data-idx="' + i + '"'
-          + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
-          + ' data-corp="' + cj + '" onmouseover="setACFocus(' + i + ')">'
-          + '<div class="ac-item-name">' + c.corp_name + ' ' + mktBadge(c.market_name) + ' ' + srcBadge(c._sources) + '</div>'
-          + '<div class="ac-item-meta">' + meta + '</div>'
-          + '</div>';
-      }).join('')
-      + '<div class="ac-item ac-item-manual"'
-      + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
-      + ' data-corp="' + directJson + '">'
-      + '<div class="ac-item-name" style="color:var(--muted)">✏️ "' + q + '" 직접 입력</div>'
-      + '</div>';
+      // 캐시 저장
+      _corpCacheSet(q, data);
+
+      _renderCorpResults(q, data, dropdown);
       return;
 
     } catch (err) {
       if (abortCtrl.signal.aborted) break;
-      lastErr = err;
-      console.warn('[기업검색] ' + attempt + '차 실패:', err.message);
-      if (attempt < MAX_RETRY) await new Promise(r => setTimeout(r, 3000));
+      console.warn(`[기업검색] ${attempt}차 실패:`, err.message);
+
+      // cold start 감지 — 즉시 재시도 트리거
+      if (!_backendReady && attempt === 1) {
+        _renderLoading(q, dropdown, '서버 깨우는 중…', '첫 접속 시 준비 시간이 필요합니다 (최대 30초)');
+      }
+
+      if (attempt < MAX_RETRY) {
+        await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+      }
     }
   }
-  // ── 최종 실패 ──
+
+  // 최종 실패
   clearInterval(stepTimer);
   if (abortCtrl.signal.aborted) return;
   _searchAbort = null;
-  _renderManualOnly(q, dropdown, '자동 검색을 완료하지 못했습니다. 직접 입력해주세요.');
+  _renderManualOnly(q, dropdown, '검색 연결에 실패했습니다. 직접 입력해주세요.');
+}
+
+// ── 결과 렌더링 (searchDartCompany에서 분리) ──
+function _renderCorpResults(q, data, dropdown) {
+  const companies = data.companies || [];
+  const srcBadge = (sources) => {
+    const badges = (sources || []).map(s => {
+      if (s === 'dart')       return '<span class="corp-src-badge src-dart">DART</span>';
+      if (s === 'fsc')        return '<span class="corp-src-badge src-fsc">금융위</span>';
+      if (s === 'perplexity') return '<span class="corp-src-badge src-perp">AI</span>';
+      if (s === 'claude')     return '<span class="corp-src-badge src-perp" style="background:#7c3aed;color:#fff">Claude</span>';
+      return '';
+    });
+    return badges.filter(Boolean).join('');
+  };
+  const mktBadge = (mkt) => {
+    if (mkt === 'KOSPI')  return '<span class="stock-badge">KOSPI</span>';
+    if (mkt === 'KOSDAQ') return '<span class="stock-badge" style="background:#e0f2fe;color:#0369a1">KOSDAQ</span>';
+    return '';
+  };
+
+  const directCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
+  const directJson = JSON.stringify(directCorp).replace(/"/g, '&quot;');
+
+  dropdown.innerHTML = companies.map((c, i) => {
+    const corp = {
+      corp_name:     c.corp_name,
+      corp_code:     c.corp_code     || '',
+      industry_name: c.industry_name || '',
+      market_name:   c.market_name   || '',
+      adres:         c.adres         || '',
+      ceo_name:      c.ceo_name      || '',
+      homepage:      c.homepage      || '',
+      phone:         c.phone         || '',
+      employee_cnt:  c.employee_cnt  || null,
+      _source:       (c._sources || [c._source])[0] || 'unknown',
+      _sources:      c._sources || [c._source || 'unknown'],
+    };
+    const cj   = JSON.stringify(corp).replace(/"/g, '&quot;');
+    const meta = [
+      c.industry_name || '업종 미상',
+      c.ceo_name  ? '대표 ' + c.ceo_name : '',
+      c.employee_cnt ? c.employee_cnt.toLocaleString() + '명' : '',
+      c.adres ? c.adres.substring(0, 16) + (c.adres.length > 16 ? '…' : '') : '',
+    ].filter(Boolean).join(' · ');
+
+    return '<div class="ac-item" data-idx="' + i + '"'
+      + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
+      + ' data-corp="' + cj + '" onmouseover="setACFocus(' + i + ')">'
+      + '<div class="ac-item-name">' + c.corp_name + ' ' + mktBadge(c.market_name) + ' ' + srcBadge(c._sources) + '</div>'
+      + '<div class="ac-item-meta">' + meta + '</div>'
+      + '</div>';
+  }).join('')
+  + '<div class="ac-item ac-item-manual"'
+  + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
+  + ' data-corp="' + directJson + '">'
+  + '<div class="ac-item-name" style="color:var(--muted)">✏️ \"' + q + '\" 직접 입력</div>'
+  + '</div>';
+  dropdown.classList.add('show');
 }
 
 function setACFocus(idx) {
@@ -3085,8 +3157,48 @@ async function generateReport() {
   closeModal();
   showGenerating(true);
 
+  // ── 생성 진행 메시지 순환 ──
+  const _genMsgs = [
+    '시장 데이터 수집 중… (R-ONE · 정책뉴스 · 업종뉴스 병렬 조회)',
+    'R-ONE 부동산원 통계 처리 중…',
+    'AI 뉴스 인사이트 생성 중…',
+    'Claude AI 종합 분석 작성 중… (최대 60초 소요)',
+    '마지막 단계 처리 중…',
+  ];
+  let _genMsgIdx = 0;
+  const _statusEl = document.getElementById('generatingStatus');
+  const _genMsgTimer = setInterval(() => {
+    _genMsgIdx = Math.min(_genMsgIdx + 1, _genMsgs.length - 1);
+    if (_statusEl) _statusEl.textContent = _genMsgs[_genMsgIdx];
+  }, 12000);
+
+  const _clearGenTimer = () => clearInterval(_genMsgTimer);
+
+  const _callReportAPI = async (bodyData, attempt) => {
+    const controller = new AbortController();
+    // 90초 타임아웃 (병렬화로 실제 ~35초, 여유 있게 설정)
+    const tid = setTimeout(() => controller.abort(), 90000);
+    try {
+      const resp = await fetch(`${BACKEND}/api/report/generate`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(bodyData),
+        signal:  controller.signal,
+      });
+      clearTimeout(tid);
+      if (!resp.ok) throw new Error(`서버 오류 ${resp.status}`);
+      return await resp.json();
+    } catch (e) {
+      clearTimeout(tid);
+      // AbortError는 타임아웃으로 변환
+      if (e.name === 'AbortError') throw new Error('응답 시간 초과 (90초) — 서버가 준비 중입니다');
+      throw e;
+    }
+  };
+
   try {
     // 인근 빌딩 조회 (Firebase)
+    if (_statusEl) _statusEl.textContent = '인근 빌딩 · 공실 데이터 조회 중…';
     setGenStep(1, 'active');
     const nearbyBuildings = await fetchNearbyBuildings(reportParams.lat, reportParams.lng, selectedRadius);
     const vacancyData     = await fetchNearbyVacancies(nearbyBuildings.map(b => b.id));
@@ -3094,18 +3206,33 @@ async function generateReport() {
     body.vacancyData      = vacancyData;
     setGenStep(1, 'done');
 
-    // 백엔드 API 호출
+    // 백엔드 API 호출 — 최대 2회 재시도
     setGenStep(2, 'active');
-    const resp = await fetch(`${BACKEND}/api/report/generate`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(body),
-    });
+    if (_statusEl) _statusEl.textContent = _genMsgs[0];
 
-    if (!resp.ok) throw new Error(`API 오류: ${resp.status}`);
-    const result = await resp.json();
-    if (!result.success) throw new Error(result.error || '생성 실패');
+    const MAX_ATTEMPTS = 2;
+    let result = null;
 
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        result = await _callReportAPI(body, attempt);
+        break;  // 성공
+      } catch (err) {
+        console.warn(`[리포트생성] ${attempt}차 시도 실패:`, err.message);
+        if (attempt < MAX_ATTEMPTS) {
+          // 재시도 전 사용자에게 알림
+          if (_statusEl) _statusEl.textContent = `연결 재시도 중… (${attempt + 1}/${MAX_ATTEMPTS}차)`;
+          showToast(`서버 연결 재시도 중… (${attempt + 1}차)`, 'warn');
+          await new Promise(r => setTimeout(r, 3000));
+        } else {
+          throw err;  // 최종 실패
+        }
+      }
+    }
+
+    if (!result || !result.success) throw new Error(result?.error || '생성 실패');
+
+    _clearGenTimer();
     setGenStep(2, 'done');
     setGenStep(3, 'done');
     setGenStep(4, 'done');
@@ -3129,14 +3256,21 @@ async function generateReport() {
 
     setGenStep(5, 'done');
     showGenerating(false);
-
-    // 뷰어로 바로 이동
     viewReport(report);
 
   } catch (err) {
+    _clearGenTimer();
     showGenerating(false);
-    console.error(err);
-    showToast(`생성 실패: ${err.message}`, 'error');
+    console.error('[리포트생성] 최종 실패:', err);
+
+    // 에러 유형별 메시지
+    let msg = err.message || '알 수 없는 오류';
+    if (msg.includes('fetch') || msg.includes('network') || msg.toLowerCase().includes('failed')) {
+      msg = '서버 연결 실패 — Render 서버가 준비 중일 수 있습니다. 30초 후 다시 시도해주세요.';
+    } else if (msg.includes('시간 초과')) {
+      msg = '응답 시간 초과 — 서버 부하가 높습니다. 잠시 후 재시도해주세요.';
+    }
+    showToast(msg, 'error');
   }
 }
 
