@@ -923,9 +923,9 @@ body {
 .ridx-bar-track { flex:1; height:7px; border-radius:4px; background:linear-gradient(90deg,#22c55e 0%,#facc15 42%,#f97316 68%,#ef4444 100%); position:relative; }
 .ridx-needle { position:absolute; top:-4px; width:3px; height:15px; background:#1d4ed8; border-radius:2px; transform:translateX(-50%); box-shadow:0 0 0 2px #fff; }
 /* 스파크라인 */
-.spark-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px; }
-.spark-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px 16px; height:210px; box-sizing:border-box; }
-.spark-card .sc-title { font-size:11.5px; font-weight:600; color:var(--text); margin-bottom:10px; }
+.spark-row { display:flex; flex-direction:column; gap:16px; margin-top:16px; }
+.spark-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:16px 18px; height:220px; box-sizing:border-box; }
+.spark-card .sc-title { font-size:12px; font-weight:600; color:var(--text); margin-bottom:10px; }
 .spark-card canvas { display:block; }
 /* 출처 뱃지 */
 .src-badge-row { display:flex; justify-content:flex-end; margin-top:8px; gap:6px; align-items:center; flex-wrap:wrap; }
@@ -3440,14 +3440,13 @@ function renderReportHTML(report) {
   document.getElementById('reportContent').innerHTML = `
     <!-- 표지 -->
     <div class="report-cover">
-      <div class="report-cover-mode ${mode.toLowerCase()}">${isLR ? 'LR — 임대인 대리' : 'TR — 임차인 대리'}</div>
-      <h1>${report.buildingName} 시장 분석 리포트</h1>
-      <div class="sub">${isLR ? report.clientName + '을 위한' : report.clientName + ' 이전 검토를 위한'} ${report.district} 오피스 마켓 분석</div>
+      <h1>${isLR ? report.clientName + ' 오피스 마켓 인사이트 리포트' : report.clientName + ' 오피스 시장 조사 보고서'}</h1>
+      <div class="sub">${report.district} 인근 ${(report.nearbyBuildings||[]).length}개 빌딩 시세 및 시장 현황 분석 · ${new Date(report.createdAt).toLocaleDateString('ko-KR')} 기준</div>
       <div class="report-cover-meta">
-        <span>📅 생성일: ${new Date(report.createdAt).toLocaleDateString('ko-KR')}</span>
-        <span>📍 분석 범위: ${report.district} 반경 ${(report.params.radius/1000).toFixed(1)}km</span>
-        <span>🏢 분석 빌딩: ${(report.nearbyBuildings||[]).length}개</span>
-        <span>출처: CRE Portal by S&I Corporation</span>
+        <span>📅 조사일: ${new Date(report.createdAt).toLocaleDateString('ko-KR')}</span>
+        <span>📍 조사 범위: ${report.district} 반경 ${(report.params.radius/1000).toFixed(1)}km</span>
+        <span>🏢 조사 빌딩: ${(report.nearbyBuildings||[]).length}개</span>
+        <span>Prepared by S&I Corporation CRE팀</span>
       </div>
     </div>
 
@@ -3461,7 +3460,7 @@ function renderReportHTML(report) {
     <div class="report-section">
       <div class="section-title">
         <div class="section-icon">🏛️</div>
-        부동산 정책 동향 (국토교통부)
+        최근 부동산 정책 및 규제 동향
       </div>
       <div class="news-list">${newsHTML(policyNews, 5, 'pol_' + report.id)}</div>
     </div>` : ''}
@@ -3471,7 +3470,7 @@ function renderReportHTML(report) {
     <div class="report-section">
       <div class="section-title">
         <div class="section-icon">${isLR ? '🎯' : '🔍'}</div>
-        ${isLR ? '임차 수요 업종 동향' : '고객사 업종 및 경쟁사 동향'}
+        ${isLR ? '업종 트렌드 및 오피스 시장 동향' : '관련 업종 및 시장 동향'}
       </div>
       <div class="news-list" id="industryNewsList_${report.id}">${newsHTML(industryNews, 8, 'ind_' + report.id)}</div>
     </div>` : ''}
@@ -3481,7 +3480,7 @@ function renderReportHTML(report) {
     <div class="report-section">
       <div class="section-title">
         <div class="section-icon">🤖</div>
-        AI 종합 분석
+        주요 시장 현황 및 협상 포인트
       </div>
       <div class="ai-analysis-box">
         <div class="ai-analysis-text">${aiAnalysis}</div>
@@ -3493,7 +3492,7 @@ function renderReportHTML(report) {
     <div class="report-section rent-chart-section">
       <div class="section-title">
         <div class="section-icon">🏢</div>
-        인근 빌딩 공실 및 임대 조건 비교 (반경 ${(report.params.radius/1000).toFixed(1)}km · ${(report.nearbyBuildings||[]).length}개 빌딩 · 공실 ${(report.vacancyData||[]).length}건)
+        인근 빌딩 시세 현황 (반경 ${(report.params.radius/1000).toFixed(1)}km · ${(report.nearbyBuildings||[]).length}개 빌딩 · 공실 ${(report.vacancyData||[]).length}건)
       </div>
       <div class="src-badge-row" style="margin-bottom:8px"><span class="src-badge">📋 출처: CRE Portal DB · S&amp;I CRE팀 직접 수집</span></div>
 
@@ -3527,7 +3526,7 @@ function renderReportHTML(report) {
       <!-- 막대 차트 -->
       <div style="margin-top:20px">
         <div class="cc-title" style="font-size:13px;font-weight:600;margin-bottom:8px">📊 빌딩별 임대료/평 비교 (원, 기준가 기준)</div>
-        <div style="position:relative;height:240px">
+        <div id="rentBarWrap_${report.id}" style="position:relative;height:${Math.max(240, Math.min((report.nearbyBuildings||[]).length, 12) * 22 + 60)}px;overflow:visible">
           <canvas id="rentBarChart_${report.id}"></canvas>
         </div>
       </div>
@@ -3548,7 +3547,7 @@ function renderReportHTML(report) {
     <div class="report-section">
       <div class="section-title">
         <div class="section-icon">🏗️</div>
-        조건 충족 공실 물건 목록 (전용 ${report.params.desiredAreaMin}~${report.params.desiredAreaMax}평 · ${dedup7.length}건)
+        희망 면적 조건 충족 매물 현황 (전용 ${report.params.desiredAreaMin}~${report.params.desiredAreaMax}평 · ${dedup7.length}건)
       </div>
       <div class="rent-ai-summary" id="vacAiSummary_${report.id}">
         <span style="color:var(--muted);font-size:11px">🏗️ 조건 충족 물건 분석 중...</span>
@@ -3591,12 +3590,12 @@ function renderReportHTML(report) {
     <div class="report-section" id="aiInsightSlide_${report.id}">
       <div class="section-title">
         <div class="section-icon">🎯</div>
-        S&amp;I CRE 전략 시사점
+        오피스 이전 시 유용한 체크포인트
       </div>
       <div class="ai-insight-card">
         <div class="aic-header">
-          🤖 AI 분석 요약
-          <span style="font-size:11px;opacity:.7;font-weight:400">— ${report.district} 오피스 마켓 · ${new Date(report.createdAt).toLocaleDateString('ko-KR')} 기준</span>
+          📋 시장 분석 요약
+          <span style="font-size:11px;opacity:.7;font-weight:400">— ${report.district} 인근 시장 조사 · ${new Date(report.createdAt).toLocaleDateString('ko-KR')} 기준</span>
         </div>
         <div class="aic-points" id="aiInsightPoints_${report.id}">
           <div class="aic-point"><span class="dot">⏳</span><span>시사점 생성 중...</span></div>
@@ -3944,19 +3943,34 @@ function renderSparklines(report) {
 }
 
 function renderRentCharts(report) {
-  const buildings = (report.nearbyBuildings || []).slice(0, 12);
+  // 임대료 있는 빌딩만 필터 후 최대 15개
+  const allBld  = report.nearbyBuildings || [];
+  const buildings = allBld
+    .filter(b => parseNum(b.rentPy) || parseNum(b.pricing?.rentPy) || (report.vacancyData||[]).some(v=>(v.buildingId===b.id||v.buildingName===b.buildingName)&&parseNum(v.rentPy)))
+    .slice(0, 15);
   if (!buildings.length) return;
 
   const barCtx = document.getElementById(`rentBarChart_${report.id}`);
   if (!barCtx) return;
-  // 기존 Chart 인스턴스 destroy
   const existingBar = Chart.getChart(barCtx);
   if (existingBar) existingBar.destroy();
 
-  // 빌딩 자체 기준가 사용 (parseNum 헬퍼로 문자열/숫자 모두 처리)
-  const labels   = buildings.map((b,i) => (i===0?'🏠 ':'') + (b.buildingName||b.name||'').substring(0,9));
+  // 동적 높이 조정
+  const wrap = document.getElementById(`rentBarWrap_${report.id}`);
+  const dynH = Math.max(260, buildings.length * 26 + 60);
+  if (wrap) wrap.style.height = dynH + 'px';
+  barCtx.style.height = dynH + 'px';
+
+  // vacancyData 평균 임대료 fallback
+  const _vAvg = (b) => {
+    const vacs = (report.vacancyData||[]).filter(v=>(v.buildingId===b.id||v.buildingName===b.buildingName)&&parseNum(v.rentPy));
+    if (!vacs.length) return 0;
+    return Math.round(vacs.reduce((s,v)=>s+parseNum(v.rentPy),0)/vacs.length);
+  };
+
+  const labels   = buildings.map((b,i) => (i===0?'🏠 ':'') + (b.buildingName||b.name||'').substring(0,10));
   const rentData = buildings.map(b =>
-    parseNum(b.rentPy) || parseNum(b.pricing?.rentPy) || 0
+    parseNum(b.rentPy) || parseNum(b.pricing?.rentPy) || _vAvg(b) || 0
   );
   const maintData = buildings.map(b =>
     parseNum(b.maintenancePy) || parseNum(b.pricing?.maintenancePy) || 0
@@ -4005,8 +4019,9 @@ function renderRentCharts(report) {
           }
         }
       },
+      layout: { padding: { bottom: 10 } },
       scales: {
-        x: { ticks: { font: { size: 10 }, maxRotation: 30 } },
+        x: { ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 30 } },
         y: {
           ticks: {
             font: { size: 10 },
@@ -4024,7 +4039,7 @@ async function generateNewsComments(report, newsItems, prefix) {
 
   const issue = report.params?.clientIssue || '';
   const industry = report.params?.clientIndustry || report.params?.targetIndustry || '';
-  const issueLabel = {expand:'확장이전 검토',shrink:'축소이전 검토',new:'신규사무실 검토',reloc:'동일규모 이전'}[issue] || '오피스 검토';
+  const issueLabel = {expand:'공간 확장 검토',shrink:'효율 공간 검토',new:'신규 사무실 탐색',reloc:'공간 조건 개선 검토'}[issue] || '오피스 검토';
 
   // aiComment 없는 뉴스만 처리
   const toGenerate = newsItems
@@ -4133,7 +4148,7 @@ async function generateRentAiSummary(report) {
     `${b.name}: 임대료 ${b.rent.toLocaleString()}원${b.maint ? ' + 관리비 ' + b.maint.toLocaleString() + '원' : ''}/평`
   ).join(' | ');
 
-  const issueLabel = {expand:'확장이전',shrink:'축소이전',new:'신규사무실',reloc:'동일규모이전'}[report.params?.clientIssue]||'이전';
+  const issueLabel = {expand:'공간 확장',shrink:'효율화',new:'신규사무실',reloc:'조건 개선'}[report.params?.clientIssue]||'이전';
 
   try {
     const res = await fetch(`${BACKEND}/api/claude-proxy`, {
@@ -4310,7 +4325,7 @@ ${issueNuance}
       expand: [
         { icon:'🚀', title:'성장 수요 선점이 핵심', body:`기업 확장 국면에서 적합한 면적의 공실 물건 선점이 이전 성공의 핵심입니다. 현재 ${vacCnt}건 공실 중 희망 면적 기준 충족 물건을 S&I CRE팀이 직접 발굴하고 조건 협상을 지원합니다.` },
         { icon:'📐', title:'면적 여유분 반드시 확보', body:`이전 후 조직 성장을 감안해 현재 인원의 20~30% 여유 면적을 확보하는 것이 표준입니다. 초기 임대료 부담을 줄이면서 옵션 공간을 계약에 포함시키는 협상 구조를 S&I CRE팀이 설계합니다.` },
-        { icon:'💰', title:'이전 비용 전략적 분산', body:`인테리어·이전 비용은 임대인 측 렌트프리(3~6개월)와 인테리어 지원금으로 일부 충당 가능합니다. S&I CRE팀이 복수 후보 빌딩을 경쟁시켜 최대한의 인센티브 조건을 이끌어냅니다.` },
+        { icon:'💰', title:'입주 비용 최소화 방법', body:`새 공간으로 이사할 때 드는 인테리어·이사 비용은 임대인의 렌트프리 및 인테리어 지원금으로 상당 부분 충당할 수 있습니다. 복수 후보 빌딩을 동시에 협상하면 더 유리한 조건을 얻을 수 있습니다.` },
         { icon:'⚡', title:'지금 움직여야 좋은 물건 잡는다', body:`인근 ${bldgCnt}개 빌딩 중 희망 스펙을 충족하는 물건은 한정적이며, 대형 면적일수록 경쟁 임차인이 존재합니다. 빠른 검토 착수가 최적 공간 확보의 전제 조건입니다.` },
       ],
       new: [
@@ -4320,10 +4335,10 @@ ${issueNuance}
         { icon:'📅', title:'입주 타임라인 역산 설계', body:`신규 사무실 확보 → 인테리어 공사 → 입주까지 통상 4~8개월 소요됩니다. S&I CRE팀이 목표 입주일 기준으로 역산한 실행 일정을 수립해 드립니다.` },
       ],
       reloc: [
-        { icon:'🔄', title:'이전 실익 먼저 검증해야', body:`동일 규모 이전은 "왜 지금 이 빌딩인가"에 대한 명확한 근거가 협상력의 출발점입니다. S&I CRE팀이 현 계약 대비 임대료·관리비·위치·빌딩 등급 개선폭을 수치로 산출해 이전 결정의 근거를 만들어 드립니다.` },
-        { icon:'💰', title:'이전 비용 = 조건 협상으로 회수', body:`인테리어·이사 비용은 렌트프리(3~6개월)와 인테리어 지원금으로 상당 부분 회수 가능합니다. 공실 ${vacCnt}건 시장에서 임차인 협상력이 높은 지금이 조건 확보의 최적 타이밍입니다.` },
-        { icon:'📋', title:'현 계약 해지 조건 선제 검토', body:`이전 실행 전 현 임대차계약의 중도해지 조건·위약금·원상복구 범위를 반드시 확인해야 합니다. S&I CRE팀이 법적 리스크 없이 최적 이전 타이밍을 설계해 드립니다.` },
-        { icon:'📍', title:'위치·빌딩 품질 개선 기회', body:`이전은 단순 공간 교체가 아닌 기업 이미지·접근성·시설 품질을 업그레이드할 기회입니다. S&I CRE팀이 동일 예산 범위 내에서 스펙 상향 가능한 물건을 우선 발굴합니다.` },
+        { icon:'🔄', title:'이동 전 비용 대비 효과 먼저 확인', body:`같은 면적으로 이동할 때는 현재 계약 대비 임대료·관리비·접근성·건물 수준이 얼마나 개선되는지 수치로 먼저 확인하는 것이 중요합니다. 이 분석 자료가 협상에서도 강력한 근거가 됩니다.` },
+        { icon:'💰', title:'입주 비용, 협상으로 상당 부분 절약 가능', body:`인테리어·이사 비용은 렌트프리 및 인테리어 지원금으로 상당 부분 충당할 수 있습니다. 공실 ${vacCnt}건 시장에서 임차인 협상력이 높은 지금이 조건 확보의 최적 타이밍입니다.` },
+        { icon:'📋', title:'현 임대차 계약 주요 조건 확인', body:`새 공간으로 이동하기 전에 현 계약의 해지 조건·원상복구 범위를 미리 파악해 두면 불필요한 비용을 방지할 수 있습니다. 계약 검토 시 전문가의 조언을 받는 것을 권장합니다.` },
+        { icon:'📍', title:'건물 수준·접근성 업그레이드 기회', body:`공간 이동은 기업 이미지·접근성·시설 수준을 함께 높이는 좋은 기회입니다. 비슷한 예산 안에서도 더 나은 사양의 빌딩을 찾을 수 있는 경우가 많습니다.` },
       ],
     };
     const fb = fallbacks[issue] || fallbacks.new;
@@ -4432,6 +4447,9 @@ function downloadReportPDF(id) {
     .report-section { page-break-inside: avoid; }
     .report-section + .report-section { page-break-before: auto; }
     .rent-chart-section { page-break-before: always; }
+    .spark-row { page-break-inside: avoid; }
+    .spark-card { page-break-inside: avoid; overflow: visible !important; }
+    canvas { display: block !important; }
   `;
   document.head.appendChild(pdfStyle);
 
