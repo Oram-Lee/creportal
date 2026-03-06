@@ -924,7 +924,7 @@ body {
 .ridx-needle { position:absolute; top:-4px; width:3px; height:15px; background:#1d4ed8; border-radius:2px; transform:translateX(-50%); box-shadow:0 0 0 2px #fff; }
 /* 스파크라인 */
 .spark-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
-.spark-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+.spark-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; height:90px; box-sizing:border-box; }
 .spark-card .sc-title { font-size:10.5px; font-weight:600; color:var(--text); margin-bottom:6px; }
 /* 출처 뱃지 */
 .src-badge-row { display:flex; justify-content:flex-end; margin-top:8px; gap:6px; align-items:center; flex-wrap:wrap; }
@@ -3201,6 +3201,17 @@ function closeViewer() {
 }
 
 function renderReportHTML(report) {
+  // 이전 렌더링의 Chart 인스턴스 일괄 destroy (재렌더링 충돌 방지)
+  try {
+    const rc = document.getElementById('reportContent');
+    if (rc) {
+      rc.querySelectorAll('canvas').forEach(c => {
+        const ch = Chart.getChart(c);
+        if (ch) ch.destroy();
+      });
+    }
+  } catch(e) {}
+
   const r        = report.result;
   const sections = r.sections || {};
   const mode     = report.mode;
@@ -3629,10 +3640,10 @@ function buildSection1(report) {
     sparkHtml = '<div class="spark-row">';
     if (spark6V.length >= 3)
       sparkHtml += '<div class="spark-card"><div class="sc-title">📉 공실률 추이 (최근 6분기)</div>'
-        + '<canvas id="spkV_' + report.id + '" height="55"></canvas></div>';
+        + '<canvas id="spkV_' + report.id + '" width="300" height="55" style="width:100%;height:55px"></canvas></div>';
     if (spark6RI.length >= 3)
       sparkHtml += '<div class="spark-card"><div class="sc-title">📈 임대가격지수 추이 (최근 6분기)</div>'
-        + '<canvas id="spkRI_' + report.id + '" height="55"></canvas></div>';
+        + '<canvas id="spkRI_' + report.id + '" width="300" height="55" style="width:100%;height:55px"></canvas></div>';
     sparkHtml += '</div>';
   }
 
@@ -3713,13 +3724,18 @@ function renderSparklines(report) {
   const md     = report.result?.sections?.marketStats?.data || {};
   const vacList = (md.vacancy    || []).slice(-6);
   const riList  = (md.rentIndex  || []).slice(-6);
+  // 기존 Chart 인스턴스 destroy (재생성 시 충돌 방지)
+  ['spkV_' + report.id, 'spkRI_' + report.id].forEach(id => {
+    const c = document.getElementById(id);
+    if (c) { const ex = Chart.getChart(c); if (ex) ex.destroy(); }
+  });
 
   const chartOpts = function(yUnit, baseVal) {
     return {
       type: 'line',
       options: {
-        responsive: true, maintainAspectRatio: false,
-        animation: { duration: 400 },
+        responsive: false,
+        animation: { duration: 0 },
         plugins: {
           legend: { display: !!baseVal },
           tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y.toFixed(2) + (yUnit||''); } } }
@@ -3773,6 +3789,9 @@ function renderRentCharts(report) {
 
   const barCtx = document.getElementById(`rentBarChart_${report.id}`);
   if (!barCtx) return;
+  // 기존 Chart 인스턴스 destroy
+  const existingBar = Chart.getChart(barCtx);
+  if (existingBar) existingBar.destroy();
 
   // 빌딩 자체 기준가 사용 (parseNum 헬퍼로 문자열/숫자 모두 처리)
   const labels   = buildings.map((b,i) => (i===0?'🏠 ':'') + (b.buildingName||b.name||'').substring(0,9));
@@ -4047,6 +4066,13 @@ async function generateInsightPoints(report) {
   const el = document.getElementById(`aiInsightPoints_${report.id}`);
   if (!el) return;
 
+  // report 객체에서 R-ONE 지표 직접 추출 (renderReportHTML 로컬변수 미참조)
+  const _md  = report.result?.sections?.marketStats?.data || {};
+  const lVi  = _md.vacancyLatest   || {};
+  const lRi  = _md.rentLatest      || {};
+  const lRIi = _md.rentIndexLatest || {};
+  const _fv  = (v, dec=2) => { const n=parseFloat(v); return isNaN(n)?'N/A':n.toFixed(dec); };
+
   const issueMap = { expand:'사옥 이전(확장)', shrink:'사옥 이전(축소)', new:'신규 사무실 확보', reloc:'동일 규모 이전' };
   const distMap  = { GBD:'강남권역(GBD)', CBD:'도심권역(CBD)', YBD:'여의도권역(YBD)', BBD:'분당·판교(BBD)', ETC:'기타 서울' };
 
@@ -4066,7 +4092,7 @@ async function generateInsightPoints(report) {
 분석모드: ${report.mode==='TR'?'임차인대리(TR)':'임대인대리(LR)'}
 인근빌딩: ${(report.nearbyBuildings||[]).length}개 / 확인공실: ${(report.vacancyData||[]).length}건
 희망면적: ${report.params?.desiredAreaMin||0}~${report.params?.desiredAreaMax||0}평
-[R-ONE 지표] 공실률 ${fmtVal(latestV?.vacancy)}%${latestV?.qoq!==undefined?' (전분기比 '+latestV.qoq+'pp)':''} / 임대가격지수 ${fmtVal(latestRI?.rentIdx,1)}${latestRI?.yoy!==undefined?' (전년比 '+latestRI.yoy+'%)':''} / 임대료 ${fmtVal(latestR?.rentLevel||latestR?.rentIndex,0)} ${latestR?.unit||'원/㎡'}
+[R-ONE 지표] 공실률 ${_fv(lVi?.vacancy)}%${lVi?.qoq!==undefined?' (전분기比 '+lVi.qoq+'pp)':''} / 임대가격지수 ${_fv(lRIi?.rentIdx,1)}${lRIi?.yoy!==undefined?' (전년比 '+lRIi.yoy+'%)':''} / 임대료 ${_fv(lRi?.rentLevel!==undefined?lRi?.rentLevel:lRi?.rentIndex,0)} ${lRi?.unit||'원/㎡'}
 
 [이슈 방향성]
 ${issueNuance}
@@ -4154,6 +4180,12 @@ ${issueNuance}
 
 // ===== PDF 저장 =====
 async function fillAiAnalysisIfEmpty(report, el) {
+  // report에서 직접 추출 (renderReportHTML 스코프 외부)
+  const _mdf = report.result?.sections?.marketStats?.data || {};
+  const lVf  = _mdf.vacancyLatest   || {};
+  const lRf  = _mdf.rentLatest      || {};
+  const lRIf = _mdf.rentIndexLatest || {};
+  const _fvf = (v, dec=2) => { const n=parseFloat(v); return isNaN(n)?'N/A':n.toFixed(dec); };
   const existing = (report.result?.sections?.aiAnalysis || '').trim();
   if (existing.length > 200) { el.textContent = existing; return; }
 
@@ -4181,10 +4213,10 @@ async function fillAiAnalysisIfEmpty(report, el) {
 - 당면 이슈: ${issueLabel[report.params?.clientIssue]||'오피스 검토'}
 - 희망 면적: ${report.params?.desiredAreaMin||0}~${report.params?.desiredAreaMax||0}평
 - 인근 빌딩: ${(report.nearbyBuildings||[]).length}개 / 확인 공실: ${(report.vacancyData||[]).length}건
-[R-ONE 시장지표 (${latestV?.periodDesc||latestRI?.periodDesc||'최신'})]
-- 권역 공실률: ${fmtVal(latestV?.vacancy)}%${latestV?.qoq !== undefined ? ' (전분기比 '+latestV.qoq+'pp)' : ''}${latestV?.yoy !== undefined ? ' / 전년比 '+latestV.yoy+'pp' : ''}
-- 임대가격지수: ${fmtVal(latestRI?.rentIdx,1)} (기준100=2021Q1${latestRI?.qoq !== undefined ? ', 전분기比 '+latestRI.qoq+'%' : ''}${latestRI?.yoy !== undefined ? ', 전년比 '+latestRI.yoy+'%' : ''})
-- 임대료 수준: ${fmtVal(latestR?.rentLevel !== undefined ? latestR.rentLevel : latestR.rentIndex, 0)} ${latestR?.unit||'원/㎡'}
+[R-ONE 시장지표 (${lVf?.periodDesc||lRIf?.periodDesc||'최신'})]
+- 권역 공실률: ${_fvf(lVf?.vacancy)}%${lVf?.qoq !== undefined ? ' (전분기比 '+lVf.qoq+'pp)' : ''}${lVf?.yoy !== undefined ? ' / 전년比 '+lVf.yoy+'pp' : ''}
+- 임대가격지수: ${_fvf(lRIf?.rentIdx,1)} (기준100=2021Q1${lRIf?.qoq !== undefined ? ', 전분기比 '+lRIf.qoq+'%' : ''}${lRIf?.yoy !== undefined ? ', 전년比 '+lRIf.yoy+'%' : ''})
+- 임대료 수준: ${_fvf(lRf?.rentLevel !== undefined ? lRf.rentLevel : lRf.rentIndex, 0)} ${lRf?.unit||'원/㎡'}
 ${vacRows ? '[주요 인근 공실]\n' + vacRows : ''}
 
 [이슈별 방향성]
