@@ -923,9 +923,10 @@ body {
 .ridx-bar-track { flex:1; height:7px; border-radius:4px; background:linear-gradient(90deg,#22c55e 0%,#facc15 42%,#f97316 68%,#ef4444 100%); position:relative; }
 .ridx-needle { position:absolute; top:-4px; width:3px; height:15px; background:#1d4ed8; border-radius:2px; transform:translateX(-50%); box-shadow:0 0 0 2px #fff; }
 /* 스파크라인 */
-.spark-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
-.spark-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; height:90px; box-sizing:border-box; }
-.spark-card .sc-title { font-size:10.5px; font-weight:600; color:var(--text); margin-bottom:6px; }
+.spark-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px; }
+.spark-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px 16px; height:210px; box-sizing:border-box; }
+.spark-card .sc-title { font-size:11.5px; font-weight:600; color:var(--text); margin-bottom:10px; }
+.spark-card canvas { display:block; }
 /* 출처 뱃지 */
 .src-badge-row { display:flex; justify-content:flex-end; margin-top:8px; gap:6px; align-items:center; flex-wrap:wrap; }
 .src-badge { display:inline-flex; align-items:center; gap:3px; font-size:9.5px; color:var(--muted); background:#f8fafc; border:1px solid var(--border); padding:2px 8px; border-radius:10px; }
@@ -1184,12 +1185,15 @@ canvas.mini-chart { width: 100% !important; }
 /* 임대료 요약 테이블 */
 .rent-summary-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 12px; }
 .rent-summary-table th {
-  padding: 8px 10px; background: var(--primary); color: #fff;
+  padding: 9px 10px; background: var(--primary); color: #fff;
   font-weight: 600; text-align: center; white-space: nowrap;
 }
+.rent-summary-table th:first-child { text-align: left; }
 .rent-summary-table td {
-  padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--border);
+  padding: 9px 10px; text-align: center; border-bottom: 1px solid var(--border);
+  vertical-align: middle; line-height: 1.4;
 }
+.rent-summary-table td:first-child { text-align: left; }
 .rent-summary-table tr:nth-child(even) td { background: #f8fafc; }
 .rent-summary-table tr:hover td { background: var(--accent-lt); }
 .rent-summary-table .highlight { font-weight: 700; color: var(--accent); }
@@ -3316,32 +3320,7 @@ function renderReportHTML(report) {
     <!-- Section 1: 시장 현황 — buildSection1()로 동적 생성 -->
     <div id="sec1_${report.id}"></div>
 
-    <!-- Section 2: 인근 공실 현황 -->
-    ${dedupedVacancy.length ? `
-    <div class="report-section">
-      <div class="section-title">
-        <div class="section-icon">🏢</div>
-        인근 공실 현황 (반경 ${(report.params.radius/1000).toFixed(1)}km · ${dedupedVacancy.length}건)
-      </div>
-      <div style="overflow-x:auto">
-      <table class="vacancy-table">
-        <thead>
-          <tr>
-            <th style="text-align:left">빌딩명</th>
-            <th>층</th>
-            <th>임대면적</th>
-            <th>전용면적</th>
-            <th>보증금/평</th>
-            <th>임대료/평</th>
-            <th>관리비/평</th>
-            <th>입주가능</th>
-          </tr>
-        </thead>
-        <tbody>${vacancyRows}</tbody>
-      </table>
-      </div>
-      <div class="src-badge-row"><span class="src-badge">📋 CRE Portal 공실 DB · S&amp;I CRE팀 직접 수집</span></div>
-    </div>` : ''}
+    <!-- Section 2: 인근 공실 현황 → Section 6 빌딩비교로 통합 -->
 
     <!-- Section 3: 정책 뉴스 -->
     ${policyNews.length ? `
@@ -3375,28 +3354,34 @@ function renderReportHTML(report) {
       </div>
     </div>` : ''}
 
-    <!-- Section 6: 인근 빌딩 임대료 현황 -->
-    ${report.nearbyBuildings?.length ? `
+    <!-- Section 6: 인근 빌딩 공실·임대 조건 통합 비교 -->
+    ${(report.nearbyBuildings?.length || (report.vacancyData||[]).length) ? `
     <div class="report-section rent-chart-section">
       <div class="section-title">
-        <div class="section-icon">💰</div>
-        인근 빌딩 임대 조건 비교 (반경 ${(report.params.radius/1000).toFixed(1)}km · ${(report.nearbyBuildings||[]).length}개 빌딩)
+        <div class="section-icon">🏢</div>
+        인근 빌딩 공실 및 임대 조건 비교 (반경 ${(report.params.radius/1000).toFixed(1)}km · ${(report.nearbyBuildings||[]).length}개 빌딩 · 공실 ${(report.vacancyData||[]).length}건)
       </div>
       <div class="src-badge-row" style="margin-bottom:8px"><span class="src-badge">📋 출처: CRE Portal DB · S&amp;I CRE팀 직접 수집</span></div>
 
-      <!-- 임대료 요약 테이블 -->
-      <div style="overflow-x:auto">
+      <!-- AI 한줄 요약 -->
+      <div class="rent-ai-summary" id="rentAiSummary_${report.id}">
+        <span style="color:var(--muted);font-size:11px">📊 임대 조건 분석 요약 생성 중...</span>
+      </div>
+
+      <!-- 통합 빌딩 비교 테이블 -->
+      <div style="overflow-x:auto;margin-top:12px">
       <table class="rent-summary-table" id="rentSummaryTable_${report.id}">
         <thead>
           <tr>
-            <th style="text-align:left">빌딩명</th>
+            <th style="text-align:left;min-width:120px">빌딩명</th>
             <th>등급</th>
             <th>거리</th>
             <th>연면적</th>
-            <th>임대료/평</th>
+            <th>공실 현황</th>
+            <th>평균임대료/평</th>
             <th>관리비/평</th>
-            <th>보증금</th>
-            <th>공실</th>
+            <th>보증금배수</th>
+            <th>입주가능</th>
           </tr>
         </thead>
         <tbody id="rentTableBody_${report.id}">
@@ -3405,15 +3390,10 @@ function renderReportHTML(report) {
       </table>
       </div>
 
-      <!-- 임대료 비교 AI 한줄 요약 -->
-      <div class="rent-ai-summary" id="rentAiSummary_${report.id}">
-        <span style="color:var(--muted);font-size:11px">📊 임대료 분석 요약 생성 중...</span>
-      </div>
-
-      <!-- 막대 차트 1개 (풀 width) -->
-      <div style="margin-top:16px">
+      <!-- 막대 차트 -->
+      <div style="margin-top:20px">
         <div class="cc-title" style="font-size:13px;font-weight:600;margin-bottom:8px">📊 빌딩별 임대료/평 비교 (원, 기준가 기준)</div>
-        <div style="position:relative;height:220px">
+        <div style="position:relative;height:240px">
           <canvas id="rentBarChart_${report.id}"></canvas>
         </div>
       </div>
@@ -3524,43 +3504,81 @@ function buildRentTableRows(report) {
   const buildings = report.nearbyBuildings || [];
   const vacancies = report.vacancyData    || [];
 
-  if (!buildings.length) {
-    return '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">데이터 없음</td></tr>';
+  if (!buildings.length && !vacancies.length) {
+    return '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:16px">데이터 없음</td></tr>';
   }
 
-  return buildings.slice(0, 15).map((b, i) => {
-    const isBase = i === 0; // 기준 빌딩
+  const _n = v => { const n=parseFloat(String(v||'').replace(/[,원]/g,'')); return isNaN(n)||n===0?null:n; };
+  const gradeClass = { Prime:'pill-gold', A:'pill-blue', B:'pill-blue', C:'pill-gray', D:'pill-gray', E:'pill-gray' };
 
-    // 빌딩 자체 기준가 사용 (가장 신뢰도 높음)
-    const rentPy   = parseNum(b.rentPy)   || parseNum(b.pricing?.rentPy);
-    const maintPy  = parseNum(b.maintenancePy) || parseNum(b.pricing?.maintenancePy);
-    const depositPy = parseNum(b.depositPy) || parseNum(b.pricing?.depositPy);
+  // 빌딩 목록 (nearbyBuildings 기반, 없으면 vacancyData에서 유니크 추출)
+  let bldList = buildings.slice(0, 20);
+  if (!bldList.length) {
+    const seen = new Set();
+    vacancies.forEach(v => { if (!seen.has(v.buildingId||v.buildingName)) { seen.add(v.buildingId||v.buildingName); bldList.push({ id: v.buildingId, buildingName: v.buildingName }); } });
+  }
 
-    // 공실 수 (vacancyData에서 매칭)
-    const bVacs    = vacancies.filter(v => v.buildingId === b.id);
+  return bldList.map((b, i) => {
+    const isBase = i === 0;
+
+    // 기준가 (빌딩 자체 → vacancyData 평균 순서로 fallback)
+    const bVacs = vacancies.filter(v => v.buildingId === b.id || v.buildingName === b.buildingName);
     const vacCount = bVacs.length;
 
-    // 연면적
-    const grossPy  = parseNum(b.grossFloorPy);
+    // 빌딩 자체 기준가
+    let rentPy    = _n(b.rentPy)   || _n(b.pricing?.rentPy);
+    let maintPy   = _n(b.maintenancePy) || _n(b.pricing?.maintenancePy);
+    let depositPy = _n(b.depositPy) || _n(b.pricing?.depositPy);
 
-    // 보증금 배수 (depositPy / rentPy)
-    const depMult  = (depositPy && rentPy) ? (depositPy / rentPy).toFixed(0) + '개월' : '-';
+    // 기준가 없으면 vacancyData 평균으로 계산
+    if (!rentPy && bVacs.length) {
+      const rvals = bVacs.map(v=>_n(v.rentPy)).filter(Boolean);
+      if (rvals.length) rentPy = Math.round(rvals.reduce((a,c)=>a+c,0)/rvals.length);
+    }
+    if (!maintPy && bVacs.length) {
+      const mvals = bVacs.map(v=>_n(v.maintenancePy)).filter(Boolean);
+      if (mvals.length) maintPy = Math.round(mvals.reduce((a,c)=>a+c,0)/mvals.length);
+    }
+    if (!depositPy && bVacs.length) {
+      const dvals = bVacs.map(v=>_n(v.depositPy)).filter(Boolean);
+      if (dvals.length) depositPy = Math.round(dvals.reduce((a,c)=>a+c,0)/dvals.length);
+    }
 
-    const gradeClass = { Prime:'pill-gold', A:'pill-blue', B:'pill-blue', C:'pill-gray', D:'pill-gray' };
-    const grade = b.grade || '-';
+    const grossPy = _n(b.grossFloorPy);
+    const depMult = (depositPy && rentPy) ? (depositPy / rentPy).toFixed(0) + '개월' : '-';
+    const grade   = b.grade || '-';
+    const isAvgRent = !(_n(b.rentPy) || _n(b.pricing?.rentPy)) && rentPy;
 
-        return `<tr style="${isBase ? 'background:#f0f7ff;font-weight:700' : ''}">
-      <td style="text-align:left;font-weight:${isBase?700:400};${isBase?'color:var(--accent)':''}">
-        ${isBase ? '🏠 ' : ''}${b.buildingName || b.name || '-'}
-      </td>
-      <td><span class="pill ${gradeClass[grade]||'pill-gray'}">${grade}</span></td>
-      <td>${b.distanceM != null ? b.distanceM + 'm' : '-'}</td>
-      <td>${grossPy ? grossPy.toLocaleString() + '평' : '-'}</td>
-      <td class="highlight">${rentPy ? rentPy.toLocaleString() + '원' : '-'}</td>
-      <td>${maintPy ? maintPy.toLocaleString() + '원' : '-'}</td>
-      <td>${depMult}</td>
-      <td>${vacCount > 0 ? vacCount + '건' : '-'}</td>
-    </tr>`;
+    // 공실 층 요약 (최대 3개)
+    let vacSummary = '-';
+    if (bVacs.length) {
+      const floors = [...new Set(bVacs.map(v => v.floor).filter(Boolean))].slice(0,3);
+      const totalArea = bVacs.reduce((s,v)=>s+(_n(v.exclusiveArea)||_n(v.rentArea)||0),0);
+      vacSummary = '<span style="color:#b91c1c;font-weight:600">'
+        + vacCount + '건</span>'
+        + (floors.length ? ' <span style="color:#64748b;font-size:10px">(' + floors.join('/') + '층' + (bVacs.length>3?'…':'') + ')</span>' : '')
+        + (totalArea > 0 ? '<br><span style="color:#64748b;font-size:10px">합계 ' + totalArea.toFixed(0) + '평</span>' : '');
+    }
+
+    // 입주가능 (가장 빠른 날짜)
+    const moveDates = bVacs.map(v=>v.moveInDate).filter(Boolean);
+    const moveIn = moveDates.length ? (moveDates.includes('즉시') ? '즉시' : moveDates.sort()[0]) : '-';
+
+    return '<tr style="' + (isBase ? 'background:#f0f7ff;font-weight:700' : '') + '">'
+      + '<td style="text-align:left;font-weight:' + (isBase?700:500) + ';' + (isBase?'color:var(--accent)':'') + '">'
+      +   (isBase ? '🏠 ' : '') + (b.buildingName || b.name || '-')
+      + '</td>'
+      + '<td><span class="pill ' + (gradeClass[grade]||'pill-gray') + '">' + grade + '</span></td>'
+      + '<td>' + (b.distanceM != null ? b.distanceM + 'm' : '-') + '</td>'
+      + '<td>' + (grossPy ? grossPy.toLocaleString() + '평' : '-') + '</td>'
+      + '<td>' + vacSummary + '</td>'
+      + '<td class="highlight">'
+      +   (rentPy ? rentPy.toLocaleString() + '원' + (isAvgRent ? '<br><span style="font-size:9px;color:#94a3b8">평균값</span>' : '') : '-')
+      + '</td>'
+      + '<td>' + (maintPy ? maintPy.toLocaleString() + '원' : '-') + '</td>'
+      + '<td>' + depMult + '</td>'
+      + '<td>' + (vacCount > 0 ? '<span class="pill pill-green" style="font-size:10px">' + moveIn + '</span>' : '-') + '</td>'
+      + '</tr>';
   }).join('');
 }
 
@@ -3640,10 +3658,10 @@ function buildSection1(report) {
     sparkHtml = '<div class="spark-row">';
     if (spark6V.length >= 3)
       sparkHtml += '<div class="spark-card"><div class="sc-title">📉 공실률 추이 (최근 6분기)</div>'
-        + '<canvas id="spkV_' + report.id + '" width="300" height="55" style="width:100%;height:55px"></canvas></div>';
+        + '<canvas id="spkV_' + report.id + '" width="600" height="160" style="width:100%;height:160px"></canvas></div>';
     if (spark6RI.length >= 3)
       sparkHtml += '<div class="spark-card"><div class="sc-title">📈 임대가격지수 추이 (최근 6분기)</div>'
-        + '<canvas id="spkRI_' + report.id + '" width="300" height="55" style="width:100%;height:55px"></canvas></div>';
+        + '<canvas id="spkRI_' + report.id + '" width="600" height="160" style="width:100%;height:160px"></canvas></div>';
     sparkHtml += '</div>';
   }
 
@@ -3734,15 +3752,23 @@ function renderSparklines(report) {
     return {
       type: 'line',
       options: {
-        responsive: false,
-        animation: { duration: 0 },
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 400 },
+        layout: { padding: { top: 6, bottom: 4, left: 4, right: 8 } },
         plugins: {
-          legend: { display: !!baseVal },
+          legend: { display: !!baseVal, labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } },
           tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y.toFixed(2) + (yUnit||''); } } }
         },
         scales: {
-          x: { grid: { display: false }, ticks: { font: { size: 9 }, maxRotation: 0 } },
-          y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 9 }, callback: function(v){ return v + (yUnit||''); } } }
+          x: {
+            grid: { display: false },
+            ticks: { font: { size: 10 }, maxRotation: 0, color: '#64748b' }
+          },
+          y: {
+            grid: { color: 'rgba(0,0,0,0.06)', lineWidth: 1 },
+            ticks: { font: { size: 10 }, color: '#64748b', callback: function(v){ return v + (yUnit||''); } }
+          }
         }
       }
     };
@@ -4264,14 +4290,29 @@ function downloadReportPDF(id) {
   const el       = document.getElementById('reportContent');
   const filename = `[${report.clientName}]_${report.buildingName}_리포트_${new Date().toLocaleDateString('ko-KR').replace(/\./g,'-').replace(/ /g,'')}.pdf`;
 
+  // PDF 출력 전 표지+섹션1이 자연스럽게 이어지도록 print-specific 스타일 적용
+  const pdfStyle = document.createElement('style');
+  pdfStyle.id = 'pdf-temp-style';
+  pdfStyle.textContent = `
+    .report-cover { page-break-after: avoid !important; margin-bottom: 0 !important; }
+    .report-section { page-break-inside: avoid; }
+    .report-section + .report-section { page-break-before: auto; }
+    .rent-chart-section { page-break-before: always; }
+  `;
+  document.head.appendChild(pdfStyle);
+
   html2pdf().set({
     margin:     [10, 10, 10, 10],
     filename,
     image:      { type: 'jpeg', quality: 0.98 },
-    html2canvas:{ scale: 2, useCORS: true },
+    html2canvas:{ scale: 2, useCORS: true, logging: false },
     jsPDF:      { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak:  { mode: 'css', before: '.report-section' }
-  }).from(el).save().then(() => showToast('PDF 저장 완료', 'success'));
+    pagebreak:  { mode: ['avoid-all', 'css'] }
+  }).from(el).save().then(() => {
+    const s = document.getElementById('pdf-temp-style');
+    if (s) s.remove();
+    showToast('PDF 저장 완료', 'success');
+  });
 }
 
 // ===== 유틸 =====
