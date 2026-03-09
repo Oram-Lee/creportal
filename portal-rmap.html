@@ -5339,6 +5339,22 @@ async function runResearchSummarize() {
   btn.disabled    = true;
   btn.textContent = '⏳ AI 분석 중...';
 
+  // ── 백엔드 웜업 대기 (cold start 대응) ──
+  if (!_backendReady) {
+    btn.textContent = '⏳ 서버 연결 중...';
+    let waited = 0;
+    while (!_backendReady && waited < 60000) {
+      await new Promise(r => setTimeout(r, 1500));
+      waited += 1500;
+    }
+    if (!_backendReady) {
+      showToast('서버 응답 없음 — 잠시 후 다시 시도해주세요', 'error');
+      btn.disabled = false; btn.textContent = '🤖 AI 요약 생성';
+      return;
+    }
+  }
+  btn.textContent = '⏳ AI 분석 중...';
+
   const source   = document.getElementById('researchSourceSelect').value;
   const coverage = getSelectedCoverage();
   const period   = getPeriodString();
