@@ -1689,7 +1689,7 @@ canvas.mini-chart { width: 100% !important; }
                   </div>
                 </label>
                 <label class="intel-check-row">
-                  <input type="checkbox" id="ic-market">
+                  <input type="checkbox" id="ic-market" checked>
                   <div class="intel-check-label">
                     💼 임차 시장 이슈
                     <span class="ic-sub">임대차보호법, 계약갱신, 임대료 분쟁 등 최신 이슈</span>
@@ -2523,7 +2523,7 @@ async function collectIntelligence() {
       <h4>${s.title} (${s.items.length}건)</h4>
       ${s.items.slice(0, 3).map(n => `
         <div class="ir-item">
-          <a href="${n.link || '#'}" target="_blank" style="color:var(--text);text-decoration:none;font-weight:600">${n.title}</a>
+          <a href="${n.link && n.link !== '' ? n.link : 'javascript:void(0)'}" ${n.link && n.link !== '' ? 'target="_blank" rel="noopener"' : 'title="원문 링크 없음" style="cursor:default;opacity:.6"'} style="color:var(--text);text-decoration:none;font-weight:600">${n.title}</a>
           <div class="ir-source">${n.pubDate ? formatDate(n.pubDate) + ' · ' : ''}${n.source || ''}</div>
         </div>
       `).join('')}
@@ -3401,7 +3401,7 @@ function renderReportHTML(report) {
       ? `<div class="news-curator">💡 ${summary}</div>`
       : (curatorId ? `<div class="news-curator news-curator-loading" id="${curatorId}"><span class="nc-spinner"></span> AI 인사이트 생성 중...</div>` : '');
     return `
-    <a class="news-item" href="${n.link}" target="_blank" rel="noopener">
+    <a class="news-item" href="${n.link && n.link !== '' ? n.link : 'javascript:void(0)'}" ${n.link && n.link !== '' ? 'target="_blank" rel="noopener"' : ''} style="${n.link && n.link !== '' ? '' : 'cursor:default'}">
       <div style="flex:1;min-width:0">
         <div class="news-title-row">
           <div class="news-title">${n.title}<span class="news-source-badge badge-${n.source}">${n.source}</span></div>
