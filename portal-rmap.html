@@ -1061,6 +1061,9 @@ body {
 
 /* ===== 이슈 선택 카드 (Step 4) ===== */
 .issue-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.issue-card.full-width { grid-column: 1 / -1; }
+.issue-card.maintain-card { border-color: #8b5cf6; }
+.issue-card.maintain-card:hover, .issue-card.maintain-card.selected { border-color: #7c3aed; background: #f5f3ff; }
 .issue-card {
   border: 2px solid var(--border); border-radius: 10px;
   padding: 11px 14px; cursor: pointer; transition: all .18s;
@@ -1530,6 +1533,16 @@ canvas.mini-chart { width: 100% !important; }
                 <div class="issue-info">
                   <div class="issue-title">동일 규모 이전</div>
                   <div class="issue-sub">면적은 유지하되 빌딩·위치·임대 조건 개선 목적으로 이전</div>
+                </div>
+                <div class="issue-radio"></div>
+              </div>
+
+              <!-- 관계유지용 — 부동산 이슈 없는 고객 관리 -->
+              <div class="issue-card full-width maintain-card" id="issue-maintain" onclick="selectIssue('maintain')">
+                <span class="issue-icon">🤝</span>
+                <div class="issue-info">
+                  <div class="issue-title">특이사항 없음 — 관계유지용</div>
+                  <div class="issue-sub">현재 부동산 이슈 없음 · 시장 정보 및 권역 동향 중심 리포트로 자동 구성</div>
                 </div>
                 <div class="issue-radio"></div>
               </div>
@@ -2540,10 +2553,17 @@ async function collectIntelligence() {
 // ===== 이슈 선택 =====
 function selectIssue(type) {
   selectedClientIssue = type;
-  ['expand','shrink','new','reloc'].forEach(t => {
-    document.getElementById('issue-'+t).classList.toggle('selected', t === type);
+  ['expand','shrink','new','reloc','maintain'].forEach(t => {
+    const el = document.getElementById('issue-'+t);
+    if (el) el.classList.toggle('selected', t === type);
   });
-  document.getElementById('issue-sub-panel').classList.add('show');
+  // 관계유지용 선택 시 면적·지역 서브 패널 숨김
+  const subPanel = document.getElementById('issue-sub-panel');
+  if (type === 'maintain') {
+    subPanel.classList.remove('show');
+  } else {
+    subPanel.classList.add('show');
+  }
 }
 
 // ===== 지역 범위 탭 =====
@@ -4039,7 +4059,7 @@ async function generateNewsComments(report, newsItems, prefix) {
 
   const issue = report.params?.clientIssue || '';
   const industry = report.params?.clientIndustry || report.params?.targetIndustry || '';
-  const issueLabel = {expand:'공간 확장 검토',shrink:'효율 공간 검토',new:'신규 사무실 탐색',reloc:'공간 조건 개선 검토'}[issue] || '오피스 검토';
+  const issueLabel = {expand:'공간 확장 검토',shrink:'효율 공간 검토',new:'신규 사무실 탐색',reloc:'공간 조건 개선 검토',maintain:'관계유지 (특이사항 없음)'}[issue] || '오피스 검토';
 
   // aiComment 없는 뉴스만 처리
   const toGenerate = newsItems
@@ -4148,7 +4168,7 @@ async function generateRentAiSummary(report) {
     `${b.name}: 임대료 ${b.rent.toLocaleString()}원${b.maint ? ' + 관리비 ' + b.maint.toLocaleString() + '원' : ''}/평`
   ).join(' | ');
 
-  const issueLabel = {expand:'공간 확장',shrink:'효율화',new:'신규사무실',reloc:'조건 개선'}[report.params?.clientIssue]||'이전';
+  const issueLabel = {expand:'공간 확장',shrink:'효율화',new:'신규사무실',reloc:'조건 개선',maintain:'관계유지'}[report.params?.clientIssue]||'이전';
 
   try {
     const res = await fetch(`${BACKEND}/api/claude-proxy`, {
@@ -4210,7 +4230,7 @@ async function generateVacAiSummary(report) {
     `${nm}: ${Math.round(rs.reduce((a,b)=>a+b,0)/rs.length).toLocaleString()}원/평 (${rs.length}건)`
   ).join(', ');
 
-  const issueLabel = {expand:'확장이전',shrink:'축소이전',new:'신규사무실',reloc:'동일규모이전'}[report.params?.clientIssue]||'이전';
+  const issueLabel = {expand:'확장이전',shrink:'축소이전',new:'신규사무실',reloc:'동일규모이전',maintain:'관계유지'}[report.params?.clientIssue]||'이전';
 
   try {
     const res = await fetch(`${BACKEND}/api/claude-proxy`, {
@@ -4248,7 +4268,7 @@ async function generateInsightPoints(report) {
   const lRIi = _md.rentIndexLatest || {};
   const _fv  = (v, dec=2) => { const n=parseFloat(v); return isNaN(n)?'N/A':n.toFixed(dec); };
 
-  const issueMap = { expand:'사옥 이전(확장)', shrink:'사옥 이전(축소)', new:'신규 사무실 확보', reloc:'동일 규모 이전' };
+  const issueMap = { expand:'사옥 이전(확장)', shrink:'사옥 이전(축소)', new:'신규 사무실 확보', reloc:'동일 규모 이전', maintain:'관계유지 (시장정보 중심)' };
   const distMap  = { GBD:'강남권역(GBD)', CBD:'도심권역(CBD)', YBD:'여의도권역(YBD)', BBD:'분당·판교(BBD)', ETC:'기타 서울' };
 
   const issueNuance = {
@@ -4256,6 +4276,7 @@ async function generateInsightPoints(report) {
     shrink: '축소이전의 합리성과 비용절감 효과를 강조. 현계약 해지 전략과 절감폭 극대화.',
     new:    '신규 공간 확보의 시급성과 최적 타이밍. 후보군 비교·조건 협상이 핵심.',
     reloc:  '동일 면적이지만 빌딩 품질·위치·임대 조건 개선에 집중. 이전 비용 대비 실익 최대화.',
+    maintain: '부동산 이슈 없는 고객이므로 시장 정보 전달에 집중. 향후 의사결정에 참고가 될 권역 동향·시세 변화·정책 이슈를 중심으로 구성.',
   }[report.params?.clientIssue] || '오피스 최적화 전략에 집중.';
 
   const prompt = `당신은 S&I Corporation CRE팀 상업용 부동산 전문 컨설턴트입니다.
@@ -4371,7 +4392,7 @@ async function fillAiAnalysisIfEmpty(report, el) {
   const vacRows = (report.vacancyData||[]).slice(0,5).map(v =>
     `- ${v.buildingName||''} ${v.floor||''}층: 임대 ${v.rentArea||'-'}평, 임대료 ${v.rentPy||'-'}원/평`
   ).join(NL);
-  const issueLabel = { expand:'사옥이전(확장)', shrink:'사옥이전(축소)', new:'신규사무실 확보', reloc:'동일규모 이전' };
+  const issueLabel = { expand:'사옥이전(확장)', shrink:'사옥이전(축소)', new:'신규사무실 확보', reloc:'동일규모 이전', maintain:'관계유지 (시장정보 중심)' };
   const issueDir = {
     expand: '고객사는 현재 공간이 부족해 이전·확장을 검토 중입니다. S&I CRE팀이 조력해야 할 방향은 충분한 면적 확보, 성장 여지 감안한 스펙 협상, 이전 비용 최소화입니다.',
     shrink: '고객사는 비용 효율화를 위해 축소 이전을 검토 중입니다. S&I CRE팀의 역할은 현재 계약 해지 전략, 새 공간에서 임대료·관리비 절감폭 극대화, 이전 공백 최소화입니다.',
