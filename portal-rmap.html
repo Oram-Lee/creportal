@@ -1249,6 +1249,404 @@ canvas.mini-chart { width: 100% !important; }
 }
 .ac-item-manual:hover { background: #f1f5f9 !important; }
 
+/* ===== 페이지 탭 ===== */
+.page-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 24px;
+}
+.page-tab-btn {
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.page-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.page-tab-btn:hover:not(.active) { color: var(--text); }
+.page-tab-panel { display: none; }
+.page-tab-panel.active { display: block; }
+
+/* ===== 리서치 자료 관리 ===== */
+.research-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) { .research-layout { grid-template-columns: 1fr; } }
+
+/* 왼쪽 등록 카드 */
+.research-upload-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.research-upload-card h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.research-field { margin-bottom: 11px; }
+.research-field label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 4px;
+}
+.research-field select,
+.research-field input[type=text] {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: var(--text);
+}
+.research-field select:focus,
+.research-field input[type=text]:focus { outline: none; border-color: var(--accent); }
+
+/* 출처 직접입력 */
+.source-input-wrap { position: relative; }
+.source-input-wrap input { padding-right: 72px; }
+.source-add-btn {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  padding: 0 10px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.source-add-btn:hover { opacity: .85; }
+
+/* 출처 선택 드롭다운 */
+.source-select-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.source-select-row select { flex: 1; }
+.source-manage-btn {
+  flex-shrink: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.source-manage-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* 권역 커버리지 체크박스 */
+.coverage-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.coverage-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: #fff;
+  cursor: pointer;
+  transition: all .12s;
+  user-select: none;
+}
+.coverage-chip input { display: none; }
+.coverage-chip.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.coverage-chip.checked-all {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* 시점 선택 */
+.period-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 6px;
+}
+
+/* 드롭존 */
+.research-dropzone {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 20px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  margin-bottom: 11px;
+  background: #fafbfc;
+}
+.research-dropzone:hover, .research-dropzone.dragover {
+  border-color: var(--accent); background: var(--accent-lt);
+}
+.research-dropzone .dz-icon { font-size: 24px; margin-bottom: 4px; }
+.research-dropzone .dz-text { font-size: 12px; color: var(--muted); }
+.research-dropzone .dz-sub  { font-size: 11px; color: #aaa; margin-top: 3px; }
+.research-dropzone.has-file { border-color: var(--success); background: #f0fdf4; }
+.research-dropzone.has-file .dz-text { color: var(--success); font-weight: 600; }
+#researchFileInput { display: none; }
+
+.research-btn-summarize {
+  width: 100%;
+  padding: 9px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.research-btn-summarize:disabled { opacity: .45; cursor: not-allowed; }
+.research-btn-summarize:hover:not(:disabled) { opacity: .88; }
+
+/* 미리보기 */
+.research-preview {
+  background: var(--accent-lt);
+  border: 1px solid #c3daf5;
+  border-radius: 8px;
+  padding: 13px;
+  margin-top: 12px;
+  display: none;
+}
+.research-preview.show { display: block; }
+.research-preview h4 { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 7px; }
+.research-preview-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.research-preview-summary {
+  font-size: 12px; color: var(--text); line-height: 1.6;
+  margin-bottom: 9px; max-height: 110px; overflow-y: auto;
+}
+.research-preview-stats { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
+.research-stat-chip {
+  padding: 2px 8px;
+  background: #fff;
+  border: 1px solid #c3daf5;
+  border-radius: 20px;
+  font-size: 11px; color: var(--accent); font-weight: 600;
+}
+.research-btn-save {
+  width: 100%; padding: 8px;
+  background: var(--success); color: #fff;
+  border: none; border-radius: 6px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: opacity .15s;
+}
+.research-btn-save:hover { opacity: .88; }
+
+/* ── 오른쪽 목록 카드 ── */
+.research-list-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.research-list-header {
+  padding: 12px 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.research-list-header-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.research-list-header-top h3 { font-size: 14px; font-weight: 700; color: var(--primary); flex: 1; }
+.research-list-count {
+  font-size: 12px; color: var(--muted);
+  background: #f1f5f9; padding: 2px 9px; border-radius: 12px;
+}
+
+/* 필터 탭 */
+.research-filter-tabs {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+}
+.rft-btn {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .12s;
+}
+.rft-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.rft-btn:hover:not(.active) { color: var(--text); }
+
+/* 서브 필터 행 */
+.research-subfilter {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+  background: #fafbfc;
+}
+.rsf-btn {
+  padding: 3px 11px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+  color: var(--muted); background: #fff;
+  cursor: pointer; transition: all .12s;
+}
+.rsf-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* 문서 리스트 */
+.research-doc-list { min-height: 180px; }
+.research-doc-item {
+  padding: 11px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 9px;
+  align-items: center;
+  transition: background .1s;
+}
+.research-doc-item:hover { background: #fafbff; }
+.research-doc-item:last-child { border-bottom: none; }
+
+.rdi-icon {
+  width: 34px; height: 34px;
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.rdi-icon.pdf  { background: #fef2f2; }
+.rdi-icon.docx { background: #eff6ff; }
+.rdi-icon.xlsx { background: #f0fdf4; }
+.rdi-icon.txt  { background: #fafafa; }
+
+.rdi-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  margin-bottom: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px;
+}
+.rdi-meta {
+  font-size: 11px; color: var(--muted);
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+.rdi-badge {
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px; font-weight: 700;
+  background: var(--accent-lt); color: var(--accent);
+}
+.rdi-badge.type-q   { background: #fef9c3; color: #854d0e; }
+.rdi-badge.type-yr  { background: #dcfce7; color: #166534; }
+.rdi-badge.type-sp  { background: #fce7f3; color: #9d174d; }
+
+.rdi-actions { display: flex; gap: 5px; flex-shrink: 0; }
+.rdi-btn {
+  padding: 3px 9px;
+  border: 1px solid var(--border); border-radius: 5px;
+  font-size: 11px; color: var(--muted); background: #fff;
+  cursor: pointer; transition: all .12s;
+}
+.rdi-btn:hover { color: var(--accent); border-color: var(--accent); }
+.rdi-btn.del:hover { color: var(--danger); border-color: var(--danger); }
+
+/* 그룹 헤더 */
+.rdi-group-header {
+  padding: 8px 16px;
+  font-size: 11px; font-weight: 700;
+  color: var(--muted); background: #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+
+.research-empty { padding: 44px 20px; text-align: center; color: var(--muted); }
+.research-empty .icon { font-size: 28px; margin-bottom: 8px; }
+.research-empty p { font-size: 13px; }
+
+/* 출처 관리 모달 */
+.source-mgr-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 9000;
+  align-items: center; justify-content: center;
+}
+.source-mgr-overlay.show { display: flex; }
+.source-mgr-modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  width: 380px;
+  max-width: 95vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+}
+.source-mgr-modal h3 { font-size: 15px; font-weight: 700; margin-bottom: 16px; }
+.source-mgr-list { margin-bottom: 16px; }
+.source-mgr-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 0; border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+.source-mgr-item .name { flex: 1; }
+.source-mgr-item .del-btn {
+  padding: 2px 8px; font-size: 11px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: #fff; color: var(--muted); cursor: pointer;
+}
+.source-mgr-item .del-btn:hover { color: var(--danger); border-color: var(--danger); }
+.source-mgr-add { display: flex; gap: 8px; }
+.source-mgr-add input {
+  flex: 1; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: 6px;
+  font-size: 13px;
+}
+.source-mgr-add button {
+  padding: 8px 14px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 6px;
+  font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.source-mgr-close {
+  margin-top: 14px; width: 100%; padding: 9px;
+  background: #f1f5f9; border: none; border-radius: 6px;
+  font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text);
+}
+
 </style>
 </head>
 <body>
@@ -1267,15 +1665,26 @@ canvas.mini-chart { width: 100% !important; }
 
 <!-- 메인 -->
 <main class="page">
+
+  <!-- 페이지 상단 헤더 -->
   <div class="page-title">
     <div>
-      <h1>📊 맞춤형 리포트</h1>
-      <p>TR / LR 관점의 시장 분석 리포트를 자동으로 생성합니다</p>
+      <h1 id="pageMainTitle">📊 맞춤형 리포트</h1>
+      <p id="pageMainDesc">TR / LR 관점의 시장 분석 리포트를 자동으로 생성합니다</p>
     </div>
-    <button class="btn-new-report" onclick="openModal()">
+    <button class="btn-new-report" id="btnNewReport" onclick="openModal()">
       ＋ 새 리포트 생성
     </button>
   </div>
+
+  <!-- 페이지 탭 -->
+  <div class="page-tabs">
+    <button class="page-tab-btn active" id="tabBtnReport" onclick="switchPageTab('report')">📊 리포트</button>
+    <button class="page-tab-btn" id="tabBtnResearch" onclick="switchPageTab('research')">📚 리서치 자료</button>
+  </div>
+
+  <!-- ===== 탭 1: 리포트 ===== -->
+  <div class="page-tab-panel active" id="tabPanelReport">
 
   <!-- 리포트 목록 -->
   <div class="report-list-view" id="reportListView">
@@ -1297,6 +1706,166 @@ canvas.mini-chart { width: 100% !important; }
     </div>
     <div id="reportContent"></div>
   </div>
+
+  </div><!-- /tabPanelReport -->
+
+  <!-- ===== 탭 2: 리서치 자료 관리 ===== -->
+  <div class="page-tab-panel" id="tabPanelResearch">
+    <div class="research-layout">
+
+      <!-- ── 왼쪽: 등록 카드 ── -->
+      <div class="research-upload-card">
+        <h3>📂 리서치 자료 등록</h3>
+
+        <!-- 출처 기관 -->
+        <div class="research-field">
+          <label>출처 기관</label>
+          <div class="source-select-row">
+            <select id="researchSourceSelect" onchange="onSourceSelectChange()"></select>
+            <button class="source-manage-btn" onclick="openSourceMgr()" title="출처 목록 관리">⚙️</button>
+          </div>
+        </div>
+
+        <!-- 커버리지 (권역) -->
+        <div class="research-field">
+          <label>커버리지 (권역)</label>
+          <div class="coverage-checks">
+            <label class="coverage-chip checked-all" id="covAll">
+              <input type="checkbox" value="전국" checked onchange="onCoverageChange(this)">전국
+            </label>
+            <label class="coverage-chip" id="covCBD">
+              <input type="checkbox" value="CBD" onchange="onCoverageChange(this)">CBD
+            </label>
+            <label class="coverage-chip" id="covGBD">
+              <input type="checkbox" value="GBD" onchange="onCoverageChange(this)">GBD
+            </label>
+            <label class="coverage-chip" id="covYBD">
+              <input type="checkbox" value="YBD" onchange="onCoverageChange(this)">YBD
+            </label>
+            <label class="coverage-chip" id="covBBD">
+              <input type="checkbox" value="BBD" onchange="onCoverageChange(this)">BBD
+            </label>
+            <label class="coverage-chip" id="covRegion">
+              <input type="checkbox" value="지방" onchange="onCoverageChange(this)">지방
+            </label>
+          </div>
+        </div>
+
+        <!-- 기준 연도 + 구분 -->
+        <div class="research-field">
+          <label>기준 시점</label>
+          <div class="period-row">
+            <select id="researchYear"></select>
+            <select id="researchPeriodType">
+              <optgroup label="분기">
+                <option value="Q1">Q1 (1분기)</option>
+                <option value="Q2">Q2 (2분기)</option>
+                <option value="Q3">Q3 (3분기)</option>
+                <option value="Q4">Q4 (4분기)</option>
+              </optgroup>
+              <optgroup label="반기">
+                <option value="H1">상반기</option>
+                <option value="H2">하반기</option>
+              </optgroup>
+              <optgroup label="연간">
+                <option value="연간전망">연간 전망</option>
+                <option value="연간결산">연간 결산</option>
+              </optgroup>
+              <optgroup label="기타">
+                <option value="기타">기타 / 특별</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+
+        <!-- 리포트 종류 -->
+        <div class="research-field">
+          <label>리포트 종류</label>
+          <select id="researchReportType">
+            <option value="마켓리포트">마켓 리포트</option>
+            <option value="연간전망">연간 전망 (Outlook)</option>
+            <option value="연간결산">연간 결산 (Review)</option>
+            <option value="스냅샷">스냅샷 (Snapshot)</option>
+            <option value="특별리포트">특별 리포트</option>
+            <option value="기타">기타</option>
+          </select>
+        </div>
+
+        <!-- 파일 업로드 -->
+        <div class="research-dropzone" id="researchDropzone"
+             onclick="document.getElementById('researchFileInput').click()"
+             ondragover="event.preventDefault(); this.classList.add('dragover')"
+             ondragleave="this.classList.remove('dragover')"
+             ondrop="handleResearchDrop(event)">
+          <div class="dz-icon">📄</div>
+          <div class="dz-text" id="dzText">클릭하거나 파일을 드래그하세요</div>
+          <div class="dz-sub">PDF · DOCX · XLSX · TXT 지원</div>
+        </div>
+        <input type="file" id="researchFileInput"
+               accept=".pdf,.docx,.xlsx,.txt"
+               onchange="handleResearchFileSelect(this.files[0])">
+
+        <button class="research-btn-summarize" id="btnResearchSummarize"
+                onclick="runResearchSummarize()" disabled>
+          🤖 AI 요약 생성
+        </button>
+
+        <!-- 요약 미리보기 -->
+        <div class="research-preview" id="researchPreview">
+          <h4>✅ AI 요약 결과</h4>
+          <div class="research-preview-title" id="previewTitle"></div>
+          <div class="research-preview-summary" id="previewSummary"></div>
+          <div class="research-preview-stats" id="previewStats"></div>
+          <button class="research-btn-save" onclick="saveResearchDoc()">
+            💾 Firebase에 저장
+          </button>
+        </div>
+      </div>
+
+      <!-- ── 오른쪽: 목록 카드 ── -->
+      <div class="research-list-card">
+        <div class="research-list-header">
+          <div class="research-list-header-top">
+            <h3>📚 등록된 리서치 자료</h3>
+            <span class="research-list-count" id="researchListCount">0건</span>
+          </div>
+          <!-- 메인 필터 탭 -->
+          <div class="research-filter-tabs">
+            <button class="rft-btn active" data-tab="all"    onclick="setResearchTab('all')">전체</button>
+            <button class="rft-btn"        data-tab="source" onclick="setResearchTab('source')">출처별</button>
+            <button class="rft-btn"        data-tab="year"   onclick="setResearchTab('year')">연도별</button>
+            <button class="rft-btn"        data-tab="type"   onclick="setResearchTab('type')">종류별</button>
+            <button class="rft-btn"        data-tab="cov"    onclick="setResearchTab('cov')">권역별</button>
+          </div>
+        </div>
+        <!-- 서브 필터 -->
+        <div class="research-subfilter" id="researchSubfilter" style="display:none"></div>
+        <!-- 목록 -->
+        <div class="research-doc-list" id="researchDocList">
+          <div class="research-empty">
+            <div class="icon">📭</div>
+            <p>등록된 자료가 없습니다</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /tabPanelResearch -->
+
+  <!-- ── 출처 관리 모달 ── -->
+  <div class="source-mgr-overlay" id="sourceMgrOverlay">
+    <div class="source-mgr-modal">
+      <h3>📋 출처 기관 관리</h3>
+      <div class="source-mgr-list" id="sourceMgrList"></div>
+      <div class="source-mgr-add">
+        <input type="text" id="sourceMgrInput" placeholder="새 출처 기관명 입력"
+               onkeydown="if(event.key==='Enter') addSourceFromMgr()">
+        <button onclick="addSourceFromMgr()">추가</button>
+      </div>
+      <button class="source-mgr-close" onclick="closeSourceMgr()">닫기</button>
+    </div>
+  </div>
+
 </main>
 
 <!-- ===== 리포트 생성 모달 ===== -->
@@ -3224,6 +3793,15 @@ async function generateReport() {
     const vacancyData     = await fetchNearbyVacancies(nearbyBuildings.map(b => b.id));
     body.nearbyBuildings  = nearbyBuildings;
     body.vacancyData      = vacancyData;
+
+    // 리서치 컨텍스트 주입 (해당 권역 등록 자료 최신 3건)
+    if (_statusEl) _statusEl.textContent = '리서치 자료 컨텍스트 로드 중…';
+    const researchCtx = await buildResearchContext(body.district || reportParams.district || 'GBD');
+    if (researchCtx) {
+      body.researchContext = researchCtx;
+      console.log(`[리포트생성] 리서치 컨텍스트 주입 (${body.district}): ${researchCtx.length}자`);
+    }
+
     setGenStep(1, 'done');
 
     // 백엔드 API 호출 — 최대 2회 재시도
@@ -4511,6 +5089,573 @@ function showToast(msg, type='', duration=3000) {
 
 // ===== 초기화 =====
 renderReportList();
+
+// =============================================================================
+// ■ 페이지 탭 전환
+// =============================================================================
+function switchPageTab(tab) {
+  document.querySelectorAll('.page-tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.page-tab-panel').forEach(p => p.classList.remove('active'));
+
+  document.getElementById(`tabBtn${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
+  document.getElementById(`tabPanel${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
+
+  const titleEl = document.getElementById('pageMainTitle');
+  const descEl  = document.getElementById('pageMainDesc');
+  const btnEl   = document.getElementById('btnNewReport');
+
+  if (tab === 'research') {
+    titleEl.textContent = '📚 리서치 자료 관리';
+    descEl.textContent  = '출처별·시점별 리서치 자료를 등록하고 리포트 생성 시 자동 활용합니다';
+    btnEl.style.display = 'none';
+    initResearchTab();
+  } else {
+    titleEl.textContent = '📊 맞춤형 리포트';
+    descEl.textContent  = 'TR / LR 관점의 시장 분석 리포트를 자동으로 생성합니다';
+    btnEl.style.display = '';
+  }
+}
+
+// =============================================================================
+// ■ 리서치 자료 관리 v2
+//   Firebase RTDB:
+//     researchDocs/{docId}   — 자료 (flat, district 필드 없음 → coverage 배열)
+//     researchSources/{id}   — 출처 기관 관리 목록
+// =============================================================================
+
+// ── 상수 ──
+const RESEARCH_DEFAULT_SOURCES = [
+  'CBRE','JLL','쿠시먼웨이크필드','나이트프랭크','세빌스','컬리어스',
+  '에비슨영','알스퀘어','메이트플러스','원빌딩','교보리얼코',
+  '신한리츠운용','한국부동산원','자체분석'
+];
+const RESEARCH_FILE_ICONS = { pdf:'📕', docx:'📘', xlsx:'📗', txt:'📄' };
+const COVERAGE_LABELS     = { 전국:'전국', CBD:'CBD', GBD:'GBD', YBD:'YBD', BBD:'BBD', 지방:'지방' };
+const REPORT_TYPE_CLASS   = {
+  마켓리포트:'type-q', 스냅샷:'type-q',
+  연간전망:'type-yr', 연간결산:'type-yr',
+  특별리포트:'type-sp',
+};
+
+// ── 상태 ──
+let _researchFile      = null;
+let _researchSummary   = null;
+let _researchAllDocs   = [];
+let _researchSources   = [];     // Firebase에서 관리
+let _researchTab       = 'all';  // all | source | year | type | cov
+let _researchSubfilter = 'ALL';  // 서브 필터 값
+
+// =============================================================================
+// ■ 초기화 — 탭 진입 시 호출
+// =============================================================================
+async function initResearchTab() {
+  await loadResearchSources();
+  renderSourceSelect();
+  buildYearSelect();
+  loadResearchDocs();
+}
+
+// =============================================================================
+// ■ 출처 관리
+// =============================================================================
+async function loadResearchSources() {
+  try {
+    const snap = await db.ref('researchSources').once('value');
+    const val  = snap.val() || {};
+    _researchSources = Object.values(val).filter(s => s.active !== false).map(s => s.name).sort();
+    if (_researchSources.length === 0) {
+      // 최초: 기본 목록 Firebase에 저장
+      const batch = {};
+      RESEARCH_DEFAULT_SOURCES.forEach(name => {
+        const id = `src_${name.replace(/\s/g,'_')}`;
+        batch[id] = { name, active: true, createdAt: Date.now() };
+      });
+      await db.ref('researchSources').set(batch);
+      _researchSources = [...RESEARCH_DEFAULT_SOURCES];
+    }
+  } catch(e) {
+    _researchSources = [...RESEARCH_DEFAULT_SOURCES];
+    console.warn('[sources load]', e);
+  }
+}
+
+function renderSourceSelect() {
+  const sel = document.getElementById('researchSourceSelect');
+  if (!sel) return;
+  sel.innerHTML = _researchSources.map(s =>
+    `<option value="${s}">${s}</option>`
+  ).join('') + `<option value="__new__">＋ 직접 입력...</option>`;
+}
+
+function onSourceSelectChange() {
+  const sel = document.getElementById('researchSourceSelect');
+  if (sel.value === '__new__') openSourceMgr();
+}
+
+// ── 출처 관리 모달 ──
+function openSourceMgr() {
+  renderSourceMgrList();
+  document.getElementById('sourceMgrOverlay').classList.add('show');
+}
+function closeSourceMgr() {
+  document.getElementById('sourceMgrOverlay').classList.remove('show');
+  // 선택값 복원 (직접입력 선택 상태면 첫 항목으로)
+  const sel = document.getElementById('researchSourceSelect');
+  if (sel.value === '__new__' && _researchSources.length > 0)
+    sel.value = _researchSources[0];
+}
+
+function renderSourceMgrList() {
+  const listEl = document.getElementById('sourceMgrList');
+  listEl.innerHTML = _researchSources.map(name =>
+    `<div class="source-mgr-item">
+      <span class="name">${name}</span>
+      <button class="del-btn" onclick="deleteSource('${name}')">삭제</button>
+    </div>`
+  ).join('') || '<p style="font-size:12px;color:var(--muted);padding:8px 0">출처가 없습니다</p>';
+}
+
+async function addSourceFromMgr() {
+  const inp  = document.getElementById('sourceMgrInput');
+  const name = inp.value.trim();
+  if (!name) return;
+  if (_researchSources.includes(name)) { showToast('이미 존재하는 출처입니다', 'warn'); return; }
+
+  const id = `src_${Date.now()}`;
+  try {
+    await db.ref(`researchSources/${id}`).set({ name, active: true, createdAt: Date.now() });
+    _researchSources.push(name);
+    _researchSources.sort();
+    renderSourceSelect();
+    renderSourceMgrList();
+    // 새로 추가한 출처 자동 선택
+    document.getElementById('researchSourceSelect').value = name;
+    inp.value = '';
+    showToast(`'${name}' 추가됨`, 'success');
+  } catch(e) { showToast('저장 오류: ' + e.message, 'error'); }
+}
+
+async function deleteSource(name) {
+  if (!confirm(`'${name}' 출처를 삭제할까요?\n등록된 자료의 출처명은 유지됩니다.`)) return;
+  try {
+    // Firebase에서 해당 name의 key 찾아 삭제
+    const snap = await db.ref('researchSources').once('value');
+    const val  = snap.val() || {};
+    const key  = Object.keys(val).find(k => val[k].name === name);
+    if (key) await db.ref(`researchSources/${key}`).remove();
+    _researchSources = _researchSources.filter(s => s !== name);
+    renderSourceSelect();
+    renderSourceMgrList();
+    showToast(`'${name}' 삭제됨`, 'success');
+  } catch(e) { showToast('삭제 오류: ' + e.message, 'error'); }
+}
+
+// =============================================================================
+// ■ 시점 선택 초기화
+// =============================================================================
+function buildYearSelect() {
+  const sel = document.getElementById('researchYear');
+  if (!sel) return;
+  const cur = new Date().getFullYear();
+  let html = '';
+  for (let y = cur; y >= cur - 5; y--) html += `<option value="${y}">${y}년</option>`;
+  sel.innerHTML = html;
+  // 현재 분기 자동 선택
+  const q = Math.ceil((new Date().getMonth()+1) / 3);
+  document.getElementById('researchPeriodType').value = `Q${q}`;
+}
+
+function getPeriodString() {
+  const y  = document.getElementById('researchYear').value;
+  const pt = document.getElementById('researchPeriodType').value;
+  return `${y}-${pt}`;   // ex) 2025-Q1 / 2025-연간전망
+}
+
+// =============================================================================
+// ■ 커버리지 체크박스
+// =============================================================================
+function onCoverageChange(cb) {
+  const val = cb.value;
+  const lbl = cb.closest('.coverage-chip');
+
+  if (val === '전국') {
+    // 전국 선택 → 나머지 해제
+    if (cb.checked) {
+      document.querySelectorAll('.coverage-chip input:not([value="전국"])').forEach(c => {
+        c.checked = false;
+        c.closest('.coverage-chip').classList.remove('checked');
+      });
+      lbl.classList.add('checked-all');
+      lbl.classList.remove('checked');
+    } else {
+      lbl.classList.remove('checked-all');
+    }
+  } else {
+    // 개별 권역 선택 → 전국 해제
+    const allCb = document.querySelector('.coverage-chip input[value="전국"]');
+    allCb.checked = false;
+    allCb.closest('.coverage-chip').classList.remove('checked-all');
+    lbl.classList.toggle('checked', cb.checked);
+  }
+}
+
+function getSelectedCoverage() {
+  const allCb = document.querySelector('.coverage-chip input[value="전국"]');
+  if (allCb && allCb.checked) return ['전국'];
+  const checked = [];
+  document.querySelectorAll('.coverage-chip input:not([value="전국"])').forEach(c => {
+    if (c.checked) checked.push(c.value);
+  });
+  return checked.length > 0 ? checked : ['전국'];
+}
+
+// =============================================================================
+// ■ 파일 선택 / 드롭
+// =============================================================================
+function handleResearchFileSelect(file) {
+  if (!file) return;
+  _researchFile = file;
+  const ext = file.name.split('.').pop().toLowerCase();
+  const dz  = document.getElementById('researchDropzone');
+  const txt = document.getElementById('dzText');
+  dz.classList.add('has-file');
+  txt.textContent = `${RESEARCH_FILE_ICONS[ext]||'📄'} ${file.name} (${(file.size/1024).toFixed(0)}KB)`;
+  document.getElementById('btnResearchSummarize').disabled = false;
+}
+
+function handleResearchDrop(event) {
+  event.preventDefault();
+  document.getElementById('researchDropzone').classList.remove('dragover');
+  const file = event.dataTransfer.files[0];
+  if (file) handleResearchFileSelect(file);
+}
+
+// =============================================================================
+// ■ AI 요약 실행
+// =============================================================================
+async function runResearchSummarize() {
+  if (!_researchFile) return;
+  const btn = document.getElementById('btnResearchSummarize');
+  btn.disabled    = true;
+  btn.textContent = '⏳ AI 분석 중...';
+
+  const source   = document.getElementById('researchSourceSelect').value;
+  const coverage = getSelectedCoverage();
+  const period   = getPeriodString();
+  const rtype    = document.getElementById('researchReportType').value;
+  const ext      = _researchFile.name.split('.').pop().toLowerCase();
+  // 커버리지 → 백엔드에 전달할 대표 권역 (전국이면 ALL, 단일이면 그대로)
+  const districtForApi = coverage.includes('전국') ? 'ALL' : (coverage[0] || 'GBD');
+
+  try {
+    const formData = new FormData();
+    formData.append('file',       _researchFile);
+    formData.append('file_type',  ['pdf','docx','xlsx','txt'].includes(ext) ? ext : 'txt');
+    formData.append('district',   districtForApi);
+    formData.append('coverage',   JSON.stringify(coverage));
+    formData.append('source',     source === '__new__' ? '' : source);
+    formData.append('period',     period);
+    formData.append('report_type', rtype);
+
+    const res  = await fetch(`${BACKEND}/api/research/summarize`, { method:'POST', body:formData });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '요약 실패');
+
+    _researchSummary = {
+      ...data,
+      coverage,
+      reportType: rtype,
+      fileName:   _researchFile.name,
+      fileType:   ext,
+      fileSize:   _researchFile.size,
+      uploadedAt: Date.now(),
+    };
+
+    // 미리보기
+    document.getElementById('previewTitle').textContent   = data.suggestedTitle || '';
+    document.getElementById('previewSummary').textContent = data.summary || '';
+
+    const stats = data.keyStats || {};
+    const chips = [];
+    if (stats.vacancyRate != null) chips.push(`공실률 ${stats.vacancyRate}%`);
+    if (stats.avgRentPy   != null) chips.push(`임대료 ${stats.avgRentPy.toLocaleString()}원/평`);
+    if (stats.rentFree    != null) chips.push(`RF ${stats.rentFree}`);
+    if (stats.trend       != null) chips.push(`📈 ${stats.trend}`);
+    // 커버리지 칩
+    chips.push(...coverage.map(c => `🗺 ${c}`));
+    document.getElementById('previewStats').innerHTML =
+      chips.map(c => `<span class="research-stat-chip">${c}</span>`).join('');
+
+    document.getElementById('researchPreview').classList.add('show');
+    showToast('AI 요약 완료 — 확인 후 저장하세요', 'success');
+
+  } catch(e) {
+    showToast(`요약 오류: ${e.message}`, 'error');
+    console.error('[research summarize]', e);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = '🤖 AI 요약 생성';
+  }
+}
+
+// =============================================================================
+// ■ Firebase 저장 (flat: researchDocs/{docId})
+// =============================================================================
+async function saveResearchDoc() {
+  if (!_researchSummary) return;
+
+  const source   = document.getElementById('researchSourceSelect').value;
+  const coverage = getSelectedCoverage();
+  const period   = getPeriodString();
+  const rtype    = document.getElementById('researchReportType').value;
+  const year     = document.getElementById('researchYear').value;
+  const ptype    = document.getElementById('researchPeriodType').value;
+  const docId    = `doc_${Date.now()}`;
+
+  const payload = {
+    title:       _researchSummary.suggestedTitle || `${source} ${coverage.join('·')} ${period}`,
+    source:      source === '__new__' ? '' : source,
+    coverage,                   // ['전국'] or ['GBD','CBD']
+    year:        parseInt(year),
+    periodType:  ptype,         // Q1 / 연간전망 등
+    period,                     // '2025-Q1'
+    reportType:  rtype,
+    summary:     _researchSummary.summary || '',
+    keyStats:    _researchSummary.keyStats || {},
+    tags:        _researchSummary.tags || [],
+    fileName:    _researchSummary.fileName || '',
+    fileType:    _researchSummary.fileType || '',
+    fileSize:    _researchSummary.fileSize || 0,
+    uploadedAt:  _researchSummary.uploadedAt || Date.now(),
+    active:      true,
+  };
+
+  try {
+    await db.ref(`researchDocs/${docId}`).set(payload);
+    showToast('✅ 저장 완료', 'success');
+    _researchFile = null; _researchSummary = null;
+    document.getElementById('researchDropzone').classList.remove('has-file');
+    document.getElementById('dzText').textContent = '클릭하거나 파일을 드래그하세요';
+    document.getElementById('btnResearchSummarize').disabled = true;
+    document.getElementById('researchPreview').classList.remove('show');
+    document.getElementById('researchFileInput').value = '';
+    loadResearchDocs();
+  } catch(e) {
+    showToast(`저장 오류: ${e.message}`, 'error');
+  }
+}
+
+// =============================================================================
+// ■ 목록 로드 (flat researchDocs)
+// =============================================================================
+async function loadResearchDocs() {
+  const listEl = document.getElementById('researchDocList');
+  listEl.innerHTML = '<div class="research-empty"><div class="icon">⏳</div><p>로딩 중...</p></div>';
+  try {
+    const snap = await db.ref('researchDocs').once('value');
+    const val  = snap.val() || {};
+    _researchAllDocs = Object.entries(val)
+      .filter(([,d]) => d.active !== false)
+      .map(([id, d]) => ({ _id: id, ...d }))
+      .sort((a, b) => (b.uploadedAt||0) - (a.uploadedAt||0));
+
+    document.getElementById('researchListCount').textContent = `${_researchAllDocs.length}건`;
+    applyResearchFilter();
+  } catch(e) {
+    listEl.innerHTML = `<div class="research-empty"><div class="icon">⚠️</div><p>로드 오류: ${e.message}</p></div>`;
+  }
+}
+
+// =============================================================================
+// ■ 탭 전환 + 서브 필터
+// =============================================================================
+function setResearchTab(tab) {
+  _researchTab       = tab;
+  _researchSubfilter = 'ALL';
+  document.querySelectorAll('.rft-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tab === tab));
+  buildSubfilter(tab);
+  applyResearchFilter();
+}
+
+function buildSubfilter(tab) {
+  const sfEl = document.getElementById('researchSubfilter');
+  if (tab === 'all') { sfEl.style.display = 'none'; sfEl.innerHTML = ''; return; }
+
+  let items = [];
+  if (tab === 'source') {
+    const sources = [...new Set(_researchAllDocs.map(d => d.source).filter(Boolean))].sort();
+    items = sources.map(s => ({ val: s, label: s }));
+  } else if (tab === 'year') {
+    const years = [...new Set(_researchAllDocs.map(d => d.year).filter(Boolean))].sort((a,b) => b-a);
+    items = years.map(y => ({ val: String(y), label: `${y}년` }));
+  } else if (tab === 'type') {
+    const types = [...new Set(_researchAllDocs.map(d => d.reportType).filter(Boolean))];
+    items = types.map(t => ({ val: t, label: t }));
+  } else if (tab === 'cov') {
+    // 커버리지 풀 목록 (coverage 배열 flatten → unique)
+    const covSet = new Set();
+    _researchAllDocs.forEach(d => (d.coverage||[]).forEach(c => covSet.add(c)));
+    items = [...covSet].map(c => ({ val: c, label: COVERAGE_LABELS[c]||c }));
+  }
+
+  if (!items.length) { sfEl.style.display = 'none'; return; }
+
+  sfEl.style.display = 'flex';
+  sfEl.innerHTML = `<button class="rsf-btn active" data-val="ALL" onclick="setSubfilter('ALL')">전체</button>`
+    + items.map(it =>
+        `<button class="rsf-btn" data-val="${it.val}" onclick="setSubfilter('${it.val.replace(/'/g,"\\'")}')">${it.label}</button>`
+      ).join('');
+}
+
+function setSubfilter(val) {
+  _researchSubfilter = val;
+  document.querySelectorAll('.rsf-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.val === val));
+  applyResearchFilter();
+}
+
+// =============================================================================
+// ■ 필터 적용 + 렌더링
+// =============================================================================
+function applyResearchFilter() {
+  let docs = [..._researchAllDocs];
+  const sf = _researchSubfilter;
+
+  if (_researchTab === 'source' && sf !== 'ALL') docs = docs.filter(d => d.source === sf);
+  if (_researchTab === 'year'   && sf !== 'ALL') docs = docs.filter(d => String(d.year) === sf);
+  if (_researchTab === 'type'   && sf !== 'ALL') docs = docs.filter(d => d.reportType === sf);
+  if (_researchTab === 'cov'    && sf !== 'ALL') docs = docs.filter(d => (d.coverage||[]).includes(sf));
+
+  if (_researchTab === 'all' || sf !== 'ALL') {
+    renderResearchList(docs, null);
+  } else {
+    // 서브 필터 "전체"인 상태에서 그룹 헤더 표시
+    renderResearchList(docs, _researchTab);
+  }
+}
+
+function renderResearchList(docs, groupBy) {
+  const listEl = document.getElementById('researchDocList');
+  if (!docs.length) {
+    listEl.innerHTML = '<div class="research-empty"><div class="icon">📭</div><p>해당 조건의 자료가 없습니다</p></div>';
+    return;
+  }
+
+  const iconMap = { pdf:'📕', docx:'📘', xlsx:'📗', txt:'📄' };
+
+  const renderItem = doc => {
+    const ts  = doc.uploadedAt ? _relativeTime(doc.uploadedAt) : '';
+    const ext = (doc.fileType||'txt').toLowerCase();
+    const covStr  = (doc.coverage||['?']).join('·');
+    const typeClass = REPORT_TYPE_CLASS[doc.reportType] || '';
+    return `<div class="research-doc-item">
+      <div class="rdi-icon ${ext}">${iconMap[ext]||'📄'}</div>
+      <div class="rdi-body">
+        <div class="rdi-title" title="${(doc.title||'').replace(/"/g,'&quot;')}">${doc.title||'제목 없음'}</div>
+        <div class="rdi-meta">
+          <span class="rdi-badge ${typeClass}">${doc.reportType||''}</span>
+          <span>${doc.source||''}</span>
+          <span>${doc.period||''}</span>
+          <span>🗺 ${covStr}</span>
+          ${ts ? `<span>${ts}</span>` : ''}
+        </div>
+      </div>
+      <div class="rdi-actions">
+        <button class="rdi-btn" onclick="viewResearchDoc('${doc._id}')" title="요약 보기">👁️</button>
+        <button class="rdi-btn del" onclick="deleteResearchDoc('${doc._id}')" title="삭제">🗑️</button>
+      </div>
+    </div>`;
+  };
+
+  if (!groupBy || groupBy === 'all') {
+    listEl.innerHTML = docs.map(renderItem).join('');
+    return;
+  }
+
+  // 그룹핑
+  const groups = {};
+  docs.forEach(doc => {
+    let key = '기타';
+    if (groupBy === 'source') key = doc.source || '출처 미상';
+    if (groupBy === 'year')   key = doc.year ? `${doc.year}년` : '연도 미상';
+    if (groupBy === 'type')   key = doc.reportType || '종류 미상';
+    if (groupBy === 'cov')    key = (doc.coverage||['?']).join('·');
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(doc);
+  });
+
+  listEl.innerHTML = Object.entries(groups).map(([gkey, gdocs]) =>
+    `<div class="rdi-group-header">${gkey} <span style="font-weight:400;opacity:.7">(${gdocs.length}건)</span></div>`
+    + gdocs.map(renderItem).join('')
+  ).join('');
+}
+
+// =============================================================================
+// ■ 상세 보기 / 삭제
+// =============================================================================
+function viewResearchDoc(docId) {
+  const doc = _researchAllDocs.find(d => d._id === docId);
+  if (!doc) return;
+  const stats = doc.keyStats || {};
+  const chips = [
+    stats.vacancyRate != null ? `공실률 ${stats.vacancyRate}%` : null,
+    stats.avgRentPy   != null ? `임대료 ${stats.avgRentPy.toLocaleString()}원/평` : null,
+    stats.rentFree    != null ? `RF ${stats.rentFree}` : null,
+    stats.trend       != null ? `📈 ${stats.trend}` : null,
+  ].filter(Boolean);
+  alert(`📋 ${doc.title}\n출처: ${doc.source||'-'}  |  ${doc.period||'-'}  |  커버리지: ${(doc.coverage||[]).join('·')}\n\n${doc.summary||'요약 없음'}\n\n${chips.join(' · ')}`);
+}
+
+async function deleteResearchDoc(docId) {
+  if (!confirm('이 리서치 자료를 삭제할까요?')) return;
+  try {
+    await db.ref(`researchDocs/${docId}/active`).set(false);
+    showToast('삭제됨', 'success');
+    loadResearchDocs();
+  } catch(e) { showToast(`삭제 오류: ${e.message}`, 'error'); }
+}
+
+// =============================================================================
+// ■ 상대 시간
+// =============================================================================
+function _relativeTime(ts) {
+  const diff = Date.now() - ts;
+  const m    = Math.floor(diff / 60000);
+  if (m < 2)  return '방금 전';
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  const d = Math.floor(h / 24);
+  if (d < 7)  return `${d}일 전`;
+  return new Date(ts).toLocaleDateString('ko-KR', { month:'short', day:'numeric' });
+}
+
+// =============================================================================
+// ■ 리포트 생성 시 컨텍스트 주입 (coverage 배열 기반)
+// =============================================================================
+async function buildResearchContext(district) {
+  // district ex) 'GBD' — 해당 권역 포함 자료 OR 전국 자료 우선
+  try {
+    const snap = await db.ref('researchDocs').once('value');
+    const val  = snap.val() || {};
+    const docs = Object.values(val)
+      .filter(d => d.active !== false)
+      .filter(d => {
+        const cov = d.coverage || ['전국'];
+        return cov.includes('전국') || cov.includes(district);
+      })
+      .sort((a, b) => (b.uploadedAt||0) - (a.uploadedAt||0))
+      .slice(0, 3);
+    if (!docs.length) return '';
+    return docs.map(d =>
+      `[${d.source||'?'} ${d.period||''} ${(d.coverage||[]).join('·')}] ${d.summary||''}`
+    ).join('\n\n');
+  } catch(e) {
+    console.warn('[buildResearchContext]', e);
+    return '';
+  }
+}
 </script>
 </body>
 </html>
