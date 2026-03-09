@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
 
 <!-- 카카오 지도 -->
 <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=1ac6eee9b1e4c2e0cc6f1d1ca1a6a559&libraries=services"></script>
@@ -2362,8 +2363,9 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db   = firebase.database();
+const auth    = firebase.auth();
+const db      = firebase.database();
+const storage = firebase.storage();
 
 const BACKEND = 'https://portal-dsyl.onrender.com';
 
@@ -3794,12 +3796,23 @@ async function generateReport() {
     body.nearbyBuildings  = nearbyBuildings;
     body.vacancyData      = vacancyData;
 
-    // 리서치 컨텍스트 주입 (해당 권역 등록 자료 최신 3건)
+    // 리서치 컨텍스트 주입 (RAG 2단계)
     if (_statusEl) _statusEl.textContent = '리서치 자료 컨텍스트 로드 중…';
-    const researchCtx = await buildResearchContext(body.district || reportParams.district || 'GBD');
+    const _district = body.district || reportParams.district || 'GBD';
+    // 리포트 컨텍스트 문자열 (select-pages에서 관련 페이지 선택에 사용)
+    const _reportCtxStr = [
+      `빌딩: ${reportParams.buildingName || ''}`,
+      `권역: ${_district}`,
+      `고객사: ${body.clientCompany || ''}`,
+      `업종: ${body.clientIndustry || body.targetIndustry || ''}`,
+      `리포트타입: ${body.reportType || ''}`,
+      `이슈: ${body.clientIssue || ''}`,
+    ].filter(s => !s.endsWith(': ')).join(', ');
+
+    const researchCtx = await buildResearchContext(_district, _reportCtxStr);
     if (researchCtx) {
       body.researchContext = researchCtx;
-      console.log(`[리포트생성] 리서치 컨텍스트 주입 (${body.district}): ${researchCtx.length}자`);
+      console.log(`[리포트생성] RAG 컨텍스트 주입 (${_district}): ${researchCtx.length}자`);
     }
 
     setGenStep(1, 'done');
@@ -5397,8 +5410,10 @@ async function runResearchSummarize() {
     if (stats.avgRentPy   != null) chips.push(`임대료 ${stats.avgRentPy.toLocaleString()}원/평`);
     if (stats.rentFree    != null) chips.push(`RF ${stats.rentFree}`);
     if (stats.trend       != null) chips.push(`📈 ${stats.trend}`);
-    // 커버리지 칩
     chips.push(...coverage.map(c => `🗺 ${c}`));
+    // pageIndex 건수 표시
+    if (data.pageIndex && data.pageIndex.length > 0)
+      chips.push(`📑 색인 ${data.pageIndex.length}페이지`);
     document.getElementById('previewStats').innerHTML =
       chips.map(c => `<span class="research-stat-chip">${c}</span>`).join('');
 
@@ -5415,10 +5430,14 @@ async function runResearchSummarize() {
 }
 
 // =============================================================================
-// ■ Firebase 저장 (flat: researchDocs/{docId})
+// ■ Storage 업로드 + RTDB 저장 (RAG 구조)
 // =============================================================================
 async function saveResearchDoc() {
-  if (!_researchSummary) return;
+  if (!_researchSummary || !_researchFile) return;
+
+  const btnSave  = document.querySelector('.research-btn-save');
+  btnSave.disabled = true;
+  btnSave.textContent = '⏳ 업로드 중...';
 
   const source   = document.getElementById('researchSourceSelect').value;
   const coverage = getSelectedCoverage();
@@ -5427,28 +5446,37 @@ async function saveResearchDoc() {
   const year     = document.getElementById('researchYear').value;
   const ptype    = document.getElementById('researchPeriodType').value;
   const docId    = `doc_${Date.now()}`;
-
-  const payload = {
-    title:       _researchSummary.suggestedTitle || `${source} ${coverage.join('·')} ${period}`,
-    source:      source === '__new__' ? '' : source,
-    coverage,                   // ['전국'] or ['GBD','CBD']
-    year:        parseInt(year),
-    periodType:  ptype,         // Q1 / 연간전망 등
-    period,                     // '2025-Q1'
-    reportType:  rtype,
-    summary:     _researchSummary.summary || '',
-    keyStats:    _researchSummary.keyStats || {},
-    tags:        _researchSummary.tags || [],
-    fileName:    _researchSummary.fileName || '',
-    fileType:    _researchSummary.fileType || '',
-    fileSize:    _researchSummary.fileSize || 0,
-    uploadedAt:  _researchSummary.uploadedAt || Date.now(),
-    active:      true,
-  };
+  const ext      = _researchFile.name.split('.').pop().toLowerCase();
 
   try {
+    // 1. Firebase Storage 업로드
+    const srcName    = (source||'unknown').replace(/[^a-zA-Z0-9가-힣]/g,'_');
+    const storagePath = `research/${year}/${srcName}_${period}_${docId}.${ext}`;
+    const storageRef  = storage.ref(storagePath);
+    btnSave.textContent = '⏳ Storage 업로드 중...';
+    const mimeMap = { pdf:'application/pdf', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', txt:'text/plain' };
+    await storageRef.put(_researchFile, { contentType: mimeMap[ext] || 'application/octet-stream' });
+    const storageUrl = await storageRef.getDownloadURL();
+
+    // 2. RTDB 저장 (pageIndex 포함)
+    btnSave.textContent = '⏳ 색인 저장 중...';
+    const payload = {
+      title:      _researchSummary.suggestedTitle || `${source} ${coverage.join('·')} ${period}`,
+      source:     source === '__new__' ? '' : source,
+      coverage, year: parseInt(year), periodType: ptype, period, reportType: rtype,
+      summary:    _researchSummary.summary || '',
+      keyStats:   _researchSummary.keyStats || {},
+      pageIndex:  _researchSummary.pageIndex || [],
+      pageCount:  _researchSummary.pageCount || 0,
+      tags:       _researchSummary.tags || [],
+      fileName:   _researchFile.name, fileType: ext, fileSize: _researchFile.size,
+      storagePath, storageUrl,
+      uploadedAt: Date.now(), active: true,
+    };
     await db.ref(`researchDocs/${docId}`).set(payload);
-    showToast('✅ 저장 완료', 'success');
+    showToast(`✅ 저장 완료 — 페이지 색인 ${payload.pageIndex.length}건`, 'success');
+    console.log('[research] 저장:', docId, `pageIndex: ${payload.pageIndex.length}p`);
+
     _researchFile = null; _researchSummary = null;
     document.getElementById('researchDropzone').classList.remove('has-file');
     document.getElementById('dzText').textContent = '클릭하거나 파일을 드래그하세요';
@@ -5458,6 +5486,10 @@ async function saveResearchDoc() {
     loadResearchDocs();
   } catch(e) {
     showToast(`저장 오류: ${e.message}`, 'error');
+    console.error('[research save]', e);
+  } finally {
+    btnSave.disabled = false;
+    btnSave.textContent = '💾 Firebase에 저장';
   }
 }
 
@@ -5648,26 +5680,99 @@ function _relativeTime(ts) {
 }
 
 // =============================================================================
-// ■ 리포트 생성 시 컨텍스트 주입 (coverage 배열 기반)
+// ■ RAG 리포트 컨텍스트 주입 (2단계)
 // =============================================================================
-async function buildResearchContext(district) {
-  // district ex) 'GBD' — 해당 권역 포함 자료 OR 전국 자료 우선
+async function buildResearchContext(district, reportContextStr) {
   try {
+    // 1단계: RTDB에서 해당 권역 관련 docs 로드
     const snap = await db.ref('researchDocs').once('value');
     const val  = snap.val() || {};
-    const docs = Object.values(val)
-      .filter(d => d.active !== false)
-      .filter(d => {
+    const docs = Object.entries(val)
+      .filter(([, d]) => d.active !== false)
+      .filter(([, d]) => {
         const cov = d.coverage || ['전국'];
         return cov.includes('전국') || cov.includes(district);
       })
-      .sort((a, b) => (b.uploadedAt||0) - (a.uploadedAt||0))
-      .slice(0, 3);
+      .sort((a, b) => (b[1].uploadedAt || 0) - (a[1].uploadedAt || 0))
+      .slice(0, 5)  // 최신 5개 문서
+      .map(([id, d]) => ({ docId: id, ...d }));
+
     if (!docs.length) return '';
-    return docs.map(d =>
-      `[${d.source||'?'} ${d.period||''} ${(d.coverage||[]).join('·')}] ${d.summary||''}`
-    ).join('\n\n');
-  } catch(e) {
+
+    // pageIndex가 있는 문서
+    const docsWithIndex = docs.filter(d => d.pageIndex && d.pageIndex.length > 0);
+    const docsNoIndex   = docs.filter(d => !d.pageIndex || d.pageIndex.length === 0);
+
+    let finalContext = '';
+
+    // 2단계-A: pageIndex 있는 문서 → select-pages → get-pages
+    if (docsWithIndex.length > 0 && reportContextStr) {
+      try {
+        const selectRes = await fetch(`${BACKEND}/api/research/select-pages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            reportContext: reportContextStr,
+            docs: docsWithIndex.map(d => ({
+              docId: d.docId,
+              title: d.title || '',
+              pageIndex: d.pageIndex || [],
+            }))
+          })
+        });
+        const selectData = await selectRes.json();
+        const selected   = selectData.selected || [];
+
+        for (const sel of selected) {
+          const doc = docsWithIndex.find(d => d.docId === sel.docId);
+          if (!doc || !doc.storageUrl || !sel.pages?.length) continue;
+
+          // get-pages: Storage에서 실제 페이지 텍스트 추출
+          const pageRes = await fetch(`${BACKEND}/api/research/get-pages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ storageUrl: doc.storageUrl, pages: sel.pages })
+          });
+          const pageData = await pageRes.json();
+          const pageTexts = pageData.pages || {};
+
+          if (Object.keys(pageTexts).length > 0) {
+            const pagesStr = Object.entries(pageTexts)
+              .map(([pg, txt]) => `  [p${pg}] ${txt.slice(0, 400)}`)
+              .join('\n');
+            finalContext += `\n[${doc.source || '?'} ${doc.period || ''} — 관련 페이지: ${sel.pages.join(', ')}]\n${pagesStr}\n`;
+            console.log(`[RAG] ${doc.title}: p${sel.pages.join(',')} 주입`);
+          }
+        }
+      } catch (e) {
+        console.warn('[RAG] select/get-pages 실패, pageIndex 요약으로 fallback:', e);
+        // fallback: pageIndex 요약 텍스트
+        finalContext += docsWithIndex.map(d =>
+          `[${d.source||'?'} ${d.period||''} — 색인 요약]\n` +
+          (d.pageIndex||[]).slice(0,10).map(p =>
+            `  p${p.page}: ${p.topic} — ${p.summary}`
+          ).join('\n')
+        ).join('\n\n');
+      }
+    } else if (docsWithIndex.length > 0) {
+      // reportContextStr 없을 때: pageIndex 요약만
+      finalContext += docsWithIndex.map(d =>
+        `[${d.source||'?'} ${d.period||''}]\n` + d.summary +
+        '\n색인:\n' + (d.pageIndex||[]).slice(0,8).map(p =>
+          `  p${p.page}: ${p.topic} — ${p.summary}`
+        ).join('\n')
+      ).join('\n\n');
+    }
+
+    // 2단계-B: pageIndex 없는 구버전 문서 → summary만
+    if (docsNoIndex.length > 0) {
+      finalContext += '\n' + docsNoIndex.map(d =>
+        `[${d.source||'?'} ${d.period||''}] ${d.summary||''}`
+      ).join('\n\n');
+    }
+
+    return finalContext.trim();
+  } catch (e) {
     console.warn('[buildResearchContext]', e);
     return '';
   }
