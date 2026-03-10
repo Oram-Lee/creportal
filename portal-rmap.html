@@ -6570,10 +6570,7 @@ async function _rdvInitPdf(url) {
     return;
   }
   try {
-    // Firebase Storage → 브라우저 직접 fetch는 CORS 차단
-    // 백엔드 프록시를 통해 스트리밍
-    const proxyUrl = `${BACKEND}/api/research/proxy-pdf?url=${encodeURIComponent(url)}`;
-    const loadTask = pdfjsLib.getDocument({ url: proxyUrl, cMapUrl: null, cMapPacked: true });
+    const loadTask = pdfjsLib.getDocument({ url: url, cMapUrl: null, cMapPacked: true });
     _rdvPdfDoc = await loadTask.promise;
     const total = _rdvPdfDoc.numPages;
     document.getElementById('rdvTotalPages').textContent = total;
