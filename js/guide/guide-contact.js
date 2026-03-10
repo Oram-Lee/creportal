@@ -3,8 +3,8 @@
  * 담당자 배정, 일괄 매핑
  */
 
-import { state, db, ref, get, update } from './guide-state.js';
-import { showToast } from './guide-utils.js';
+import { state, db, ref, get, update } from './guide-state.js?v=5.1';
+import { showToast } from './guide-utils.js?v=5.1';
 // renderBuildingEditor는 window 객체를 통해 호출 (순환 의존성 방지)
 
 // 모달 상태
@@ -102,23 +102,11 @@ function renderBuildingContacts() {
             <button class="btn btn-sm btn-secondary" onclick="document.getElementById('cpAddDropdown').style.display='none'">취소</button>
         </div>
         
-        <div class="cp-drag-hint" style="font-size:11px; color:#94a3b8; padding:4px 0 8px; display:${contacts.length > 1 ? 'block' : 'none'};">
-            ✋ 드래그하여 순서 변경 가능
-        </div>
-        
-        <div class="cp-list" id="cpDraggableList">
+        <div class="cp-list">
             ${contacts.length === 0 ? `
                 <div class="empty-state">등록된 담당자가 없습니다</div>
             ` : contacts.map((c, i) => `
-                <div class="cp-item" draggable="true" data-idx="${i}" 
-                     style="cursor:grab; user-select:none;"
-                     ondragstart="cpDragStart(event, ${i})"
-                     ondragover="cpDragOver(event)"
-                     ondragenter="cpDragEnter(event)"
-                     ondragleave="cpDragLeave(event)"
-                     ondrop="cpDrop(event, ${i})"
-                     ondragend="cpDragEnd(event)">
-                    <div class="cp-drag-handle" style="color:#94a3b8; margin-right:8px; font-size:16px;">⠿</div>
+                <div class="cp-item">
                     <div class="cp-item-info">
                         <span class="cp-name">${c.name || '-'}</span>
                         <span class="cp-position">${c.position || ''}</span>
@@ -134,86 +122,6 @@ function renderBuildingContacts() {
             `).join('')}
         </div>
     `;
-    
-    // 드래그앤드롭 CSS 추가 (한 번만)
-    if (!document.getElementById('cpDragStyle')) {
-        const style = document.createElement('style');
-        style.id = 'cpDragStyle';
-        style.textContent = `
-            .cp-item { display: flex; align-items: center; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 6px; background: white; transition: all 0.15s; }
-            .cp-item:hover { border-color: #3b82f6; background: #f8faff; }
-            .cp-item.cp-dragging { opacity: 0.4; border: 2px dashed #3b82f6; }
-            .cp-item.cp-drag-over { border: 2px dashed #22c55e; background: #f0fdf4; transform: scale(1.01); }
-            .cp-drag-handle { cursor: grab; }
-            .cp-item:active .cp-drag-handle { cursor: grabbing; }
-        `;
-        document.head.appendChild(style);
-    }
-}
-
-// ★ 드래그앤드롭 상태 변수
-let cpDragSrcIdx = null;
-
-export function cpDragStart(event, idx) {
-    cpDragSrcIdx = idx;
-    event.currentTarget.classList.add('cp-dragging');
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', String(idx));
-}
-
-export function cpDragOver(event) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-}
-
-export function cpDragEnter(event) {
-    event.preventDefault();
-    const item = event.currentTarget.closest('.cp-item');
-    if (item) item.classList.add('cp-drag-over');
-}
-
-export function cpDragLeave(event) {
-    const item = event.currentTarget.closest('.cp-item');
-    if (item && !item.contains(event.relatedTarget)) {
-        item.classList.remove('cp-drag-over');
-    }
-}
-
-export async function cpDrop(event, targetIdx) {
-    event.preventDefault();
-    const item = event.currentTarget.closest('.cp-item');
-    if (item) item.classList.remove('cp-drag-over');
-    
-    if (cpDragSrcIdx === null || cpDragSrcIdx === targetIdx) return;
-    
-    const building = state.allBuildings.find(b => b.id === cpModalBuildingId);
-    if (!building || !building.contactPoints) return;
-    
-    // 배열에서 항목 이동
-    const contacts = [...building.contactPoints];
-    const [moved] = contacts.splice(cpDragSrcIdx, 1);
-    contacts.splice(targetIdx, 0, moved);
-    building.contactPoints = contacts;
-    
-    // Firebase 저장
-    try {
-        await update(ref(db, `buildings/${cpModalBuildingId}`), {
-            contactPoints: building.contactPoints
-        });
-        showToast('담당자 순서가 변경되었습니다', 'success');
-    } catch (error) {
-        console.error('순서 변경 오류:', error);
-    }
-    
-    cpDragSrcIdx = null;
-    renderBuildingContacts();
-    refreshCurrentPreview(building);
-}
-
-export function cpDragEnd(event) {
-    event.currentTarget.classList.remove('cp-dragging');
-    document.querySelectorAll('.cp-item').forEach(el => el.classList.remove('cp-drag-over'));
-    cpDragSrcIdx = null;
 }
 
 // 담당자 추가 드롭다운 표시
@@ -532,11 +440,4 @@ export function registerContactFunctions() {
     window.updateBulkCount = updateBulkCount;
     window.applyBulkMapping = applyBulkMapping;
     window.removeBulkMapping = removeBulkMapping;
-    // ★ 드래그앤드롭
-    window.cpDragStart = cpDragStart;
-    window.cpDragOver = cpDragOver;
-    window.cpDragEnter = cpDragEnter;
-    window.cpDragLeave = cpDragLeave;
-    window.cpDrop = cpDrop;
-    window.cpDragEnd = cpDragEnd;
 }

@@ -3,8 +3,8 @@
  * 임대안내문 표시용 메모 연동
  */
 
-import { state, db, ref, set, update } from './guide-state.js';
-import { showToast } from './guide-utils.js';
+import { state, db, ref, set, update } from './guide-state.js?v=5.1';
+import { showToast } from './guide-utils.js?v=5.1';
 // renderBuildingEditor는 window 객체를 통해 호출 (순환 의존성 방지)
 
 // NOTE 모달 열기

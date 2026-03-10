@@ -21,22 +21,6 @@ export function formatNumber(n) {
     return Number(n).toLocaleString();
 }
 
-// ★ 면적/백분율 포맷팅 (소수점 2자리 강제 표기, 0이어도 0.00)
-export function formatArea(n) {
-    if (!n && n !== 0) return '-';
-    const num = Number(n);
-    if (isNaN(num)) return '-';
-    return num.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-// ★ 백분율 포맷팅 (소수점 2자리 강제 표기)
-export function formatPercent(n) {
-    if (!n && n !== 0) return '-';
-    const num = Number(n);
-    if (isNaN(num)) return '-';
-    return num.toFixed(2);
-}
-
 // ★ 금액 포맷팅 (콤마 자동 추가)
 export function formatPrice(value) {
     if (!value && value !== 0) return '-';

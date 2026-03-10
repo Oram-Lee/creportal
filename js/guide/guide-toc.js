@@ -16,8 +16,8 @@
  * - ★ guide-preview.js와 순서 동기화: 미리보기/출력에도 변경 순서 반영
  */
 
-import { state, getRegionOrder, setRegionOrder, resetRegionOrder } from './guide-state.js';
-import { showToast, getRegionName } from './guide-utils.js';
+import { state, getRegionOrder, setRegionOrder, resetRegionOrder } from './guide-state.js?v=5.1';
+import { showToast, getRegionName } from './guide-utils.js?v=5.1';
 // 순환 의존성 방지 - window 객체를 통해 호출
 // renderCoverEditor, renderBuildingEditor, renderDividerEditor, renderGuideList, renderEndingEditor
 

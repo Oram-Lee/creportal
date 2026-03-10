@@ -12,8 +12,8 @@
  * - 전용면적/임대면적 분리 표시
  */
 
-import { state, db, ref, get } from './guide-state.js';
-import { showToast, formatPrice } from './guide-utils.js';
+import { state, db, ref, get } from './guide-state.js?v=5.1';
+import { showToast, formatPrice } from './guide-utils.js?v=5.1';
 // renderBuildingEditor는 window 객체를 통해 호출 (순환 의존성 방지)
 
 // ★ v3.7: 층 표기 정규화 함수 (FF 중복 방지)
