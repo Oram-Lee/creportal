@@ -6511,7 +6511,7 @@ function viewResearchDoc(docId) {
   // ── PDF 로드 ──
   _rdvPdfDoc  = null;
   _rdvCurPage = 1;
-  _rdvZoom    = 1.0;
+  _rdvZoomLevel = 1.0;
   document.getElementById('rdvZoomLabel').textContent = '100%';
   document.getElementById('rdvPageInput').value = 1;
   document.getElementById('rdvTotalPages').textContent = doc.pageCount || '—';
@@ -6539,7 +6539,10 @@ async function _rdvInitPdf(url) {
     return;
   }
   try {
-    const loadTask = pdfjsLib.getDocument({ url, cMapUrl: null, cMapPacked: true });
+    // Firebase Storage → 브라우저 직접 fetch는 CORS 차단
+    // 백엔드 프록시를 통해 스트리밍
+    const proxyUrl = `${BACKEND}/api/research/proxy-pdf?url=${encodeURIComponent(url)}`;
+    const loadTask = pdfjsLib.getDocument({ url: proxyUrl, cMapUrl: null, cMapPacked: true });
     _rdvPdfDoc = await loadTask.promise;
     const total = _rdvPdfDoc.numPages;
     document.getElementById('rdvTotalPages').textContent = total;
@@ -6563,7 +6566,7 @@ async function _rdvRenderPage(pageNum) {
 
   try {
     const page     = await _rdvPdfDoc.getPage(pageNum);
-    const viewport = page.getViewport({ scale: _rdvZoom * _rdvAutoScale() });
+    const viewport = page.getViewport({ scale: _rdvZoomLevel * _rdvAutoScale() });
     const wrap     = document.getElementById('rdvCanvasWrap');
 
     let canvas = wrap.querySelector('canvas');
@@ -6600,9 +6603,9 @@ function _rdvGoTo(pageNum) {
 }
 
 function _rdvZoom(delta) {
-  if (delta === 0) { _rdvZoom = 1.0; }
-  else { _rdvZoom = Math.max(0.4, Math.min(3.0, _rdvZoom + delta)); }
-  document.getElementById('rdvZoomLabel').textContent = `${Math.round(_rdvZoom * 100)}%`;
+  if (delta === 0) { _rdvZoomLevel = 1.0; }
+  else { _rdvZoomLevel = Math.max(0.4, Math.min(3.0, _rdvZoomLevel + delta)); }
+  document.getElementById('rdvZoomLabel').textContent = `${Math.round(_rdvZoomLevel * 100)}%`;
   if (_rdvPdfDoc) _rdvRenderPage(_rdvCurPage);
 }
 
