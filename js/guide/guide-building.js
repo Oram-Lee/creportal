@@ -54,7 +54,7 @@
  */
 
 import { state, db, ref, get, update, getAllRegions } from './guide-state.js';
-import { showToast, formatNumber, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages } from './guide-utils.js';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages } from './guide-utils.js';
 import { 
     getUniqueSourcesHtml, 
     getUniqueDatesHtml, 
@@ -260,7 +260,7 @@ export function renderBuildingEditor(item, building) {
                 <button class="info-action-btn" onclick="openNoteModal(${idx}, '${building.id}')" title="노트 편집">✏️</button>
             </div>
             <div class="preview-note-content">
-                ${guideMemos.map(m => `<div class="note-item">• ${m.content}</div>`).join('')}
+                ${guideMemos.map(m => `<div class="note-item">• ${(m.content || '').replace(/\n/g, '<br>')}</div>`).join('')}
             </div>
         </div>
     `;
@@ -394,13 +394,13 @@ export function renderBuildingEditor(item, building) {
                         <table class="preview-info-table">
                             <tr><th>주소</th><td>${building.address || '-'}</td></tr>
                             <tr><th>위치</th><td>${building.nearbyStation || '-'}</td></tr>
-                            <tr><th>연면적</th><td>${formatNumber(building.grossFloorPy)} 평 (${formatNumber((building.grossFloorPy || 0) * 3.3058)}㎡)</td></tr>
+                            <tr><th>연면적</th><td>${formatArea(building.grossFloorPy)} 평 (${formatArea((building.grossFloorPy || 0) * 3.3058)}㎡)</td></tr>
                             <tr><th>규모</th><td>B${building.floorsBelow || 0} / ${building.floorsAbove || 0}F</td></tr>
                             <tr><th>준공년도</th><td>${building.completionYear || '-'}년</td></tr>
-                            <tr><th>기준층(전용)</th><td>${formatNumber(building.typicalFloorPy)} 평</td></tr>
-                            <tr><th>전용률</th><td>${building.exclusiveRate || '-'}%</td></tr>
+                            <tr><th>기준층(임대)</th><td>${formatArea(building.typicalFloorPy)} 평</td></tr>
+                            <tr><th>전용률</th><td>${formatPercent(building.exclusiveRate) || '-'}%</td></tr>
                             <tr><th>E/V</th><td>총 ${building.elevatorTotal || '-'}대</td></tr>
-                            <tr><th>주차</th><td>총 ${building.parkingTotal || '-'}대 ${building.parkingNote || ''}</td></tr>
+                            <tr><th>주차</th><td>총 ${String(building.parkingTotal || '-').replace(/대+$/, '')}대${building.parkingNote ? '<br><span style="font-size:10px; color:#64748b;">' + building.parkingNote.replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                         </table>
                     </div>
                     <div>
@@ -443,8 +443,8 @@ export function renderBuildingEditor(item, building) {
                                 ${allVacancies.length > 0 ? allVacancies.map(v => `
                                     <tr>
                                         <td class="floor">${formatFloorDisplay(v.floor)}</td>
-                                        <td>${v.rentArea || v.area || '-'}</td>
-                                        <td>${v.exclusiveArea || v.area || '-'}</td>
+                                        <td>${formatArea(v.rentArea || v.area) === '-' ? '-' : formatArea(v.rentArea || v.area)}</td>
+                                        <td>${formatArea(v.exclusiveArea || v.area) === '-' ? '-' : formatArea(v.exclusiveArea || v.area)}</td>
                                         <td>${v.deposit || v.depositPy || '문의'}</td>
                                         <td>${v.rent || v.rentPy || '문의'}</td>
                                         <td>${v.maintenance || v.maintenancePy || '문의'}</td>
@@ -465,8 +465,8 @@ export function renderBuildingEditor(item, building) {
                                 ${allVacancies.length > 0 ? `
                                     <tr class="total-row">
                                         <td>합계</td>
-                                        <td>${formatNumber(allVacancies.reduce((s,v) => s + (parseFloat(v.rentArea || v.area || 0)), 0))}</td>
-                                        <td>${formatNumber(allVacancies.reduce((s,v) => s + (parseFloat(v.exclusiveArea || v.area || 0)), 0))}</td>
+                                        <td>${formatArea(allVacancies.reduce((s,v) => s + (parseFloat(v.rentArea || v.area || 0)), 0))}</td>
+                                        <td>${formatArea(allVacancies.reduce((s,v) => s + (parseFloat(v.exclusiveArea || v.area || 0)), 0))}</td>
                                         <td colspan="4">-</td>
                                     </tr>
                                 ` : ''}
@@ -1434,7 +1434,7 @@ export function openBuildingEditModal(buildingId) {
                             <input type="text" id="editBldGrossFloor" value="${building.grossFloorPy || ''}">
                         </div>
                         <div class="form-group">
-                            <label>기준층 전용면적 (평)</label>
+                            <label>기준층 임대면적 (평)</label>
                             <input type="text" id="editBldTypicalFloor" value="${building.typicalFloorPy || ''}">
                         </div>
                     </div>
@@ -1490,6 +1490,11 @@ export function closeBuildingEditModal() {
 }
 
 export async function saveBuildingEdit(buildingId) {
+    // ★ CRE Portal 반영 알럿
+    if (!confirm('이 변경사항은 CRE Portal의 해당 빌딩 기본정보에도 반영됩니다.\n저장하시겠습니까?')) {
+        return;
+    }
+    
     try {
         const updateData = {
             name: document.getElementById('editBldName')?.value || '',
@@ -1523,6 +1528,18 @@ export async function saveBuildingEdit(buildingId) {
             building.elevatorTotal = parseInt(document.getElementById('editBldElevator')?.value) || building.elevatorTotal;
             building.parkingTotal = parseInt(document.getElementById('editBldParking')?.value) || building.parkingTotal;
             building.parkingNote = document.getElementById('editBldParkingNote')?.value || building.parkingNote;
+            
+            // ★ 이슈 #8: 로컬 상태 업데이트 후 normalizeBuilding 재실행 (미리보기 반영 보장)
+            // 중첩 구조 필드도 업데이트
+            if (!building.area) building.area = {};
+            building.area.grossFloorPy = building.grossFloorPy;
+            building.area.typicalFloorPy = building.typicalFloorPy;
+            building.area.exclusiveRate = building.exclusiveRate;
+            if (!building.specs) building.specs = {};
+            building.specs.completionYear = building.completionYear;
+            building.specs.passengerElevator = building.elevatorTotal;
+            if (!building.parking) building.parking = {};
+            building.parking.total = building.parkingTotal;
         }
         
         closeBuildingEditModal();
@@ -1567,11 +1584,20 @@ export async function fetchBuildingRegistry(buildingId) {
         // 데이터 정규화 (중첩 구조 → 평면 구조)
         normalizeBuilding(freshData);
         
-        // 로컬 상태 업데이트 (state.allBuildings에서 해당 빌딩 교체)
+        // ★ 이슈 #8: 기존 데이터와 병합 시 stale 플랫 필드가 fresh 중첩 필드를 막는 문제 해결
+        // 플랫 필드는 freshData가 재계산한 값으로 덮어쓰기
         const idx = state.allBuildings.findIndex(b => b.id === buildingId);
         if (idx >= 0) {
-            // 기존 데이터와 병합 (새 데이터 우선)
-            state.allBuildings[idx] = { ...state.allBuildings[idx], ...freshData };
+            // 기존 안내문 전용 필드 보존 (이미지 등)
+            const preserved = {
+                exteriorImages: state.allBuildings[idx].exteriorImages,
+                floorPlanImages: state.allBuildings[idx].floorPlanImages,
+                images: state.allBuildings[idx].images,
+                contactPoints: state.allBuildings[idx].contactPoints,
+                memos: state.allBuildings[idx].memos,
+                vacancies: state.allBuildings[idx].vacancies,
+            };
+            state.allBuildings[idx] = { ...freshData, ...preserved };
         }
         
         const building = state.allBuildings[idx] || freshData;

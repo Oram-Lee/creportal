@@ -31,7 +31,7 @@
  */
 
 import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo, getRegionOrder } from './guide-state.js';
-import { showToast, formatNumber, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js';
 
 // ★ v3.6: 층 표기 정규화 함수 (FF 중복 방지)
 function formatFloorDisplay(floor) {
@@ -640,12 +640,12 @@ function renderBuildingPreviewPage(data) {
                             <table class="info-table">
                                 <tr><th>주소</th><td>${building.address || '-'}</td></tr>
                                 <tr><th>위치</th><td>${building.nearbyStation || '-'}</td></tr>
-                                <tr><th>연면적</th><td>${formatNumber(building.grossFloorPy)}평 (${formatNumber(Math.round((building.grossFloorPy || 0) * 3.3058))}㎡)</td></tr>
+                                <tr><th>연면적</th><td>${formatArea(building.grossFloorPy)}평 (${formatArea(Math.round((building.grossFloorPy || 0) * 3.3058))}㎡)</td></tr>
                                 <tr><th>규모</th><td>B${building.floorsBelow || 0} / ${building.floorsAbove || 0}F</td></tr>
                                 <tr><th>준공</th><td>${building.completionYear || '-'}년</td></tr>
-                                <tr><th>기준층</th><td>${formatNumber(building.typicalFloorPy)}평 (전용률 ${building.exclusiveRate || '-'}%)</td></tr>
+                                <tr><th>기준층(임대)</th><td>${formatArea(building.typicalFloorPy)}평 (전용률 ${formatPercent(building.exclusiveRate) || '-'}%)</td></tr>
                                 <tr><th>E/V</th><td>총 ${building.elevatorTotal || '-'}대</td></tr>
-                                <tr><th>주차</th><td>총 ${building.parkingTotal || '-'}대 ${building.parkingNote || ''}</td></tr>
+                                <tr><th>주차</th><td>총 ${String(building.parkingTotal || '-').replace(/대+$/, '')}대${building.parkingNote ? '<br><span style="font-size:10px; color:#64748b;">' + building.parkingNote.replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                             </table>
                         </div>
                     </div>
@@ -669,8 +669,8 @@ function renderBuildingPreviewPage(data) {
                                 <thead>
                                     <tr>
                                         <th>해당층</th>
-                                        <th>전용 면적</th>
                                         <th>임대 면적</th>
+                                        <th>전용 면적</th>
                                         <th>보증금</th>
                                         <th>임대료</th>
                                         <th>관리비</th>
@@ -681,8 +681,8 @@ function renderBuildingPreviewPage(data) {
                                     ${vacancies.length > 0 ? vacancies.slice(0, 5).map(v => `
                                         <tr>
                                             <td>${formatFloorDisplay(v.floor)}</td>
-                                            <td>${safeFormatPrice(v.exclusiveArea || v.area) || '-'}</td>
-                                            <td>${safeFormatPrice(v.rentArea || v.area) || '-'}</td>
+                                            <td>${formatArea(v.rentArea || v.area) || '-'}</td>
+                                            <td>${formatArea(v.exclusiveArea || v.area) || '-'}</td>
                                             <td>${safeFormatPrice(v.deposit || v.depositPy) || '문의'}</td>
                                             <td>${safeFormatPrice(v.rent || v.rentPy) || '문의'}</td>
                                             <td>${safeFormatPrice(v.maintenance || v.maintenancePy) || '문의'}</td>
@@ -694,8 +694,8 @@ function renderBuildingPreviewPage(data) {
                                 <tfoot>
                                     <tr>
                                         <td>합계</td>
-                                        <td>${formatNumber(vacancies.reduce((sum, v) => sum + (parseFloat(v.exclusiveArea || v.area) || 0), 0))}</td>
-                                        <td>${formatNumber(vacancies.reduce((sum, v) => sum + (parseFloat(v.rentArea || v.area) || 0), 0))}</td>
+                                        <td>${formatArea(vacancies.reduce((sum, v) => sum + (parseFloat(v.rentArea || v.area) || 0), 0))}</td>
+                                        <td>${formatArea(vacancies.reduce((sum, v) => sum + (parseFloat(v.exclusiveArea || v.area) || 0), 0))}</td>
                                         <td colspan="4">-</td>
                                     </tr>
                                 </tfoot>
@@ -737,7 +737,7 @@ function renderBuildingPreviewPage(data) {
                         <div class="section-title">NOTE</div>
                         <div class="section-content note-content">
                             ${guideMemos.length > 0 
-                                ? guideMemos.map(m => `<div class="note-item">• ${m.content}</div>`).join('') 
+                                ? guideMemos.map(m => `<div class="note-item">• ${(m.content || '').replace(/\n/g, '<br>')}</div>`).join('') 
                                 : '<div class="note-empty">-</div>'}
                         </div>
                     </div>

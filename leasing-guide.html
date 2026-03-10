@@ -1182,8 +1182,10 @@
         }
         .preview-floor-plan img {
             width: 100%;
-            height: 100%;
+            height: auto;
+            max-height: 100%;
             object-fit: contain;
+            display: block;
         }
         
         /* 우측 컬럼: 공실 + 임대조건 + 담당자 - v4.1 */
@@ -1339,7 +1341,7 @@
         
         /* 담당자 테이블 */
         .preview-contact-section {
-            margin-top: auto;
+            margin-top: 6px;
         }
         .preview-contact-header {
             display: flex;
@@ -5084,6 +5086,172 @@
         .fullpreview-col-center {
             border-right: 1px solid #e5e7eb;
             padding-right: 16px;
+        }
+        
+        /* ★ fullpreview 공통 섹션 스타일 */
+        .fullpreview-col-left .preview-section,
+        .fullpreview-col-center .preview-section,
+        .fullpreview-col-right .preview-section {
+            display: flex;
+            flex-direction: column;
+        }
+        .fullpreview-col-left .preview-section:first-child,
+        .fullpreview-col-center .preview-section:first-child {
+            flex: 0 0 auto;
+        }
+        .fullpreview-col-left .preview-section:last-child,
+        .fullpreview-col-center .preview-section:last-child {
+            flex: 1;
+            min-height: 0;
+        }
+        .section-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: #1e3a5f;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #1e3a5f;
+            margin-bottom: 6px;
+            flex-shrink: 0;
+        }
+        .section-title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #1e3a5f;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #1e3a5f;
+            margin-bottom: 6px;
+            flex-shrink: 0;
+        }
+        .section-unit {
+            font-size: 9px;
+            color: #94a3b8;
+            font-weight: 400;
+        }
+        .section-content {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+        }
+        /* ★ 이슈 #4: 평면도 이미지 비율 유지 */
+        .floorplan-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .floorplan-img {
+            max-width: 100%;
+            max-height: 200px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+        .floorplan-placeholder {
+            width: 100%;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8fafc;
+            border-radius: 4px;
+            font-size: 24px;
+            color: #94a3b8;
+        }
+        /* 빌딩 사진 */
+        .photo-content {
+            overflow: hidden;
+            border-radius: 4px;
+        }
+        .building-photo {
+            width: 100%;
+            height: auto;
+            max-height: 140px;
+            object-fit: cover;
+            display: block;
+        }
+        .photo-placeholder {
+            width: 100%;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f8fafc;
+            border-radius: 4px;
+            font-size: 32px;
+            color: #94a3b8;
+        }
+        /* 지도 이미지 */
+        .map-content {
+            overflow: hidden;
+            border-radius: 4px;
+        }
+        .map-img {
+            width: 100%;
+            height: auto;
+            max-height: 140px;
+            object-fit: cover;
+            display: block;
+        }
+        .map-placeholder {
+            width: 100%;
+            height: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #f8fafc;
+            border-radius: 4px;
+            font-size: 28px;
+            color: #94a3b8;
+            gap: 6px;
+        }
+        .map-text { font-size: 11px; color: #94a3b8; }
+        /* fullpreview 공실 테이블 */
+        .vacancy-table, .rent-table, .contact-table, .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+        .vacancy-table th, .rent-table th, .contact-table th, .info-table th {
+            background: #1e3a5f;
+            color: white;
+            padding: 5px 4px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 10px;
+        }
+        .vacancy-table td, .rent-table td, .contact-table td, .info-table td {
+            padding: 4px 5px;
+            border: 1px solid #e5e7eb;
+            font-size: 10px;
+            text-align: center;
+        }
+        .info-table th { text-align: left; width: 28%; }
+        .info-table td { text-align: left; }
+        .vacancy-table tfoot td { font-weight: 700; background: #f8fafc; }
+        .empty-cell { text-align: center; color: #94a3b8; }
+        /* NOTE */
+        .note-section .section-content { max-height: 60px; overflow-y: auto; }
+        .note-item { font-size: 10px; color: #374151; line-height: 1.5; }
+        .note-empty { font-size: 10px; color: #94a3b8; }
+        /* ★ 이슈 #7: Contact Point 위치 - 우측 컬럼 하단에 붙이되 적절히 올리기 */
+        .fullpreview-col-right {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .fullpreview-col-right .contact-section {
+            margin-top: 0;
+            flex-shrink: 0;
+        }
+        .fullpreview-col-right .vacancy-section {
+            flex: 1;
+            min-height: 0;
         }
 
         /* ===== 간지 미리보기 ===== */
