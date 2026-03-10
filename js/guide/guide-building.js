@@ -400,7 +400,7 @@ export function renderBuildingEditor(item, building) {
                             <tr><th>기준층(임대)</th><td>${formatArea(building.typicalFloorPy)} 평</td></tr>
                             <tr><th>전용률</th><td>${formatPercent(building.exclusiveRate) || '-'}%</td></tr>
                             <tr><th>E/V</th><td>총 ${building.elevatorTotal || '-'}대</td></tr>
-                            <tr><th>주차</th><td>총 ${String(building.parkingTotal || '-').replace(/대+$/, '')}대${building.parkingNote ? '<br><span style="font-size:10px; color:#64748b;">' + building.parkingNote.replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
+                            <tr><th>주차</th><td>총 ${String(building.parkingTotal || '-').replace(/대+$/, '')}대${building.parkingNote ? '<br><span style="font-size:10px; color:#64748b;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                         </table>
                     </div>
                     <div>

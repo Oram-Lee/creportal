@@ -267,9 +267,22 @@
             max-height: 85mm;
         }
         
-        .section-location .image-box,
+        .section-location .image-box {
+            height: calc(85mm - 6mm);
+        }
         .section-floorplan .image-box {
-            height: calc(85mm - 6mm); /* 타이틀 높이 제외 */
+            height: calc(85mm - 6mm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* ★ 이슈 #4: 평면도 비율 유지 */
+        .section-floorplan .image-box img {
+            width: auto !important;
+            height: auto !important;
+            max-width: 100% !important;
+            max-height: 100% !important;
+            object-fit: contain !important;
         }
         
         .no-image {
@@ -956,6 +969,22 @@
             return Number(num).toLocaleString('ko-KR');
         }
         
+        // ★ 면적 소수점 2자리 강제 표기
+        function formatArea(n) {
+            if (!n && n !== 0) return '-';
+            const num = Number(n);
+            if (isNaN(num)) return '-';
+            return num.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        
+        // ★ 백분율 소수점 2자리 강제 표기
+        function formatPercent(n) {
+            if (!n && n !== 0) return '-';
+            const num = Number(n);
+            if (isNaN(num)) return '-';
+            return num.toFixed(2);
+        }
+        
         // 가격 포맷 (원/평)
         function formatPrice(val) {
             if (!val) return '-';
@@ -1429,13 +1458,13 @@
                                 <table class="info-table">
                                     <tr><th>주소</th><td>${building.address || '-'}</td></tr>
                                     <tr><th>위치</th><td>${building.nearbyStation || '-'}</td></tr>
-                                    <tr><th>연면적</th><td>${formatNumber(building.grossFloorPy || building.area?.grossFloorPy)} 평</td></tr>
+                                    <tr><th>연면적</th><td>${formatArea(building.grossFloorPy || building.area?.grossFloorPy)} 평</td></tr>
                                     <tr><th>규모</th><td>B${building.floorsBelow || building.floors?.below || 0} / ${building.floorsAbove || building.floors?.above || 0}F</td></tr>
                                     <tr><th>준공년도</th><td>${building.completionYear || building.specs?.completionYear || '-'}년</td></tr>
-                                    <tr><th>기준층(전용)</th><td>${formatNumber(building.typicalFloorPy || building.area?.typicalFloorPy)} 평</td></tr>
-                                    <tr><th>전용률</th><td>${building.exclusiveRate || building.area?.exclusiveRate || '-'}%</td></tr>
+                                    <tr><th>기준층(임대)</th><td>${formatArea(building.typicalFloorPy || building.area?.typicalFloorPy)} 평</td></tr>
+                                    <tr><th>전용률</th><td>${formatPercent(building.exclusiveRate || building.area?.exclusiveRate)}%</td></tr>
                                     <tr><th>E/V</th><td>총 ${getElevatorTotal(building)}대</td></tr>
-                                    <tr><th>주차</th><td>총 ${getParkingTotal(building)}대 ${getParkingNote(building)}</td></tr>
+                                    <tr><th>주차</th><td>총 ${String(getParkingTotal(building) || '-').replace(/대+$/, '')}대${getParkingNote(building) ? '<br><span style="font-size:7pt; color:#64748b;">' + String(getParkingNote(building)).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                                 </table>
                             </div>
                             <div class="section section-floorplan">
@@ -1467,8 +1496,8 @@
                                         ${vacancies.length > 0 ? vacancies.map(v => `
                                             <tr>
                                                 <td class="floor">${formatFloor(v.floor)}</td>
-                                                <td>${v.rentArea || v.area || '-'}</td>
-                                                <td>${v.exclusiveArea || v.area || '-'}</td>
+                                                <td>${formatArea(v.rentArea || v.area)}</td>
+                                                <td>${formatArea(v.exclusiveArea || v.area)}</td>
                                                 <td>${v.deposit || v.depositPy || '문의'}</td>
                                                 <td>${v.rent || v.rentPy || '문의'}</td>
                                                 <td>${v.maintenance || v.maintenancePy || '문의'}</td>
@@ -1482,8 +1511,8 @@
                                         ${vacancies.length > 0 ? `
                                             <tr class="total-row">
                                                 <td>합계</td>
-                                                <td>${formatNumber(vacancies.reduce((s,v) => s + parseFloat(v.rentArea || v.area || 0), 0))}</td>
-                                                <td>${formatNumber(vacancies.reduce((s,v) => s + parseFloat(v.exclusiveArea || v.area || 0), 0))}</td>
+                                                <td>${formatArea(vacancies.reduce((s,v) => s + parseFloat(v.rentArea || v.area || 0), 0))}</td>
+                                                <td>${formatArea(vacancies.reduce((s,v) => s + parseFloat(v.exclusiveArea || v.area || 0), 0))}</td>
                                                 <td colspan="4">-</td>
                                             </tr>
                                         ` : ''}
@@ -1517,7 +1546,7 @@
                                 <div class="section section-note">
                                     <div class="section-title">NOTE</div>
                                     <div class="note-box">
-                                        ${notes.map(n => `<div class="note-item">• ${n.content}</div>`).join('')}
+                                        ${notes.map(n => `<div class="note-item">• ${(n.content || '').replace(/\n/g, '<br>')}</div>`).join('')}
                                     </div>
                                 </div>
                                 ` : ''}
