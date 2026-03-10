@@ -1778,127 +1778,223 @@ canvas.mini-chart { width: 100% !important; }
 /* ── 리서치 자료 미리보기 모달 ── */
 .rdv-overlay {
   position: fixed; inset: 0;
-  background: rgba(15,23,42,.55);
+  background: rgba(15,23,42,.62);
   z-index: 9200;
   display: none; align-items: center; justify-content: center;
-  padding: 16px;
+  padding: 12px;
 }
 .rdv-overlay.show { display: flex; }
 .rdv-modal {
-  background: #fff;
+  background: #f8fafc;
   border-radius: 14px;
-  width: 680px;
-  max-width: 100%;
-  max-height: 88vh;
+  width: min(1240px, 96vw);
+  height: 90vh;
   display: flex; flex-direction: column;
-  box-shadow: 0 24px 64px rgba(0,0,0,.18);
+  box-shadow: 0 28px 70px rgba(0,0,0,.22);
   overflow: hidden;
 }
+/* ── 헤더 ── */
 .rdv-header {
-  padding: 18px 20px 14px;
+  padding: 13px 18px 11px;
   border-bottom: 1px solid var(--border);
-  display: flex; align-items: flex-start; gap: 12px;
+  display: flex; align-items: center; gap: 10px;
+  background: #fff; flex-shrink: 0;
 }
 .rdv-header-icon {
-  width: 38px; height: 38px; border-radius: 8px;
+  width: 32px; height: 32px; border-radius: 7px;
   background: #fef2f2; display: flex; align-items: center;
-  justify-content: center; font-size: 18px; flex-shrink: 0;
+  justify-content: center; font-size: 16px; flex-shrink: 0;
 }
 .rdv-header-info { flex: 1; min-width: 0; }
 .rdv-title {
-  font-size: 14px; font-weight: 800; color: var(--primary);
-  margin-bottom: 4px; line-height: 1.4;
+  font-size: 13px; font-weight: 800; color: var(--primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .rdv-meta {
-  font-size: 11px; color: var(--muted);
-  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  font-size: 10px; color: var(--muted);
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 2px;
 }
 .rdv-meta-sep { color: #cbd5e1; }
+.rdv-chips {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-left: 8px;
+}
+.rdv-chip {
+  padding: 2px 8px; border-radius: 20px;
+  font-size: 10px; font-weight: 700;
+  background: var(--accent-lt); color: var(--accent);
+  border: 1px solid #c3daf5; white-space: nowrap;
+}
 .rdv-close {
   flex-shrink: 0; width: 28px; height: 28px;
   border: none; background: #f1f5f9; border-radius: 6px;
-  cursor: pointer; font-size: 14px; color: var(--muted);
+  cursor: pointer; font-size: 13px; color: var(--muted);
   display: flex; align-items: center; justify-content: center;
   transition: background .12s;
 }
 .rdv-close:hover { background: #e2e8f0; color: var(--text); }
-.rdv-chips {
-  padding: 10px 20px;
-  display: flex; flex-wrap: wrap; gap: 5px;
-  border-bottom: 1px solid #f1f5f9;
+
+/* ── 2-컬럼 본문 ── */
+.rdv-body {
+  flex: 1; display: grid;
+  grid-template-columns: 1fr 380px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── 좌: PDF 뷰어 ── */
+.rdv-pdf-pane {
+  display: flex; flex-direction: column;
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  overflow: hidden;
+}
+.rdv-pdf-controls {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 12px;
+  background: #0f172a;
+  flex-shrink: 0;
+}
+.rdv-pdf-ctrl-btn {
+  padding: 4px 10px;
+  background: #334155; color: #e2e8f0;
+  border: none; border-radius: 5px;
+  font-size: 13px; cursor: pointer; transition: background .12s;
+}
+.rdv-pdf-ctrl-btn:hover:not(:disabled) { background: #475569; }
+.rdv-pdf-ctrl-btn:disabled { opacity: .35; cursor: default; }
+.rdv-pdf-page-info {
+  font-size: 12px; font-weight: 700; color: #94a3b8;
+  display: flex; align-items: center; gap: 5px;
+}
+.rdv-pdf-page-input {
+  width: 42px; text-align: center;
+  background: #334155; color: #f1f5f9;
+  border: 1px solid #475569; border-radius: 4px;
+  padding: 3px 4px; font-size: 12px; font-weight: 700;
+}
+.rdv-pdf-zoom-btns { margin-left: auto; display: flex; gap: 4px; }
+.rdv-pdf-canvas-wrap {
+  flex: 1; overflow: auto;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 14px;
+  background: #1e293b;
+}
+.rdv-pdf-canvas-wrap canvas {
+  display: block;
+  box-shadow: 0 4px 20px rgba(0,0,0,.5);
+  border-radius: 3px;
+  max-width: 100%;
+}
+.rdv-pdf-loading {
+  color: #94a3b8; font-size: 13px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 10px; padding: 60px 20px;
+}
+.rdv-pdf-spinner {
+  width: 28px; height: 28px;
+  border: 3px solid #334155;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.rdv-pdf-no-pdf {
+  color: #64748b; font-size: 13px; text-align: center; padding: 60px 20px;
+}
+
+/* ── 우: 정보 패널 ── */
+.rdv-info-pane {
+  display: flex; flex-direction: column;
+  background: #fff;
+  overflow: hidden;
+}
+.rdv-info-tabs {
+  display: flex; flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
   background: #fafbfc;
 }
-.rdv-chip {
-  padding: 3px 10px; border-radius: 20px;
-  font-size: 11px; font-weight: 700;
-  background: var(--accent-lt); color: var(--accent);
-  border: 1px solid #c3daf5;
+.rdv-info-tab {
+  padding: 8px 16px;
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  background: none; border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer; white-space: nowrap; transition: all .12s;
 }
-.rdv-body {
-  flex: 1; overflow-y: auto; padding: 18px 20px;
-  display: flex; flex-direction: column; gap: 18px;
+.rdv-info-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.rdv-info-tab:hover:not(.active) { color: var(--text); }
+.rdv-info-scroll {
+  flex: 1; overflow-y: auto; padding: 14px 16px;
 }
-.rdv-section-title {
-  font-size: 11px; font-weight: 700; color: var(--muted);
-  text-transform: uppercase; letter-spacing: .6px;
-  margin-bottom: 7px;
-}
-.rdv-summary-text {
-  font-size: 13px; color: var(--text); line-height: 1.75;
+
+/* AI 요약 */
+.rdv-summary-box {
+  font-size: 12px; color: var(--text); line-height: 1.75;
   background: var(--accent-lt); border: 1px solid #c3daf5;
-  border-radius: 8px; padding: 12px 14px;
+  border-radius: 8px; padding: 12px 14px; margin-bottom: 0;
 }
-/* pageIndex 카드 그리드 */
-.rdv-pages-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 8px;
-}
-.rdv-page-card {
+
+/* 페이지 색인 리스트 */
+.rdv-pi-list { display: flex; flex-direction: column; gap: 6px; }
+.rdv-pi-item {
   border: 1px solid var(--border);
   border-radius: 8px; padding: 10px 12px;
-  background: #fff; transition: border-color .12s, box-shadow .12s;
+  cursor: pointer; transition: border-color .12s, box-shadow .12s, background .12s;
+  background: #fff;
 }
-.rdv-page-card:hover {
+.rdv-pi-item:hover {
   border-color: var(--accent);
   box-shadow: 0 2px 8px rgba(37,99,235,.1);
 }
-.rdv-page-num {
-  font-size: 10px; font-weight: 800; color: var(--accent);
-  margin-bottom: 4px;
-  display: flex; align-items: center; gap: 5px;
+.rdv-pi-item.active {
+  border-color: var(--accent);
+  background: var(--accent-lt);
+  box-shadow: 0 0 0 2px rgba(37,99,235,.15);
 }
-.rdv-page-badges { display: flex; gap: 3px; flex-wrap: wrap; margin-left: auto; }
-.rdv-page-badge {
+.rdv-pi-row1 {
+  display: flex; align-items: center; gap: 5px; margin-bottom: 4px;
+}
+.rdv-pi-dtype {
+  padding: 1px 6px; border-radius: 4px;
+  font-size: 9px; font-weight: 800;
+}
+.rdv-pi-pg {
+  font-size: 11px; font-weight: 800; color: var(--accent);
+}
+.rdv-pi-badges { display: flex; gap: 3px; margin-left: auto; }
+.rdv-pi-badge {
   padding: 1px 5px; border-radius: 4px;
   font-size: 9px; font-weight: 700;
   background: #f1f5f9; color: var(--muted);
 }
-.rdv-page-badge.chart { background: #fef9c3; color: #854d0e; }
-.rdv-page-badge.table { background: #dcfce7; color: #166534; }
-.rdv-page-topic {
+.rdv-pi-badge.chart { background: #fef9c3; color: #854d0e; }
+.rdv-pi-badge.table { background: #dcfce7; color: #166534; }
+.rdv-pi-topic {
   font-size: 12px; font-weight: 700; color: var(--text);
-  margin-bottom: 4px; line-height: 1.4;
+  margin-bottom: 3px; line-height: 1.4;
 }
-.rdv-page-summary {
-  font-size: 11px; color: #64748b; line-height: 1.6;
-  margin-bottom: 5px;
-}
-.rdv-page-figures {
-  display: flex; flex-wrap: wrap; gap: 3px;
-}
-.rdv-page-figure {
+.rdv-pi-summary { font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 4px; }
+.rdv-pi-figures { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 3px; }
+.rdv-pi-figure {
   padding: 1px 6px; border-radius: 10px;
   font-size: 10px; font-weight: 700;
-  background: #eff6ff; color: #1d4ed8;
-  border: 1px solid #bfdbfe;
+  background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
 }
-.rdv-page-kws {
-  font-size: 10px; color: #94a3b8; margin-top: 3px;
+.rdv-pi-kws { font-size: 10px; color: #94a3b8; }
+/* 추출된 텍스트 */
+.rdv-pi-text {
+  margin-top: 6px; padding: 7px 9px;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 5px; font-size: 10px; color: #475569; line-height: 1.65;
+  max-height: 90px; overflow-y: auto;
+  display: none;
 }
-.rdv-empty-pi {
-  padding: 24px; text-align: center;
-  color: var(--muted); font-size: 13px;
+.rdv-pi-item.active .rdv-pi-text { display: block; }
+.rdv-pi-empty { padding: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 800px) {
+  .rdv-body { grid-template-columns: 1fr; grid-template-rows: 1fr 340px; }
+  .rdv-info-pane { border-right: none; border-top: 1px solid var(--border); }
 }
 
 .source-mgr-overlay {
@@ -2173,25 +2269,50 @@ canvas.mini-chart { width: 100% !important; }
   <!-- ── 리서치 자료 미리보기 모달 ── -->
   <div class="rdv-overlay" id="rdvOverlay" onclick="if(event.target===this)closeRdvModal()">
     <div class="rdv-modal">
+      <!-- 헤더 -->
       <div class="rdv-header">
         <div class="rdv-header-icon">📄</div>
         <div class="rdv-header-info">
           <div class="rdv-title" id="rdvTitle"></div>
           <div class="rdv-meta" id="rdvMeta"></div>
         </div>
+        <div class="rdv-chips" id="rdvChips"></div>
         <button class="rdv-close" onclick="closeRdvModal()">✕</button>
       </div>
-      <div class="rdv-chips" id="rdvChips"></div>
+      <!-- 2-컬럼 본문 -->
       <div class="rdv-body">
-        <!-- 요약 섹션 -->
-        <div>
-          <div class="rdv-section-title">📝 AI 요약</div>
-          <div class="rdv-summary-text" id="rdvSummary"></div>
+        <!-- 좌: PDF 뷰어 -->
+        <div class="rdv-pdf-pane" id="rdvPdfPane">
+          <div class="rdv-pdf-controls">
+            <button class="rdv-pdf-ctrl-btn" id="rdvPrevBtn" onclick="_rdvGo(-1)">◀</button>
+            <div class="rdv-pdf-page-info">
+              <input class="rdv-pdf-page-input" id="rdvPageInput" type="number" min="1"
+                     onchange="_rdvGoTo(parseInt(this.value))" value="1">
+              <span>/ <span id="rdvTotalPages">—</span></span>
+            </div>
+            <button class="rdv-pdf-ctrl-btn" id="rdvNextBtn" onclick="_rdvGo(1)">▶</button>
+            <div class="rdv-pdf-zoom-btns">
+              <button class="rdv-pdf-ctrl-btn" onclick="_rdvZoom(-0.2)">－</button>
+              <button class="rdv-pdf-ctrl-btn" id="rdvZoomLabel" onclick="_rdvZoom(0)" style="min-width:46px">100%</button>
+              <button class="rdv-pdf-ctrl-btn" onclick="_rdvZoom(0.2)">＋</button>
+            </div>
+          </div>
+          <div class="rdv-pdf-canvas-wrap" id="rdvCanvasWrap">
+            <div class="rdv-pdf-loading" id="rdvPdfLoading">
+              <div class="rdv-pdf-spinner"></div>
+              <span>PDF 로딩 중...</span>
+            </div>
+          </div>
         </div>
-        <!-- pageIndex 섹션 -->
-        <div id="rdvPageIndexSection">
-          <div class="rdv-section-title">📑 페이지 색인 <span id="rdvPageIndexCount" style="font-weight:400;text-transform:none;letter-spacing:0"></span></div>
-          <div class="rdv-pages-grid" id="rdvPagesGrid"></div>
+        <!-- 우: 정보 패널 -->
+        <div class="rdv-info-pane">
+          <div class="rdv-info-tabs">
+            <button class="rdv-info-tab active" id="rdvTabSummary"  onclick="_rdvTab('summary')">📝 요약</button>
+            <button class="rdv-info-tab"        id="rdvTabPages"    onclick="_rdvTab('pages')">📑 페이지 색인</button>
+          </div>
+          <div class="rdv-info-scroll" id="rdvInfoScroll">
+            <!-- 탭 내용은 JS가 채움 -->
+          </div>
         </div>
       </div>
     </div>
@@ -6326,81 +6447,258 @@ function renderResearchList(docs, groupBy) {
 // =============================================================================
 // ■ 상세 보기 / 삭제
 // =============================================================================
+// =============================================================================
+// ■ 리서치 자료 미리보기 모달 (PDF.js 뷰어 + pageIndex)
+// =============================================================================
+let _rdvPdfDoc   = null;
+let _rdvCurPage  = 1;
+let _rdvZoom     = 1.0;
+let _rdvRendering = false;
+let _rdvCurTab   = 'summary';
+let _rdvDoc      = null;   // 현재 열린 doc 객체
+let _rdvPdfJsReady = false;
+
+const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+const PDFJS_WRK = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+async function _rdvLoadPdfJs() {
+  if (_rdvPdfJsReady) return true;
+  return new Promise((resolve) => {
+    const s = document.createElement('script');
+    s.src = PDFJS_CDN;
+    s.onload = () => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WRK;
+      _rdvPdfJsReady = true;
+      resolve(true);
+    };
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  });
+}
+
 function viewResearchDoc(docId) {
   const doc = _researchAllDocs.find(d => d._id === docId);
   if (!doc) return;
+  _rdvDoc    = doc;
+  _rdvCurTab = 'summary';
 
-  // 헤더
+  // ── 헤더 ──
   document.getElementById('rdvTitle').textContent = doc.title || docId;
   document.getElementById('rdvMeta').innerHTML = [
-    doc.source ? `<span>${doc.source}</span>` : null,
-    doc.period ? `<span class="rdv-meta-sep">|</span><span>${doc.period}</span>` : null,
-    doc.coverage?.length ? `<span class="rdv-meta-sep">|</span><span>커버리지: ${doc.coverage.join('·')}</span>` : null,
+    doc.source    ? `<span>${doc.source}</span>` : null,
+    doc.period    ? `<span class="rdv-meta-sep">|</span><span>${doc.period}</span>` : null,
+    doc.coverage?.length ? `<span class="rdv-meta-sep">|</span><span>${doc.coverage.join('·')}</span>` : null,
     doc.pageCount ? `<span class="rdv-meta-sep">|</span><span>총 ${doc.pageCount}p</span>` : null,
   ].filter(Boolean).join('');
 
-  // 통계 칩
   const stats = doc.keyStats || {};
   const chips = [
     stats.vacancyRate != null ? `공실률 ${stats.vacancyRate}%` : null,
     stats.avgRentPy   != null ? `임대료 ${stats.avgRentPy.toLocaleString()}원/평` : null,
     stats.rentFree    != null ? `RF ${stats.rentFree}` : null,
     stats.trend       != null ? `📈 ${stats.trend}` : null,
-    stats.supplyPy    != null ? `공급 ${Number(stats.supplyPy).toLocaleString()}㎡` : null,
-    doc.pageIndex?.length     ? `📑 색인 ${doc.pageIndex.length}p` : null,
-    doc.pageTexts && Object.keys(doc.pageTexts).length
-      ? `📄 텍스트 ${Object.keys(doc.pageTexts).length}p` : null,
+    doc.pageIndex?.length ? `📑 ${doc.pageIndex.length}p 색인` : null,
   ].filter(Boolean);
   document.getElementById('rdvChips').innerHTML =
     chips.map(c => `<span class="rdv-chip">${c}</span>`).join('');
 
-  // 요약
-  document.getElementById('rdvSummary').textContent = doc.summary || '요약 없음';
+  // ── 탭 초기화 ──
+  _rdvTab('summary');
 
-  // pageIndex 카드
-  const pi = doc.pageIndex || [];
-  const dataTypeColor = {
-    '임대료': '#eff6ff:#1d4ed8', '공실률': '#fef9c3:#854d0e',
-    '공급':   '#dcfce7:#166534', '수요':   '#fce7f3:#9d174d',
-    '전망':   '#f3e8ff:#7e22ce', '기타':   '#f1f5f9:#475569',
-  };
-  document.getElementById('rdvPageIndexCount').textContent =
-    pi.length ? `— ${pi.length}개 페이지` : '';
-
-  if (!pi.length) {
-    document.getElementById('rdvPagesGrid').innerHTML =
-      '<div class="rdv-empty-pi">페이지 색인 정보가 없습니다</div>';
-  } else {
-    document.getElementById('rdvPagesGrid').innerHTML = pi.map(entry => {
-      const [dtBg, dtFg] = (dataTypeColor[entry.dataType] || '#f1f5f9:#475569').split(':');
-      const badges = [
-        entry.hasChart ? '<span class="rdv-page-badge chart">차트</span>' : '',
-        entry.hasTable ? '<span class="rdv-page-badge table">표</span>'  : '',
-      ].join('');
-      const figures = (entry.figures || []).slice(0, 4)
-        .map(f => `<span class="rdv-page-figure">${f}</span>`).join('');
-      const kws = (entry.keywords || []).slice(0, 4).join(' · ');
-      return `
-        <div class="rdv-page-card">
-          <div class="rdv-page-num">
-            <span style="background:${dtBg};color:${dtFg};padding:1px 6px;border-radius:4px;font-size:9px">${entry.dataType||'기타'}</span>
-            <span>p${entry.page}</span>
-            <div class="rdv-page-badges">${badges}</div>
-          </div>
-          <div class="rdv-page-topic">${entry.topic || ''}</div>
-          ${entry.summary ? `<div class="rdv-page-summary">${entry.summary}</div>` : ''}
-          ${figures ? `<div class="rdv-page-figures">${figures}</div>` : ''}
-          ${kws ? `<div class="rdv-page-kws">${kws}</div>` : ''}
-        </div>`;
-    }).join('');
-  }
-
+  // ── 모달 열기 ──
   document.getElementById('rdvOverlay').classList.add('show');
+
+  // ── PDF 로드 ──
+  _rdvPdfDoc  = null;
+  _rdvCurPage = 1;
+  _rdvZoom    = 1.0;
+  document.getElementById('rdvZoomLabel').textContent = '100%';
+  document.getElementById('rdvPageInput').value = 1;
+  document.getElementById('rdvTotalPages').textContent = doc.pageCount || '—';
+  document.getElementById('rdvPdfLoading').style.display = 'flex';
+
+  const wrap = document.getElementById('rdvCanvasWrap');
+  // 기존 canvas 제거
+  const old = wrap.querySelector('canvas');
+  if (old) old.remove();
+
+  if (doc.storageUrl) {
+    _rdvInitPdf(doc.storageUrl);
+  } else {
+    document.getElementById('rdvPdfLoading').style.display = 'none';
+    wrap.insertAdjacentHTML('beforeend',
+      '<div class="rdv-pdf-no-pdf">📭 저장된 PDF가 없습니다<br><small>Storage URL 없음</small></div>');
+  }
+}
+
+async function _rdvInitPdf(url) {
+  const ok = await _rdvLoadPdfJs();
+  if (!ok) {
+    document.getElementById('rdvPdfLoading').innerHTML =
+      '<span style="color:#f87171">PDF.js 로드 실패</span>';
+    return;
+  }
+  try {
+    const loadTask = pdfjsLib.getDocument({ url, cMapUrl: null, cMapPacked: true });
+    _rdvPdfDoc = await loadTask.promise;
+    const total = _rdvPdfDoc.numPages;
+    document.getElementById('rdvTotalPages').textContent = total;
+    document.getElementById('rdvPageInput').max = total;
+    document.getElementById('rdvPdfLoading').style.display = 'none';
+    _rdvRenderPage(_rdvCurPage);
+  } catch(e) {
+    console.warn('[rdv] PDF 로드 오류:', e);
+    document.getElementById('rdvPdfLoading').innerHTML =
+      `<span style="color:#f87171">PDF 로드 실패<br><small>${e.message}</small></span>`;
+  }
+}
+
+async function _rdvRenderPage(pageNum) {
+  if (!_rdvPdfDoc || _rdvRendering) return;
+  _rdvRendering = true;
+  _rdvCurPage   = pageNum;
+  document.getElementById('rdvPageInput').value = pageNum;
+  document.getElementById('rdvPrevBtn').disabled = pageNum <= 1;
+  document.getElementById('rdvNextBtn').disabled = pageNum >= _rdvPdfDoc.numPages;
+
+  try {
+    const page     = await _rdvPdfDoc.getPage(pageNum);
+    const viewport = page.getViewport({ scale: _rdvZoom * _rdvAutoScale() });
+    const wrap     = document.getElementById('rdvCanvasWrap');
+
+    let canvas = wrap.querySelector('canvas');
+    if (!canvas) { canvas = document.createElement('canvas'); wrap.appendChild(canvas); }
+    const ctx = canvas.getContext('2d');
+    canvas.width  = viewport.width;
+    canvas.height = viewport.height;
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    _rdvHighlightActiveCard(pageNum);
+  } catch(e) {
+    console.warn('[rdv] 페이지 렌더 오류:', e);
+  }
+  _rdvRendering = false;
+}
+
+function _rdvAutoScale() {
+  const wrap = document.getElementById('rdvCanvasWrap');
+  const w    = wrap.clientWidth - 28;
+  // 첫 렌더 시 기준 너비(595pt = A4) 대비 맞춤
+  return Math.min(w / 595, 1.6);
+}
+
+function _rdvGo(delta) {
+  if (!_rdvPdfDoc) return;
+  const next = _rdvCurPage + delta;
+  if (next >= 1 && next <= _rdvPdfDoc.numPages) _rdvRenderPage(next);
+}
+
+function _rdvGoTo(pageNum) {
+  if (!_rdvPdfDoc || isNaN(pageNum)) return;
+  const clamped = Math.max(1, Math.min(_rdvPdfDoc.numPages, pageNum));
+  _rdvRenderPage(clamped);
+}
+
+function _rdvZoom(delta) {
+  if (delta === 0) { _rdvZoom = 1.0; }
+  else { _rdvZoom = Math.max(0.4, Math.min(3.0, _rdvZoom + delta)); }
+  document.getElementById('rdvZoomLabel').textContent = `${Math.round(_rdvZoom * 100)}%`;
+  if (_rdvPdfDoc) _rdvRenderPage(_rdvCurPage);
+}
+
+// ── 탭 전환 ──
+function _rdvTab(tab) {
+  _rdvCurTab = tab;
+  document.getElementById('rdvTabSummary').className =
+    'rdv-info-tab' + (tab === 'summary' ? ' active' : '');
+  document.getElementById('rdvTabPages').className =
+    'rdv-info-tab' + (tab === 'pages' ? ' active' : '');
+
+  const scroll = document.getElementById('rdvInfoScroll');
+  if (tab === 'summary') {
+    scroll.innerHTML = `<div class="rdv-summary-box">${(_rdvDoc?.summary || '요약 없음').replace(/\n/g,'<br>')}</div>`;
+  } else {
+    _rdvRenderPageIndex();
+  }
+}
+
+const _rdvDtColor = {
+  '임대료':'#eff6ff:#1d4ed8','공실률':'#fef9c3:#854d0e',
+  '공급':'#dcfce7:#166534','수요':'#fce7f3:#9d174d',
+  '전망':'#f3e8ff:#7e22ce','기타':'#f1f5f9:#475569',
+};
+
+function _rdvRenderPageIndex() {
+  const scroll = document.getElementById('rdvInfoScroll');
+  const doc    = _rdvDoc;
+  if (!doc) return;
+  const pi = doc.pageIndex || [];
+  if (!pi.length) {
+    scroll.innerHTML = '<div class="rdv-pi-empty">페이지 색인 정보가 없습니다</div>';
+    return;
+  }
+  const pageTexts = doc.pageTexts || {};
+  scroll.innerHTML = '<div class="rdv-pi-list">' + pi.map((entry, idx) => {
+    const [dtBg, dtFg] = (_rdvDtColor[entry.dataType] || '#f1f5f9:#475569').split(':');
+    const badges = [
+      entry.hasChart ? '<span class="rdv-pi-badge chart">차트</span>' : '',
+      entry.hasTable ? '<span class="rdv-pi-badge table">표</span>'   : '',
+    ].join('');
+    const figures = (entry.figures || []).slice(0,5)
+      .map(f => `<span class="rdv-pi-figure">${f}</span>`).join('');
+    const kws  = (entry.keywords || []).slice(0,5).join(' · ');
+    const text = pageTexts[String(entry.page)] || '';
+    const isActive = entry.page === _rdvCurPage ? ' active' : '';
+    return `<div class="rdv-pi-item${isActive}" id="rdvPiItem_${idx}"
+                 onclick="_rdvJumpTo(${entry.page}, ${idx})">
+      <div class="rdv-pi-row1">
+        <span class="rdv-pi-dtype" style="background:${dtBg};color:${dtFg}">${entry.dataType||'기타'}</span>
+        <span class="rdv-pi-pg">p${entry.page}</span>
+        <div class="rdv-pi-badges">${badges}</div>
+      </div>
+      <div class="rdv-pi-topic">${entry.topic||''}</div>
+      ${entry.summary ? `<div class="rdv-pi-summary">${entry.summary}</div>` : ''}
+      ${figures ? `<div class="rdv-pi-figures">${figures}</div>` : ''}
+      ${kws  ? `<div class="rdv-pi-kws">${kws}</div>` : ''}
+      ${text ? `<div class="rdv-pi-text">${text}</div>` : ''}
+    </div>`;
+  }).join('') + '</div>';
+}
+
+function _rdvJumpTo(pageNum, idx) {
+  // 탭 전환 없이 PDF 페이지 이동
+  if (_rdvPdfDoc) _rdvRenderPage(pageNum);
+  else _rdvGoTo(pageNum);
+  // 카드 활성화
+  document.querySelectorAll('.rdv-pi-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`rdvPiItem_${idx}`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
+}
+
+function _rdvHighlightActiveCard(pageNum) {
+  if (_rdvCurTab !== 'pages') return;
+  document.querySelectorAll('.rdv-pi-item').forEach(el => el.classList.remove('active'));
+  const pi = _rdvDoc?.pageIndex || [];
+  const idx = pi.findIndex(e => e.page === pageNum);
+  if (idx >= 0) {
+    const el = document.getElementById(`rdvPiItem_${idx}`);
+    if (el) { el.classList.add('active'); el.scrollIntoView({ behavior:'smooth', block:'nearest' }); }
+  }
 }
 
 function closeRdvModal() {
   document.getElementById('rdvOverlay').classList.remove('show');
+  _rdvPdfDoc  = null;
+  _rdvDoc     = null;
+  // canvas 정리
+  const wrap = document.getElementById('rdvCanvasWrap');
+  const old  = wrap.querySelector('canvas');
+  if (old) old.remove();
+  document.getElementById('rdvPdfLoading').style.display = 'flex';
+  document.getElementById('rdvPdfLoading').innerHTML =
+    '<div class="rdv-pdf-spinner"></div><span>PDF 로딩 중...</span>';
 }
+
 
 async function deleteResearchDoc(docId) {
   if (!confirm('이 리서치 자료를 삭제할까요?')) return;
