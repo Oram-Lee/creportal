@@ -4299,6 +4299,37 @@ async function generateReport() {
       console.log(`[리포트생성] RAG 컨텍스트 주입 (${_district}): ${researchCtx.length}자`);
     }
 
+    // ── 이전 인텔리전스 조회 + 주입 ──
+    try {
+      const intelResp = await fetch(
+        `${BACKEND}/api/intel/query?district=${_district}&mode=${selectedMode}` +
+        `&industry=${encodeURIComponent(body.clientIndustry || body.targetIndustry || '')}`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (intelResp.ok) {
+        const intelData = await intelResp.json();
+        if (intelData.items && intelData.items.length > 0) {
+          const best = intelData.items[0];  // 점수 최고 1건
+          body.priorIntelligenceId      = best.id;
+          body.priorIntelligenceContext = [
+            `[이전 ${_district}/${selectedMode} 분석 참고 — ${new Date(best.generatedAt).toLocaleDateString('ko-KR')}]`,
+            `업종: ${best.clientIndustry || best.industryGroup} | 빌딩: ${best.buildingName}`,
+            best.researchContext ? `리서치: ${best.researchContext.slice(0, 400)}` : '',
+            `분석 요약: ${(best.aiAnalysis || '').slice(0, 300)}`,
+          ].filter(Boolean).join('\n');
+          console.log(`[리포트생성] 이전 인텔리전스 주입: ${best.id} (useCount: ${best.useCount})`);
+          // useCount 증가 (비동기, 결과 무관)
+          fetch(`${BACKEND}/api/intel/increment-use`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: best.id }),
+          }).catch(() => {});
+        }
+      }
+    } catch(e) {
+      console.warn('[리포트생성] 이전 인텔리전스 조회 실패 (무시):', e.message);
+    }
+
     setGenStep(1, 'done');
 
     // 백엔드 API 호출 — 최대 2회 재시도
