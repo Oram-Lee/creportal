@@ -6450,9 +6450,9 @@ function renderResearchList(docs, groupBy) {
 // =============================================================================
 // ■ 리서치 자료 미리보기 모달 (PDF.js 뷰어 + pageIndex)
 // =============================================================================
-let _rdvPdfDoc   = null;
-let _rdvCurPage  = 1;
-let _rdvZoom     = 1.0;
+let _rdvPdfDoc    = null;
+let _rdvCurPage   = 1;
+let _rdvZoomLevel = 1.0;
 let _rdvRendering = false;
 let _rdvCurTab   = 'summary';
 let _rdvDoc      = null;   // 현재 열린 doc 객체
@@ -6632,36 +6632,71 @@ function _rdvRenderPageIndex() {
   const scroll = document.getElementById('rdvInfoScroll');
   const doc    = _rdvDoc;
   if (!doc) return;
-  const pi = doc.pageIndex || [];
-  if (!pi.length) {
-    scroll.innerHTML = '<div class="rdv-pi-empty">페이지 색인 정보가 없습니다</div>';
+
+  const piEntries  = doc.pageIndex || [];          // AI 선별 페이지 (상세 메타)
+  const pageTexts  = doc.pageTexts || {};           // 전체 페이지 텍스트
+  const pageCount  = doc.pageCount || 0;
+
+  // pageIndex 맵 (페이지번호 → entry)
+  const piMap = {};
+  piEntries.forEach(e => { piMap[e.page] = e; });
+
+  // 전체 페이지 목록: pageCount 기준, 없으면 pageTexts 키 + pageIndex 페이지 합집합
+  const allNums = new Set();
+  if (pageCount > 0) {
+    for (let i = 1; i <= pageCount; i++) allNums.add(i);
+  } else {
+    piEntries.forEach(e => allNums.add(e.page));
+    Object.keys(pageTexts).forEach(k => allNums.add(parseInt(k)));
+  }
+  const sortedPages = [...allNums].sort((a,b) => a - b);
+
+  if (!sortedPages.length) {
+    scroll.innerHTML = '<div class="rdv-pi-empty">페이지 정보가 없습니다</div>';
     return;
   }
-  const pageTexts = doc.pageTexts || {};
-  scroll.innerHTML = '<div class="rdv-pi-list">' + pi.map((entry, idx) => {
-    const [dtBg, dtFg] = (_rdvDtColor[entry.dataType] || '#f1f5f9:#475569').split(':');
-    const badges = [
-      entry.hasChart ? '<span class="rdv-pi-badge chart">차트</span>' : '',
-      entry.hasTable ? '<span class="rdv-pi-badge table">표</span>'   : '',
-    ].join('');
-    const figures = (entry.figures || []).slice(0,5)
-      .map(f => `<span class="rdv-pi-figure">${f}</span>`).join('');
-    const kws  = (entry.keywords || []).slice(0,5).join(' · ');
-    const text = pageTexts[String(entry.page)] || '';
-    const isActive = entry.page === _rdvCurPage ? ' active' : '';
-    return `<div class="rdv-pi-item${isActive}" id="rdvPiItem_${idx}"
-                 onclick="_rdvJumpTo(${entry.page}, ${idx})">
-      <div class="rdv-pi-row1">
-        <span class="rdv-pi-dtype" style="background:${dtBg};color:${dtFg}">${entry.dataType||'기타'}</span>
-        <span class="rdv-pi-pg">p${entry.page}</span>
-        <div class="rdv-pi-badges">${badges}</div>
-      </div>
-      <div class="rdv-pi-topic">${entry.topic||''}</div>
-      ${entry.summary ? `<div class="rdv-pi-summary">${entry.summary}</div>` : ''}
-      ${figures ? `<div class="rdv-pi-figures">${figures}</div>` : ''}
-      ${kws  ? `<div class="rdv-pi-kws">${kws}</div>` : ''}
-      ${text ? `<div class="rdv-pi-text">${text}</div>` : ''}
-    </div>`;
+
+  scroll.innerHTML = '<div class="rdv-pi-list">' + sortedPages.map((pageNum, idx) => {
+    const entry  = piMap[pageNum];        // AI 메타 있는 경우
+    const text   = pageTexts[String(pageNum)] || '';
+    const isIndexed = !!entry;
+    const isActive  = pageNum === _rdvCurPage ? ' active' : '';
+
+    if (isIndexed) {
+      // AI가 선별한 중요 페이지 — 풀 카드
+      const [dtBg, dtFg] = (_rdvDtColor[entry.dataType] || '#f1f5f9:#475569').split(':');
+      const badges = [
+        entry.hasChart ? '<span class="rdv-pi-badge chart">차트</span>' : '',
+        entry.hasTable ? '<span class="rdv-pi-badge table">표</span>'   : '',
+      ].join('');
+      const figures = (entry.figures || []).slice(0,5)
+        .map(f => `<span class="rdv-pi-figure">${f}</span>`).join('');
+      const kws = (entry.keywords || []).slice(0,5).join(' · ');
+      return `<div class="rdv-pi-item${isActive}" id="rdvPiItem_${idx}"
+                   onclick="_rdvJumpTo(${pageNum}, ${idx})" style="border-left:3px solid var(--accent)">
+        <div class="rdv-pi-row1">
+          <span class="rdv-pi-dtype" style="background:${dtBg};color:${dtFg}">${entry.dataType||'기타'}</span>
+          <span class="rdv-pi-pg">p${pageNum}</span>
+          <span style="font-size:9px;color:var(--accent);font-weight:700;margin-left:2px">★ AI 선별</span>
+          <div class="rdv-pi-badges">${badges}</div>
+        </div>
+        <div class="rdv-pi-topic">${entry.topic||''}</div>
+        ${entry.summary ? `<div class="rdv-pi-summary">${entry.summary}</div>` : ''}
+        ${figures ? `<div class="rdv-pi-figures">${figures}</div>` : ''}
+        ${kws  ? `<div class="rdv-pi-kws">${kws}</div>` : ''}
+        ${text ? `<div class="rdv-pi-text">${text}</div>` : ''}
+      </div>`;
+    } else {
+      // 일반 페이지 — 텍스트만 있는 간결한 카드
+      return `<div class="rdv-pi-item${isActive}" id="rdvPiItem_${idx}"
+                   onclick="_rdvJumpTo(${pageNum}, ${idx})">
+        <div class="rdv-pi-row1">
+          <span class="rdv-pi-pg">p${pageNum}</span>
+          ${text ? '<span style="font-size:9px;color:#94a3b8;margin-left:4px">텍스트 추출됨</span>' : '<span style="font-size:9px;color:#cbd5e1;margin-left:4px">텍스트 없음</span>'}
+        </div>
+        ${text ? `<div class="rdv-pi-text" style="display:block;max-height:60px">${text}</div>` : ''}
+      </div>`;
+    }
   }).join('') + '</div>';
 }
 
