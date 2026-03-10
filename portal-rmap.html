@@ -1277,11 +1277,11 @@ canvas.mini-chart { width: 100% !important; }
 /* ===== 리서치 자료 관리 ===== */
 .research-layout {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 480px 1fr;
   gap: 20px;
   align-items: start;
 }
-@media (max-width: 900px) { .research-layout { grid-template-columns: 1fr; } }
+@media (max-width: 1000px) { .research-layout { grid-template-columns: 1fr; } }
 
 /* 왼쪽 등록 카드 */
 .research-upload-card {
@@ -1289,6 +1289,10 @@ canvas.mini-chart { width: 100% !important; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
 }
 .research-upload-card h3 {
   font-size: 13px;
@@ -1445,19 +1449,111 @@ canvas.mini-chart { width: 100% !important; }
 }
 .research-preview.show { display: block; }
 .research-preview h4 { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 7px; }
-.research-preview-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.research-preview-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
 .research-preview-summary {
-  font-size: 12px; color: var(--text); line-height: 1.6;
-  margin-bottom: 9px; max-height: 110px; overflow-y: auto;
+  font-size: 12px; color: var(--text); line-height: 1.7;
+  margin-bottom: 9px; max-height: 160px; overflow-y: auto;
+  background: rgba(255,255,255,.6); border-radius: 5px; padding: 8px 10px;
 }
 .research-preview-stats { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
 .research-stat-chip {
-  padding: 2px 8px;
+  padding: 3px 9px;
   background: #fff;
   border: 1px solid #c3daf5;
   border-radius: 20px;
   font-size: 11px; color: var(--accent); font-weight: 600;
 }
+
+/* ── 텍스트 추출 진행 패널 ── */
+.rex-panel {
+  background: #f4f8ff;
+  border: 1px solid #c3daf5;
+  border-radius: 8px;
+  padding: 13px 14px;
+  margin-top: 10px;
+}
+.rex-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.rex-title { font-size: 12px; font-weight: 700; color: var(--accent); }
+.rex-progress-label { font-size: 11px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rex-progress-bar-wrap {
+  height: 7px;
+  background: #dce8f8;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.rex-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), #4fa8ff);
+  border-radius: 4px;
+  transition: width .5s ease;
+}
+.rex-batch-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.rex-batch-item {
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2eaf8;
+  font-size: 11px;
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 7px;
+  align-items: center;
+  transition: background .2s, border-color .2s;
+}
+.rex-batch-item.processing {
+  border-color: var(--accent);
+  background: #eef5ff;
+  animation: rexPulse 1.5s infinite;
+}
+@keyframes rexPulse {
+  0%,100% { opacity: 1; }
+  50%      { opacity: .72; }
+}
+.rex-batch-item.done  { border-color: #86efac; background: #f0fdf4; }
+.rex-batch-item.error { border-color: #fca5a5; background: #fef2f2; }
+.rex-batch-icon { font-size: 12px; text-align: center; line-height: 1; }
+.rex-batch-info { color: var(--text); font-weight: 600; font-size: 11px; }
+.rex-batch-count { font-size: 10px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.rex-batch-item.done .rex-batch-count { color: #16a34a; }
+.rex-batch-texts {
+  grid-column: 1 / -1;
+  margin-top: 5px;
+  padding: 5px 8px;
+  background: rgba(0,0,0,.03);
+  border-radius: 4px;
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.6;
+  max-height: 72px;
+  overflow-y: auto;
+  display: none;
+}
+.rex-batch-item.done .rex-batch-texts { display: block; }
+.rex-summary-line {
+  margin-top: 9px;
+  padding: 7px 10px;
+  background: #e0f2fe;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0369a1;
+  text-align: center;
+  display: none;
+}
+.rex-summary-line.show { display: block; }
 .research-btn-save {
   width: 100%; padding: 8px;
   background: var(--success); color: #fff;
@@ -1817,10 +1913,24 @@ canvas.mini-chart { width: 100% !important; }
           <div class="research-preview-title" id="previewTitle"></div>
           <div class="research-preview-summary" id="previewSummary"></div>
           <div class="research-preview-stats" id="previewStats"></div>
-          <button class="research-btn-save" onclick="saveResearchDoc()">
-            💾 Firebase에 저장
-          </button>
         </div>
+
+        <!-- 텍스트 추출 진행 패널 -->
+        <div class="rex-panel" id="researchExtractPanel" style="display:none">
+          <div class="rex-header">
+            <span class="rex-title">📄 페이지 텍스트 추출 중</span>
+            <span class="rex-progress-label" id="rexProgressLabel">준비 중...</span>
+          </div>
+          <div class="rex-progress-bar-wrap">
+            <div class="rex-progress-bar" id="rexProgressBar" style="width:0%"></div>
+          </div>
+          <div class="rex-batch-log" id="rexBatchLog"></div>
+          <div class="rex-summary-line" id="rexSummaryLine"></div>
+        </div>
+
+        <button class="research-btn-save" id="researchBtnSave" onclick="saveResearchDoc()" style="display:none;margin-top:11px">
+          💾 Firebase에 저장
+        </button>
       </div>
 
       <!-- ── 오른쪽: 목록 카드 ── -->
@@ -5414,9 +5524,10 @@ async function runResearchSummarize() {
     document.getElementById('previewStats').innerHTML =
       chips.map(c => `<span class="research-stat-chip">${c}</span>`).join('');
     document.getElementById('researchPreview').classList.add('show');
+    document.getElementById('researchBtnSave').style.display = 'block';
     showToast('AI 요약 완료 — 저장 버튼을 누르세요 (페이지 텍스트 추출 중...)', 'success');
 
-    // ── 2단계: pageTexts 추출 (백그라운드, ~60초) ──
+    // ── 2단계: pageTexts 추출 (백그라운드) ──
     if (ext === 'pdf' && data.pageIndex && data.pageIndex.length > 0) {
       _extractPageTexts(data.pageIndex);  // await 없이 백그라운드 실행
     } else {
@@ -5432,30 +5543,120 @@ async function runResearchSummarize() {
   }
 }
 
-// 2단계: pageTexts 백그라운드 추출
+// 2단계: pageTexts 배치 추출 (10페이지씩, 실시간 UI 업데이트)
 async function _extractPageTexts(pageIndex) {
   if (!_researchFile || !_researchSummary) return;
-  try {
-    console.log('[research] extract-texts 시작 (백그라운드)');
-    const fd = new FormData();
-    fd.append('file',      _researchFile);
-    fd.append('pageIndex', JSON.stringify(pageIndex));
-    const res  = await fetch(`${BACKEND}/api/research/extract-texts`, { method:'POST', body:fd });
-    const data = await res.json();
-    if (data.success && data.pageTexts) {
-      _researchSummary.pageTexts    = data.pageTexts;
-      _researchSummary._textsReady  = true;
-      const n = Object.keys(data.pageTexts).length;
-      console.log(`[research] pageTexts 준비 완료: ${n}p`);
-      // 칩 업데이트
-      const existing = document.getElementById('previewStats').innerHTML;
-      document.getElementById('previewStats').innerHTML =
-        existing + `<span class="research-stat-chip">📄 텍스트 ${n}p 준비</span>`;
+
+  const pageCount = _researchSummary.pageCount || 0;
+  const BATCH = 10;
+
+  // 전체 페이지 순서: pageIndex 중요 페이지 우선 → 나머지 순서대로
+  const indexedPages = pageIndex.map(p => p.page).filter(Boolean);
+  const allPages = [];
+  for (let i = 1; i <= Math.max(pageCount, ...indexedPages); i++) allPages.push(i);
+  const ordered = [...new Set([...indexedPages, ...allPages])];
+
+  const totalPages  = ordered.length;
+  const totalBatches = Math.ceil(totalPages / BATCH);
+
+  // ── 패널 초기화 ──
+  const panel  = document.getElementById('researchExtractPanel');
+  const logEl  = document.getElementById('rexBatchLog');
+  const barEl  = document.getElementById('rexProgressBar');
+  const lblEl  = document.getElementById('rexProgressLabel');
+  const sumEl  = document.getElementById('rexSummaryLine');
+  panel.style.display = 'block';
+  logEl.innerHTML     = '';
+  barEl.style.width   = '0%';
+  lblEl.textContent   = `0 / ${totalPages}p`;
+  sumEl.classList.remove('show');
+
+  const mergedTexts = {};
+
+  for (let bi = 0; bi < totalBatches; bi++) {
+    const batch      = ordered.slice(bi * BATCH, (bi + 1) * BATCH);
+    const pRange     = `p${batch[0]}–${batch[batch.length - 1]}`;
+    const batchLabel = `배치 ${bi + 1} / ${totalBatches} (${pRange})`;
+    const itemId     = `rexBatch_${bi}`;
+
+    // 배치 아이템 추가 — processing 상태
+    const itemHtml = `
+      <div class="rex-batch-item processing" id="${itemId}">
+        <span class="rex-batch-icon">⏳</span>
+        <span class="rex-batch-info">${batchLabel}</span>
+        <span class="rex-batch-count">추출 중...</span>
+      </div>`;
+    logEl.insertAdjacentHTML('beforeend', itemHtml);
+    logEl.scrollTop = logEl.scrollHeight;
+
+    try {
+      const fd = new FormData();
+      fd.append('file',      _researchFile);
+      fd.append('pageIndex', JSON.stringify(batch.map(p => ({ page: p }))));
+
+      const res  = await fetch(`${BACKEND}/api/research/extract-texts`, { method: 'POST', body: fd });
+      const data = await res.json();
+
+      const extracted = (data.success && data.pageTexts) ? data.pageTexts : {};
+      Object.assign(mergedTexts, extracted);
+      _researchSummary.pageTexts = { ...mergedTexts }; // 중간 상태 즉시 반영
+
+      const extractedCount = Object.keys(extracted).length;
+      const cumulative     = Object.keys(mergedTexts).length;
+      const pct            = Math.round((cumulative / totalPages) * 100);
+
+      // 추출된 텍스트 샘플 (최대 3페이지)
+      const sampleHtml = Object.entries(extracted).slice(0, 3)
+        .map(([pg, txt]) => `<b>p${pg}</b>: ${(txt || '').slice(0, 70)}…`)
+        .join('<br>');
+
+      const itemEl = document.getElementById(itemId);
+      if (itemEl) {
+        itemEl.className = 'rex-batch-item done';
+        itemEl.innerHTML = `
+          <span class="rex-batch-icon">✅</span>
+          <span class="rex-batch-info">${batchLabel}</span>
+          <span class="rex-batch-count">${extractedCount}p 추출</span>
+          <div class="rex-batch-texts">${sampleHtml || '(텍스트 없음)'}</div>`;
+      }
+
+      barEl.style.width = `${pct}%`;
+      lblEl.textContent = `${cumulative} / ${totalPages}p (${pct}%)`;
+      logEl.scrollTop   = logEl.scrollHeight;
+
+      console.log(`[research] 배치 ${bi + 1}/${totalBatches} 완료 — 누적 ${cumulative}p`);
+
+    } catch (e) {
+      const itemEl = document.getElementById(itemId);
+      if (itemEl) {
+        itemEl.className = 'rex-batch-item error';
+        itemEl.innerHTML = `
+          <span class="rex-batch-icon">❌</span>
+          <span class="rex-batch-info">${batchLabel}</span>
+          <span class="rex-batch-count">오류 발생</span>`;
+      }
+      console.warn(`[research] 배치 ${bi + 1} 오류:`, e);
     }
-  } catch(e) {
-    console.warn('[research] extract-texts 실패 (저장은 계속 가능):', e);
-    _researchSummary._textsReady = true;  // 실패해도 저장 가능하게
   }
+
+  // ── 완료 처리 ──
+  _researchSummary._textsReady = true;
+  const total = Object.keys(mergedTexts).length;
+  barEl.style.width = '100%';
+  lblEl.textContent = `완료 — 총 ${total}p`;
+  panel.querySelector('.rex-title').textContent = '✅ 페이지 텍스트 추출 완료';
+
+  sumEl.textContent = `총 ${total}p 텍스트 추출 완료 — 저장 버튼을 눌러 Firebase에 저장하세요`;
+  sumEl.classList.add('show');
+
+  // 미리보기 칩 업데이트
+  const statsEl  = document.getElementById('previewStats');
+  const existing = statsEl.querySelector('.rex-text-chip');
+  if (existing) existing.textContent = `📄 텍스트 ${total}p 준비`;
+  else statsEl.insertAdjacentHTML('beforeend',
+    `<span class="research-stat-chip rex-text-chip">📄 텍스트 ${total}p 준비</span>`);
+
+  console.log(`[research] pageTexts 전체 완료: ${total}p`);
 }
 
 // =============================================================================
@@ -5464,7 +5665,7 @@ async function _extractPageTexts(pageIndex) {
 async function saveResearchDoc() {
   if (!_researchSummary || !_researchFile) return;
 
-  const btnSave  = document.querySelector('.research-btn-save');
+  const btnSave  = document.getElementById('researchBtnSave');
   btnSave.disabled = true;
   btnSave.textContent = '⏳ 업로드 중...';
 
@@ -5478,11 +5679,11 @@ async function saveResearchDoc() {
   const ext      = _researchFile.name.split('.').pop().toLowerCase();
 
   try {
-    // pageTexts 추출 완료 대기 (최대 90초)
+    // pageTexts 추출 완료 대기 (최대 300초)
     if (_researchSummary.fileType === 'pdf' && !_researchSummary._textsReady) {
       btnSave.textContent = '⏳ 페이지 텍스트 추출 중...';
       let waited = 0;
-      while (!_researchSummary._textsReady && waited < 90000) {
+      while (!_researchSummary._textsReady && waited < 300000) {
         await new Promise(r => setTimeout(r, 1000));
         waited += 1000;
       }
@@ -5525,6 +5726,9 @@ async function saveResearchDoc() {
     document.getElementById('dzText').textContent = '클릭하거나 파일을 드래그하세요';
     document.getElementById('btnResearchSummarize').disabled = true;
     document.getElementById('researchPreview').classList.remove('show');
+    document.getElementById('researchBtnSave').style.display = 'none';
+    document.getElementById('researchExtractPanel').style.display = 'none';
+    document.getElementById('rexBatchLog').innerHTML = '';
     document.getElementById('researchFileInput').value = '';
     loadResearchDocs();
   } catch(e) {
