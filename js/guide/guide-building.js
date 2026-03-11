@@ -766,13 +766,17 @@ export function renderBuildingEditor(item, building) {
                         <div style="display:flex; flex-direction:column; gap:4px;">
                             ${item.floorPricing.map((fp, fi) => {
                                 const fpId = fp.id || String(fi);
-                                const selectedIds = item.selectedFloorPricingIds || [fpId]; // 기본: 첫번째
+                                const selectedIds = item.selectedFloorPricingIds || [fpId];
                                 const isChecked = selectedIds.includes(fpId);
-                                return \`<label style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:white; border-radius:4px; cursor:pointer; font-size:12px;">
-                                    <input type="checkbox" \${isChecked ? 'checked' : ''} onchange="toggleFloorPricing(\${idx}, '\${fpId}')" style="cursor:pointer;">
-                                    <span style="font-weight:500;">\${fp.label || fp.floorRange || ('기준가 ' + (fi+1))}</span>
-                                    <span style="color:#64748b;">보증금 \${fp.depositPy ? fp.depositPy.toLocaleString() : '-'} / 임대 \${fp.rentPy ? fp.rentPy.toLocaleString() : '-'} / 관리 \${fp.maintenancePy ? fp.maintenancePy.toLocaleString() : '-'}</span>
-                                \</label>\`;
+                                const label = fp.label || fp.floorRange || ('기준가 ' + (fi+1));
+                                const dep = fp.depositPy ? fp.depositPy.toLocaleString() : '-';
+                                const rent = fp.rentPy ? fp.rentPy.toLocaleString() : '-';
+                                const maint = fp.maintenancePy ? fp.maintenancePy.toLocaleString() : '-';
+                                return '<label style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:white; border-radius:4px; cursor:pointer; font-size:12px;">'
+                                    + '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleFloorPricing(' + idx + ', \'' + fpId + '\')" style="cursor:pointer;">'
+                                    + '<span style="font-weight:500;">' + label + '</span>'
+                                    + '<span style="color:#64748b;">보증금 ' + dep + ' / 임대 ' + rent + ' / 관리 ' + maint + '</span>'
+                                    + '</label>';
                             }).join('')}
                         </div>
                     </div>
