@@ -6617,9 +6617,12 @@
             }
             
             container.innerHTML = contacts.map((c, idx) => `
-                <div class="contact-current-chip">
-                    <span>${c.name}</span>
-                    <button class="remove" onclick="removeSelectedContact(${idx})">×</button>
+                <div class="contact-current-chip" style="display:flex; align-items:center; gap:4px; padding:4px 8px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:20px; font-size:12px;">
+                    <span style="color:#94a3b8; font-size:10px; font-weight:600; min-width:14px;">${idx+1}</span>
+                    <span style="font-weight:500;">${c.name}</span>
+                    <button onclick="moveSelectedContact(${idx}, -1)" ${idx === 0 ? 'disabled' : ''} title="위로" style="font-size:10px; padding:0 3px; border:1px solid #bae6fd; border-radius:3px; background:white; cursor:pointer; color:#0369a1; ${idx === 0 ? 'opacity:0.3;' : ''}">↑</button>
+                    <button onclick="moveSelectedContact(${idx}, 1)" ${idx === contacts.length-1 ? 'disabled' : ''} title="아래로" style="font-size:10px; padding:0 3px; border:1px solid #bae6fd; border-radius:3px; background:white; cursor:pointer; color:#0369a1; ${idx === contacts.length-1 ? 'opacity:0.3;' : ''}">↓</button>
+                    <button class="remove" onclick="removeSelectedContact(${idx})" style="font-size:12px; color:#94a3b8; border:none; background:none; cursor:pointer; padding:0 2px;">×</button>
                 </div>
             `).join('');
         };
@@ -6631,6 +6634,16 @@
             renderCurrentContacts();
             renderDefaultContactList();
             renderSniContactList();
+        };
+        
+        // ★ 담당자 순서 이동 (이슈 #2)
+        window.moveSelectedContact = function(idx, dir) {
+            const contacts = window.contactChangeState.selectedContacts;
+            const newIdx = idx + dir;
+            if (newIdx < 0 || newIdx >= contacts.length) return;
+            [contacts[idx], contacts[newIdx]] = [contacts[newIdx], contacts[idx]];
+            window.contactChangeState.isDefault = false;
+            renderCurrentContacts();
         };
         
         // 기본 담당자 목록 렌더링

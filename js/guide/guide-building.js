@@ -54,7 +54,7 @@
  */
 
 import { state, db, ref, get, update, getAllRegions } from './guide-state.js?v=5.1';
-import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.1';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, cleanUnitValue } from './guide-utils.js?v=5.1';
 import { 
     getUniqueSourcesHtml, 
     getUniqueDatesHtml, 
@@ -399,8 +399,8 @@ export function renderBuildingEditor(item, building) {
                             <tr><th>준공년도</th><td>${building.completionYear || '-'}년</td></tr>
                             <tr><th>기준층(임대)</th><td>${formatArea(building.typicalFloorPy)} 평</td></tr>
                             <tr><th>전용률</th><td>${formatPercent(building.exclusiveRate || building.area?.exclusiveRate)}%</td></tr>
-                            <tr><th>E/V</th><td>총 ${building.elevatorTotal || '-'}대</td></tr>
-                            <tr><th>주차</th><td>총 ${String(building.parkingTotal || '-').replace(/대+$/, '')}대${building.parkingNote ? '<br><span style="font-size:10px; color:#555;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
+                            <tr><th>E/V</th><td>총 ${(()=>{ const n=cleanUnitValue(building.elevatorTotal??building.specs?.passengerElevator); return n!==null?n+'대':'-'; })()}</td></tr>
+                            <tr><th>주차</th><td>총 ${(()=>{ const n=cleanUnitValue(building.parkingTotal??building.parking?.total); return n!==null?n+'대':'-'; })()}${building.parkingNote ? '<br><span style="font-size:10px; color:#555;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                         </table>
                     </div>
                     <div>
@@ -431,8 +431,8 @@ export function renderBuildingEditor(item, building) {
                                     <th class="sortable-header" onclick="toggleVacancySort(${idx})" style="cursor:pointer;" title="클릭하여 정렬 변경">
                                         해당층 ${item.vacancySortOrder === 'asc' ? '▲' : '▼'}
                                     </th>
-                                    <th>임대 면적</th>
                                     <th>전용 면적</th>
+                                    <th>임대 면적</th>
                                     <th>보증금</th>
                                     <th>임대료</th>
                                     <th>관리비</th>
@@ -443,8 +443,8 @@ export function renderBuildingEditor(item, building) {
                                 ${allVacancies.length > 0 ? allVacancies.map(v => `
                                     <tr>
                                         <td class="floor">${formatFloorDisplay(v.floor)}</td>
-                                        <td>${v.rentArea || v.area || '-'}</td>
                                         <td>${v.exclusiveArea || v.area || '-'}</td>
+                                        <td>${v.rentArea || v.area || '-'}</td>
                                         <td>${v.deposit || v.depositPy || '문의'}</td>
                                         <td>${v.rent || v.rentPy || '문의'}</td>
                                         <td>${v.maintenance || v.maintenancePy || '문의'}</td>
@@ -465,8 +465,8 @@ export function renderBuildingEditor(item, building) {
                                 ${allVacancies.length > 0 ? `
                                     <tr class="total-row">
                                         <td>합계</td>
-                                        <td>${formatNumber(allVacancies.reduce((s,v) => s + (parseFloat(v.rentArea || v.area || 0)), 0))}</td>
                                         <td>${formatNumber(allVacancies.reduce((s,v) => s + (parseFloat(v.exclusiveArea || v.area || 0)), 0))}</td>
+                                        <td>${formatNumber(allVacancies.reduce((s,v) => s + (parseFloat(v.rentArea || v.area || 0)), 0))}</td>
                                         <td colspan="4">-</td>
                                     </tr>
                                 ` : ''}
@@ -628,6 +628,33 @@ export function renderBuildingEditor(item, building) {
                         <input type="text" id="stdExclusiveRate" value="${building.exclusiveRate || ''}" placeholder="예: 52">
                     </div>
                 </div>
+                ${item.floorPricing && item.floorPricing.length > 0 ? `
+                    <div style="margin-top:10px; padding:10px 12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">
+                        <div style="font-size:12px; font-weight:600; color:#0369a1; margin-bottom:8px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                            💰 기준가 선택
+                            <span style="font-weight:normal; color:#64748b;">(RENT 테이블에 표시됨)</span>
+                            <button onclick="toggleAllFloorPricing(${idx}, true)" style="font-size:10px; padding:2px 6px; border:1px solid #0369a1; border-radius:3px; background:white; color:#0369a1; cursor:pointer;">전체선택</button>
+                            <button onclick="toggleAllFloorPricing(${idx}, false)" style="font-size:10px; padding:2px 6px; border:1px solid #94a3b8; border-radius:3px; background:white; color:#64748b; cursor:pointer;">전체해제</button>
+                        </div>
+                        <div id="floorPricingList_${idx}" style="display:flex; flex-direction:column; gap:4px;">
+                            ${item.floorPricing.map((fp, fi) => {
+                                const fpId = fp.id || String(fi);
+                                const selectedIds = item.selectedFloorPricingIds || [fpId];
+                                const isChecked = selectedIds.includes(fpId);
+                                const label = fp.label || fp.floorRange || ('기준가 ' + (fi+1));
+                                const dep = fp.depositPy ? fp.depositPy.toLocaleString() : '-';
+                                const rent = fp.rentPy ? fp.rentPy.toLocaleString() : '-';
+                                const maint = fp.maintenancePy ? fp.maintenancePy.toLocaleString() : '-';
+                                return '<div id="fpRow_' + idx + '_' + fi + '" style="display:flex; align-items:center; gap:6px; padding:6px 8px; background:white; border-radius:4px; font-size:12px;">'
+                                    + '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleFloorPricing(' + idx + ', \'' + fpId + '\')" style="cursor:pointer; flex-shrink:0;">'
+                                    + '<span style="font-weight:500; min-width:60px;">' + label + '</span>'
+                                    + '<span class="fp-display-' + idx + '_' + fi + '" style="color:#64748b; flex:1;">보증금 ' + dep + ' / 임대 ' + rent + ' / 관리 ' + maint + '</span>'
+                                    + '<button onclick="editFloorPricingInline(' + idx + ',' + fi + ')" title="항목 편집" style="font-size:11px; padding:2px 6px; border:1px solid #94a3b8; border-radius:3px; background:white; color:#475569; cursor:pointer; flex-shrink:0;">✏️</button>'
+                                    + '</div>';
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : ''}
             </div>
             
             <!-- 공실 관리 -->
@@ -724,7 +751,7 @@ export function renderBuildingEditor(item, building) {
                     </div>
                 </div>
                 
-                <!-- 등록된 공실 테이블 -->
+                <!-- 등록된 공실 테이블 (★ 관리비 컬럼 + 인라인 편집) -->
                 <table class="vacancy-list-table">
                     <thead>
                         <tr>
@@ -733,54 +760,31 @@ export function renderBuildingEditor(item, building) {
                             <th>임대(평)</th>
                             <th>보증금</th>
                             <th>임대료</th>
+                            <th>관리비</th>
                             <th>입주시기</th>
                             <th>관리</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="vacancyListBody_${idx}">
                         ${allVacancies.length > 0 ? allVacancies.map((v, i) => `
-                            <tr>
+                            <tr id="vacRow_${idx}_${i}" data-vacid="${v.id}" data-vactype="${v.type}">
                                 <td class="floor">${formatFloorDisplay(v.floor)}</td>
                                 <td>${v.exclusiveArea || v.area || '-'}</td>
                                 <td>${v.rentArea || v.area || '-'}</td>
                                 <td>${v.deposit || v.depositPy || '-'}</td>
                                 <td>${v.rent || v.rentPy || '-'}</td>
+                                <td>${v.maintenance || v.maintenancePy || '-'}</td>
                                 <td>${v.moveIn || v.moveInDate || '협의'}</td>
                                 <td>
                                     <div class="actions">
-                                        <button class="btn btn-sm btn-secondary" onclick="editVacancyItem(${idx}, '${v.id}', '${v.type}')">✏️</button>
+                                        <button class="btn btn-sm btn-secondary" onclick="startVacancyRowEdit(${idx}, '${v.id}', '${v.type}', this)" title="인라인 편집">✏️</button>
                                         <button class="btn btn-sm btn-danger" onclick="removeSelectedVacancy(${idx}, '${v.id}', '${v.type}')">×</button>
                                     </div>
                                 </td>
                             </tr>
-                        `).join('') : `<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">등록된 공실이 없습니다</td></tr>`}
+                        `).join('') : `<tr><td colspan="8" style="text-align:center; padding:30px; color:#94a3b8;">등록된 공실이 없습니다</td></tr>`}
                     </tbody>
                 </table>
-                ${item.floorPricing && item.floorPricing.length > 0 ? `
-                    <div style="margin-top:8px; padding:10px 12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">
-                        <div style="font-size:12px; font-weight:600; color:#0369a1; margin-bottom:8px;">
-                            💰 기준가 선택 <span style="font-weight:normal; color:#64748b;">(RENT 테이블에 표시됨)</span>
-                            <button onclick="toggleAllFloorPricing(${idx}, true)" style="margin-left:8px; font-size:10px; padding:2px 6px; border:1px solid #0369a1; border-radius:3px; background:white; color:#0369a1; cursor:pointer;">전체선택</button>
-                            <button onclick="toggleAllFloorPricing(${idx}, false)" style="margin-left:4px; font-size:10px; padding:2px 6px; border:1px solid #94a3b8; border-radius:3px; background:white; color:#64748b; cursor:pointer;">전체해제</button>
-                        </div>
-                        <div style="display:flex; flex-direction:column; gap:4px;">
-                            ${item.floorPricing.map((fp, fi) => {
-                                const fpId = fp.id || String(fi);
-                                const selectedIds = item.selectedFloorPricingIds || [fpId];
-                                const isChecked = selectedIds.includes(fpId);
-                                const label = fp.label || fp.floorRange || ('기준가 ' + (fi+1));
-                                const dep = fp.depositPy ? fp.depositPy.toLocaleString() : '-';
-                                const rent = fp.rentPy ? fp.rentPy.toLocaleString() : '-';
-                                const maint = fp.maintenancePy ? fp.maintenancePy.toLocaleString() : '-';
-                                return '<label style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:white; border-radius:4px; cursor:pointer; font-size:12px;">'
-                                    + '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleFloorPricing(' + idx + ', \'' + fpId + '\')" style="cursor:pointer;">'
-                                    + '<span style="font-weight:500;">' + label + '</span>'
-                                    + '<span style="color:#64748b;">보증금 ' + dep + ' / 임대 ' + rent + ' / 관리 ' + maint + '</span>'
-                                    + '</label>';
-                            }).join('')}
-                        </div>
-                    </div>
-                ` : ''}
             </div>
         </div>
     `;
@@ -1543,7 +1547,7 @@ export async function saveBuildingEdit(buildingId) {
         
         await update(ref(db, `buildings/${buildingId}`), updateData);
         
-        // 로컬 상태 업데이트 (플랫 구조로)
+        // 로컬 상태 업데이트 (플랫 + 중첩 구조 동시 업데이트 → normalizeBuilding 재호출 보장)
         const building = state.allBuildings.find(b => b.id === buildingId);
         if (building) {
             building.name = document.getElementById('editBldName')?.value || building.name;
@@ -1558,6 +1562,21 @@ export async function saveBuildingEdit(buildingId) {
             building.elevatorTotal = parseInt(document.getElementById('editBldElevator')?.value) || building.elevatorTotal;
             building.parkingTotal = parseInt(document.getElementById('editBldParking')?.value) || building.parkingTotal;
             building.parkingNote = document.getElementById('editBldParkingNote')?.value || building.parkingNote;
+            // ★ 중첩 키도 동기화 (출력 페이지 Firebase 재읽기 시 반영)
+            if (!building.area) building.area = {};
+            building.area.grossFloorPy = building.grossFloorPy;
+            building.area.typicalFloorPy = building.typicalFloorPy;
+            building.area.exclusiveRate = building.exclusiveRate;
+            if (!building.floors) building.floors = {};
+            building.floors.above = building.floorsAbove;
+            building.floors.below = building.floorsBelow;
+            if (!building.specs) building.specs = {};
+            building.specs.completionYear = building.completionYear;
+            building.specs.passengerElevator = building.elevatorTotal;
+            if (!building.parking) building.parking = {};
+            building.parking.total = building.parkingTotal;
+            // ★ normalizeBuilding 재호출로 floorsDisplay 등 파생 필드 갱신
+            normalizeBuilding(building);
         }
         
         closeBuildingEditModal();
@@ -1626,6 +1645,11 @@ export async function fetchBuildingRegistry(buildingId) {
         
         showToast('빌딩 정보를 불러왔습니다', 'success');
         
+        // ★ CRE Portal 기본정보 패널에 반영 알림 (portal.html이 수신)
+        window.dispatchEvent(new CustomEvent('buildingUpdated', {
+            detail: { buildingId, data: building }
+        }));
+        
         // 프리뷰 갱신
         if (state.selectedTocIndex >= 0) {
             const item = state.tocItems[state.selectedTocIndex];
@@ -1657,30 +1681,52 @@ export function changeItemRegion(idx, newRegion) {
 
 // ★ v5.0: 출력 페이지 열기 (별도 페이지로 분리)
 export function openPrintPage(pageIndex = null) {
-    // 현재 안내문 ID 가져오기 (currentGuide.id 사용)
     const guideId = state.currentGuide?.id;
-    
     if (!guideId) {
         showToast('안내문을 먼저 저장해주세요', 'warning');
         return;
     }
     
-    // 저장 여부 확인
+    const doOpen = () => {
+        let url = `leasing-guide-print.html?id=${guideId}`;
+        if (pageIndex !== null) url += `&page=${pageIndex}`;
+        window.open(url, '_blank');
+        showToast('출력 페이지를 새 탭에서 열었습니다', 'success');
+    };
+    
     if (state.hasUnsavedChanges) {
-        if (!confirm('저장하지 않은 변경사항이 있습니다.\n출력 페이지로 이동하시겠습니까?')) {
-            return;
-        }
+        // ★ 커스텀 3버튼 모달 (이슈 #9)
+        const modalId = 'printConfirmModal_' + Date.now();
+        const html = `
+            <div id="${modalId}" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
+                <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:400px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+                    <div style="font-size:22px;text-align:center;margin-bottom:12px;">⚠️</div>
+                    <div style="font-size:15px;font-weight:600;text-align:center;color:#1e293b;margin-bottom:8px;">저장되지 않은 변경사항이 있습니다</div>
+                    <div style="font-size:12px;color:#64748b;text-align:center;margin-bottom:24px;">임시저장 후 출력하면 최신 내용이 반영됩니다.</div>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <button id="${modalId}_saveprint" style="padding:10px;border-radius:8px;background:#2563eb;color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;">💾 임시저장 후 출력</button>
+                        <button id="${modalId}_print" style="padding:10px;border-radius:8px;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;font-size:13px;cursor:pointer;">그냥 출력 (현재 저장본 기준)</button>
+                        <button id="${modalId}_cancel" style="padding:10px;border-radius:8px;background:transparent;color:#94a3b8;border:none;font-size:12px;cursor:pointer;">취소</button>
+                    </div>
+                </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', html);
+        const close = () => document.getElementById(modalId)?.remove();
+        document.getElementById(modalId + '_saveprint').onclick = async () => {
+            close();
+            // 임시저장 함수가 있으면 호출, 없으면 안내
+            if (typeof window.autoSaveGuide === 'function') {
+                await window.autoSaveGuide();
+            } else if (typeof window.saveGuide === 'function') {
+                await window.saveGuide();
+            }
+            doOpen();
+        };
+        document.getElementById(modalId + '_print').onclick = () => { close(); doOpen(); };
+        document.getElementById(modalId + '_cancel').onclick = close;
+        return;
     }
-    
-    // 출력 페이지 URL 생성
-    let url = `leasing-guide-print.html?id=${guideId}`;
-    if (pageIndex !== null) {
-        url += `&page=${pageIndex}`;
-    }
-    
-    // 새 탭에서 열기
-    window.open(url, '_blank');
-    showToast('출력 페이지를 새 탭에서 열었습니다', 'success');
+    doOpen();
 }
 
 // ★ 공실 정렬 토글 함수
@@ -1726,6 +1772,66 @@ export function toggleAllFloorPricing(itemIdx, selectAll) {
     if (building) window.renderBuildingEditor(item, building);
 }
 
+// ★ v5.4: 기준가 선택 항목 인라인 편집
+export function editFloorPricingInline(itemIdx, fpIdx) {
+    const item = state.tocItems[itemIdx];
+    if (!item || !item.floorPricing) return;
+    const fp = item.floorPricing[fpIdx];
+    if (!fp) return;
+    const rowEl = document.getElementById(`fpRow_${itemIdx}_${fpIdx}`);
+    if (!rowEl) return;
+    const fpId = fp.id || String(fpIdx);
+    const selectedIds = item.selectedFloorPricingIds || [fpId];
+    const isChecked = selectedIds.includes(fpId);
+    const label = fp.label || fp.floorRange || ('기준가 ' + (fpIdx+1));
+    rowEl.innerHTML = `
+        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleFloorPricing(${itemIdx}, '${fpId}')" style="cursor:pointer; flex-shrink:0;">
+        <input type="text" id="fpLabel_${itemIdx}_${fpIdx}" value="${label}" placeholder="구분명" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <input type="text" id="fpDep_${itemIdx}_${fpIdx}" value="${fp.depositPy || ''}" placeholder="보증금" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <input type="text" id="fpRent_${itemIdx}_${fpIdx}" value="${fp.rentPy || ''}" placeholder="임대료" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <input type="text" id="fpMaint_${itemIdx}_${fpIdx}" value="${fp.maintenancePy || ''}" placeholder="관리비" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <button onclick="saveFloorPricingInline(${itemIdx}, ${fpIdx})" style="font-size:11px; padding:2px 8px; border-radius:3px; background:#2563eb; color:white; border:none; cursor:pointer;">저장</button>
+        <button onclick="cancelFloorPricingInline(${itemIdx})" style="font-size:11px; padding:2px 6px; border-radius:3px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer;">취소</button>
+    `;
+}
+
+export async function saveFloorPricingInline(itemIdx, fpIdx) {
+    const item = state.tocItems[itemIdx];
+    if (!item || !item.floorPricing) return;
+    const fp = item.floorPricing[fpIdx];
+    if (!fp) return;
+    const newLabel = document.getElementById(`fpLabel_${itemIdx}_${fpIdx}`)?.value || fp.label;
+    const newDep = document.getElementById(`fpDep_${itemIdx}_${fpIdx}`)?.value;
+    const newRent = document.getElementById(`fpRent_${itemIdx}_${fpIdx}`)?.value;
+    const newMaint = document.getElementById(`fpMaint_${itemIdx}_${fpIdx}`)?.value;
+    const toNum = v => { const n = parseFloat(String(v).replace(/[^0-9.]/g, '')); return isNaN(n) ? (v || null) : n; };
+    fp.label = newLabel;
+    fp.depositPy = toNum(newDep);
+    fp.rentPy = toNum(newRent);
+    fp.maintenancePy = toNum(newMaint);
+    // Firebase 동기화
+    try {
+        const buildingId = item.buildingId;
+        const fpId = fp.id || String(fpIdx);
+        await update(ref(db, `buildings/${buildingId}/floorPricing/${fpIdx}`), {
+            label: fp.label, depositPy: fp.depositPy, rentPy: fp.rentPy, maintenancePy: fp.maintenancePy
+        });
+        showToast('기준가 항목이 저장되었습니다', 'success');
+    } catch(e) {
+        console.error('기준가 저장 오류:', e);
+        showToast('저장 중 오류가 발생했습니다', 'error');
+    }
+    const building = state.allBuildings.find(b => b.id === item.buildingId);
+    if (building) renderBuildingEditor(item, building);
+}
+
+export function cancelFloorPricingInline(itemIdx) {
+    const item = state.tocItems[itemIdx];
+    if (!item) return;
+    const building = state.allBuildings.find(b => b.id === item.buildingId);
+    if (building) renderBuildingEditor(item, building);
+}
+
 export function registerBuildingFunctions() {
     window.renderBuildingEditor = renderBuildingEditor;
     window.uploadImage = uploadImage;
@@ -1749,6 +1855,9 @@ export function registerBuildingFunctions() {
     window.loadLeasingGuideVacancies = loadLeasingGuideVacancies;
     window.toggleGuideVacancy = toggleGuideVacancy;
     // ★ 신규: 공실 정렬
+    window.editFloorPricingInline = editFloorPricingInline;
+    window.saveFloorPricingInline = saveFloorPricingInline;
+    window.cancelFloorPricingInline = cancelFloorPricingInline;
     window.toggleVacancySort = toggleVacancySort;
     window.selectAllGuideVacancies = selectAllGuideVacancies;
     // ★ v5.1: 지도 자동 생성

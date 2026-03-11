@@ -506,8 +506,8 @@ export function addDirectVacancy(idx) {
     showToast('공실이 추가되었습니다', 'success');
 }
 
-// 공실 수정
-export function editVacancyItem(idx, vacancyId, type) {
+// 공실 인라인 행 편집 시작
+export function startVacancyRowEdit(idx, vacancyId, type, btn) {
     const item = state.tocItems[idx];
     if (!item) return;
     
@@ -516,48 +516,80 @@ export function editVacancyItem(idx, vacancyId, type) {
         const vacIdx = parseInt(vacancyId.replace('custom_', ''));
         vacancy = item.customVacancies?.[vacIdx];
     } else if (type === 'guide') {
-        // ★ 추가: guide 타입 처리
         const vacIdx = parseInt(vacancyId.replace('guide_', ''));
         vacancy = item.leasingGuideVacancies?.[vacIdx];
     } else {
         vacancy = item.selectedExternalVacancies?.find(v => v.id === vacancyId);
     }
+    if (!vacancy) { showToast('공실 정보를 찾을 수 없습니다', 'error'); return; }
     
-    if (!vacancy) {
-        showToast('공실 정보를 찾을 수 없습니다', 'error');
-        return;
+    // 행 찾기
+    const tr = btn?.closest('tr');
+    if (!tr) return;
+    
+    const cell = s => `<input type="text" value="${s||''}" style="width:100%; font-size:11px; padding:2px 4px; border:1px solid #93c5fd; border-radius:3px; min-width:50px;">`;
+    tr.innerHTML = `
+        <td class="floor">${cell(vacancy.floor)}</td>
+        <td>${cell(vacancy.exclusiveArea||vacancy.area)}</td>
+        <td>${cell(vacancy.rentArea||vacancy.area)}</td>
+        <td>${cell(vacancy.deposit||vacancy.depositPy)}</td>
+        <td>${cell(vacancy.rent||vacancy.rentPy)}</td>
+        <td>${cell(vacancy.maintenance||vacancy.maintenancePy)}</td>
+        <td>${cell(vacancy.moveIn||vacancy.moveInDate)}</td>
+        <td>
+            <div class="actions" style="flex-direction:column; gap:3px;">
+                <button class="btn btn-sm btn-primary" onclick="saveVacancyRowEdit(${idx},'${vacancyId}','${type}',this)" style="font-size:10px; padding:2px 6px;">💾</button>
+                <button class="btn btn-sm btn-secondary" onclick="cancelVacancyRowEdit(${idx})" style="font-size:10px; padding:2px 6px;">취소</button>
+            </div>
+        </td>`;
+}
+
+// 공실 인라인 행 편집 저장
+export function saveVacancyRowEdit(idx, vacancyId, type, btn) {
+    const item = state.tocItems[idx];
+    if (!item) return;
+    const tr = btn?.closest('tr');
+    if (!tr) return;
+    const inputs = tr.querySelectorAll('input[type="text"]');
+    const [floor, exclusiveArea, rentArea, deposit, rent, maintenance, moveIn] = [...inputs].map(i => i.value.trim());
+    
+    const update = (v) => {
+        v.floor = floor; v.exclusiveArea = exclusiveArea; v.area = rentArea; v.rentArea = rentArea;
+        v.deposit = deposit; v.depositPy = deposit; v.rent = rent; v.rentPy = rent;
+        v.maintenance = maintenance; v.maintenancePy = maintenance;
+        v.moveIn = moveIn; v.moveInDate = moveIn;
+    };
+    
+    if (type === 'custom') {
+        const vacIdx = parseInt(vacancyId.replace('custom_', ''));
+        if (item.customVacancies?.[vacIdx]) update(item.customVacancies[vacIdx]);
+    } else if (type === 'guide') {
+        const vacIdx = parseInt(vacancyId.replace('guide_', ''));
+        if (item.leasingGuideVacancies?.[vacIdx]) update(item.leasingGuideVacancies[vacIdx]);
+    } else {
+        const v = item.selectedExternalVacancies?.find(v => v.id === vacancyId);
+        if (v) update(v);
     }
-    
-    // 간단한 프롬프트로 수정 (나중에 모달로 개선 가능)
-    const newFloor = prompt('층:', vacancy.floor || '');
-    if (newFloor === null) return;
-    
-    const newArea = prompt('면적(평):', vacancy.area || vacancy.rentArea || '');
-    if (newArea === null) return;
-    
-    const newDeposit = prompt('보증금:', vacancy.deposit || vacancy.depositPy || '');
-    if (newDeposit === null) return;
-    
-    const newRent = prompt('임대료:', vacancy.rent || vacancy.rentPy || '');
-    if (newRent === null) return;
-    
-    const newMoveIn = prompt('입주시기:', vacancy.moveIn || vacancy.moveInDate || '');
-    if (newMoveIn === null) return;
-    
-    // 업데이트
-    vacancy.floor = newFloor;
-    vacancy.area = newArea;
-    vacancy.rentArea = newArea;
-    vacancy.deposit = newDeposit;
-    vacancy.depositPy = newDeposit;
-    vacancy.rent = newRent;
-    vacancy.rentPy = newRent;
-    vacancy.moveIn = newMoveIn;
-    vacancy.moveInDate = newMoveIn;
     
     const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
     window.renderBuildingEditor(item, building);
     showToast('공실 정보가 수정되었습니다', 'success');
+}
+
+// 공실 인라인 행 편집 취소
+export function cancelVacancyRowEdit(idx) {
+    const item = state.tocItems[idx];
+    if (!item) return;
+    const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
+    window.renderBuildingEditor(item, building);
+}
+
+// 공실 수정 (레거시 — startVacancyRowEdit으로 대체됨, 호환성 유지)
+export function editVacancyItem(idx, vacancyId, type) {
+    // 해당 행의 편집 버튼을 찾아 startVacancyRowEdit 호출
+    const row = document.querySelector(`tr[data-vacid="${vacancyId}"]`);
+    const btn = row?.querySelector('.btn-secondary');
+    if (btn) startVacancyRowEdit(idx, vacancyId, type, btn);
 }
 
 // ★ 수정: 공실 삭제 (guide 타입 추가)
@@ -600,6 +632,9 @@ export function registerVacancyFunctions() {
     window.switchAddVacancyMode = switchAddVacancyMode;
     window.addDirectVacancy = addDirectVacancy;
     window.editVacancyItem = editVacancyItem;
+    window.startVacancyRowEdit = startVacancyRowEdit;
+    window.saveVacancyRowEdit = saveVacancyRowEdit;
+    window.cancelVacancyRowEdit = cancelVacancyRowEdit;
     window.removeSelectedVacancy = removeSelectedVacancy;
     // ★ v3.8: pending 관련
     window.applyPendingExternalVacancies = applyPendingExternalVacancies;

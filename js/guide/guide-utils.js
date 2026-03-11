@@ -290,6 +290,13 @@ export function normalizeBuilding(building) {
     return building;
 }
 
+// ★ v5.4: 숫자+단위 혼재 값에서 순수 숫자만 추출 (예: "123대" → 123, 5 → 5)
+export function cleanUnitValue(val) {
+    if (val === null || val === undefined || val === '') return null;
+    const num = parseInt(String(val).replace(/[^0-9]/g, ''), 10);
+    return isNaN(num) ? null : num;
+}
+
 // 날짜 포맷팅
 export function formatArea(n) {
     if (!n && n !== 0) return '-';
