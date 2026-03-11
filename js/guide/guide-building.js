@@ -241,26 +241,34 @@ export function renderBuildingEditor(item, building) {
     // 정렬 적용
     const allVacancies = sortVacancies(allVacanciesRaw, item.vacancySortOrder);
     
-    // NOTE (임대안내문 표시용 메모)
+    // NOTE (임대안내문 표시용 메모) — 인라인 편집
     const guideMemos = (building.memos || []).filter(m => m.showInLeasingGuide);
-    const noteHtml = guideMemos.length === 0 ? `
-        <div class="preview-note-section preview-note-empty">
+    // 미들닷: 각 줄마다 • 처리
+    const renderNoteLines = (content) =>
+        (content || '').split('\n')
+            .filter(l => l.trim())
+            .map(l => `<div class="note-item">• ${l.trim()}</div>`)
+            .join('');
+    const noteDisplayHtml = guideMemos.length === 0
+        ? `<div class="preview-note-placeholder" onclick="startNoteInlineEdit(${idx}, '${building.id}')">📝 클릭하여 노트 추가</div>`
+        : guideMemos.map(m => renderNoteLines(m.content)).join('');
+    const noteCurrentText = guideMemos.map(m => (m.content||'')).join('\n');
+    const noteHtml = `
+        <div class="preview-note-section${guideMemos.length === 0 ? ' preview-note-empty' : ''}">
             <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>NOTE</span>
-                <button class="info-action-btn add-note-btn" onclick="openNoteModal(${idx}, '${building.id}')" title="노트 추가">+ 추가</button>
+                <button class="info-action-btn" onclick="startNoteInlineEdit(${idx}, '${building.id}')" title="노트 편집">✏️</button>
             </div>
-            <div class="preview-note-placeholder" onclick="openNoteModal(${idx}, '${building.id}')">
-                📝 클릭하여 노트 추가
-            </div>
-        </div>
-    ` : `
-        <div class="preview-note-section">
-            <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
-                <span>NOTE</span>
-                <button class="info-action-btn" onclick="openNoteModal(${idx}, '${building.id}')" title="노트 편집">✏️</button>
-            </div>
-            <div class="preview-note-content">
-                ${guideMemos.map(m => `<div class="note-item">• ${(m.content||'').replace(/\n/g,'<br>')}</div>`).join('')}
+            <div id="noteDisplay_${idx}" class="preview-note-content">${noteDisplayHtml}</div>
+            <div id="noteEditor_${idx}" style="display:none; margin-top:6px;">
+                <textarea id="noteTextarea_${idx}"
+                    style="width:100%; box-sizing:border-box; min-height:90px; font-size:12px; border:1px solid #bae6fd; border-radius:6px; padding:8px; resize:vertical; font-family:inherit; color:#1e293b;"
+                    placeholder="줄바꿈(Enter)으로 항목을 구분합니다&#10;예) 6월 19일 사용승인예정&#10;2,3층 업무시설 가능"
+                >${noteCurrentText}</textarea>
+                <div style="display:flex; gap:6px; margin-top:6px; justify-content:flex-end;">
+                    <button class="info-action-btn" onclick="cancelNoteInlineEdit(${idx})" style="color:#64748b;">취소</button>
+                    <button class="info-action-btn" onclick="saveNoteInline(${idx}, '${building.id}')" style="background:#2563eb; color:#fff; border-color:#2563eb;">💾 저장</button>
+                </div>
             </div>
         </div>
     `;
@@ -387,8 +395,7 @@ export function renderBuildingEditor(item, building) {
                         <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                             <span>GENERAL INFORMATION</span>
                             <div class="info-action-btns">
-                                <button class="info-action-btn" onclick="fetchFromPortal('${building.id}')" title="Portal DB → 안내문 편집화면에 최신 데이터 반영" style="color:#0369a1; border-color:#0369a1;">⬇️ Portal→안내문</button>
-                                <button class="info-action-btn" onclick="pushToPortal('${building.id}')" title="안내문 편집화면의 현재 값 → Portal DB 및 상세패널 반영" style="color:#16a34a; border-color:#16a34a;">⬆️ 안내문→Portal</button>
+                                <button class="info-action-btn" onclick="fetchBuildingRegistry('${building.id}')" title="Firebase에서 최신 데이터 불러오기">🔄 DB동기화</button>
                                 <button class="info-action-btn" onclick="openBuildingEditModal('${building.id}')" title="수동으로 정보 입력/수정">✏️ 수정</button>
                             </div>
                         </div>
@@ -397,8 +404,8 @@ export function renderBuildingEditor(item, building) {
                             <tr><th>위치</th><td>${building.nearbyStation || '-'}</td></tr>
                             <tr><th>연면적</th><td>${formatArea(building.grossFloorPy)} 평 (${formatNumber((building.grossFloorPy || 0) * 3.3058)}㎡)</td></tr>
                             <tr><th>규모</th><td>B${building.floorsBelow || 0} / ${building.floorsAbove || 0}F</td></tr>
-                            <tr><th>준공년도</th><td>${building.completionYear || '-'}년</td></tr>
-                            <tr><th>기준층(임대)</th><td>${formatArea(building.typicalFloorPy)} 평</td></tr>
+                            <tr><th>준공년도</th><td>${building.completionYear || '-'}</td></tr>
+                            <tr><th>기준층(임대)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy) + ' 평' : '-'}</td></tr>
                             <tr><th>전용률</th><td>${formatPercent(building.exclusiveRate || building.area?.exclusiveRate)}%</td></tr>
                             <tr><th>E/V</th><td>총 ${(()=>{ const n=cleanUnitValue(building.elevatorTotal??building.specs?.passengerElevator); return n!==null?n+'대':'-'; })()}</td></tr>
                             <tr><th>주차</th><td>총 ${(()=>{ const n=cleanUnitValue(building.parkingTotal??building.parking?.total); return n!==null?n+'대':'-'; })()}${building.parkingNote ? '<br><span style="font-size:10px; color:#555;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
@@ -500,7 +507,7 @@ export function renderBuildingEditor(item, building) {
                                     `).join('');
                                 }
                                 return `<tr>
-                                    <td>기준층</td>
+                                    <td>${building.rentLabel || '기준층'}</td>
                                     <td>${formatPriceWon(building.depositPy)}</td>
                                     <td>${formatPriceWon(building.rentPy)}</td>
                                     <td>${formatPriceWon(building.maintenancePy)}</td>
@@ -625,8 +632,8 @@ export function renderBuildingEditor(item, building) {
                         <input type="text" id="stdMaintenance" value="${building.maintenancePy || ''}" placeholder="예: 3.5만">
                     </div>
                     <div class="standard-floor-field">
-                        <label>전용률 (%)</label>
-                        <input type="text" id="stdExclusiveRate" value="${building.exclusiveRate || ''}" placeholder="예: 52">
+                        <label>구분 (RENT 테이블 표시명)</label>
+                        <input type="text" id="stdLabel" value="${building.rentLabel || '기준층'}" placeholder="예: 기준층">
                     </div>
                 </div>
                 ${item.floorPricing && item.floorPricing.length > 0 ? `
@@ -772,9 +779,9 @@ export function renderBuildingEditor(item, building) {
                                 <td class="floor">${formatFloorDisplay(v.floor)}</td>
                                 <td>${v.exclusiveArea || v.area || '-'}</td>
                                 <td>${v.rentArea || v.area || '-'}</td>
-                                <td>${v.deposit || v.depositPy || '-'}</td>
-                                <td>${v.rent || v.rentPy || '-'}</td>
-                                <td>${v.maintenance || v.maintenancePy || '-'}</td>
+                                <td>${v.deposit ?? v.depositPy ?? '문의'}</td>
+                                <td>${v.rent ?? v.rentPy ?? '문의'}</td>
+                                <td>${v.maintenance ?? v.maintenancePy ?? '문의'}</td>
                                 <td>${v.moveIn || v.moveInDate || '협의'}</td>
                                 <td>
                                     <div class="actions">
@@ -1409,13 +1416,13 @@ export async function saveStandardFloor(buildingId) {
         const depositPy = document.getElementById('stdDeposit')?.value || '';
         const rentPy = document.getElementById('stdRent')?.value || '';
         const maintenancePy = document.getElementById('stdMaintenance')?.value || '';
-        const exclusiveRate = document.getElementById('stdExclusiveRate')?.value || '';
+        const rentLabel = document.getElementById('stdLabel')?.value || '기준층';
         
         await update(ref(db, `buildings/${buildingId}`), {
             depositPy,
             rentPy,
             maintenancePy,
-            exclusiveRate
+            rentLabel
         });
         
         // 로컬 상태 업데이트
@@ -1424,7 +1431,7 @@ export async function saveStandardFloor(buildingId) {
             building.depositPy = depositPy;
             building.rentPy = rentPy;
             building.maintenancePy = maintenancePy;
-            building.exclusiveRate = exclusiveRate;
+            building.rentLabel = rentLabel;
         }
         
         showToast('기준층 임대조건이 저장되었습니다', 'success');
@@ -1665,77 +1672,6 @@ export async function fetchBuildingRegistry(buildingId) {
     }
 }
 
-// ★ v5.4: Portal → 안내문 (Firebase DB → 편집화면)
-export async function fetchFromPortal(buildingId) {
-    showToast('Portal DB에서 최신 빌딩 정보를 가져오는 중...', 'info');
-    try {
-        const snapshot = await get(ref(db, `buildings/${buildingId}`));
-        if (!snapshot.exists()) { showToast('빌딩 정보를 찾을 수 없습니다', 'error'); return; }
-        const freshData = snapshot.val();
-        freshData.id = buildingId;
-        normalizeBuilding(freshData);
-        const bIdx = state.allBuildings.findIndex(b => b.id === buildingId);
-        if (bIdx >= 0) state.allBuildings[bIdx] = { ...state.allBuildings[bIdx], ...freshData };
-        const building = state.allBuildings[bIdx] || freshData;
-        showToast('Portal DB 최신 정보를 안내문 편집화면에 반영했습니다', 'success');
-        if (state.selectedTocIndex >= 0) {
-            const item = state.tocItems[state.selectedTocIndex];
-            if (item) renderBuildingEditor(item, building);
-        }
-    } catch (e) {
-        console.error('fetchFromPortal 오류:', e);
-        showToast('불러오기에 실패했습니다', 'error');
-    }
-}
-
-// ★ v5.4: 안내문 → Portal (편집화면 현재값 → Firebase DB + BroadcastChannel)
-export async function pushToPortal(buildingId) {
-    const building = state.allBuildings.find(b => b.id === buildingId);
-    if (!building) { showToast('빌딩 데이터를 찾을 수 없습니다', 'error'); return; }
-    if (!confirm('현재 편집화면의 GENERAL INFORMATION 값을\nPortal DB 및 상세패널에 반영합니다.\n계속하시겠습니까?')) return;
-    try {
-        // ★ 키 매핑 — 중첩키(Portal 읽기용) + 평면키(안내문 읽기용) 동시 저장
-        const updateData = {
-            name: building.name || '',
-            address: building.address || '',
-            nearbyStation: building.nearbyStation || '',
-            'area/grossFloorPy': building.grossFloorPy || 0,
-            grossFloorPy: building.grossFloorPy || 0,
-            'area/typicalFloorPy': building.typicalFloorPy || 0,
-            typicalFloorPy: building.typicalFloorPy || 0,
-            'area/exclusiveRate': building.exclusiveRate || 0,
-            exclusiveRate: building.exclusiveRate || 0,
-            'floors/above': building.floorsAbove || 0,
-            'floors/below': building.floorsBelow || 0,
-            'specs/completionYear': String(building.completionYear || ''),
-            completionYear: String(building.completionYear || ''),
-            'specs/passengerElevator': building.elevatorTotal || 0,
-            elevatorTotal: building.elevatorTotal || 0,
-            'parking/total': building.parkingTotal || 0,
-            parkingTotal: building.parkingTotal || 0,
-            parkingNote: building.parkingNote || ''
-        };
-        await update(ref(db, `buildings/${buildingId}`), updateData);
-
-        // ★ BroadcastChannel: Portal 탭이 열려 있으면 즉시 패널 갱신
-        try {
-            const bc = new BroadcastChannel('cre_portal_sync');
-            bc.postMessage({ type: 'buildingUpdated', buildingId, data: { ...building, ...updateData } });
-            bc.close();
-        } catch (_) { /* 미지원 환경 무시 */ }
-        window.dispatchEvent(new CustomEvent('buildingUpdated', { detail: { buildingId, data: building } }));
-
-        showToast('Portal DB 및 상세패널에 반영되었습니다', 'success');
-        if (state.selectedTocIndex >= 0) {
-            const item = state.tocItems[state.selectedTocIndex];
-            if (item) renderBuildingEditor(item, building);
-        }
-    } catch (e) {
-        console.error('pushToPortal 오류:', e);
-        showToast('Portal 반영에 실패했습니다', 'error');
-    }
-}
-
 // ========== 빌딩 권역 변경 ==========
 export function changeItemRegion(idx, newRegion) {
     if (idx < 0 || idx >= state.tocItems.length) return;
@@ -1904,9 +1840,62 @@ export function cancelFloorPricingInline(itemIdx) {
     if (building) renderBuildingEditor(item, building);
 }
 
+// ★ NOTE 인라인 편집 함수들
+export function startNoteInlineEdit(idx, buildingId) {
+    const display = document.getElementById(`noteDisplay_${idx}`);
+    const editor = document.getElementById(`noteEditor_${idx}`);
+    if (!display || !editor) return;
+    display.style.display = 'none';
+    editor.style.display = 'block';
+    const ta = document.getElementById(`noteTextarea_${idx}`);
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+
+export function cancelNoteInlineEdit(idx) {
+    const display = document.getElementById(`noteDisplay_${idx}`);
+    const editor = document.getElementById(`noteEditor_${idx}`);
+    if (!display || !editor) return;
+    display.style.display = '';
+    editor.style.display = 'none';
+}
+
+export async function saveNoteInline(idx, buildingId) {
+    const ta = document.getElementById(`noteTextarea_${idx}`);
+    if (!ta) return;
+    const newText = ta.value.trim();
+    try {
+        const building = state.allBuildings.find(b => b.id === buildingId);
+        if (!building) return;
+        // memos 배열에서 showInLeasingGuide 메모 찾아 업데이트 or 신규 생성
+        if (!building.memos) building.memos = [];
+        const guideIdx = building.memos.findIndex(m => m.showInLeasingGuide);
+        if (newText === '') {
+            // 내용 비우면 삭제
+            if (guideIdx >= 0) building.memos.splice(guideIdx, 1);
+            await update(ref(db, `buildings/${buildingId}`), { memos: building.memos });
+        } else {
+            if (guideIdx >= 0) {
+                building.memos[guideIdx].content = newText;
+            } else {
+                building.memos.push({ content: newText, showInLeasingGuide: true, createdAt: new Date().toISOString() });
+            }
+            await update(ref(db, `buildings/${buildingId}`), { memos: building.memos });
+        }
+        showToast('노트가 저장되었습니다', 'success');
+        const item = state.tocItems[idx];
+        if (item) renderBuildingEditor(item, building);
+    } catch (e) {
+        console.error('saveNoteInline 오류:', e);
+        showToast('저장에 실패했습니다', 'error');
+    }
+}
+
 export function registerBuildingFunctions() {
     window.renderBuildingEditor = renderBuildingEditor;
     window.uploadImage = uploadImage;
+    window.startNoteInlineEdit = startNoteInlineEdit;
+    window.cancelNoteInlineEdit = cancelNoteInlineEdit;
+    window.saveNoteInline = saveNoteInline;
     window.setMainImage = setMainImage;
     window.removeImage = removeImage;
     window.removeMapImage = removeMapImage;
@@ -1919,8 +1908,6 @@ export function registerBuildingFunctions() {
     window.closeBuildingEditModal = closeBuildingEditModal;
     window.saveBuildingEdit = saveBuildingEdit;
     window.fetchBuildingRegistry = fetchBuildingRegistry;
-    window.fetchFromPortal = fetchFromPortal;
-    window.pushToPortal = pushToPortal;
     window.changeItemRegion = changeItemRegion;
     window.openPrintPage = openPrintPage;
     // ★ v5.0: 상수 노출

@@ -1485,9 +1485,8 @@
                                     <tr><th>위치</th><td>${building.nearbyStation || '-'}</td></tr>
                                     <tr><th>연면적</th><td>${formatArea(building.grossFloorPy || building.area?.grossFloorPy)} 평</td></tr>
                                     <tr><th>규모</th><td>B${building.floorsBelow || building.floors?.below || 0} / ${building.floorsAbove || building.floors?.above || 0}F</td></tr>
-                                    <tr><th>준공년도</th><td>${building.completionYear || building.specs?.completionYear || '-'}년</td></tr>
-                                    <tr><th>기준층(임대)</th><td>${formatArea(building.typicalFloorPy || building.area?.typicalFloorPy)} 평</td></tr>
-                                    <tr><th>전용률</th><td>${formatPercent(building.exclusiveRate || building.area?.exclusiveRate)}%</td></tr>
+                                    <tr><th>준공년도</th><td>${building.completionYear || building.specs?.completionYear || '-'}</td></tr>
+                                    <tr><th>기준층(임대)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy || building.area?.typicalFloorPy) + ' 평' : '-'}</td></tr>
                                     <tr><th>E/V</th><td>총 ${getElevatorTotal(building)}대</td></tr>
                                     <tr><th>주차</th><td>총 ${String(getParkingTotal(building) || '-').replace(/대+$/, '')}대${getParkingNote(building) ? '<br><span style="font-size:inherit; color:inherit;">' + String(getParkingNote(building)).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                                 </table>
@@ -1570,7 +1569,7 @@
                                                 </tr>`).join('');
                                             }
                                             return `<tr>
-                                                <td>기준층</td>
+                                                <td>${building.rentLabel || '기준층'}</td>
                                                 <td>${formatPrice(building.depositPy || building.pricing?.depositPy)}</td>
                                                 <td>${formatPrice(building.rentPy || building.pricing?.rentPy)}</td>
                                                 <td>${formatPrice(building.maintenancePy || building.pricing?.maintenancePy)}</td>
@@ -1584,7 +1583,7 @@
                                 <div class="section section-note">
                                     <div class="section-title">NOTE</div>
                                     <div class="note-box">
-                                        ${notes.map(n => `<div class="note-item">• ${(n.content || '').replace(/\n/g, '<br>')}</div>`).join('')}
+                                        ${notes.map(n => (n.content || '').split('\n').filter(l => l.trim()).map(l => `<div class="note-item">• ${l.trim()}</div>`).join('')).join('')}
                                     </div>
                                 </div>
                                 ` : ''}
