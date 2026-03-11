@@ -256,7 +256,6 @@ async function cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH,
     if (mapInstance) {
         try {
             const cX = selX + selW / 2, cY = selY + selH / 2;
-            const containerCenter = mapInstance.getCenter();
             const proj = mapInstance.getProjection();
             if (proj) {
                 const offsetLatLng = proj.coordsFromPoint(new kakao.maps.Point(cX, cY));
@@ -269,15 +268,7 @@ async function cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH,
     // 현재 지도 레벨 읽기
     const level = mapInstance ? mapInstance.getLevel() : 3;
 
-    const markerParam = `positions:${centerLng} ${centerLat},image:${encodeURIComponent(BUILDING_MARKER_IMAGE)}`;
-    const staticUrl = `https://dapi.kakao.com/v2/maps/staticmap`
-        + `?appkey=${appKey}`
-        + `&center=${centerLng},${centerLat}`
-        + `&width=${outW}&height=${outH}`
-        + `&level=${level}`
-        + `&marker=${markerParam}`;
-
-    // 저장 선택 대화상자 (다운로드 or Firebase Storage)
+    // 저장 선택 대화상자
     const safeName = (buildingName || '지도').replace(/[^a-zA-Z0-9가-힣]/g, '_');
     const timestamp = new Date().toISOString().slice(0, 10);
     const filename = `${safeName}_map_${timestamp}.png`;
@@ -300,9 +291,25 @@ async function cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH,
 
     const closeModal = () => document.getElementById(modalId)?.remove();
 
+    // ★ CORS 해결: 브라우저에서 직접 dapi.kakao.com fetch 불가 → Flask 프록시 경유
+    const API_BASE = window.CONFIG?.API_BASE || 'https://portal-dsyl.onrender.com';
     const fetchImage = async () => {
-        const res = await fetch(staticUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res = await fetch(`${API_BASE}/api/kakao-staticmap-proxy`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                appkey: appKey,
+                lat: centerLat,
+                lng: centerLng,
+                width: outW,
+                height: outH,
+                level: level
+            })
+        });
+        if (!res.ok) {
+            const errText = await res.text().catch(() => '');
+            throw new Error(`프록시 HTTP ${res.status}: ${errText}`);
+        }
         return res.blob();
     };
 
