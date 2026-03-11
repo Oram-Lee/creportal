@@ -54,7 +54,7 @@
  */
 
 import { state, db, ref, get, update, getAllRegions } from './guide-state.js?v=5.1';
-import { showToast, formatNumber, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.1';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.1';
 import { 
     getUniqueSourcesHtml, 
     getUniqueDatesHtml, 
@@ -260,7 +260,7 @@ export function renderBuildingEditor(item, building) {
                 <button class="info-action-btn" onclick="openNoteModal(${idx}, '${building.id}')" title="노트 편집">✏️</button>
             </div>
             <div class="preview-note-content">
-                ${guideMemos.map(m => `<div class="note-item">• ${m.content}</div>`).join('')}
+                ${guideMemos.map(m => `<div class="note-item">• ${(m.content||'').replace(/\n/g,'<br>')}</div>`).join('')}
             </div>
         </div>
     `;
@@ -394,13 +394,13 @@ export function renderBuildingEditor(item, building) {
                         <table class="preview-info-table">
                             <tr><th>주소</th><td>${building.address || '-'}</td></tr>
                             <tr><th>위치</th><td>${building.nearbyStation || '-'}</td></tr>
-                            <tr><th>연면적</th><td>${formatNumber(building.grossFloorPy)} 평 (${formatNumber((building.grossFloorPy || 0) * 3.3058)}㎡)</td></tr>
+                            <tr><th>연면적</th><td>${formatArea(building.grossFloorPy)} 평 (${formatNumber((building.grossFloorPy || 0) * 3.3058)}㎡)</td></tr>
                             <tr><th>규모</th><td>B${building.floorsBelow || 0} / ${building.floorsAbove || 0}F</td></tr>
                             <tr><th>준공년도</th><td>${building.completionYear || '-'}년</td></tr>
-                            <tr><th>기준층(전용)</th><td>${formatNumber(building.typicalFloorPy)} 평</td></tr>
-                            <tr><th>전용률</th><td>${building.exclusiveRate || '-'}%</td></tr>
+                            <tr><th>기준층(임대)</th><td>${formatArea(building.typicalFloorPy)} 평</td></tr>
+                            <tr><th>전용률</th><td>${formatPercent(building.exclusiveRate || building.area?.exclusiveRate)}%</td></tr>
                             <tr><th>E/V</th><td>총 ${building.elevatorTotal || '-'}대</td></tr>
-                            <tr><th>주차</th><td>총 ${building.parkingTotal || '-'}대 ${building.parkingNote || ''}</td></tr>
+                            <tr><th>주차</th><td>총 ${String(building.parkingTotal || '-').replace(/대+$/, '')}대${building.parkingNote ? '<br><span style="font-size:10px; color:#555;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                         </table>
                     </div>
                     <div>
@@ -484,12 +484,27 @@ export function renderBuildingEditor(item, building) {
                                 <th>임대료</th>
                                 <th>관리비</th>
                             </tr>
-                            <tr>
-                                <td>기준층</td>
-                                <td>${formatPriceWon(building.depositPy)}</td>
-                                <td>${formatPriceWon(building.rentPy)}</td>
-                                <td>${formatPriceWon(building.maintenancePy)}</td>
-                            </tr>
+                            ${(() => {
+                                const selectedIds = item.selectedFloorPricingIds || [];
+                                const fps = item.floorPricing || [];
+                                const selectedFps = fps.filter((fp, i) => selectedIds.includes(fp.id || String(i)));
+                                if (selectedFps.length > 0) {
+                                    return selectedFps.map(fp => `
+                                        <tr>
+                                            <td>${fp.label || fp.floorRange || '기준층'}</td>
+                                            <td>${formatPriceWon(fp.depositPy)}</td>
+                                            <td>${formatPriceWon(fp.rentPy)}</td>
+                                            <td>${formatPriceWon(fp.maintenancePy)}</td>
+                                        </tr>
+                                    `).join('');
+                                }
+                                return `<tr>
+                                    <td>기준층</td>
+                                    <td>${formatPriceWon(building.depositPy)}</td>
+                                    <td>${formatPriceWon(building.rentPy)}</td>
+                                    <td>${formatPriceWon(building.maintenancePy)}</td>
+                                </tr>`;
+                            })()}
                         </table>
                     </div>
                     
@@ -742,9 +757,24 @@ export function renderBuildingEditor(item, building) {
                     </tbody>
                 </table>
                 ${item.floorPricing && item.floorPricing.length > 0 ? `
-                    <div style="margin-top:8px; padding:8px 12px; background:var(--bg-secondary, #f8fafc); border-radius:6px; font-size:12px; color:#64748b;">
-                        💰 기준가 ${item.floorPricing.length}건 연동됨
-                        (${item.floorPricing.map(fp => fp.label || fp.floorRange || '기준가').join(', ')})
+                    <div style="margin-top:8px; padding:10px 12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">
+                        <div style="font-size:12px; font-weight:600; color:#0369a1; margin-bottom:8px;">
+                            💰 기준가 선택 <span style="font-weight:normal; color:#64748b;">(RENT 테이블에 표시됨)</span>
+                            <button onclick="toggleAllFloorPricing(${idx}, true)" style="margin-left:8px; font-size:10px; padding:2px 6px; border:1px solid #0369a1; border-radius:3px; background:white; color:#0369a1; cursor:pointer;">전체선택</button>
+                            <button onclick="toggleAllFloorPricing(${idx}, false)" style="margin-left:4px; font-size:10px; padding:2px 6px; border:1px solid #94a3b8; border-radius:3px; background:white; color:#64748b; cursor:pointer;">전체해제</button>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            ${item.floorPricing.map((fp, fi) => {
+                                const fpId = fp.id || String(fi);
+                                const selectedIds = item.selectedFloorPricingIds || [fpId]; // 기본: 첫번째
+                                const isChecked = selectedIds.includes(fpId);
+                                return \`<label style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:white; border-radius:4px; cursor:pointer; font-size:12px;">
+                                    <input type="checkbox" \${isChecked ? 'checked' : ''} onchange="toggleFloorPricing(\${idx}, '\${fpId}')" style="cursor:pointer;">
+                                    <span style="font-weight:500;">\${fp.label || fp.floorRange || ('기준가 ' + (fi+1))}</span>
+                                    <span style="color:#64748b;">보증금 \${fp.depositPy ? fp.depositPy.toLocaleString() : '-'} / 임대 \${fp.rentPy ? fp.rentPy.toLocaleString() : '-'} / 관리 \${fp.maintenancePy ? fp.maintenancePy.toLocaleString() : '-'}</span>
+                                \</label>\`;
+                            }).join('')}
+                        </div>
                     </div>
                 ` : ''}
             </div>
@@ -1490,6 +1520,7 @@ export function closeBuildingEditModal() {
 }
 
 export async function saveBuildingEdit(buildingId) {
+    if (!confirm('이 변경사항은 CRE Portal의 해당 빌딩 기본정보에도 반영됩니다.\n저장하시겠습니까?')) return;
     try {
         const updateData = {
             name: document.getElementById('editBldName')?.value || '',
@@ -1675,6 +1706,8 @@ export function registerBuildingFunctions() {
     window.resetToStorageMapImage = resetToStorageMapImage;
     window.switchImageTab = switchImageTab;
     window.saveStandardFloor = saveStandardFloor;
+    window.toggleFloorPricing = toggleFloorPricing;
+    window.toggleAllFloorPricing = toggleAllFloorPricing;
     window.openBuildingEditModal = openBuildingEditModal;
     window.closeBuildingEditModal = closeBuildingEditModal;
     window.saveBuildingEdit = saveBuildingEdit;

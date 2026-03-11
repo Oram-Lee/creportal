@@ -31,7 +31,7 @@
  */
 
 import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo, getRegionOrder } from './guide-state.js?v=5.1';
-import { showToast, formatNumber, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.1';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.1';
 
 // ★ v3.6: 층 표기 정규화 함수 (FF 중복 방지)
 function formatFloorDisplay(floor) {
@@ -640,12 +640,12 @@ function renderBuildingPreviewPage(data) {
                             <table class="info-table">
                                 <tr><th>주소</th><td>${building.address || '-'}</td></tr>
                                 <tr><th>위치</th><td>${building.nearbyStation || '-'}</td></tr>
-                                <tr><th>연면적</th><td>${formatNumber(building.grossFloorPy)}평 (${formatNumber(Math.round((building.grossFloorPy || 0) * 3.3058))}㎡)</td></tr>
+                                <tr><th>연면적</th><td>${formatArea(building.grossFloorPy)}평 (${formatNumber(Math.round((building.grossFloorPy || 0) * 3.3058))}㎡)</td></tr>
                                 <tr><th>규모</th><td>B${building.floorsBelow || 0} / ${building.floorsAbove || 0}F</td></tr>
                                 <tr><th>준공</th><td>${building.completionYear || '-'}년</td></tr>
-                                <tr><th>기준층</th><td>${formatNumber(building.typicalFloorPy)}평 (전용률 ${building.exclusiveRate || '-'}%)</td></tr>
+                                <tr><th>기준층</th><td>${formatArea(building.typicalFloorPy)}평 (전용률 ${formatPercent(building.exclusiveRate || building.area?.exclusiveRate)}%)</td></tr>
                                 <tr><th>E/V</th><td>총 ${building.elevatorTotal || '-'}대</td></tr>
-                                <tr><th>주차</th><td>총 ${building.parkingTotal || '-'}대 ${building.parkingNote || ''}</td></tr>
+                                <tr><th>주차</th><td>총 ${String(building.parkingTotal || '-').replace(/대+$/, '')}대${building.parkingNote ? '<br><span style="font-size:10px; color:#555;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                             </table>
                         </div>
                     </div>
@@ -721,12 +721,25 @@ function renderBuildingPreviewPage(data) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>기준층</td>
-                                        <td>${formatNumber(building.floorPricing?.[0]?.depositPy || building.depositPy) || '-'}</td>
-                                        <td>${formatNumber(building.floorPricing?.[0]?.rentPy || building.rentPy) || '-'}</td>
-                                        <td>${formatNumber(building.floorPricing?.[0]?.maintenancePy || building.maintenancePy) || '-'}</td>
-                                    </tr>
+                                    ${(() => {
+                                        const selectedIds = item.selectedFloorPricingIds || [];
+                                        const fps = item.floorPricing || [];
+                                        const selectedFps = fps.filter((fp, i) => selectedIds.includes(fp.id || String(i)));
+                                        if (selectedFps.length > 0) {
+                                            return selectedFps.map(fp => `<tr>
+                                                <td>${fp.label || fp.floorRange || '기준층'}</td>
+                                                <td>${formatNumber(fp.depositPy) || '-'}</td>
+                                                <td>${formatNumber(fp.rentPy) || '-'}</td>
+                                                <td>${formatNumber(fp.maintenancePy) || '-'}</td>
+                                            </tr>`).join('');
+                                        }
+                                        return `<tr>
+                                            <td>기준층</td>
+                                            <td>${formatNumber(building.depositPy) || '-'}</td>
+                                            <td>${formatNumber(building.rentPy) || '-'}</td>
+                                            <td>${formatNumber(building.maintenancePy) || '-'}</td>
+                                        </tr>`;
+                                    })()}
                                 </tbody>
                             </table>
                         </div>
@@ -737,7 +750,7 @@ function renderBuildingPreviewPage(data) {
                         <div class="section-title">NOTE</div>
                         <div class="section-content note-content">
                             ${guideMemos.length > 0 
-                                ? guideMemos.map(m => `<div class="note-item">• ${m.content}</div>`).join('') 
+                                ? guideMemos.map(m => `<div class="note-item">• ${(m.content||"").replace(/\n/g,"<br>")}</div>`).join('') 
                                 : '<div class="note-empty">-</div>'}
                         </div>
                     </div>

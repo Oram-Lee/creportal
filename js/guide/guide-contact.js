@@ -88,30 +88,60 @@ function renderBuildingContacts() {
     container.innerHTML = `
         <div class="cp-building-info">
             <div class="cp-building-name">🏢 ${building.name || '빌딩명'}</div>
-            <button class="btn btn-sm btn-primary" onclick="showAddCpDropdown()">+ 담당자 추가</button>
+            <div style="display:flex; gap:6px;">
+                <button class="btn btn-sm btn-primary" onclick="showAddCpDropdown('user')">+ 사용자 선택</button>
+                <button class="btn btn-sm btn-secondary" onclick="showAddCpDropdown('manual')">+ 직접 입력</button>
+            </div>
         </div>
         
+        <!-- 사용자 선택 드롭다운 -->
         <div class="cp-add-dropdown" id="cpAddDropdown" style="display:none;">
-            <select id="cpUserSelect" style="flex:1;">
-                <option value="">-- 사용자 선택 --</option>
-                ${(state.allUsers || []).map(u => `
-                    <option value="${u.id}">${u.name || u.email} (${u.position || '직급없음'})</option>
-                `).join('')}
-            </select>
-            <button class="btn btn-sm btn-primary" onclick="addCpToBuilding()">추가</button>
-            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('cpAddDropdown').style.display='none'">취소</button>
+            <div id="cpAddModeUser">
+                <select id="cpUserSelect" style="flex:1;">
+                    <option value="">-- 사용자 선택 --</option>
+                    ${(state.allUsers || []).map(u => `
+                        <option value="${u.id}">${u.name || u.email} (${u.position || '직급없음'})</option>
+                    `).join('')}
+                </select>
+                <button class="btn btn-sm btn-primary" onclick="addCpToBuilding()">추가</button>
+                <button class="btn btn-sm btn-secondary" onclick="document.getElementById('cpAddDropdown').style.display='none'">취소</button>
+            </div>
+            <div id="cpAddModeManual" style="display:none; flex-direction:column; gap:6px;">
+                <div style="display:flex; gap:6px;">
+                    <input id="cpManualName" type="text" placeholder="이름" style="flex:1; padding:4px 8px; border:1px solid var(--border-color); border-radius:4px; font-size:12px;">
+                    <input id="cpManualPosition" type="text" placeholder="직함 (선택)" style="flex:1; padding:4px 8px; border:1px solid var(--border-color); border-radius:4px; font-size:12px;">
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <input id="cpManualPhone" type="text" placeholder="연락처" style="flex:1; padding:4px 8px; border:1px solid var(--border-color); border-radius:4px; font-size:12px;">
+                    <input id="cpManualEmail" type="text" placeholder="이메일" style="flex:1; padding:4px 8px; border:1px solid var(--border-color); border-radius:4px; font-size:12px;">
+                </div>
+                <div style="display:flex; gap:6px; justify-content:flex-end;">
+                    <button class="btn btn-sm btn-primary" onclick="addManualCpToBuilding()">추가</button>
+                    <button class="btn btn-sm btn-secondary" onclick="document.getElementById('cpAddDropdown').style.display='none'">취소</button>
+                </div>
+            </div>
         </div>
         
-        <div class="cp-list">
+        <div class="cp-list" id="cpDragList">
             ${contacts.length === 0 ? `
                 <div class="empty-state">등록된 담당자가 없습니다</div>
             ` : contacts.map((c, i) => `
-                <div class="cp-item">
-                    <div class="cp-item-info">
-                        <span class="cp-name">${c.name || '-'}</span>
-                        <span class="cp-position">${c.position || ''}</span>
-                        <span class="cp-phone">${c.phone || c.mobile || '-'}</span>
-                        <span class="cp-email">${c.email || '-'}</span>
+                <div class="cp-item" draggable="true" data-idx="${i}"
+                     style="cursor:grab;"
+                     ondragstart="cpDragStart(event,${i})"
+                     ondragover="cpDragOver(event)"
+                     ondragenter="cpDragEnter(event)"
+                     ondragleave="cpDragLeave(event)"
+                     ondrop="cpDrop(event,${i})"
+                     ondragend="cpDragEnd(event)">
+                    <div style="display:flex; align-items:center; gap:8px; flex:1;">
+                        <span style="color:#94a3b8; font-size:14px; cursor:grab;">⠿</span>
+                        <div class="cp-item-info">
+                            <span class="cp-name">${c.name || '-'}</span>
+                            <span class="cp-position">${c.position || ''}</span>
+                            <span class="cp-phone">${c.phone || c.mobile || '-'}</span>
+                            <span class="cp-email">${c.email || '-'}</span>
+                        </div>
                     </div>
                     <div class="cp-item-actions">
                         <button class="btn btn-xs btn-secondary" onclick="moveCpOrder(${i}, -1)" ${i === 0 ? 'disabled' : ''}>↑</button>
@@ -122,12 +152,92 @@ function renderBuildingContacts() {
             `).join('')}
         </div>
     `;
+    
+    // 드래그앤드롭 이벤트 바인딩
+    bindCpDragEvents();
+}
+
+// 드래그 상태
+let cpDragFromIdx = null;
+
+function bindCpDragEvents() { /* 이벤트는 인라인으로 처리 */ }
+
+export function cpDragStart(e, idx) {
+    cpDragFromIdx = idx;
+    e.dataTransfer.effectAllowed = 'move';
+    e.currentTarget.style.opacity = '0.5';
+}
+export function cpDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+export function cpDragEnter(e) {
+    e.currentTarget.style.background = 'var(--bg-secondary, #f1f5f9)';
+    e.currentTarget.style.borderTop = '2px solid var(--primary, #3b82f6)';
+}
+export function cpDragLeave(e) {
+    e.currentTarget.style.background = '';
+    e.currentTarget.style.borderTop = '';
+}
+export async function cpDrop(e, toIdx) {
+    e.preventDefault();
+    e.currentTarget.style.background = '';
+    e.currentTarget.style.borderTop = '';
+    if (cpDragFromIdx === null || cpDragFromIdx === toIdx) return;
+    
+    const building = state.allBuildings.find(b => b.id === cpModalBuildingId);
+    if (!building || !building.contactPoints) return;
+    
+    const cp = building.contactPoints.splice(cpDragFromIdx, 1)[0];
+    building.contactPoints.splice(toIdx, 0, cp);
+    
+    try {
+        await update(ref(db, `buildings/${cpModalBuildingId}`), { contactPoints: building.contactPoints });
+    } catch(err) { console.error(err); }
+    
+    cpDragFromIdx = null;
+    renderBuildingContacts();
+    refreshCurrentPreview(building);
+}
+export function cpDragEnd(e) {
+    e.currentTarget.style.opacity = '';
+    cpDragFromIdx = null;
+}
+
+export async function addManualCpToBuilding() {
+    const name = document.getElementById('cpManualName')?.value?.trim();
+    const position = document.getElementById('cpManualPosition')?.value?.trim();
+    const phone = document.getElementById('cpManualPhone')?.value?.trim();
+    const email = document.getElementById('cpManualEmail')?.value?.trim();
+    
+    if (!name) { showToast('이름을 입력하세요', 'error'); return; }
+    
+    const building = state.allBuildings.find(b => b.id === cpModalBuildingId);
+    if (!building) return;
+    if (!building.contactPoints) building.contactPoints = [];
+    
+    building.contactPoints.push({ name, position, phone, mobile: phone, email, isManual: true });
+    
+    try {
+        await update(ref(db, `buildings/${cpModalBuildingId}`), { contactPoints: building.contactPoints });
+        showToast('담당자가 추가되었습니다', 'success');
+    } catch(err) { console.error(err); }
+    
+    document.getElementById('cpAddDropdown').style.display = 'none';
+    renderBuildingContacts();
+    refreshCurrentPreview(building);
 }
 
 // 담당자 추가 드롭다운 표시
-export function showAddCpDropdown() {
+export function showAddCpDropdown(mode = 'user') {
     const dropdown = document.getElementById('cpAddDropdown');
-    if (dropdown) dropdown.style.display = 'flex';
+    if (!dropdown) return;
+    dropdown.style.display = 'flex';
+    dropdown.style.flexDirection = 'column';
+    const modeUser = document.getElementById('cpAddModeUser');
+    const modeManual = document.getElementById('cpAddModeManual');
+    if (modeUser) modeUser.style.display = mode === 'user' ? 'flex' : 'none';
+    if (modeManual) modeManual.style.display = mode === 'manual' ? 'flex' : 'none';
 }
 
 // 담당자 추가
@@ -436,6 +546,13 @@ export function registerContactFunctions() {
     window.addCpToBuilding = addCpToBuilding;
     window.removeCpFromBuilding = removeCpFromBuilding;
     window.moveCpOrder = moveCpOrder;
+    window.addManualCpToBuilding = addManualCpToBuilding;
+    window.cpDragStart = cpDragStart;
+    window.cpDragOver = cpDragOver;
+    window.cpDragEnter = cpDragEnter;
+    window.cpDragLeave = cpDragLeave;
+    window.cpDrop = cpDrop;
+    window.cpDragEnd = cpDragEnd;
     window.loadUserBuildings = loadUserBuildings;
     window.updateBulkCount = updateBulkCount;
     window.applyBulkMapping = applyBulkMapping;

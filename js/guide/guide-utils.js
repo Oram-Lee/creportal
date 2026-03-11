@@ -291,6 +291,20 @@ export function normalizeBuilding(building) {
 }
 
 // 날짜 포맷팅
+export function formatArea(n) {
+    if (!n && n !== 0) return '-';
+    const num = Number(n);
+    if (isNaN(num)) return '-';
+    return num.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function formatPercent(n) {
+    if (!n && n !== 0) return '-';
+    const num = Number(n);
+    if (isNaN(num)) return '-';
+    return num.toFixed(2);
+}
+
 export function formatDate(dateStr) {
     if (!dateStr) return '-';
     try {

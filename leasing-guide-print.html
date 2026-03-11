@@ -163,11 +163,10 @@
             min-width: 0;
         }
         
-        /* ★ 우측 컬럼 특수 레이아웃 - Space Availability는 상단, 나머지는 하단 정렬 */
+        /* ★ 우측 컬럼 레이아웃 - Space Availability는 상단, 하단은 순서대로 */
         .col-right {
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
             gap: 2mm;
         }
         
@@ -176,7 +175,6 @@
         }
         
         .col-right .col-bottom {
-            margin-top: auto;
             display: flex;
             flex-direction: column;
             gap: 2mm;
@@ -1464,7 +1462,7 @@
                                     <tr><th>기준층(임대)</th><td>${formatArea(building.typicalFloorPy || building.area?.typicalFloorPy)} 평</td></tr>
                                     <tr><th>전용률</th><td>${formatPercent(building.exclusiveRate || building.area?.exclusiveRate)}%</td></tr>
                                     <tr><th>E/V</th><td>총 ${getElevatorTotal(building)}대</td></tr>
-                                    <tr><th>주차</th><td>총 ${String(getParkingTotal(building) || '-').replace(/대+$/, '')}대${getParkingNote(building) ? '<br><span style="font-size:7pt; color:#64748b;">' + String(getParkingNote(building)).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
+                                    <tr><th>주차</th><td>총 ${String(getParkingTotal(building) || '-').replace(/대+$/, '')}대${getParkingNote(building) ? '<br><span style="font-size:inherit; color:inherit;">' + String(getParkingNote(building)).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                                 </table>
                             </div>
                             <div class="section section-floorplan">
@@ -1532,12 +1530,25 @@
                                             <th>임대료</th>
                                             <th>관리비</th>
                                         </tr>
-                                        <tr>
-                                            <td>기준층</td>
-                                            <td>${formatPrice(building.depositPy || building.pricing?.depositPy)}</td>
-                                            <td>${formatPrice(building.rentPy || building.pricing?.rentPy)}</td>
-                                            <td>${formatPrice(building.maintenancePy || building.pricing?.maintenancePy)}</td>
-                                        </tr>
+                                        ${(() => {
+                                            const selectedIds = item.selectedFloorPricingIds || [];
+                                            const fps = item.floorPricing || [];
+                                            const selectedFps = fps.filter((fp, i) => selectedIds.includes(fp.id || String(i)));
+                                            if (selectedFps.length > 0) {
+                                                return selectedFps.map(fp => `<tr>
+                                                    <td>${fp.label || fp.floorRange || '기준층'}</td>
+                                                    <td>${formatPrice(fp.depositPy)}</td>
+                                                    <td>${formatPrice(fp.rentPy)}</td>
+                                                    <td>${formatPrice(fp.maintenancePy)}</td>
+                                                </tr>`).join('');
+                                            }
+                                            return `<tr>
+                                                <td>기준층</td>
+                                                <td>${formatPrice(building.depositPy || building.pricing?.depositPy)}</td>
+                                                <td>${formatPrice(building.rentPy || building.pricing?.rentPy)}</td>
+                                                <td>${formatPrice(building.maintenancePy || building.pricing?.maintenancePy)}</td>
+                                            </tr>`;
+                                        })()}
                                     </table>
                                 </div>
                                 
