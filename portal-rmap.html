@@ -1778,66 +1778,79 @@ canvas.mini-chart { width: 100% !important; }
 /* ── 리서치 자료 미리보기 모달 ── */
 .rdv-overlay {
   position: fixed; inset: 0;
-  background: rgba(15,23,42,.62);
+  background: rgba(15,23,42,.72);
   z-index: 9200;
   display: none; align-items: center; justify-content: center;
-  padding: 12px;
+  padding: 0;
 }
 .rdv-overlay.show { display: flex; }
 .rdv-modal {
   background: #f8fafc;
-  border-radius: 14px;
-  width: min(1240px, 96vw);
-  height: 90vh;
+  border-radius: 0;
+  width: 100vw;
+  height: 100vh;
   display: flex; flex-direction: column;
-  box-shadow: 0 28px 70px rgba(0,0,0,.22);
+  box-shadow: none;
   overflow: hidden;
 }
 /* ── 헤더 ── */
 .rdv-header {
-  padding: 13px 18px 11px;
+  padding: 16px 24px 14px;
   border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 12px;
   background: #fff; flex-shrink: 0;
 }
 .rdv-header-icon {
-  width: 32px; height: 32px; border-radius: 7px;
+  width: 40px; height: 40px; border-radius: 9px;
   background: #fef2f2; display: flex; align-items: center;
-  justify-content: center; font-size: 16px; flex-shrink: 0;
+  justify-content: center; font-size: 20px; flex-shrink: 0;
 }
 .rdv-header-info { flex: 1; min-width: 0; }
 .rdv-title {
-  font-size: 13px; font-weight: 800; color: var(--primary);
+  font-size: 16px; font-weight: 800; color: var(--primary);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .rdv-meta {
-  font-size: 10px; color: var(--muted);
-  display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 2px;
+  font-size: 12px; color: var(--muted);
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 3px;
 }
 .rdv-meta-sep { color: #cbd5e1; }
 .rdv-chips {
-  display: flex; flex-wrap: wrap; gap: 4px;
+  display: flex; flex-wrap: wrap; gap: 5px;
   margin-left: 8px;
 }
 .rdv-chip {
-  padding: 2px 8px; border-radius: 20px;
-  font-size: 10px; font-weight: 700;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 12px; font-weight: 700;
   background: var(--accent-lt); color: var(--accent);
   border: 1px solid #c3daf5; white-space: nowrap;
 }
 .rdv-close {
-  flex-shrink: 0; width: 28px; height: 28px;
-  border: none; background: #f1f5f9; border-radius: 6px;
-  cursor: pointer; font-size: 13px; color: var(--muted);
+  flex-shrink: 0; width: 34px; height: 34px;
+  border: none; background: #f1f5f9; border-radius: 7px;
+  cursor: pointer; font-size: 15px; color: var(--muted);
   display: flex; align-items: center; justify-content: center;
   transition: background .12s;
 }
 .rdv-close:hover { background: #e2e8f0; color: var(--text); }
+.rdv-download-btn {
+  flex-shrink: 0;
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 16px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 7px;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; text-decoration: none;
+  transition: background .12s, opacity .12s;
+  white-space: nowrap;
+}
+.rdv-download-btn:hover { background: #1d4ed8; }
+.rdv-download-btn.disabled { opacity: .38; pointer-events: none; }
 
 /* ── 2-컬럼 본문 ── */
 .rdv-body {
   flex: 1; display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: 1fr 520px;
   overflow: hidden;
   min-height: 0;
 }
@@ -1850,30 +1863,30 @@ canvas.mini-chart { width: 100% !important; }
   overflow: hidden;
 }
 .rdv-pdf-controls {
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 12px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
   background: #0f172a;
   flex-shrink: 0;
 }
 .rdv-pdf-ctrl-btn {
-  padding: 4px 10px;
+  padding: 6px 14px;
   background: #334155; color: #e2e8f0;
-  border: none; border-radius: 5px;
-  font-size: 13px; cursor: pointer; transition: background .12s;
+  border: none; border-radius: 6px;
+  font-size: 15px; cursor: pointer; transition: background .12s;
 }
 .rdv-pdf-ctrl-btn:hover:not(:disabled) { background: #475569; }
 .rdv-pdf-ctrl-btn:disabled { opacity: .35; cursor: default; }
 .rdv-pdf-page-info {
-  font-size: 12px; font-weight: 700; color: #94a3b8;
-  display: flex; align-items: center; gap: 5px;
+  font-size: 14px; font-weight: 700; color: #94a3b8;
+  display: flex; align-items: center; gap: 6px;
 }
 .rdv-pdf-page-input {
-  width: 42px; text-align: center;
+  width: 50px; text-align: center;
   background: #334155; color: #f1f5f9;
-  border: 1px solid #475569; border-radius: 4px;
-  padding: 3px 4px; font-size: 12px; font-weight: 700;
+  border: 1px solid #475569; border-radius: 5px;
+  padding: 4px 5px; font-size: 14px; font-weight: 700;
 }
-.rdv-pdf-zoom-btns { margin-left: auto; display: flex; gap: 4px; }
+.rdv-pdf-zoom-btns { margin-left: auto; display: flex; gap: 5px; }
 .rdv-pdf-canvas-wrap {
   flex: 1; overflow: auto;
   display: flex; align-items: flex-start; justify-content: center;
@@ -1915,8 +1928,8 @@ canvas.mini-chart { width: 100% !important; }
   background: #fafbfc;
 }
 .rdv-info-tab {
-  padding: 8px 16px;
-  font-size: 12px; font-weight: 600; color: var(--muted);
+  padding: 11px 20px;
+  font-size: 14px; font-weight: 600; color: var(--muted);
   background: none; border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer; white-space: nowrap; transition: all .12s;
@@ -1924,21 +1937,21 @@ canvas.mini-chart { width: 100% !important; }
 .rdv-info-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .rdv-info-tab:hover:not(.active) { color: var(--text); }
 .rdv-info-scroll {
-  flex: 1; overflow-y: auto; padding: 14px 16px;
+  flex: 1; overflow-y: auto; padding: 20px 22px;
 }
 
 /* AI 요약 */
 .rdv-summary-box {
-  font-size: 12px; color: var(--text); line-height: 1.75;
+  font-size: 15px; color: var(--text); line-height: 1.9;
   background: var(--accent-lt); border: 1px solid #c3daf5;
-  border-radius: 8px; padding: 12px 14px; margin-bottom: 0;
+  border-radius: 10px; padding: 16px 18px; margin-bottom: 0;
 }
 
 /* 페이지 색인 리스트 */
-.rdv-pi-list { display: flex; flex-direction: column; gap: 6px; }
+.rdv-pi-list { display: flex; flex-direction: column; gap: 8px; }
 .rdv-pi-item {
   border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 12px;
+  border-radius: 10px; padding: 13px 15px;
   cursor: pointer; transition: border-color .12s, box-shadow .12s, background .12s;
   background: #fff;
 }
@@ -1952,48 +1965,48 @@ canvas.mini-chart { width: 100% !important; }
   box-shadow: 0 0 0 2px rgba(37,99,235,.15);
 }
 .rdv-pi-row1 {
-  display: flex; align-items: center; gap: 5px; margin-bottom: 4px;
+  display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
 }
 .rdv-pi-dtype {
-  padding: 1px 6px; border-radius: 4px;
-  font-size: 9px; font-weight: 800;
+  padding: 2px 7px; border-radius: 4px;
+  font-size: 11px; font-weight: 800;
 }
 .rdv-pi-pg {
-  font-size: 11px; font-weight: 800; color: var(--accent);
+  font-size: 13px; font-weight: 800; color: var(--accent);
 }
-.rdv-pi-badges { display: flex; gap: 3px; margin-left: auto; }
+.rdv-pi-badges { display: flex; gap: 4px; margin-left: auto; }
 .rdv-pi-badge {
-  padding: 1px 5px; border-radius: 4px;
-  font-size: 9px; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px;
+  font-size: 11px; font-weight: 700;
   background: #f1f5f9; color: var(--muted);
 }
 .rdv-pi-badge.chart { background: #fef9c3; color: #854d0e; }
 .rdv-pi-badge.table { background: #dcfce7; color: #166534; }
 .rdv-pi-topic {
-  font-size: 12px; font-weight: 700; color: var(--text);
-  margin-bottom: 3px; line-height: 1.4;
+  font-size: 14px; font-weight: 700; color: var(--text);
+  margin-bottom: 4px; line-height: 1.45;
 }
-.rdv-pi-summary { font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 4px; }
-.rdv-pi-figures { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 3px; }
+.rdv-pi-summary { font-size: 13px; color: #64748b; line-height: 1.7; margin-bottom: 5px; }
+.rdv-pi-figures { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
 .rdv-pi-figure {
-  padding: 1px 6px; border-radius: 10px;
-  font-size: 10px; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px;
+  font-size: 12px; font-weight: 700;
   background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
 }
-.rdv-pi-kws { font-size: 10px; color: #94a3b8; }
+.rdv-pi-kws { font-size: 12px; color: #94a3b8; }
 /* 추출된 텍스트 */
 .rdv-pi-text {
-  margin-top: 6px; padding: 7px 9px;
+  margin-top: 8px; padding: 10px 12px;
   background: #f8fafc; border: 1px solid #e2e8f0;
-  border-radius: 5px; font-size: 10px; color: #475569; line-height: 1.65;
-  max-height: 90px; overflow-y: auto;
+  border-radius: 6px; font-size: 13px; color: #475569; line-height: 1.75;
+  max-height: 200px; overflow-y: auto;
   display: none;
 }
 .rdv-pi-item.active .rdv-pi-text { display: block; }
-.rdv-pi-empty { padding: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+.rdv-pi-empty { padding: 40px; text-align: center; color: var(--muted); font-size: 14px; }
 
-@media (max-width: 800px) {
-  .rdv-body { grid-template-columns: 1fr; grid-template-rows: 1fr 340px; }
+@media (max-width: 900px) {
+  .rdv-body { grid-template-columns: 1fr; grid-template-rows: 1fr 420px; }
   .rdv-info-pane { border-right: none; border-top: 1px solid var(--border); }
 }
 
@@ -2277,6 +2290,7 @@ canvas.mini-chart { width: 100% !important; }
           <div class="rdv-meta" id="rdvMeta"></div>
         </div>
         <div class="rdv-chips" id="rdvChips"></div>
+        <button class="rdv-download-btn disabled" id="rdvDownloadBtn" onclick="_rdvDownload()" title="PDF 다운로드">⬇️ 다운로드</button>
         <button class="rdv-close" onclick="closeRdvModal()">✕</button>
       </div>
       <!-- 2-컬럼 본문 -->
@@ -6447,6 +6461,7 @@ function renderResearchList(docs, groupBy) {
       </div>
       <div class="rdi-actions">
         <button class="rdi-btn" onclick="viewResearchDoc('${doc._id}')" title="요약 보기">👁️</button>
+        <button class="rdi-btn" onclick="event.stopPropagation();_rdvDownloadById('${doc._id}')" title="PDF 다운로드" style="color:var(--accent)">⬇️</button>
         <button class="rdi-btn del" onclick="deleteResearchDoc('${doc._id}')" title="삭제">🗑️</button>
       </div>
     </div>`;
@@ -6485,7 +6500,7 @@ let _rdvPdfDoc    = null;
 let _rdvCurPage   = 1;
 let _rdvZoomLevel = 1.0;
 let _rdvRendering = false;
-let _rdvPendingPage = null;   // 렌더 대기 페이지 (경쟁 조건 방지)
+let _rdvPendingPage = null;
 let _rdvCurTab   = 'summary';
 let _rdvDoc      = null;   // 현재 열린 doc 객체
 let _rdvPdfJsReady = false;
@@ -6540,6 +6555,14 @@ function viewResearchDoc(docId) {
   // ── 모달 열기 ──
   document.getElementById('rdvOverlay').classList.add('show');
 
+  // ── 다운로드 버튼 활성화 ──
+  const dlBtn = document.getElementById('rdvDownloadBtn');
+  if (doc.storageUrl) {
+    dlBtn.classList.remove('disabled');
+  } else {
+    dlBtn.classList.add('disabled');
+  }
+
   // ── PDF 로드 ──
   _rdvPdfDoc  = null;
   _rdvCurPage = 1;
@@ -6591,7 +6614,6 @@ async function _rdvInitPdf(url) {
 async function _rdvRenderPage(pageNum) {
   if (!_rdvPdfDoc) return;
   if (_rdvRendering) {
-    // 렌더 중이면 최신 요청만 pending으로 저장 후 대기
     _rdvPendingPage = pageNum;
     return;
   }
@@ -6621,7 +6643,6 @@ async function _rdvRenderPage(pageNum) {
 
   _rdvRendering = false;
 
-  // 대기 중인 요청이 있으면 즉시 실행 (줌 연타 등 대응)
   if (_rdvPendingPage !== null) {
     const next = _rdvPendingPage;
     _rdvPendingPage = null;
@@ -6654,7 +6675,6 @@ function _rdvZoom(delta) {
   document.getElementById('rdvZoomLabel').textContent = `${Math.round(_rdvZoomLevel * 100)}%`;
   if (!_rdvPdfDoc) return;
   if (_rdvRendering) {
-    // 현재 렌더 중이면 pending에 등록해두면 완료 후 자동 실행됨
     _rdvPendingPage = _rdvCurPage;
   } else {
     _rdvRenderPage(_rdvCurPage);
@@ -6778,15 +6798,44 @@ function _rdvHighlightActiveCard(pageNum) {
 
 function closeRdvModal() {
   document.getElementById('rdvOverlay').classList.remove('show');
-  _rdvPdfDoc  = null;
-  _rdvDoc     = null;
-  // canvas 정리
+  _rdvPdfDoc    = null;
+  _rdvDoc       = null;
+  _rdvRendering = false;
+  _rdvPendingPage = null;
   const wrap = document.getElementById('rdvCanvasWrap');
   const old  = wrap.querySelector('canvas');
   if (old) old.remove();
   document.getElementById('rdvPdfLoading').style.display = 'flex';
   document.getElementById('rdvPdfLoading').innerHTML =
     '<div class="rdv-pdf-spinner"></div><span>PDF 로딩 중...</span>';
+  document.getElementById('rdvDownloadBtn').classList.add('disabled');
+}
+
+// ── PDF 다운로드 (모달 헤더 버튼) ──
+function _rdvDownload() {
+  if (!_rdvDoc || !_rdvDoc.storageUrl) return;
+  const fileName = (_rdvDoc.title || 'research').replace(/[\\/:*?"<>|]/g, '_') + '.pdf';
+  const a = document.createElement('a');
+  a.href = _rdvDoc.storageUrl;
+  a.download = fileName;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// ── PDF 다운로드 (리스트 버튼, docId로 직접) ──
+function _rdvDownloadById(docId) {
+  const doc = _researchAllDocs.find(d => d._id === docId);
+  if (!doc || !doc.storageUrl) { showToast('저장된 PDF가 없습니다', 'warning'); return; }
+  const fileName = (doc.title || 'research').replace(/[\\/:*?"<>|]/g, '_') + '.pdf';
+  const a = document.createElement('a');
+  a.href = doc.storageUrl;
+  a.download = fileName;
+  a.target = '_blank';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 
