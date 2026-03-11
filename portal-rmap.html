@@ -1897,7 +1897,7 @@ canvas.mini-chart { width: 100% !important; }
   display: block;
   box-shadow: 0 4px 20px rgba(0,0,0,.5);
   border-radius: 3px;
-  max-width: 100%;
+  /* max-width 제거 — 줌 확대 시 canvas를 강제 축소하는 원인 */
 }
 .rdv-pdf-loading {
   color: #94a3b8; font-size: 13px;
@@ -6496,13 +6496,14 @@ function renderResearchList(docs, groupBy) {
 // =============================================================================
 // ■ 리서치 자료 미리보기 모달 (PDF.js 뷰어 + pageIndex)
 // =============================================================================
-let _rdvPdfDoc    = null;
-let _rdvCurPage   = 1;
-let _rdvZoomLevel = 1.0;
-let _rdvRendering = false;
-let _rdvPendingPage = null;
-let _rdvCurTab   = 'summary';
-let _rdvDoc      = null;   // 현재 열린 doc 객체
+let _rdvPdfDoc      = null;
+let _rdvCurPage     = 1;
+let _rdvZoomLevel   = 1.0;
+let _rdvRendering   = false;
+let _rdvPendingPage = null;   // 렌더 대기 페이지 (경쟁 조건 방지)
+let _rdvRenderTask  = null;   // 현재 진행 중인 PDF.js renderTask (중복 캔버스 충돌 방지)
+let _rdvCurTab      = 'summary';
+let _rdvDoc         = null;   // 현재 열린 doc 객체
 let _rdvPdfJsReady = false;
 
 const PDFJS_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
@@ -6557,11 +6558,8 @@ function viewResearchDoc(docId) {
 
   // ── 다운로드 버튼 활성화 ──
   const dlBtn = document.getElementById('rdvDownloadBtn');
-  if (doc.storageUrl) {
-    dlBtn.classList.remove('disabled');
-  } else {
-    dlBtn.classList.add('disabled');
-  }
+  if (doc.storageUrl) { dlBtn.classList.remove('disabled'); }
+  else                { dlBtn.classList.add('disabled'); }
 
   // ── PDF 로드 ──
   _rdvPdfDoc  = null;
@@ -6614,7 +6612,11 @@ async function _rdvInitPdf(url) {
 async function _rdvRenderPage(pageNum) {
   if (!_rdvPdfDoc) return;
   if (_rdvRendering) {
+    // 렌더 중이면 최신 요청만 pending 저장 후 기존 렌더 취소
     _rdvPendingPage = pageNum;
+    if (_rdvRenderTask) {
+      try { _rdvRenderTask.cancel(); } catch(e) {}
+    }
     return;
   }
   _rdvRendering   = true;
@@ -6632,17 +6634,32 @@ async function _rdvRenderPage(pageNum) {
     let canvas = wrap.querySelector('canvas');
     if (!canvas) { canvas = document.createElement('canvas'); wrap.appendChild(canvas); }
     const ctx = canvas.getContext('2d');
+
+    // 이전 렌더 태스크가 있으면 완전히 취소 후 대기
+    if (_rdvRenderTask) {
+      try { _rdvRenderTask.cancel(); await _rdvRenderTask.promise; } catch(e) {}
+      _rdvRenderTask = null;
+    }
+
     canvas.width  = viewport.width;
     canvas.height = viewport.height;
 
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    _rdvRenderTask = page.render({ canvasContext: ctx, viewport });
+    await _rdvRenderTask.promise;
+    _rdvRenderTask = null;
+
     _rdvHighlightActiveCard(pageNum);
   } catch(e) {
-    console.warn('[rdv] 페이지 렌더 오류:', e);
+    _rdvRenderTask = null;
+    // PDF.js RenderingCancelledException은 정상 취소이므로 무시
+    if (e?.name !== 'RenderingCancelledException') {
+      console.warn('[rdv] 페이지 렌더 오류:', e);
+    }
   }
 
   _rdvRendering = false;
 
+  // 대기 중인 요청 실행 (줌 연타 등 최신 요청만 처리)
   if (_rdvPendingPage !== null) {
     const next = _rdvPendingPage;
     _rdvPendingPage = null;
@@ -6676,6 +6693,7 @@ function _rdvZoom(delta) {
   if (!_rdvPdfDoc) return;
   if (_rdvRendering) {
     _rdvPendingPage = _rdvCurPage;
+    if (_rdvRenderTask) { try { _rdvRenderTask.cancel(); } catch(e) {} }
   } else {
     _rdvRenderPage(_rdvCurPage);
   }
@@ -6798,9 +6816,11 @@ function _rdvHighlightActiveCard(pageNum) {
 
 function closeRdvModal() {
   document.getElementById('rdvOverlay').classList.remove('show');
-  _rdvPdfDoc    = null;
-  _rdvDoc       = null;
-  _rdvRendering = false;
+  // 진행 중 렌더 취소
+  if (_rdvRenderTask) { try { _rdvRenderTask.cancel(); } catch(e) {} _rdvRenderTask = null; }
+  _rdvPdfDoc      = null;
+  _rdvDoc         = null;
+  _rdvRendering   = false;
   _rdvPendingPage = null;
   const wrap = document.getElementById('rdvCanvasWrap');
   const old  = wrap.querySelector('canvas');
@@ -6811,7 +6831,6 @@ function closeRdvModal() {
   document.getElementById('rdvDownloadBtn').classList.add('disabled');
 }
 
-// ── PDF 다운로드 (모달 헤더 버튼) ──
 function _rdvDownload() {
   if (!_rdvDoc || !_rdvDoc.storageUrl) return;
   const fileName = (_rdvDoc.title || 'research').replace(/[\\/:*?"<>|]/g, '_') + '.pdf';
@@ -6824,7 +6843,6 @@ function _rdvDownload() {
   document.body.removeChild(a);
 }
 
-// ── PDF 다운로드 (리스트 버튼, docId로 직접) ──
 function _rdvDownloadById(docId) {
   const doc = _researchAllDocs.find(d => d._id === docId);
   if (!doc || !doc.storageUrl) { showToast('저장된 PDF가 없습니다', 'warning'); return; }
