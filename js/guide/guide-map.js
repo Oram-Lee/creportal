@@ -145,98 +145,210 @@ export function openRoadview(lat, lng) {
     window.open(roadviewUrl, '_blank');
 }
 
-// ★ v4.8: StaticMap API + 빌딩 이모지 마커 캡처
-export async function captureMap(idx, buildingName) {
-    const coords = buildingCoords[idx];
-    
-    if (!coords || !coords.lat || !coords.lng) {
-        alert('좌표 정보가 없어 캡처할 수 없습니다.');
-        return;
-    }
-    
-    // 카카오맵 API 키 가져오기
-    const appKey = getKakaoAppKey();
-    if (!appKey) {
-        alert('카카오맵 API 키를 찾을 수 없습니다.');
-        return;
-    }
-    
-    // 캡처 버튼 상태 변경
+// ★ v5.4: 자동 모드 지도 캡쳐 — 선택 영역 오버레이 방식
+export function captureMap(idx, buildingName) {
     const mapContainer = document.getElementById(`kakaoMapContainer_${idx}`);
-    const captureBtn = mapContainer?.parentElement?.querySelector('.capture-btn');
-    if (captureBtn) {
-        captureBtn.textContent = '⏳ 캡처 중...';
-        captureBtn.disabled = true;
+    if (!mapContainer) { showToast('지도 컨테이너를 찾을 수 없습니다', 'error'); return; }
+    const coords = buildingCoords[idx];
+
+    // 이미 오버레이가 열려있으면 닫기
+    const existingOverlay = document.getElementById(`captureOverlay_${idx}`);
+    if (existingOverlay) { existingOverlay.remove(); return; }
+
+    const rect = mapContainer.getBoundingClientRect();
+    const mapW = mapContainer.offsetWidth;
+    const mapH = mapContainer.offsetHeight;
+
+    // ── 선택 영역 오버레이 생성 ──────────────────────────────────────
+    const overlay = document.createElement('div');
+    overlay.id = `captureOverlay_${idx}`;
+    overlay.style.cssText = `
+        position:absolute; inset:0; z-index:9990;
+        cursor:crosshair; user-select:none;
+        background:rgba(0,0,0,0.25);
+    `;
+
+    // 선택 사각형
+    const selection = document.createElement('div');
+    selection.style.cssText = `
+        position:absolute; border:2px dashed #fff;
+        box-shadow:0 0 0 9999px rgba(0,0,0,0.35);
+        pointer-events:none; display:none;
+        box-sizing:border-box;
+    `;
+    overlay.appendChild(selection);
+
+    // 안내 텍스트
+    const guide = document.createElement('div');
+    guide.textContent = '📐 드래그로 캡쳐 영역을 선택하세요   ESC: 취소';
+    guide.style.cssText = `
+        position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+        background:rgba(0,0,0,0.75); color:#fff; font-size:12px;
+        padding:6px 14px; border-radius:20px; white-space:nowrap; pointer-events:none;
+    `;
+    overlay.appendChild(guide);
+
+    // 지도 컨테이너에 relative 포지션 설정
+    const oldPosition = mapContainer.style.position;
+    if (!oldPosition || oldPosition === 'static') mapContainer.style.position = 'relative';
+    mapContainer.appendChild(overlay);
+
+    let startX, startY, isDragging = false;
+
+    const getLocal = (e) => {
+        const r = mapContainer.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: Math.max(0, Math.min(mapW, clientX - r.left)), y: Math.max(0, Math.min(mapH, clientY - r.top)) };
+    };
+
+    const onDown = (e) => {
+        e.preventDefault();
+        const p = getLocal(e);
+        startX = p.x; startY = p.y; isDragging = true;
+        selection.style.display = 'block';
+        selection.style.left = startX + 'px'; selection.style.top = startY + 'px';
+        selection.style.width = '0'; selection.style.height = '0';
+    };
+    const onMove = (e) => {
+        if (!isDragging) return;
+        const p = getLocal(e);
+        const x = Math.min(p.x, startX), y = Math.min(p.y, startY);
+        const w = Math.abs(p.x - startX), h = Math.abs(p.y - startY);
+        selection.style.left = x + 'px'; selection.style.top = y + 'px';
+        selection.style.width = w + 'px'; selection.style.height = h + 'px';
+    };
+    const onUp = async (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        const p = getLocal(e);
+        const selX = Math.min(p.x, startX), selY = Math.min(p.y, startY);
+        const selW = Math.abs(p.x - startX), selH = Math.abs(p.y - startY);
+        cleanup();
+        if (selW < 20 || selH < 20) { showToast('영역이 너무 작습니다. 다시 시도해 주세요.', 'warning'); return; }
+        await cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH, mapW, mapH);
+    };
+
+    const cleanup = () => {
+        overlay.remove();
+        if (!oldPosition || oldPosition === 'static') mapContainer.style.position = oldPosition || '';
+        document.removeEventListener('keydown', onEsc);
+    };
+    const onEsc = (e) => { if (e.key === 'Escape') { cleanup(); showToast('캡쳐가 취소되었습니다', 'info'); } };
+
+    overlay.addEventListener('mousedown', onDown);
+    overlay.addEventListener('mousemove', onMove);
+    overlay.addEventListener('mouseup', onUp);
+    document.addEventListener('keydown', onEsc);
+}
+
+// ★ StaticMap API로 선택 영역 비율에 맞는 이미지 생성 후 저장 대화상자
+async function cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH, mapW, mapH) {
+    const appKey = getKakaoAppKey();
+    const mapInstance = kakaoMapInstances[idx];
+
+    // StaticMap 출력 크기 (최대 800×600)
+    const outW = Math.round(Math.min(800, selW * 2));
+    const outH = Math.round(Math.min(600, selH * 2));
+
+    // 선택 영역 중심점을 지도 픽셀 → 위경도 변환
+    let centerLat = coords?.lat, centerLng = coords?.lng;
+    if (mapInstance) {
+        try {
+            const cX = selX + selW / 2, cY = selY + selH / 2;
+            const containerCenter = mapInstance.getCenter();
+            const proj = mapInstance.getProjection();
+            if (proj) {
+                const offsetLatLng = proj.coordsFromPoint(new kakao.maps.Point(cX, cY));
+                if (offsetLatLng) { centerLat = offsetLatLng.getLat(); centerLng = offsetLatLng.getLng(); }
+            }
+        } catch (_) { /* proj 실패 시 빌딩 좌표 사용 */ }
     }
-    
-    try {
-        // StaticMap 이미지 URL 생성
-        const width = 600;
-        const height = 400;
-        const level = 3;
-        
-        // 마커: 위치 + 빌딩 이모지 이미지
-        const markerParam = `positions:${coords.lng} ${coords.lat},image:${encodeURIComponent(BUILDING_MARKER_IMAGE)}`;
-        
-        const staticMapUrl = `https://dapi.kakao.com/v2/maps/staticmap`
-            + `?appkey=${appKey}`
-            + `&center=${coords.lng},${coords.lat}`
-            + `&width=${width}`
-            + `&height=${height}`
-            + `&level=${level}`
-            + `&marker=${markerParam}`;
-        
-        console.log('[캡처] StaticMap URL 생성');
-        
-        // 이미지 다운로드 시도
-        const response = await fetch(staticMapUrl);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+    if (!centerLat || !centerLng) { showToast('좌표 정보가 없어 캡쳐할 수 없습니다', 'error'); return; }
+
+    // 현재 지도 레벨 읽기
+    const level = mapInstance ? mapInstance.getLevel() : 3;
+
+    const markerParam = `positions:${centerLng} ${centerLat},image:${encodeURIComponent(BUILDING_MARKER_IMAGE)}`;
+    const staticUrl = `https://dapi.kakao.com/v2/maps/staticmap`
+        + `?appkey=${appKey}`
+        + `&center=${centerLng},${centerLat}`
+        + `&width=${outW}&height=${outH}`
+        + `&level=${level}`
+        + `&marker=${markerParam}`;
+
+    // 저장 선택 대화상자 (다운로드 or Firebase Storage)
+    const safeName = (buildingName || '지도').replace(/[^a-zA-Z0-9가-힣]/g, '_');
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const filename = `${safeName}_map_${timestamp}.png`;
+
+    const modalId = `saveMapModal_${idx}_${Date.now()}`;
+    document.body.insertAdjacentHTML('beforeend', `
+        <div id="${modalId}" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;">
+            <div style="background:#fff;border-radius:12px;padding:28px 32px;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.35);">
+                <div style="font-size:22px;text-align:center;margin-bottom:10px;">📸</div>
+                <div style="font-size:15px;font-weight:600;text-align:center;color:#1e293b;margin-bottom:6px;">지도 캡쳐 저장</div>
+                <div style="font-size:12px;color:#64748b;text-align:center;margin-bottom:22px;">${selW.toFixed(0)}×${selH.toFixed(0)}px 영역 → ${outW}×${outH}px 출력</div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <button id="${modalId}_dl" style="padding:10px;border-radius:8px;background:#2563eb;color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;">⬇️ 내 PC에 다운로드</button>
+                    <button id="${modalId}_fb" style="padding:10px;border-radius:8px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:13px;cursor:pointer;">☁️ Firebase Storage에 저장</button>
+                    <button id="${modalId}_cancel" style="padding:8px;border-radius:8px;background:transparent;color:#94a3b8;border:none;font-size:12px;cursor:pointer;">취소</button>
+                </div>
+            </div>
+        </div>
+    `);
+
+    const closeModal = () => document.getElementById(modalId)?.remove();
+
+    const fetchImage = async () => {
+        const res = await fetch(staticUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.blob();
+    };
+
+    document.getElementById(`${modalId}_dl`).onclick = async () => {
+        closeModal();
+        try {
+            const blob = await fetchImage();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = filename;
+            document.body.appendChild(a); a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('지도 이미지가 다운로드되었습니다', 'success');
+        } catch (err) {
+            console.error('[캡쳐] 다운로드 실패:', err);
+            showToast('다운로드에 실패했습니다. StaticMap API 키를 확인해주세요.', 'error');
         }
-        
-        const blob = await response.blob();
-        
-        // 파일명 생성
-        const safeName = (buildingName || '지도').replace(/[^a-zA-Z0-9가-힣]/g, '_');
-        const timestamp = new Date().toISOString().slice(0, 10);
-        const filename = `${safeName}_location_${timestamp}.png`;
-        
-        // 다운로드
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        console.log('[캡처] 저장 완료:', filename);
-        showToast && showToast('지도 캡처 완료', 'success');
-        
-    } catch (error) {
-        console.error('[캡처] StaticMap 다운로드 실패:', error);
-        
-        // 폴백: 새 탭에서 열기
-        const fallbackUrl = `https://map.kakao.com/link/map/${encodeURIComponent(buildingName || '위치')},${coords.lat},${coords.lng}`;
-        
-        const useNewTab = confirm(
-            '직접 다운로드에 실패했습니다.\n' +
-            '카카오맵을 새 탭에서 열까요?\n' +
-            '(열린 페이지에서 직접 캡처해주세요)'
-        );
-        
-        if (useNewTab) {
-            window.open(fallbackUrl, '_blank');
+    };
+
+    document.getElementById(`${modalId}_fb`).onclick = async () => {
+        closeModal();
+        try {
+            const blob = await fetchImage();
+            // Firebase Storage 업로드 — leasing-guide.html의 전역 uploadToFirebaseStorage 활용
+            if (typeof window.uploadToFirebaseStorage === 'function') {
+                const dlUrl = await window.uploadToFirebaseStorage(blob, `maps/${filename}`);
+                showToast('Firebase Storage 저장 완료', 'success');
+                console.log('[캡쳐] Storage URL:', dlUrl);
+            } else {
+                // fallback: 다운로드로 대체
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showToast('Storage 함수 없음 — PC에 다운로드했습니다', 'warning');
+            }
+        } catch (err) {
+            console.error('[캡쳐] Storage 저장 실패:', err);
+            showToast('Storage 저장에 실패했습니다', 'error');
         }
-    } finally {
-        // 버튼 복원
-        if (captureBtn) {
-            captureBtn.textContent = '📸 캡처';
-            captureBtn.disabled = false;
-        }
-    }
+    };
+
+    document.getElementById(`${modalId}_cancel`).onclick = closeModal;
 }
 
 // 카카오맵 API 키 추출

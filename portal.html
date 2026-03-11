@@ -6141,5 +6141,108 @@
     
     console.log('[v4.2] 소팅/필터 + 관심영역 그룹 시스템 등록');
     </script>
+
+    <!-- ★ v5.4: 임대안내문 ↔ Portal 2-Way 동기화 수신기 -->
+    <script>
+    (function() {
+        // ── 핵심 변수 매핑 (안내문 flat키 ↔ Portal 표시 필드) ──────────────
+        // 안내문 저장 키       Portal state.selectedBuilding 키        표시 위치
+        // name               building.name                           상단 타이틀
+        // address            building.address                        readonly 패널
+        // nearbyStation      building.nearbyStation                  기본정보 패널
+        // grossFloorPy       building.grossFloorPy / area.grossFloorPy
+        // typicalFloorPy     building.typicalFloorPy / area.typicalFloorPy
+        // exclusiveRate      building.exclusiveRate / area.exclusiveRate
+        // floorsAbove/Below  building.floors.above/below
+        // completionYear     building.completionYear / specs.completionYear
+        // elevatorTotal      building.elevatorTotal / specs.passengerElevator
+        // parkingTotal       building.parkingTotal / parking.total
+        // parkingNote        building.parkingNote
+        // ─────────────────────────────────────────────────────────────────
+
+        function applyBuildingUpdate(buildingId, data) {
+            // 1. state.allBuildings 업데이트
+            if (window.state?.allBuildings) {
+                const idx = window.state.allBuildings.findIndex(b => b.id === buildingId);
+                if (idx >= 0) {
+                    const b = window.state.allBuildings[idx];
+                    // 평면키 갱신
+                    const flat = ['name','address','nearbyStation','grossFloorPy','typicalFloorPy',
+                                  'exclusiveRate','completionYear','elevatorTotal','parkingTotal','parkingNote'];
+                    flat.forEach(k => { if (data[k] !== undefined) b[k] = data[k]; });
+                    // 중첩키 갱신
+                    if (data['area/grossFloorPy'] !== undefined) {
+                        if (!b.area) b.area = {};
+                        b.area.grossFloorPy = data['area/grossFloorPy'];
+                    }
+                    if (data['area/typicalFloorPy'] !== undefined) {
+                        if (!b.area) b.area = {};
+                        b.area.typicalFloorPy = data['area/typicalFloorPy'];
+                    }
+                    if (data['area/exclusiveRate'] !== undefined) {
+                        if (!b.area) b.area = {};
+                        b.area.exclusiveRate = data['area/exclusiveRate'];
+                    }
+                    if (data['floors/above'] !== undefined || data['floors/below'] !== undefined) {
+                        if (!b.floors || typeof b.floors !== 'object') b.floors = {};
+                        if (data['floors/above'] !== undefined) { b.floors.above = data['floors/above']; b.floorsAbove = data['floors/above']; }
+                        if (data['floors/below'] !== undefined) { b.floors.below = data['floors/below']; b.floorsBelow = data['floors/below']; }
+                    }
+                    if (data['specs/completionYear'] !== undefined) {
+                        if (!b.specs) b.specs = {};
+                        b.specs.completionYear = data['specs/completionYear'];
+                    }
+                    if (data['specs/passengerElevator'] !== undefined) {
+                        if (!b.specs) b.specs = {};
+                        b.specs.passengerElevator = data['specs/passengerElevator'];
+                    }
+                    if (data['parking/total'] !== undefined) {
+                        if (!b.parking) b.parking = {};
+                        b.parking.total = data['parking/total'];
+                    }
+                }
+            }
+
+            // 2. selectedBuilding이 해당 빌딩이면 상세패널 즉시 갱신
+            if (window.state?.selectedBuilding?.id === buildingId) {
+                const flat2 = ['name','address','nearbyStation','grossFloorPy','typicalFloorPy',
+                               'exclusiveRate','completionYear','elevatorTotal','parkingTotal','parkingNote'];
+                flat2.forEach(k => { if (data[k] !== undefined) window.state.selectedBuilding[k] = data[k]; });
+                if (typeof window.renderInfoSection === 'function') {
+                    window.renderInfoSection();
+                } else if (typeof renderInfoSection === 'function') {
+                    renderInfoSection();
+                }
+                // 빌딩명 상단 갱신
+                if (data.name) {
+                    const titleEl = document.getElementById('detailBuildingName') || document.querySelector('.detail-header h2');
+                    if (titleEl) titleEl.textContent = data.name;
+                }
+                if (typeof showToast === 'function')
+                    showToast('임대안내문에서 빌딩 정보가 업데이트되었습니다', 'success');
+            }
+        }
+
+        // ── BroadcastChannel 수신 (별도 탭의 안내문에서 pushToPortal 호출 시) ──
+        try {
+            const bc = new BroadcastChannel('cre_portal_sync');
+            bc.onmessage = (e) => {
+                if (e.data?.type === 'buildingUpdated') {
+                    applyBuildingUpdate(e.data.buildingId, e.data.data);
+                }
+            };
+        } catch (_) { /* BroadcastChannel 미지원 환경 무시 */ }
+
+        // ── 같은 탭 CustomEvent 수신 (iframe 구조 등) ──
+        window.addEventListener('buildingUpdated', (e) => {
+            if (e.detail?.buildingId) {
+                applyBuildingUpdate(e.detail.buildingId, e.detail.data);
+            }
+        });
+
+        // ── 전역 노출 (portal-main.js에서도 호출 가능하도록) ──
+        window.applyBuildingUpdateFromGuide = applyBuildingUpdate;
+    })();
+    </script>
 </body>
 </html>

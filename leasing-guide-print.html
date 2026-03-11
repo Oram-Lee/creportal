@@ -1003,24 +1003,20 @@
             return str;
         }
         
-        // E/V 총 대수 (여러 필드 통합)
+        // E/V 총 대수 (여러 필드 통합 + 단위 중복 방지)
         function getElevatorTotal(building) {
-            // 1순위: elevatorTotal (편집에서 저장된 값)
-            if (building.elevatorTotal) return building.elevatorTotal;
-            // 2순위: specs.passengerElevator
-            if (building.specs?.passengerElevator) return building.specs.passengerElevator;
-            // 3순위: specs.elevatorTotal
-            if (building.specs?.elevatorTotal) return building.specs.elevatorTotal;
-            return '-';
+            const raw = building.elevatorTotal || building.specs?.passengerElevator || building.specs?.elevatorTotal;
+            if (!raw && raw !== 0) return '-';
+            const n = parseInt(String(raw).replace(/[^0-9]/g, ''));
+            return isNaN(n) ? raw : n;
         }
         
-        // 주차 총 대수
+        // 주차 총 대수 (단위 중복 방지)
         function getParkingTotal(building) {
-            // 1순위: parkingTotal (편집에서 저장된 값)
-            if (building.parkingTotal) return building.parkingTotal;
-            // 2순위: parking.total
-            if (building.parking?.total) return building.parking.total;
-            return '-';
+            const raw = building.parkingTotal || building.parking?.total;
+            if (!raw && raw !== 0) return '-';
+            const n = parseInt(String(raw).replace(/[^0-9]/g, ''));
+            return isNaN(n) ? raw : n;
         }
         
         // 주차 비고
@@ -1038,19 +1034,50 @@
         function normalizeBuilding(building) {
             if (!building) return;
             
-            // E/V 정규화: specs.elevator에서 숫자 추출
-            if (!building.elevatorTotal && building.specs?.elevator) {
-                const match = building.specs.elevator.match(/(\d+)\s*대/);
-                if (match) building.elevatorTotal = parseInt(match[1]);
+            // ★ 연면적 (area/grossFloorPy → grossFloorPy)
+            if (!building.grossFloorPy && building.area?.grossFloorPy)
+                building.grossFloorPy = building.area.grossFloorPy;
+            // ★ 기준층 (area/typicalFloorPy → typicalFloorPy)
+            if (!building.typicalFloorPy && building.area?.typicalFloorPy)
+                building.typicalFloorPy = building.area.typicalFloorPy;
+            // ★ 전용률 (area/exclusiveRate → exclusiveRate)
+            if (!building.exclusiveRate && building.area?.exclusiveRate)
+                building.exclusiveRate = building.area.exclusiveRate;
+            // ★ 준공년도 (specs/completionYear → completionYear)
+            if (!building.completionYear && building.specs?.completionYear)
+                building.completionYear = building.specs.completionYear;
+            // ★ 인근역
+            if (!building.nearbyStation && building.nearestStation)
+                building.nearbyStation = building.nearestStation;
+
+            // E/V 정규화: 평면키 우선, specs.elevator 문자열 fallback
+            if (!building.elevatorTotal) {
+                if (building.specs?.passengerElevator)
+                    building.elevatorTotal = parseInt(building.specs.passengerElevator) || 0;
+                else if (building.specs?.elevator) {
+                    const match = building.specs.elevator.match(/(\d+)\s*대/);
+                    if (match) building.elevatorTotal = parseInt(match[1]);
+                }
+            }
+            // 단위 문자 제거 ("123대" → 123)
+            if (building.elevatorTotal) {
+                const n = parseInt(String(building.elevatorTotal).replace(/[^0-9]/g, ''));
+                building.elevatorTotal = isNaN(n) ? building.elevatorTotal : n;
             }
             
-            // 주차 정규화: parking.display에서 숫자 추출
-            if (!building.parkingTotal && building.parking?.display) {
-                const match = building.parking.display.match(/(\d+)\s*대/);
-                if (match) building.parkingTotal = parseInt(match[1]);
+            // 주차 정규화: parking.total 우선, parking.display 문자열 fallback
+            if (!building.parkingTotal) {
+                if (building.parking?.total)
+                    building.parkingTotal = building.parking.total;
+                else if (building.parking?.display) {
+                    const match = building.parking.display.match(/(\d+)\s*대/);
+                    if (match) building.parkingTotal = parseInt(match[1]);
+                }
             }
-            if (!building.parkingTotal && building.parking?.total) {
-                building.parkingTotal = building.parking.total;
+            // 단위 문자 제거
+            if (building.parkingTotal) {
+                const n = parseInt(String(building.parkingTotal).replace(/[^0-9]/g, ''));
+                building.parkingTotal = isNaN(n) ? building.parkingTotal : n;
             }
             
             // 층수 정규화

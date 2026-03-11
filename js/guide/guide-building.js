@@ -387,7 +387,8 @@ export function renderBuildingEditor(item, building) {
                         <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                             <span>GENERAL INFORMATION</span>
                             <div class="info-action-btns">
-                                <button class="info-action-btn" onclick="fetchBuildingRegistry('${building.id}')" title="Firebase에서 최신 데이터 불러오기">🔄 DB동기화</button>
+                                <button class="info-action-btn" onclick="fetchFromPortal('${building.id}')" title="Portal DB → 안내문 편집화면에 최신 데이터 반영" style="color:#0369a1; border-color:#0369a1;">⬇️ Portal→안내문</button>
+                                <button class="info-action-btn" onclick="pushToPortal('${building.id}')" title="안내문 편집화면의 현재 값 → Portal DB 및 상세패널 반영" style="color:#16a34a; border-color:#16a34a;">⬆️ 안내문→Portal</button>
                                 <button class="info-action-btn" onclick="openBuildingEditModal('${building.id}')" title="수동으로 정보 입력/수정">✏️ 수정</button>
                             </div>
                         </div>
@@ -1664,6 +1665,77 @@ export async function fetchBuildingRegistry(buildingId) {
     }
 }
 
+// ★ v5.4: Portal → 안내문 (Firebase DB → 편집화면)
+export async function fetchFromPortal(buildingId) {
+    showToast('Portal DB에서 최신 빌딩 정보를 가져오는 중...', 'info');
+    try {
+        const snapshot = await get(ref(db, `buildings/${buildingId}`));
+        if (!snapshot.exists()) { showToast('빌딩 정보를 찾을 수 없습니다', 'error'); return; }
+        const freshData = snapshot.val();
+        freshData.id = buildingId;
+        normalizeBuilding(freshData);
+        const bIdx = state.allBuildings.findIndex(b => b.id === buildingId);
+        if (bIdx >= 0) state.allBuildings[bIdx] = { ...state.allBuildings[bIdx], ...freshData };
+        const building = state.allBuildings[bIdx] || freshData;
+        showToast('Portal DB 최신 정보를 안내문 편집화면에 반영했습니다', 'success');
+        if (state.selectedTocIndex >= 0) {
+            const item = state.tocItems[state.selectedTocIndex];
+            if (item) renderBuildingEditor(item, building);
+        }
+    } catch (e) {
+        console.error('fetchFromPortal 오류:', e);
+        showToast('불러오기에 실패했습니다', 'error');
+    }
+}
+
+// ★ v5.4: 안내문 → Portal (편집화면 현재값 → Firebase DB + BroadcastChannel)
+export async function pushToPortal(buildingId) {
+    const building = state.allBuildings.find(b => b.id === buildingId);
+    if (!building) { showToast('빌딩 데이터를 찾을 수 없습니다', 'error'); return; }
+    if (!confirm('현재 편집화면의 GENERAL INFORMATION 값을\nPortal DB 및 상세패널에 반영합니다.\n계속하시겠습니까?')) return;
+    try {
+        // ★ 키 매핑 — 중첩키(Portal 읽기용) + 평면키(안내문 읽기용) 동시 저장
+        const updateData = {
+            name: building.name || '',
+            address: building.address || '',
+            nearbyStation: building.nearbyStation || '',
+            'area/grossFloorPy': building.grossFloorPy || 0,
+            grossFloorPy: building.grossFloorPy || 0,
+            'area/typicalFloorPy': building.typicalFloorPy || 0,
+            typicalFloorPy: building.typicalFloorPy || 0,
+            'area/exclusiveRate': building.exclusiveRate || 0,
+            exclusiveRate: building.exclusiveRate || 0,
+            'floors/above': building.floorsAbove || 0,
+            'floors/below': building.floorsBelow || 0,
+            'specs/completionYear': String(building.completionYear || ''),
+            completionYear: String(building.completionYear || ''),
+            'specs/passengerElevator': building.elevatorTotal || 0,
+            elevatorTotal: building.elevatorTotal || 0,
+            'parking/total': building.parkingTotal || 0,
+            parkingTotal: building.parkingTotal || 0,
+            parkingNote: building.parkingNote || ''
+        };
+        await update(ref(db, `buildings/${buildingId}`), updateData);
+
+        // ★ BroadcastChannel: Portal 탭이 열려 있으면 즉시 패널 갱신
+        try {
+            const bc = new BroadcastChannel('cre_portal_sync');
+            bc.postMessage({ type: 'buildingUpdated', buildingId, data: { ...building, ...updateData } });
+            bc.close();
+        } catch (_) { /* 미지원 환경 무시 */ }
+        window.dispatchEvent(new CustomEvent('buildingUpdated', { detail: { buildingId, data: building } }));
+
+        showToast('Portal DB 및 상세패널에 반영되었습니다', 'success');
+        if (state.selectedTocIndex >= 0) {
+            const item = state.tocItems[state.selectedTocIndex];
+            if (item) renderBuildingEditor(item, building);
+        }
+    } catch (e) {
+        console.error('pushToPortal 오류:', e);
+        showToast('Portal 반영에 실패했습니다', 'error');
+    }
+}
+
 // ========== 빌딩 권역 변경 ==========
 export function changeItemRegion(idx, newRegion) {
     if (idx < 0 || idx >= state.tocItems.length) return;
@@ -1847,6 +1919,8 @@ export function registerBuildingFunctions() {
     window.closeBuildingEditModal = closeBuildingEditModal;
     window.saveBuildingEdit = saveBuildingEdit;
     window.fetchBuildingRegistry = fetchBuildingRegistry;
+    window.fetchFromPortal = fetchFromPortal;
+    window.pushToPortal = pushToPortal;
     window.changeItemRegion = changeItemRegion;
     window.openPrintPage = openPrintPage;
     // ★ v5.0: 상수 노출
