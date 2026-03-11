@@ -1781,14 +1781,14 @@ canvas.mini-chart { width: 100% !important; }
   background: rgba(15,23,42,.62);
   z-index: 9200;
   display: none; align-items: center; justify-content: center;
-  padding: 12px;
+  padding: 6px;
 }
 .rdv-overlay.show { display: flex; }
 .rdv-modal {
   background: #f8fafc;
   border-radius: 14px;
-  width: min(1240px, 96vw);
-  height: 90vh;
+  width: min(1480px, 97vw);
+  height: 94vh;
   display: flex; flex-direction: column;
   box-shadow: 0 28px 70px rgba(0,0,0,.22);
   overflow: hidden;
@@ -1837,7 +1837,7 @@ canvas.mini-chart { width: 100% !important; }
 /* ── 2-컬럼 본문 ── */
 .rdv-body {
   flex: 1; display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: 1fr 460px;
   overflow: hidden;
   min-height: 0;
 }
@@ -1924,14 +1924,14 @@ canvas.mini-chart { width: 100% !important; }
 .rdv-info-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .rdv-info-tab:hover:not(.active) { color: var(--text); }
 .rdv-info-scroll {
-  flex: 1; overflow-y: auto; padding: 14px 16px;
+  flex: 1; overflow-y: auto; padding: 16px 20px;
 }
 
 /* AI 요약 */
 .rdv-summary-box {
-  font-size: 12px; color: var(--text); line-height: 1.75;
+  font-size: 14px; color: var(--text); line-height: 1.85;
   background: var(--accent-lt); border: 1px solid #c3daf5;
-  border-radius: 8px; padding: 12px 14px; margin-bottom: 0;
+  border-radius: 8px; padding: 14px 16px; margin-bottom: 0;
 }
 
 /* 페이지 색인 리스트 */
@@ -1970,30 +1970,30 @@ canvas.mini-chart { width: 100% !important; }
 .rdv-pi-badge.chart { background: #fef9c3; color: #854d0e; }
 .rdv-pi-badge.table { background: #dcfce7; color: #166534; }
 .rdv-pi-topic {
-  font-size: 12px; font-weight: 700; color: var(--text);
+  font-size: 13px; font-weight: 700; color: var(--text);
   margin-bottom: 3px; line-height: 1.4;
 }
-.rdv-pi-summary { font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 4px; }
+.rdv-pi-summary { font-size: 13px; color: #64748b; line-height: 1.65; margin-bottom: 4px; }
 .rdv-pi-figures { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 3px; }
 .rdv-pi-figure {
   padding: 1px 6px; border-radius: 10px;
-  font-size: 10px; font-weight: 700;
+  font-size: 11px; font-weight: 700;
   background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;
 }
-.rdv-pi-kws { font-size: 10px; color: #94a3b8; }
+.rdv-pi-kws { font-size: 11px; color: #94a3b8; }
 /* 추출된 텍스트 */
 .rdv-pi-text {
-  margin-top: 6px; padding: 7px 9px;
+  margin-top: 6px; padding: 9px 11px;
   background: #f8fafc; border: 1px solid #e2e8f0;
-  border-radius: 5px; font-size: 10px; color: #475569; line-height: 1.65;
-  max-height: 90px; overflow-y: auto;
+  border-radius: 5px; font-size: 12px; color: #475569; line-height: 1.7;
+  max-height: 180px; overflow-y: auto;
   display: none;
 }
 .rdv-pi-item.active .rdv-pi-text { display: block; }
 .rdv-pi-empty { padding: 32px; text-align: center; color: var(--muted); font-size: 13px; }
 
-@media (max-width: 800px) {
-  .rdv-body { grid-template-columns: 1fr; grid-template-rows: 1fr 340px; }
+@media (max-width: 900px) {
+  .rdv-body { grid-template-columns: 1fr; grid-template-rows: 1fr 380px; }
   .rdv-info-pane { border-right: none; border-top: 1px solid var(--border); }
 }
 
