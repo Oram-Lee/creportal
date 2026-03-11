@@ -1701,6 +1701,31 @@ export function toggleVacancySort(idx) {
 }
 
 // 전역 함수 등록
+
+// ★ 기준가 선택 토글
+export function toggleFloorPricing(itemIdx, fpId) {
+    const item = state.tocItems[itemIdx];
+    if (!item) return;
+    const fps = item.floorPricing || [];
+    if (!item.selectedFloorPricingIds) {
+        item.selectedFloorPricingIds = fps.length > 0 ? [fps[0].id || '0'] : [];
+    }
+    const i = item.selectedFloorPricingIds.indexOf(fpId);
+    if (i >= 0) item.selectedFloorPricingIds.splice(i, 1);
+    else item.selectedFloorPricingIds.push(fpId);
+    const building = state.allBuildings.find(b => b.id === item.buildingId);
+    if (building) window.renderBuildingEditor(item, building);
+}
+
+export function toggleAllFloorPricing(itemIdx, selectAll) {
+    const item = state.tocItems[itemIdx];
+    if (!item) return;
+    const fps = item.floorPricing || [];
+    item.selectedFloorPricingIds = selectAll ? fps.map((fp, i) => fp.id || String(i)) : [];
+    const building = state.allBuildings.find(b => b.id === item.buildingId);
+    if (building) window.renderBuildingEditor(item, building);
+}
+
 export function registerBuildingFunctions() {
     window.renderBuildingEditor = renderBuildingEditor;
     window.uploadImage = uploadImage;
