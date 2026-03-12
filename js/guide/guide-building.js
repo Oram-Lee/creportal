@@ -619,43 +619,7 @@ export function renderBuildingEditor(item, building) {
                 </div>
                 <!-- 직접입력 행 목록 -->
                 <div id="directInputRows_${idx}">
-                    ${(()=>{
-                        const rows = building.directInputRows || (
-                            (building.depositPy || building.rentPy || building.maintenancePy) ? [{
-                                label: building.rentLabel || '기준층',
-                                depositPy: building.depositPy || '',
-                                rentPy: building.rentPy || '',
-                                maintenancePy: building.maintenancePy || '',
-                                source: '직접입력'
-                            }] : []
-                        );
-                        if (!rows.length) return \`
-                            <div style="color:#94a3b8; font-size:12px; text-align:center; padding:12px 0;">
-                                아래 + 행 추가 버튼으로 기준층 임대조건을 입력하세요
-                            </div>\`;
-                        return rows.map((row, ri) => \`
-                            <div class="direct-input-row" id="dirRow_\${idx}_\${ri}" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:6px; align-items:center; padding:6px 8px; margin-bottom:4px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
-                                <input type="text" value="\${row.label || ''}" placeholder="구분명 (예: 기준층)" data-field="label" data-ri="\${ri}"
-                                    style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"
-                                    onchange="updateDirectRow(\${idx}, \${ri}, 'label', this.value)">
-                                <input type="text" value="\${row.depositPy || ''}" placeholder="보증금" data-field="depositPy" data-ri="\${ri}"
-                                    style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"
-                                    onchange="updateDirectRow(\${idx}, \${ri}, 'depositPy', this.value)">
-                                <input type="text" value="\${row.rentPy || ''}" placeholder="임대료" data-field="rentPy" data-ri="\${ri}"
-                                    style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"
-                                    onchange="updateDirectRow(\${idx}, \${ri}, 'rentPy', this.value)">
-                                <input type="text" value="\${row.maintenancePy || ''}" placeholder="관리비" data-field="maintenancePy" data-ri="\${ri}"
-                                    style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"
-                                    onchange="updateDirectRow(\${idx}, \${ri}, 'maintenancePy', this.value)">
-                                <div style="display:flex; gap:4px; flex-shrink:0;">
-                                    <button onclick="saveDirectRow(\${idx}, \${ri}, '${building.id}')" title="이 행 저장"
-                                        style="padding:4px 8px; background:#2563eb; color:white; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;">💾</button>
-                                    <button onclick="deleteDirectRow(\${idx}, \${ri}, '${building.id}')" title="이 행 삭제"
-                                        style="padding:4px 8px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:4px; font-size:11px; cursor:pointer;">🗑</button>
-                                </div>
-                            </div>
-                        \`).join('');
-                    })()}
+                    ${renderDirectInputRows(idx, building)}
                 </div>
                 <!-- 헤더 라벨 + 추가 버튼 -->
                 <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:6px; align-items:center; padding:4px 8px; margin-bottom:4px;">
@@ -1834,6 +1798,35 @@ export function toggleVacancySort(idx) {
 // 전역 함수 등록
 
 // ★ 기준가 선택 토글
+// ★ v5.5: 직접입력 행 HTML 렌더 (템플릿 리터럴 중첩 방지용 헬퍼)
+function renderDirectInputRows(idx, building) {
+    const rows = building.directInputRows || (
+        (building.depositPy || building.rentPy || building.maintenancePy) ? [{
+            label: building.rentLabel || '기준층',
+            depositPy: building.depositPy || '',
+            rentPy: building.rentPy || '',
+            maintenancePy: building.maintenancePy || '',
+            source: '직접입력'
+        }] : []
+    );
+    if (!rows.length) {
+        return '<div style="color:#94a3b8; font-size:12px; text-align:center; padding:12px 0;">아래 + 행 추가 버튼으로 기준층 임대조건을 입력하세요</div>';
+    }
+    return rows.map((row, ri) => {
+        const bId = building.id || '';
+        return '<div class="direct-input-row" id="dirRow_' + idx + '_' + ri + '" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:6px; align-items:center; padding:6px 8px; margin-bottom:4px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">'
+            + '<input type="text" value="' + (row.label || '') + '" placeholder="구분명 (예: 기준층)" data-field="label" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'label\', this.value)">'
+            + '<input type="text" value="' + (row.depositPy || '') + '" placeholder="보증금" data-field="depositPy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'depositPy\', this.value)">'
+            + '<input type="text" value="' + (row.rentPy || '') + '" placeholder="임대료" data-field="rentPy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'rentPy\', this.value)">'
+            + '<input type="text" value="' + (row.maintenancePy || '') + '" placeholder="관리비" data-field="maintenancePy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'maintenancePy\', this.value)">'
+            + '<div style="display:flex; gap:4px; flex-shrink:0;">'
+            +   '<button onclick="saveDirectRow(' + idx + ', ' + ri + ', \'' + bId + '\')" title="이 행 저장" style="padding:4px 8px; background:#2563eb; color:white; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;">💾</button>'
+            +   '<button onclick="deleteDirectRow(' + idx + ', ' + ri + ', \'' + bId + '\')" title="이 행 삭제" style="padding:4px 8px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:4px; font-size:11px; cursor:pointer;">🗑</button>'
+            + '</div>'
+            + '</div>';
+    }).join('');
+}
+
 // ========== 공실 탭 전환 ==========
 export function switchVacancyAddTab(mode) {
     const direct = document.getElementById('addVacancyDirect');
