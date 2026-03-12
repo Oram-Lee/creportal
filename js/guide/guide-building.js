@@ -53,15 +53,15 @@
  * - 플레이스홀더 텍스트 변경: "드래그앤드롭, Ctrl+V 또는 클릭"
  */
 
-import { state, db, ref, get, update, getAllRegions } from './guide-state.js?v=5.1';
-import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, cleanUnitValue } from './guide-utils.js?v=5.1';
+import { state, db, ref, get, update, getAllRegions } from './guide-state.js?v=5.5';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, cleanUnitValue } from './guide-utils.js?v=5.5';
 import { 
     getUniqueSourcesHtml, 
     getUniqueDatesHtml, 
     renderExternalVacancyGroups, 
     renderExternalCartItems 
-} from './guide-vacancy.js?v=5.1';
-import { initBuildingKakaoMap } from './guide-map.js?v=5.1';
+} from './guide-vacancy.js?v=5.5';
+import { initBuildingKakaoMap } from './guide-map.js?v=5.5';
 
 // ★ v5.0: 공실 최대 개수 (A4 가로 기준, 헤더/합계 포함)
 const MAX_VACANCIES_PER_BUILDING = 12;

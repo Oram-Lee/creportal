@@ -4,8 +4,8 @@
  * v4.8 - StaticMap API + 빌딩 이모지 마커
  */
 
-import { state } from './guide-state.js?v=5.1';
-import { showToast } from './guide-utils.js?v=5.1';
+import { state } from './guide-state.js?v=5.5';
+import { showToast } from './guide-utils.js?v=5.5';
 // renderBuildingEditor는 window 객체를 통해 호출 (순환 의존성 방지)
 
 // 카카오맵 인스턴스 저장
