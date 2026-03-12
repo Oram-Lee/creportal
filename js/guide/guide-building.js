@@ -610,56 +610,95 @@ export function renderBuildingEditor(item, building) {
             
             <!-- 기준층 정보 -->
             <div class="standard-floor-section">
-                <div class="standard-floor-header">
-                    <div>
-                        <div class="standard-floor-title">📐 기준층 정보 직접 입력</div>
-                        <div style="font-size:11px; color:#64748b; margin-top:4px; line-height:1.6;">
-                            기준가 정보가 미입력된 경우, 기준층 임대조건을 직접 입력하시거나 하단에 노출된 기준가를 선택·반영하세요.<br>
-                            <span style="color:#0369a1;">CRE Portal 해당 빌딩 상세패널 &gt; 기준가 탭 &gt; 공식 기준가 선택 시 노출됩니다.</span>
-                        </div>
+                <div style="margin-bottom:8px;">
+                    <div class="standard-floor-title">📐 기준층 정보 직접 입력</div>
+                    <div style="font-size:11px; color:#64748b; margin-top:3px; line-height:1.6;">
+                        기준가 정보가 미입력된 경우 직접 입력하거나 하단 기준가를 선택·반영하세요.
+                        저장 시 CRE Portal 해당 빌딩 기준가에 <strong style="color:#0369a1;">직접입력</strong> 구분으로 저장됩니다.
                     </div>
-                    <button class="btn btn-sm btn-primary" onclick="saveStandardFloor('${building.id}')">💾 저장</button>
                 </div>
-                <div class="standard-floor-grid">
-                    <div class="standard-floor-field">
-                        <label>보증금 (원/평)</label>
-                        <input type="text" id="stdDeposit" value="${building.depositPy || ''}" placeholder="예: 60만">
-                    </div>
-                    <div class="standard-floor-field">
-                        <label>임대료 (원/평)</label>
-                        <input type="text" id="stdRent" value="${building.rentPy || ''}" placeholder="예: 8.5만">
-                    </div>
-                    <div class="standard-floor-field">
-                        <label>관리비 (원/평)</label>
-                        <input type="text" id="stdMaintenance" value="${building.maintenancePy || ''}" placeholder="예: 3.5만">
-                    </div>
-                    <div class="standard-floor-field">
-                        <label>구분 (RENT 테이블 표시명)</label>
-                        <input type="text" id="stdLabel" value="${building.rentLabel || '기준층'}" placeholder="예: 기준층">
-                    </div>
+                <!-- 직접입력 행 목록 -->
+                <div id="directInputRows_${idx}">
+                    ${(()=>{
+                        const rows = building.directInputRows || (
+                            (building.depositPy || building.rentPy || building.maintenancePy) ? [{
+                                label: building.rentLabel || '기준층',
+                                depositPy: building.depositPy || '',
+                                rentPy: building.rentPy || '',
+                                maintenancePy: building.maintenancePy || '',
+                                source: '직접입력'
+                            }] : []
+                        );
+                        if (!rows.length) return \`
+                            <div style="color:#94a3b8; font-size:12px; text-align:center; padding:12px 0;">
+                                아래 + 행 추가 버튼으로 기준층 임대조건을 입력하세요
+                            </div>\`;
+                        return rows.map((row, ri) => \`
+                            <div class="direct-input-row" id="dirRow_\${idx}_\${ri}" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:6px; align-items:center; padding:6px 8px; margin-bottom:4px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">
+                                <input type="text" value="\${row.label || ''}" placeholder="구분명 (예: 기준층)" data-field="label" data-ri="\${ri}"
+                                    style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"
+                                    onchange="updateDirectRow(\${idx}, \${ri}, 'label', this.value)">
+                                <input type="text" value="\${row.depositPy || ''}" placeholder="보증금" data-field="depositPy" data-ri="\${ri}"
+                                    style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"
+                                    onchange="updateDirectRow(\${idx}, \${ri}, 'depositPy', this.value)">
+                                <input type="text" value="\${row.rentPy || ''}" placeholder="임대료" data-field="rentPy" data-ri="\${ri}"
+                                    style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"
+                                    onchange="updateDirectRow(\${idx}, \${ri}, 'rentPy', this.value)">
+                                <input type="text" value="\${row.maintenancePy || ''}" placeholder="관리비" data-field="maintenancePy" data-ri="\${ri}"
+                                    style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"
+                                    onchange="updateDirectRow(\${idx}, \${ri}, 'maintenancePy', this.value)">
+                                <div style="display:flex; gap:4px; flex-shrink:0;">
+                                    <button onclick="saveDirectRow(\${idx}, \${ri}, '${building.id}')" title="이 행 저장"
+                                        style="padding:4px 8px; background:#2563eb; color:white; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;">💾</button>
+                                    <button onclick="deleteDirectRow(\${idx}, \${ri}, '${building.id}')" title="이 행 삭제"
+                                        style="padding:4px 8px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:4px; font-size:11px; cursor:pointer;">🗑</button>
+                                </div>
+                            </div>
+                        \`).join('');
+                    })()}
+                </div>
+                <!-- 헤더 라벨 + 추가 버튼 -->
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:6px; align-items:center; padding:4px 8px; margin-bottom:4px;">
+                    <span style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">구분</span>
+                    <span style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">보증금(원/평)</span>
+                    <span style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">임대료(원/평)</span>
+                    <span style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">관리비(원/평)</span>
+                    <button onclick="addDirectRow(${idx}, '${building.id}')"
+                        style="padding:4px 10px; background:#f0f9ff; color:#0369a1; border:1px dashed #7dd3fc; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap;">
+                        + 행 추가
+                    </button>
                 </div>
                 ${item.floorPricing && item.floorPricing.length > 0 ? `
                     <div style="margin-top:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px;">
-                        <div style="font-size:12px; font-weight:700; color:#0369a1; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
-                            💰 기준가 선택
-                            <span style="font-weight:400; color:#64748b; font-size:11px;">선택 시 위 RENT 필드에 즉시 반영됩니다</span>
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                            <div style="font-size:12px; font-weight:700; color:#0369a1; display:flex; align-items:center; gap:8px;">
+                                💰 기준가 선택
+                                <span style="font-weight:400; color:#64748b; font-size:11px;">복수 선택 후 전체 반영 또는 개별 반영 가능</span>
+                            </div>
+                            <button onclick="applyAllSelectedFloorPricing(${idx})"
+                                style="padding:5px 14px; background:#0369a1; color:white; border:none; border-radius:5px; font-size:12px; font-weight:700; cursor:pointer;">
+                                ✅ 선택항목 전체 반영
+                            </button>
                         </div>
                         <table style="width:100%; border-collapse:collapse; font-size:12px;">
                             <thead>
                                 <tr style="background:#e0f2fe;">
+                                    <th style="padding:6px 8px; text-align:center; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd; width:32px;">
+                                        <input type="checkbox" id="fpCheckAll_${idx}" onchange="toggleAllFloorPricingCheck(${idx}, this.checked)" style="cursor:pointer;">
+                                    </th>
                                     <th style="padding:6px 8px; text-align:left; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">구분</th>
                                     <th style="padding:6px 8px; text-align:right; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">보증금</th>
                                     <th style="padding:6px 8px; text-align:right; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">임대료</th>
                                     <th style="padding:6px 8px; text-align:right; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">관리비</th>
                                     <th style="padding:6px 8px; text-align:center; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">출처</th>
-                                    <th style="padding:6px 8px; text-align:center; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">반영</th>
-                                    <th style="padding:6px 8px; border-bottom:1px solid #bae6fd;"></th>
+                                    <th style="padding:6px 8px; text-align:center; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">개별반영</th>
+                                    <th style="padding:6px 8px; border-bottom:1px solid #bae6fd; width:28px;"></th>
                                 </tr>
                             </thead>
                             <tbody id="floorPricingList_${idx}">
                             ${item.floorPricing.map((fp, fi) => {
                                 const fpId = fp.id || String(fi);
-                                const selectedIds = item.selectedFloorPricingIds || [fpId];
+                                const selectedIds = item.selectedFloorPricingIds || [];
                                 const isSelected = selectedIds.includes(fpId);
                                 const label = fp.label || fp.floorRange || ('기준가 ' + (fi+1));
                                 const dep = fp.depositPy ? fp.depositPy.toLocaleString() : '-';
@@ -669,6 +708,9 @@ export function renderBuildingEditor(item, building) {
                                 const rowBg = isSelected ? '#f0fdf4' : 'white';
                                 const rowBorder = isSelected ? '1px solid #bbf7d0' : '1px solid transparent';
                                 return '<tr id="fpRow_' + idx + '_' + fi + '" style="background:' + rowBg + '; border:' + rowBorder + '; transition:background 0.15s;">'
+                                    + '<td style="padding:7px 8px; text-align:center;">'
+                                    +   '<input type="checkbox" data-fpid="' + fpId + '" ' + (isSelected ? 'checked' : '') + ' onchange="toggleFloorPricingCheck(' + idx + ', \'' + fpId + '\', this.checked)" style="cursor:pointer;">'
+                                    + '</td>'
                                     + '<td style="padding:7px 8px; font-weight:600;">' + label + '</td>'
                                     + '<td style="padding:7px 8px; text-align:right; color:#334155;">' + dep + '</td>'
                                     + '<td style="padding:7px 8px; text-align:right; color:#334155;">' + rent + '</td>'
@@ -711,9 +753,15 @@ export function renderBuildingEditor(item, building) {
                 
                 <!-- 공실 추가 패널 -->
                 <div class="vacancy-add-panel" id="vacancyAddPanel" style="display:none;">
-                    <div class="vacancy-add-tabs">
-                        <button class="vacancy-add-tab active" onclick="switchAddVacancyMode('direct')">직접 입력</button>
-                        <button class="vacancy-add-tab" onclick="switchAddVacancyMode('external')">타사 공실</button>
+                    <div style="display:flex; border-bottom:2px solid #e2e8f0; margin-bottom:0; background:#f8fafc; border-radius:8px 8px 0 0; overflow:hidden;">
+                        <button id="vacTabDirect" onclick="switchAddVacancyMode('direct')"
+                            style="flex:1; padding:10px 16px; font-size:13px; font-weight:700; border:none; cursor:pointer; background:#2563eb; color:white; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.15s;">
+                            ✏️ 직접 입력
+                        </button>
+                        <button id="vacTabExternal" onclick="switchAddVacancyMode('external')"
+                            style="flex:1; padding:10px 16px; font-size:13px; font-weight:700; border:none; cursor:pointer; background:#f8fafc; color:#64748b; display:flex; align-items:center; justify-content:center; gap:6px; border-left:1px solid #e2e8f0; transition:all 0.15s;">
+                            🏢 타사 공실에서 선택
+                        </button>
                     </div>
                     
                     <!-- 직접 입력 -->
@@ -753,33 +801,32 @@ export function renderBuildingEditor(item, building) {
                                 </div>
                             </div>
                             
-                            <!-- 우측: 선택된 공실 (장바구니) -->
+                            <!-- 우측: 선택된 공실 (기준가 UI와 동일 패턴) -->
                             <div class="external-vacancy-cart">
-                                <div class="external-vacancy-cart-header">
-                                    <span>✓ 적용됨 (${item.selectedExternalVacancies.length})${(item.pendingExternalVacancies?.length || 0) > 0 ? ` / 대기 (${item.pendingExternalVacancies.length})` : ''}</span>
-                                    <div style="display:flex; gap:4px;">
-                                        <button class="btn btn-sm btn-secondary" onclick="clearExternalCart(${idx})">초기화</button>
+                                <div class="external-vacancy-cart-header" style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#f0f9ff; border-bottom:1px solid #bae6fd;">
+                                    <span style="font-size:12px; font-weight:700; color:#0369a1;">
+                                        선택된 공실 <span id="extSelectedCount_${idx}">${(item.pendingExternalVacancies?.length || 0)}</span>건
+                                    </span>
+                                    <div style="display:flex; gap:6px; align-items:center;">
+                                        <button onclick="clearExternalCart(${idx})"
+                                            style="padding:4px 10px; background:white; color:#64748b; border:1px solid #e2e8f0; border-radius:4px; font-size:11px; cursor:pointer;">초기화</button>
+                                        <button onclick="applyPendingExternalVacancies(${idx})"
+                                            style="padding:4px 12px; background:#0369a1; color:white; border:none; border-radius:4px; font-size:12px; font-weight:700; cursor:pointer;">
+                                            ✅ 전체 반영
+                                        </button>
                                     </div>
                                 </div>
-                                <!-- ★ v3.8: pending 반영 바 -->
-                                <div id="extPendingBar" style="display:${(item.pendingExternalVacancies?.length || 0) > 0 ? 'flex' : 'none'}; align-items:center; justify-content:space-between; padding:8px 12px; background:#fffbeb; border-bottom:1px solid #fde68a;">
-                                    ${(item.pendingExternalVacancies?.length || 0) > 0 ? `
-                                        <span style="font-size:12px; color:#d97706; font-weight:600;">⏳ ${item.pendingExternalVacancies.length}건 대기 중</span>
-                                        <div style="display:flex; gap:4px;">
-                                            <button class="btn btn-sm" onclick="cancelPendingExternal(${idx})" 
-                                                style="background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; font-size:11px; padding:3px 8px;">취소</button>
-                                            <button class="btn btn-sm btn-primary" onclick="applyPendingExternalVacancies(${idx})" 
-                                                style="background:#2563eb; color:white; font-size:11px; padding:3px 10px; font-weight:600;">✓ 반영</button>
-                                        </div>
-                                    ` : ''}
-                                </div>
                                 <div class="external-vacancy-cart-body" id="extCartBody">
-                                    ${renderExternalCartItems(item.selectedExternalVacancies, idx)}
+                                    ${renderExternalCartItems(item.pendingExternalVacancies || [], idx)}
                                 </div>
+                                ${(item.selectedExternalVacancies?.length || 0) > 0 ? `
+                                <div style="padding:8px 12px; background:#f0fdf4; border-top:1px solid #bbf7d0; font-size:11px; color:#16a34a; font-weight:600;">
+                                    ✅ 이미 적용된 공실: ${item.selectedExternalVacancies.length}건
+                                </div>` : ''}
                             </div>
                             
                             <div class="external-vacancy-notice">
-                                💡 공실을 체크한 후 <strong>[✓ 반영]</strong> 버튼을 클릭해야 공실 현황에 적용됩니다.
+                                💡 좌측 리스트에서 공실을 선택(체크)하면 우측에 추가됩니다. <strong>[전체 반영]</strong>으로 공실 현황에 적용하세요.
                             </div>
                         </div>
                     </div>
@@ -1787,6 +1834,194 @@ export function toggleVacancySort(idx) {
 // 전역 함수 등록
 
 // ★ 기준가 선택 토글
+// ========== 공실 탭 전환 ==========
+export function switchVacancyAddTab(mode) {
+    const direct = document.getElementById('addVacancyDirect');
+    const external = document.getElementById('addVacancyExternal');
+    const tabDirect = document.getElementById('vacTabDirect');
+    const tabExternal = document.getElementById('vacTabExternal');
+    if (mode === 'direct') {
+        if (direct) direct.style.display = '';
+        if (external) external.style.display = 'none';
+        if (tabDirect) { tabDirect.style.background = '#2563eb'; tabDirect.style.color = 'white'; }
+        if (tabExternal) { tabExternal.style.background = '#f8fafc'; tabExternal.style.color = '#64748b'; }
+    } else {
+        if (direct) direct.style.display = 'none';
+        if (external) external.style.display = '';
+        if (tabExternal) { tabExternal.style.background = '#2563eb'; tabExternal.style.color = 'white'; }
+        if (tabDirect) { tabDirect.style.background = '#f8fafc'; tabDirect.style.color = '#64748b'; }
+    }
+}
+
+// ========== 기준층 직접입력 행 관리 ==========
+
+// 직접입력 행 메모리 업데이트
+export function updateDirectRow(itemIdx, ri, field, value) {
+    const item = state.tocItems[itemIdx];
+    if (!item) return;
+    const building = state.allBuildings.find(b => b.id === item.buildingId);
+    if (!building) return;
+    if (!building.directInputRows) building.directInputRows = [];
+    if (!building.directInputRows[ri]) building.directInputRows[ri] = {};
+    building.directInputRows[ri][field] = value;
+}
+
+// 단일 행 저장 → Firebase floorPricing에 직접입력 source로 저장
+export async function saveDirectRow(itemIdx, ri, buildingId) {
+    const item = state.tocItems[itemIdx];
+    const building = state.allBuildings.find(b => b.id === buildingId);
+    if (!item || !building) return;
+    if (!building.directInputRows) building.directInputRows = [];
+    const row = building.directInputRows[ri];
+    if (!row) return;
+
+    // 행 DOM에서 최신 값 읽기 (onchange 미발생 경우 대비)
+    const rowEl = document.getElementById(`dirRow_${itemIdx}_${ri}`);
+    if (rowEl) {
+        const inputs = rowEl.querySelectorAll('input[data-field]');
+        inputs.forEach(inp => { row[inp.dataset.field] = inp.value; });
+    }
+
+    const fpEntry = {
+        label: row.label || '직접입력',
+        depositPy: parseFloat(String(row.depositPy).replace(/,/g, '')) || 0,
+        rentPy: parseFloat(String(row.rentPy).replace(/,/g, '')) || 0,
+        maintenancePy: parseFloat(String(row.maintenancePy).replace(/,/g, '')) || 0,
+        source: '직접입력',
+        publishDate: new Date().toISOString().slice(0, 7)
+    };
+
+    try {
+        // floorPricing 배열 읽기 후 직접입력 항목 업데이트
+        const { ref: dbRef, get: dbGet } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+        const snapshot = await get(ref(db, `buildings/${buildingId}/floorPricing`));
+        let fps = [];
+        if (snapshot.exists()) {
+            const val = snapshot.val();
+            fps = Array.isArray(val) ? [...val] : Object.values(val);
+        }
+        // 같은 label의 직접입력 항목 교체 or 추가
+        const existing = fps.findIndex(f => f.source === '직접입력' && f.label === fpEntry.label);
+        if (existing >= 0) fps[existing] = fpEntry;
+        else fps.push(fpEntry);
+
+        await update(ref(db, `buildings/${buildingId}`), { floorPricing: fps });
+
+        // 메모리 갱신
+        building.floorPricing = fps;
+        item.floorPricing = fps;
+        item.floorPricingLoaded = true;
+
+        showToast(`"${fpEntry.label}" 항목이 CRE Portal 기준가(직접입력)에 저장되었습니다.`, 'success');
+        renderBuildingEditor(item, building);
+    } catch (e) {
+        console.error('직접입력 저장 오류:', e);
+        showToast('저장 중 오류가 발생했습니다', 'error');
+    }
+}
+
+// 직접입력 행 추가
+export function addDirectRow(itemIdx, buildingId) {
+    const item = state.tocItems[itemIdx];
+    const building = state.allBuildings.find(b => b.id === buildingId);
+    if (!item || !building) return;
+    if (!building.directInputRows) building.directInputRows = [];
+    building.directInputRows.push({ label: '', depositPy: '', rentPy: '', maintenancePy: '', source: '직접입력' });
+    renderBuildingEditor(item, building);
+    // 새 행 첫 input 포커스
+    setTimeout(() => {
+        const rows = document.querySelectorAll(`#directInputRows_${itemIdx} .direct-input-row`);
+        if (rows.length) rows[rows.length - 1].querySelector('input')?.focus();
+    }, 100);
+}
+
+// 직접입력 행 삭제
+export async function deleteDirectRow(itemIdx, ri, buildingId) {
+    const item = state.tocItems[itemIdx];
+    const building = state.allBuildings.find(b => b.id === buildingId);
+    if (!item || !building) return;
+    if (!building.directInputRows) return;
+    const row = building.directInputRows[ri];
+    if (!row) return;
+
+    if (!confirm(`"${row.label || '이 행'}"을 삭제하시겠습니까?`)) return;
+    building.directInputRows.splice(ri, 1);
+
+    // Firebase에서도 해당 직접입력 항목 제거
+    try {
+        const snapshot = await get(ref(db, `buildings/${buildingId}/floorPricing`));
+        if (snapshot.exists()) {
+            const val = snapshot.val();
+            let fps = Array.isArray(val) ? [...val] : Object.values(val);
+            fps = fps.filter(f => !(f.source === '직접입력' && f.label === row.label));
+            await update(ref(db, `buildings/${buildingId}`), { floorPricing: fps });
+            building.floorPricing = fps;
+            item.floorPricing = fps;
+        }
+    } catch (e) { console.warn('Firebase 삭제 오류:', e); }
+
+    showToast('삭제되었습니다', 'success');
+    renderBuildingEditor(item, building);
+}
+
+// ========== 기준가 체크박스 다중 선택 ==========
+
+// 체크박스 개별 토글
+export function toggleFloorPricingCheck(itemIdx, fpId, checked) {
+    const item = state.tocItems[itemIdx];
+    if (!item) return;
+    if (!item.selectedFloorPricingIds) item.selectedFloorPricingIds = [];
+    if (checked) {
+        if (!item.selectedFloorPricingIds.includes(fpId)) item.selectedFloorPricingIds.push(fpId);
+    } else {
+        item.selectedFloorPricingIds = item.selectedFloorPricingIds.filter(id => id !== fpId);
+    }
+    // 전체선택 체크박스 동기화
+    const allCheck = document.getElementById(`fpCheckAll_${itemIdx}`);
+    if (allCheck) {
+        const total = (item.floorPricing || []).length;
+        allCheck.checked = item.selectedFloorPricingIds.length === total;
+        allCheck.indeterminate = item.selectedFloorPricingIds.length > 0 && item.selectedFloorPricingIds.length < total;
+    }
+    // 행 배경색만 업데이트 (전체 재렌더 없이)
+    const building = state.allBuildings.find(b => b.id === item.buildingId);
+    if (building) window.renderBuildingEditor(item, building);
+}
+
+// 전체 체크박스
+export function toggleAllFloorPricingCheck(itemIdx, checked) {
+    const item = state.tocItems[itemIdx];
+    if (!item) return;
+    const fps = item.floorPricing || [];
+    item.selectedFloorPricingIds = checked ? fps.map((fp, i) => fp.id || String(i)) : [];
+    const building = state.allBuildings.find(b => b.id === item.buildingId);
+    if (building) window.renderBuildingEditor(item, building);
+}
+
+// 선택된 모든 항목 전체 반영
+export function applyAllSelectedFloorPricing(itemIdx) {
+    const item = state.tocItems[itemIdx];
+    if (!item) return;
+    const selected = item.selectedFloorPricingIds || [];
+    if (!selected.length) { showToast('반영할 항목을 먼저 선택하세요', 'warning'); return; }
+    // 마지막 선택 항목 기준으로 RENT 필드 채움
+    const fps = item.floorPricing || [];
+    const last = fps.find((fp, i) => selected.includes(fp.id || String(i)));
+    if (last) {
+        const depositEl = document.getElementById('stdDeposit');
+        const rentEl = document.getElementById('stdRent');
+        const maintEl = document.getElementById('stdMaintenance');
+        const labelEl = document.getElementById('stdLabel');
+        if (depositEl) depositEl.value = last.depositPy?.toLocaleString() || '';
+        if (rentEl) rentEl.value = last.rentPy?.toLocaleString() || '';
+        if (maintEl) maintEl.value = last.maintenancePy?.toLocaleString() || '';
+        if (labelEl) labelEl.value = last.label || '';
+    }
+    showToast(`${selected.length}개 항목이 선택되었습니다. 저장 버튼으로 확정하세요.`, 'success');
+    const building = state.allBuildings.find(b => b.id === item.buildingId);
+    if (building) window.renderBuildingEditor(item, building);
+}
+
 // ★ v5.5: 기준가 → RENT 필드 단건 반영 (반영 버튼 클릭 시)
 export function applyFloorPricingToRent(itemIdx, fpId) {
     const item = state.tocItems[itemIdx];
@@ -1963,6 +2198,20 @@ export function registerBuildingFunctions() {
     window.toggleFloorPricing = toggleFloorPricing;
     window.toggleAllFloorPricing = toggleAllFloorPricing;
     window.applyFloorPricingToRent = applyFloorPricingToRent;
+    window.applyAllSelectedFloorPricing = applyAllSelectedFloorPricing;
+    window.toggleFloorPricingCheck = toggleFloorPricingCheck;
+    window.toggleAllFloorPricingCheck = toggleAllFloorPricingCheck;
+    window.switchVacancyAddTab = switchVacancyAddTab;
+    // switchAddVacancyMode 오버라이드 (guide-vacancy.js보다 나중에 등록)
+    const _origSwitch = window.switchAddVacancyMode;
+    window.switchAddVacancyMode = (mode) => {
+        if (_origSwitch) _origSwitch(mode);
+        switchVacancyAddTab(mode);
+    };
+    window.updateDirectRow = updateDirectRow;
+    window.saveDirectRow = saveDirectRow;
+    window.addDirectRow = addDirectRow;
+    window.deleteDirectRow = deleteDirectRow;
     window.openBuildingEditModal = openBuildingEditModal;
     window.closeBuildingEditModal = closeBuildingEditModal;
     window.saveBuildingEdit = saveBuildingEdit;
