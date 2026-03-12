@@ -1487,6 +1487,7 @@
                                     <tr><th>규모</th><td>B${building.floorsBelow || building.floors?.below || 0} / ${building.floorsAbove || building.floors?.above || 0}F</td></tr>
                                     <tr><th>준공년도</th><td>${building.completionYear || building.specs?.completionYear || '-'}</td></tr>
                                     <tr><th>기준층(임대)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy || building.area?.typicalFloorPy) + ' 평' : '-'}</td></tr>
+                                    <tr><th>전용률</th><td>${(()=>{ const v = building.exclusiveRate || building.area?.exclusiveRate; const n = parseFloat(v); return (!v || isNaN(n) || n === 0) ? '-' : n.toFixed(2) + '%'; })()}</td></tr>
                                     <tr><th>E/V</th><td>총 ${getElevatorTotal(building)}대</td></tr>
                                     <tr><th>주차</th><td>총 ${String(getParkingTotal(building) || '-').replace(/대+$/, '')}대${getParkingNote(building) ? '<br><span style="font-size:inherit; color:inherit;">' + String(getParkingNote(building)).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                                 </table>

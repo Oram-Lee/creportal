@@ -334,10 +334,31 @@ async function cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH,
         closeModal();
         try {
             const blob = await fetchImage();
-            // Firebase Storage 업로드 — leasing-guide.html의 전역 uploadToFirebaseStorage 활용
             if (typeof window.uploadToFirebaseStorage === 'function') {
                 const dlUrl = await window.uploadToFirebaseStorage(blob, `maps/${filename}`);
-                showToast('Firebase Storage 저장 완료', 'success');
+
+                // ★ 저장된 이미지 URL을 item.mapImage에 반영
+                const item = state.tocItems[idx];
+                if (item) {
+                    item.mapImage = dlUrl;
+                    // 수동 모드로 전환 (이미지가 location 영역에 표시되도록)
+                    item.mapMode = 'manual';
+                }
+
+                // ★ building.images.location에도 반영 (출력 페이지 대비)
+                const bId = item?.buildingId;
+                const building = bId ? state.allBuildings.find(b => b.id === bId) : null;
+                if (building) {
+                    if (!building.images) building.images = {};
+                    building.images.location = dlUrl;
+                }
+
+                // ★ 편집 화면 재렌더 (수동 모드 + 이미지 즉시 표시)
+                if (item && building) {
+                    window.renderBuildingEditor(item, building);
+                }
+
+                showToast('지도 캡쳐가 저장되었습니다. 수동 모드로 전환됩니다.', 'success');
                 console.log('[캡쳐] Storage URL:', dlUrl);
             } else {
                 // fallback: 다운로드로 대체

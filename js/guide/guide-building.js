@@ -395,7 +395,8 @@ export function renderBuildingEditor(item, building) {
                         <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                             <span>GENERAL INFORMATION</span>
                             <div class="info-action-btns">
-                                <button class="info-action-btn" onclick="fetchBuildingRegistry('${building.id}')" title="Firebase에서 최신 데이터 불러오기">🔄 DB동기화</button>
+                                <button class="info-action-btn" onclick="fetchFromPortal('${building.id}')" title="Portal DB → 안내문 편집화면에 최신 데이터 반영" style="color:#0369a1; border-color:#0369a1;">⬇️ Portal→안내문</button>
+                                <button class="info-action-btn" onclick="pushToPortal('${building.id}')" title="안내문 편집화면 현재 값 → Portal DB 및 상세패널 반영" style="color:#16a34a; border-color:#16a34a;">⬆️ 안내문→Portal</button>
                                 <button class="info-action-btn" onclick="openBuildingEditModal('${building.id}')" title="수동으로 정보 입력/수정">✏️ 수정</button>
                             </div>
                         </div>
@@ -406,7 +407,7 @@ export function renderBuildingEditor(item, building) {
                             <tr><th>규모</th><td>B${building.floorsBelow || 0} / ${building.floorsAbove || 0}F</td></tr>
                             <tr><th>준공년도</th><td>${building.completionYear || '-'}</td></tr>
                             <tr><th>기준층(임대)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy) + ' 평' : '-'}</td></tr>
-                            <tr><th>전용률</th><td>${formatPercent(building.exclusiveRate || building.area?.exclusiveRate)}%</td></tr>
+                            <tr><th>전용률</th><td>${(()=>{ const v = building.exclusiveRate || building.area?.exclusiveRate; const n = parseFloat(v); return (!v || isNaN(n) || n === 0) ? '-' : n.toFixed(2) + '%'; })()}</td></tr>
                             <tr><th>E/V</th><td>총 ${(()=>{ const n=cleanUnitValue(building.elevatorTotal??building.specs?.passengerElevator); return n!==null?n+'대':'-'; })()}</td></tr>
                             <tr><th>주차</th><td>총 ${(()=>{ const n=cleanUnitValue(building.parkingTotal??building.parking?.total); return n!==null?n+'대':'-'; })()}${building.parkingNote ? '<br><span style="font-size:10px; color:#555;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                         </table>
@@ -1604,72 +1605,76 @@ export async function saveBuildingEdit(buildingId) {
 }
 
 // ========== 건축물대장 자동 가져오기 ==========
-export async function fetchBuildingRegistry(buildingId) {
-    showToast('Firebase에서 빌딩 정보 불러오는 중...', 'info');
-    
+// ★ v5.4: Portal → 안내문 (Firebase DB → 편집화면)
+export async function fetchFromPortal(buildingId) {
+    showToast('Portal DB에서 최신 빌딩 정보를 가져오는 중...', 'info');
     try {
-        // Firebase에서 빌딩 데이터 다시 읽어오기
         const snapshot = await get(ref(db, `buildings/${buildingId}`));
-        
-        if (!snapshot.exists()) {
-            showToast('빌딩 정보를 찾을 수 없습니다', 'error');
-            return;
-        }
-        
+        if (!snapshot.exists()) { showToast('빌딩 정보를 찾을 수 없습니다', 'error'); return; }
         const freshData = snapshot.val();
         freshData.id = buildingId;
-        
-        // 디버그: 원본 Firebase 데이터
-        console.log('[자동] Firebase 원본 데이터:', JSON.stringify(freshData, null, 2));
-        console.log('[자동] specs:', freshData.specs);
-        console.log('[자동] parking:', freshData.parking);
-        console.log('[자동] floors:', freshData.floors);
-        console.log('[자동] area:', freshData.area);
-        
-        // 데이터 정규화 (중첩 구조 → 평면 구조)
         normalizeBuilding(freshData);
-        
-        // 로컬 상태 업데이트 (state.allBuildings에서 해당 빌딩 교체)
-        const idx = state.allBuildings.findIndex(b => b.id === buildingId);
-        if (idx >= 0) {
-            // 기존 데이터와 병합 (새 데이터 우선)
-            state.allBuildings[idx] = { ...state.allBuildings[idx], ...freshData };
-        }
-        
-        const building = state.allBuildings[idx] || freshData;
-        
-        // 디버그: 정규화 후 데이터
-        console.log('[자동] 정규화 후 데이터:', {
-            name: building.name,
-            floorsAbove: building.floorsAbove,
-            floorsBelow: building.floorsBelow,
-            elevatorTotal: building.elevatorTotal,
-            parkingTotal: building.parkingTotal,
-            grossFloorPy: building.grossFloorPy,
-            typicalFloorPy: building.typicalFloorPy,
-            exclusiveRate: building.exclusiveRate,
-            completionYear: building.completionYear
-        });
-        
-        showToast('빌딩 정보를 불러왔습니다', 'success');
-        
-        // ★ CRE Portal 기본정보 패널에 반영 알림 (portal.html이 수신)
-        window.dispatchEvent(new CustomEvent('buildingUpdated', {
-            detail: { buildingId, data: building }
-        }));
-        
-        // 프리뷰 갱신
+        const bIdx = state.allBuildings.findIndex(b => b.id === buildingId);
+        if (bIdx >= 0) state.allBuildings[bIdx] = { ...state.allBuildings[bIdx], ...freshData };
+        const building = state.allBuildings[bIdx] || freshData;
+        showToast('Portal DB 최신 정보를 안내문 편집화면에 반영했습니다', 'success');
         if (state.selectedTocIndex >= 0) {
             const item = state.tocItems[state.selectedTocIndex];
-            if (item) {
-                renderBuildingEditor(item, building);
-            }
+            if (item) renderBuildingEditor(item, building);
         }
-        
-    } catch (error) {
-        console.error('Firebase 데이터 로드 오류:', error);
-        showToast('빌딩 정보 로드에 실패했습니다', 'error');
+    } catch (e) {
+        console.error('fetchFromPortal 오류:', e);
+        showToast('불러오기에 실패했습니다', 'error');
     }
+}
+
+// ★ v5.4: 안내문 → Portal (편집화면 현재값 → Firebase DB + BroadcastChannel)
+export async function pushToPortal(buildingId) {
+    const building = state.allBuildings.find(b => b.id === buildingId);
+    if (!building) { showToast('빌딩 데이터를 찾을 수 없습니다', 'error'); return; }
+    if (!confirm('현재 편집화면의 GENERAL INFORMATION 값을\nPortal DB 및 상세패널에 반영합니다.\n계속하시겠습니까?')) return;
+    try {
+        const updateData = {
+            name: building.name || '',
+            address: building.address || '',
+            nearbyStation: building.nearbyStation || '',
+            'area/grossFloorPy': building.grossFloorPy || 0,
+            grossFloorPy: building.grossFloorPy || 0,
+            'area/typicalFloorPy': building.typicalFloorPy || 0,
+            typicalFloorPy: building.typicalFloorPy || 0,
+            'area/exclusiveRate': building.exclusiveRate || 0,
+            exclusiveRate: building.exclusiveRate || 0,
+            'floors/above': building.floorsAbove || 0,
+            'floors/below': building.floorsBelow || 0,
+            'specs/completionYear': String(building.completionYear || ''),
+            completionYear: String(building.completionYear || ''),
+            'specs/passengerElevator': building.elevatorTotal || 0,
+            elevatorTotal: building.elevatorTotal || 0,
+            'parking/total': building.parkingTotal || 0,
+            parkingTotal: building.parkingTotal || 0,
+            parkingNote: building.parkingNote || ''
+        };
+        await update(ref(db, `buildings/${buildingId}`), updateData);
+        try {
+            const bc = new BroadcastChannel('cre_portal_sync');
+            bc.postMessage({ type: 'buildingUpdated', buildingId, data: { ...building, ...updateData } });
+            bc.close();
+        } catch (_) {}
+        window.dispatchEvent(new CustomEvent('buildingUpdated', { detail: { buildingId, data: building } }));
+        showToast('Portal DB 및 상세패널에 반영되었습니다', 'success');
+        if (state.selectedTocIndex >= 0) {
+            const item = state.tocItems[state.selectedTocIndex];
+            if (item) renderBuildingEditor(item, building);
+        }
+    } catch (e) {
+        console.error('pushToPortal 오류:', e);
+        showToast('Portal 반영에 실패했습니다', 'error');
+    }
+}
+
+// 구 함수명 호환 유지
+export async function fetchBuildingRegistry(buildingId) {
+    return fetchFromPortal(buildingId);
 }
 
 // ========== 빌딩 권역 변경 ==========
@@ -1908,6 +1913,8 @@ export function registerBuildingFunctions() {
     window.closeBuildingEditModal = closeBuildingEditModal;
     window.saveBuildingEdit = saveBuildingEdit;
     window.fetchBuildingRegistry = fetchBuildingRegistry;
+    window.fetchFromPortal = fetchFromPortal;
+    window.pushToPortal = pushToPortal;
     window.changeItemRegion = changeItemRegion;
     window.openPrintPage = openPrintPage;
     // ★ v5.0: 상수 노출
