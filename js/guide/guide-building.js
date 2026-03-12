@@ -321,11 +321,14 @@ export function renderBuildingEditor(item, building) {
             <!-- 헤더: 빌딩명 + 권역정보 -->
             <div class="building-preview-header">
                 <div class="building-title">
-                    <span class="building-icon">🏢</span>
                     <span class="building-name">${building.name || '빌딩명'}</span>
                     ${item.exclusive ? '<span class="exclusive-badge">전속</span>' : ''}
+                    <button onclick="window.open('https://oram-lee.github.io/portal-rmap.html?buildingId=${building.id}&panel=info', '_blank')" title="CRE Portal 상세패널 열기" style="font-size:11px; padding:3px 8px; border:1px solid #94a3b8; border-radius:4px; background:white; color:#475569; cursor:pointer; font-weight:500; margin-left:6px;">🔗 Portal</button>
                 </div>
-                <div class="region-info">Leasing Information (${region})</div>
+                <div class="region-info" style="text-align:right; line-height:1.5;">
+                    <div style="font-size:13px; font-weight:700; color:#1e3a5f; letter-spacing:0.3px;">S&I Corporation</div>
+                    <div>Leasing Information (${region})</div>
+                </div>
             </div>
             
             <!-- 3열 메인 컨텐츠 -->
@@ -354,11 +357,7 @@ export function renderBuildingEditor(item, building) {
                                     ${building.lat && building.lng ? `<button class="info-action-btn" onclick="event.stopPropagation(); openRoadview(${building.lat}, ${building.lng})" title="로드뷰 보기" style="font-size:11px; padding:4px 8px;">👁️ 로드뷰</button>` : ''}
                                     <button class="info-action-btn" onclick="event.stopPropagation(); captureMap(${idx}, '${(building.name || '지도').replace(/'/g, "\\'")}')" title="지도 캡처 저장" style="font-size:11px; padding:4px 8px;">📸 캡처</button>
                                 ` : `
-                                    <!-- ★ v4.7: 수동 모드 - 삭제/기본값 버튼 -->
-                                    <!-- ★ v5.1: 지도 자동 생성 버튼 추가 -->
-                                    ${(building.coordinates?.lat && building.coordinates?.lng) || (building.lat && building.lng) ? `
-                                        <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="카카오 지도 이미지 자동 생성" style="font-size:11px; padding:4px 8px; background:#3b82f6; color:white;">🗺️ 지도생성</button>
-                                    ` : ''}
+                                    <!-- 수동 모드: 삭제/기본값만 노출 -->
                                     ${item.mapImage ? `
                                         <button class="info-action-btn" onclick="event.stopPropagation(); removeMapImage(${idx})" title="업로드 이미지 삭제" style="font-size:11px; padding:4px 8px; color:#dc2626;">🗑️ 삭제</button>
                                         ${building.images?.location ? `<button class="info-action-btn" onclick="event.stopPropagation(); resetToStorageMapImage(${idx}, '${building.id}')" title="Firebase Storage 이미지로 복원" style="font-size:11px; padding:4px 8px; color:#2563eb;">🔄 기본값</button>` : ''}
@@ -395,9 +394,9 @@ export function renderBuildingEditor(item, building) {
                         <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                             <span>GENERAL INFORMATION</span>
                             <div class="info-action-btns">
-                                <button class="info-action-btn" onclick="fetchFromPortal('${building.id}')" title="Portal DB → 안내문 편집화면에 최신 데이터 반영" style="color:#0369a1; border-color:#0369a1;">⬇️ Portal→안내문</button>
-                                <button class="info-action-btn" onclick="pushToPortal('${building.id}')" title="안내문 편집화면 현재 값 → Portal DB 및 상세패널 반영" style="color:#16a34a; border-color:#16a34a;">⬆️ 안내문→Portal</button>
-                                <button class="info-action-btn" onclick="openBuildingEditModal('${building.id}')" title="수동으로 정보 입력/수정">✏️ 수정</button>
+                                <button class="info-action-btn" onclick="fetchFromPortal('${building.id}')" title="Portal → 안내문 동기화" style="color:#0369a1; border-color:#0369a1; padding:4px 7px; font-size:15px;">⬇️</button>
+                                <button class="info-action-btn" onclick="pushToPortal('${building.id}')" title="안내문 → Portal 동기화" style="color:#16a34a; border-color:#16a34a; padding:4px 7px; font-size:15px;">⬆️</button>
+                                <button class="info-action-btn" onclick="openBuildingEditModal('${building.id}')" title="수동 정보 편집" style="padding:4px 7px; font-size:15px;">✏️</button>
                             </div>
                         </div>
                         <table class="preview-info-table">
@@ -607,16 +606,18 @@ export function renderBuildingEditor(item, building) {
         <div class="image-manager" id="dataManagerSection">
             <div class="image-manager-header">
                 <div class="image-manager-title">📋 데이터 관리</div>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn btn-sm btn-primary" onclick="openContactPointModal('${item?.buildingId}')">👤 담당자</button>
-                    <button class="btn btn-sm btn-secondary" onclick="addDividerAfter('${item?.buildingId}')">📄 간지</button>
-                </div>
             </div>
             
             <!-- 기준층 정보 -->
             <div class="standard-floor-section">
                 <div class="standard-floor-header">
-                    <div class="standard-floor-title">📐 기준층 임대조건 (RENT)</div>
+                    <div>
+                        <div class="standard-floor-title">📐 기준층 정보 직접 입력</div>
+                        <div style="font-size:11px; color:#64748b; margin-top:4px; line-height:1.6;">
+                            기준가 정보가 미입력된 경우, 기준층 임대조건을 직접 입력하시거나 하단에 노출된 기준가를 선택·반영하세요.<br>
+                            <span style="color:#0369a1;">CRE Portal 해당 빌딩 상세패널 &gt; 기준가 탭 &gt; 공식 기준가 선택 시 노출됩니다.</span>
+                        </div>
+                    </div>
                     <button class="btn btn-sm btn-primary" onclick="saveStandardFloor('${building.id}')">💾 저장</button>
                 </div>
                 <div class="standard-floor-grid">
@@ -638,30 +639,54 @@ export function renderBuildingEditor(item, building) {
                     </div>
                 </div>
                 ${item.floorPricing && item.floorPricing.length > 0 ? `
-                    <div style="margin-top:10px; padding:10px 12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:6px;">
-                        <div style="font-size:12px; font-weight:600; color:#0369a1; margin-bottom:8px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                    <div style="margin-top:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px;">
+                        <div style="font-size:12px; font-weight:700; color:#0369a1; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
                             💰 기준가 선택
-                            <span style="font-weight:normal; color:#64748b;">(RENT 테이블에 표시됨)</span>
-                            <button onclick="toggleAllFloorPricing(${idx}, true)" style="font-size:10px; padding:2px 6px; border:1px solid #0369a1; border-radius:3px; background:white; color:#0369a1; cursor:pointer;">전체선택</button>
-                            <button onclick="toggleAllFloorPricing(${idx}, false)" style="font-size:10px; padding:2px 6px; border:1px solid #94a3b8; border-radius:3px; background:white; color:#64748b; cursor:pointer;">전체해제</button>
+                            <span style="font-weight:400; color:#64748b; font-size:11px;">선택 시 위 RENT 필드에 즉시 반영됩니다</span>
                         </div>
-                        <div id="floorPricingList_${idx}" style="display:flex; flex-direction:column; gap:4px;">
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                            <thead>
+                                <tr style="background:#e0f2fe;">
+                                    <th style="padding:6px 8px; text-align:left; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">구분</th>
+                                    <th style="padding:6px 8px; text-align:right; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">보증금</th>
+                                    <th style="padding:6px 8px; text-align:right; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">임대료</th>
+                                    <th style="padding:6px 8px; text-align:right; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">관리비</th>
+                                    <th style="padding:6px 8px; text-align:center; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">출처</th>
+                                    <th style="padding:6px 8px; text-align:center; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">반영</th>
+                                    <th style="padding:6px 8px; border-bottom:1px solid #bae6fd;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="floorPricingList_${idx}">
                             ${item.floorPricing.map((fp, fi) => {
                                 const fpId = fp.id || String(fi);
                                 const selectedIds = item.selectedFloorPricingIds || [fpId];
-                                const isChecked = selectedIds.includes(fpId);
+                                const isSelected = selectedIds.includes(fpId);
                                 const label = fp.label || fp.floorRange || ('기준가 ' + (fi+1));
                                 const dep = fp.depositPy ? fp.depositPy.toLocaleString() : '-';
                                 const rent = fp.rentPy ? fp.rentPy.toLocaleString() : '-';
                                 const maint = fp.maintenancePy ? fp.maintenancePy.toLocaleString() : '-';
-                                return '<div id="fpRow_' + idx + '_' + fi + '" style="display:flex; align-items:center; gap:6px; padding:6px 8px; background:white; border-radius:4px; font-size:12px;">'
-                                    + '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleFloorPricing(' + idx + ', \'' + fpId + '\')" style="cursor:pointer; flex-shrink:0;">'
-                                    + '<span style="font-weight:500; min-width:60px;">' + label + '</span>'
-                                    + '<span class="fp-display-' + idx + '_' + fi + '" style="color:#64748b; flex:1;">보증금 ' + dep + ' / 임대 ' + rent + ' / 관리 ' + maint + '</span>'
-                                    + '<button onclick="editFloorPricingInline(' + idx + ',' + fi + ')" title="항목 편집" style="font-size:11px; padding:2px 6px; border:1px solid #94a3b8; border-radius:3px; background:white; color:#475569; cursor:pointer; flex-shrink:0;">✏️</button>'
-                                    + '</div>';
+                                const source = (fp.source || fp.company || '') + (fp.publishDate ? ' ' + fp.publishDate : '');
+                                const rowBg = isSelected ? '#f0fdf4' : 'white';
+                                const rowBorder = isSelected ? '1px solid #bbf7d0' : '1px solid transparent';
+                                return '<tr id="fpRow_' + idx + '_' + fi + '" style="background:' + rowBg + '; border:' + rowBorder + '; transition:background 0.15s;">'
+                                    + '<td style="padding:7px 8px; font-weight:600;">' + label + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:right; color:#334155;">' + dep + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:right; color:#334155;">' + rent + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:right; color:#334155;">' + maint + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:center; color:#64748b; font-size:11px;">' + (source || '-') + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:center;">'
+                                    +   '<button onclick="applyFloorPricingToRent(' + idx + ', \'' + fpId + '\')" '
+                                    +   'style="padding:3px 10px; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; '
+                                    +   (isSelected ? 'background:#16a34a; color:white; border:1px solid #16a34a;' : 'background:white; color:#0369a1; border:1px solid #0369a1;') + '">'
+                                    +   (isSelected ? '✅ 적용중' : '반영') + '</button>'
+                                    + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:center;">'
+                                    +   '<button onclick="editFloorPricingInline(' + idx + ',' + fi + ')" title="항목 편집" style="font-size:12px; padding:2px 5px; border:1px solid #e2e8f0; border-radius:3px; background:white; color:#94a3b8; cursor:pointer;">✏️</button>'
+                                    + '</td>'
+                                    + '</tr>';
                             }).join('')}
-                        </div>
+                            </tbody>
+                        </table>
                     </div>
                 ` : ''}
             </div>
@@ -1762,6 +1787,34 @@ export function toggleVacancySort(idx) {
 // 전역 함수 등록
 
 // ★ 기준가 선택 토글
+// ★ v5.5: 기준가 → RENT 필드 단건 반영 (반영 버튼 클릭 시)
+export function applyFloorPricingToRent(itemIdx, fpId) {
+    const item = state.tocItems[itemIdx];
+    if (!item) return;
+    const fps = item.floorPricing || [];
+    const fp = fps.find((f, i) => (f.id || String(i)) === fpId);
+    if (!fp) return;
+
+    // selectedFloorPricingIds 단독 선택으로 교체
+    item.selectedFloorPricingIds = [fpId];
+
+    // stdDeposit / stdRent / stdMaintenance 입력 필드에 반영
+    const depositEl = document.getElementById('stdDeposit');
+    const rentEl = document.getElementById('stdRent');
+    const maintEl = document.getElementById('stdMaintenance');
+    const labelEl = document.getElementById('stdLabel');
+    if (depositEl && fp.depositPy != null) depositEl.value = fp.depositPy.toLocaleString();
+    if (rentEl && fp.rentPy != null) rentEl.value = fp.rentPy.toLocaleString();
+    if (maintEl && fp.maintenancePy != null) maintEl.value = fp.maintenancePy.toLocaleString();
+    if (labelEl && fp.label) labelEl.value = fp.label;
+
+    showToast(`"${fp.label || fpId}" 기준가가 RENT 필드에 적용되었습니다. 저장 버튼으로 확정하세요.`, 'success');
+
+    // 표 UI 새로고침
+    const building = state.allBuildings.find(b => b.id === item.buildingId);
+    if (building) window.renderBuildingEditor(item, building);
+}
+
 export function toggleFloorPricing(itemIdx, fpId) {
     const item = state.tocItems[itemIdx];
     if (!item) return;
@@ -1909,6 +1962,7 @@ export function registerBuildingFunctions() {
     window.saveStandardFloor = saveStandardFloor;
     window.toggleFloorPricing = toggleFloorPricing;
     window.toggleAllFloorPricing = toggleAllFloorPricing;
+    window.applyFloorPricingToRent = applyFloorPricingToRent;
     window.openBuildingEditModal = openBuildingEditModal;
     window.closeBuildingEditModal = closeBuildingEditModal;
     window.saveBuildingEdit = saveBuildingEdit;

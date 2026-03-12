@@ -117,7 +117,7 @@
             align-items: center;
             padding-bottom: 3mm;
             margin-bottom: 3mm;
-            border-bottom: 2px solid #3b82f6;
+            border-bottom: 2px solid #E8332A;
         }
         
         .building-title {
@@ -1451,11 +1451,13 @@
                     <!-- 헤더 -->
                     <div class="page-header">
                         <div class="building-title">
-                            <span class="icon">🏢</span>
                             <span>${building.name || '빌딩명'}</span>
                             ${item.exclusive ? '<span class="exclusive-badge">전속</span>' : ''}
                         </div>
-                        <div class="region-info">Leasing Information (${region})</div>
+                        <div class="region-info" style="text-align:right; line-height:1.5;">
+                            <div style="font-size:10pt; font-weight:700; color:#1e3a5f;">S&I Corporation</div>
+                            <div>Leasing Information (${region})</div>
+                        </div>
                     </div>
                     
                     <!-- 본문 3열 -->

@@ -332,20 +332,18 @@ async function cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH,
 
     document.getElementById(`${modalId}_fb`).onclick = async () => {
         closeModal();
+        showToast('지도 이미지를 Firebase에 저장 중...', 'info');
         try {
             const blob = await fetchImage();
             if (typeof window.uploadToFirebaseStorage === 'function') {
                 const dlUrl = await window.uploadToFirebaseStorage(blob, `maps/${filename}`);
 
-                // ★ 저장된 이미지 URL을 item.mapImage에 반영
+                // ★ item / building 메모리 반영
                 const item = state.tocItems[idx];
                 if (item) {
                     item.mapImage = dlUrl;
-                    // 수동 모드로 전환 (이미지가 location 영역에 표시되도록)
                     item.mapMode = 'manual';
                 }
-
-                // ★ building.images.location에도 반영 (출력 페이지 대비)
                 const bId = item?.buildingId;
                 const building = bId ? state.allBuildings.find(b => b.id === bId) : null;
                 if (building) {
@@ -353,15 +351,33 @@ async function cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH,
                     building.images.location = dlUrl;
                 }
 
-                // ★ 편집 화면 재렌더 (수동 모드 + 이미지 즉시 표시)
-                if (item && building) {
-                    window.renderBuildingEditor(item, building);
+                // ★ Firebase RTDB에도 URL 영속화 (새로고침 후에도 유지)
+                try {
+                    const { getDatabase, ref: dbRef, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                    const db = getDatabase();
+                    if (bId) {
+                        await update(dbRef(db, `buildings/${bId}`), { 'images/location': dlUrl });
+                    }
+                } catch (dbErr) {
+                    console.warn('[캡쳐] RTDB 저장 실패 (무시):', dbErr);
                 }
 
-                showToast('지도 캡쳐가 저장되었습니다. 수동 모드로 전환됩니다.', 'success');
-                console.log('[캡쳐] Storage URL:', dlUrl);
+                // ★ 편집 화면 즉시 재렌더 + LOCATION 섹션 자동 갱신
+                if (item && building) {
+                    window.renderBuildingEditor(item, building);
+                    // 수동 모드 영역 DOM 직접 갱신 (재렌더 지연 보완)
+                    setTimeout(() => {
+                        const locMap = document.getElementById(`locationMap_${idx}`);
+                        if (locMap) {
+                            const existing = locMap.querySelector('img');
+                            if (existing) { existing.src = dlUrl; }
+                        }
+                    }, 300);
+                }
+
+                showToast('✅ 지도 이미지가 저장되었습니다. LOCATION 영역에 반영되었습니다.', 'success');
             } else {
-                // fallback: 다운로드로 대체
+                // fallback
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url; a.download = filename;
@@ -372,7 +388,7 @@ async function cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH,
             }
         } catch (err) {
             console.error('[캡쳐] Storage 저장 실패:', err);
-            showToast('Storage 저장에 실패했습니다', 'error');
+            showToast('❌ Storage 저장에 실패했습니다. 콘솔을 확인해주세요.', 'error');
         }
     };
 
