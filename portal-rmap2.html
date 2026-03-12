@@ -6057,17 +6057,7 @@ async function runResearchSummarize() {
     formData.append('period',      period);
     formData.append('report_type', rtype);
 
-    // PDF 대용량 파일은 Claude API 처리에 40~85초 소요 → AbortController로 90초 타임아웃 설정
-    const _sumCtrl    = new AbortController();
-    const _sumTimeout = setTimeout(() => _sumCtrl.abort(), 90000);
-    let res;
-    try {
-      res = await fetch(`${BACKEND}/api/research/summarize`, {
-        method: 'POST', body: formData, signal: _sumCtrl.signal
-      });
-    } finally {
-      clearTimeout(_sumTimeout);
-    }
+    const res  = await fetch(`${BACKEND}/api/research/summarize`, { method:'POST', body:formData });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || '요약 실패');
 
@@ -6128,10 +6118,7 @@ async function runResearchSummarize() {
     }
 
   } catch(e) {
-    const msg = e.name === 'AbortError'
-      ? '분석 시간 초과 (90초). PDF가 너무 크거나 서버 부하 상태입니다. 잠시 후 재시도해주세요.'
-      : `요약 오류: ${e.message}`;
-    showToast(msg, 'error');
+    showToast(`요약 오류: ${e.message}`, 'error');
     console.error('[research summarize]', e);
   } finally {
     btn.disabled    = false;
