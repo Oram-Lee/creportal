@@ -9,23 +9,23 @@ import { getDatabase, ref, get, set, push, update, remove, onValue } from 'https
 import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
 // State
-import { state, initFirebase, setCurrentUser, setAllBuildings, setLeasingGuides, setCoverSettings, resetCoverSettings } from './guide-state.js?v=5.1';
+import { state, initFirebase, setCurrentUser, setAllBuildings, setLeasingGuides, setCoverSettings, resetCoverSettings } from './guide-state.js?v=5.5';
 
 // Utils
-import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-utils.js?v=5.1';
+import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-utils.js?v=5.5';
 
 // Modules
-import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.1';
-import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.1';
-import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.1';
-import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=5.1';
-import { registerVacancyFunctions } from './guide-vacancy.js?v=5.1';
-import { registerMapFunctions } from './guide-map.js?v=5.1';
-import { registerNoteFunctions } from './guide-note.js?v=5.1';
-import { registerDividerFunctions } from './guide-divider.js?v=5.1';
-import { registerModalFunctions } from './guide-modal.js?v=5.1';
-import { registerContactFunctions } from './guide-contact.js?v=5.1';
-import { registerPreviewFunctions } from './guide-preview.js?v=5.1';
+import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.5';
+import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.5';
+import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.5';
+import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=5.5';
+import { registerVacancyFunctions } from './guide-vacancy.js?v=5.5';
+import { registerMapFunctions } from './guide-map.js?v=5.5';
+import { registerNoteFunctions } from './guide-note.js?v=5.5';
+import { registerDividerFunctions } from './guide-divider.js?v=5.5';
+import { registerModalFunctions } from './guide-modal.js?v=5.5';
+import { registerContactFunctions } from './guide-contact.js?v=5.5';
+import { registerPreviewFunctions } from './guide-preview.js?v=5.5';
 
 // Firebase 설정
 const firebaseConfig = {
