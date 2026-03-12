@@ -873,11 +873,11 @@ export function renderBuildingEditor(item, building) {
                 <!-- 공실 추가 패널 -->
                 <div class="vacancy-add-panel" id="vacancyAddPanel" style="display:none;">
                     <div style="display:flex; border-bottom:2px solid #e2e8f0; margin-bottom:0; background:#f8fafc; border-radius:8px 8px 0 0; overflow:hidden;">
-                        <button id="vacTabDirect_${idx}" onclick="switchAddVacancyMode('direct',${idx})"
+                        <button id="vacTabDirect_${idx}" onclick="switchVacancyAddTab('direct',${idx})"
                             style="flex:1; padding:10px 16px; font-size:13px; font-weight:700; border:none; cursor:pointer; background:#2563eb; color:white; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.15s;">
                             ✏️ 직접 입력
                         </button>
-                        <button id="vacTabExternal_${idx}" onclick="switchAddVacancyMode('external',${idx})"
+                        <button id="vacTabExternal_${idx}" onclick="switchVacancyAddTab('external',${idx})"
                             style="flex:1; padding:10px 16px; font-size:13px; font-weight:700; border:none; cursor:pointer; background:#f8fafc; color:#64748b; display:flex; align-items:center; justify-content:center; gap:6px; border-left:1px solid #e2e8f0; transition:all 0.15s;">
                             🏢 타사 공실에서 선택
                         </button>
@@ -2364,9 +2364,7 @@ export function registerBuildingFunctions() {
     window.toggleAllFloorPricingCheck = toggleAllFloorPricingCheck;
     window.switchVacancyAddTab = switchVacancyAddTab;
     // switchAddVacancyMode 오버라이드 (guide-vacancy.js보다 나중에 등록)
-    window.switchAddVacancyMode = (mode, idx) => {
-        switchVacancyAddTab(mode, idx);
-    };
+    // guide-vacancy.js 충돌 방지: 버튼에서 직접 switchVacancyAddTab 호출하므로 override 불필요
     window.toggleExternalVacancyItem = toggleExternalVacancyItem;
     window.removeExternalCartItem = removeExternalCartItem;
     window.clearExternalCart = clearExternalCart;
