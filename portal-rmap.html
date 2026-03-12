@@ -6057,17 +6057,7 @@ async function runResearchSummarize() {
     formData.append('period',      period);
     formData.append('report_type', rtype);
 
-    // PDF 대용량 파일은 Claude API 처리에 40~85초 소요 → AbortController로 90초 타임아웃 설정
-    const _sumCtrl    = new AbortController();
-    const _sumTimeout = setTimeout(() => _sumCtrl.abort(), 90000);
-    let res;
-    try {
-      res = await fetch(`${BACKEND}/api/research/summarize`, {
-        method: 'POST', body: formData, signal: _sumCtrl.signal
-      });
-    } finally {
-      clearTimeout(_sumTimeout);
-    }
+    const res  = await fetch(`${BACKEND}/api/research/summarize`, { method:'POST', body:formData });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || '요약 실패');
 
@@ -6128,10 +6118,7 @@ async function runResearchSummarize() {
     }
 
   } catch(e) {
-    const msg = e.name === 'AbortError'
-      ? '분석 시간 초과 (90초). PDF가 너무 크거나 서버 부하 상태입니다. 잠시 후 재시도해주세요.'
-      : `요약 오류: ${e.message}`;
-    showToast(msg, 'error');
+    showToast(`요약 오류: ${e.message}`, 'error');
     console.error('[research summarize]', e);
   } finally {
     btn.disabled    = false;
@@ -6202,7 +6189,32 @@ async function _extractPageTexts(pageIndex, startBatchIdx = 0, prevBatches = nul
       fd.append('file',      _researchFile);
       fd.append('pageIndex', JSON.stringify(batch.map(p => ({ page: p }))));
 
-      const res  = await fetch(`${BACKEND}/api/research/extract-texts`, { method: 'POST', body: fd });
+      // 배치당 90초 타임아웃 (PDF 업로드 + Claude 처리 시간 확보)
+      const doFetch = async () => {
+        const ctrl    = new AbortController();
+        const timer   = setTimeout(() => ctrl.abort(), 90000);
+        try {
+          const r = await fetch(`${BACKEND}/api/research/extract-texts`,
+            { method: 'POST', body: fd, signal: ctrl.signal });
+          return r;
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
+      let res;
+      try {
+        res = await doFetch();
+      } catch (fetchErr) {
+        // 1회 자동 재시도 (타임아웃 또는 네트워크 오류 시)
+        if (fetchErr.name === 'AbortError' || fetchErr.message.includes('fetch')) {
+          console.warn(`[research] 배치 ${bi + 1} 첫 시도 실패, 10초 후 재시도...`);
+          await new Promise(r => setTimeout(r, 10000));
+          res = await doFetch();
+        } else {
+          throw fetchErr;
+        }
+      }
       const data = await res.json();
 
       const extracted = (data.success && data.pageTexts) ? data.pageTexts : {};
@@ -6248,9 +6260,10 @@ async function _extractPageTexts(pageIndex, startBatchIdx = 0, prevBatches = nul
         itemEl.innerHTML = `
           <span class="rex-batch-icon">❌</span>
           <span class="rex-batch-info">${batchLabel}</span>
-          <span class="rex-batch-count">오류 — 건너뜀</span>`;
+          <span class="rex-batch-count">${errMsg}</span>`;
       }
       console.warn(`[research] 배치 ${bi + 1} 오류:`, e);
+      const errMsg = e.name === 'AbortError' ? '시간초과 — 건너뜀' : '오류 — 건너뜀';
     }
   }
 
