@@ -4338,16 +4338,18 @@
             color: white;
         }
         
-        /* 안내 메시지 */
+        /* 안내 메시지 - 하단 전체 영역 */
         .external-vacancy-notice {
-            padding: 12px 20px;
+            padding: 8px 12px;
             background: #fef3c7;
-            border-top: 1px solid #fcd34d;
-            font-size: 12px;
+            border: 1px solid #fcd34d;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            font-size: 11px;
             color: #92400e;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
         }
         
         /* 푸터 버튼 */
@@ -5314,15 +5316,16 @@
         }
 
         /* ===== 타사 공실 그룹 ===== */
+        /* ★ v5.5: 타사공실 레이아웃 전면 재정의 */
         .external-vacancy-container {
-            display: grid;
-            grid-template-columns: 1fr 240px;
-            gap: 12px;
-            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            padding: 0;
         }
         .external-vacancy-list {
             border: 1px solid var(--border-color);
-            border-radius: 8px;
+            border-radius: 8px 8px 0 0;
             overflow: hidden;
         }
         .external-vacancy-header {
@@ -5345,7 +5348,7 @@
             background: var(--bg-primary);
         }
         .external-vacancy-body {
-            max-height: 420px;
+            max-height: 340px;
             overflow-y: auto;
         }
         .external-vacancy-group {
@@ -5394,11 +5397,13 @@
         .external-vacancy-group-body {
             background: var(--bg-primary);
         }
+        /* ★ v5.5: 공실 아이템 - 테이블 행 스타일 */
         .external-vacancy-item {
-            display: flex;
+            display: grid;
+            grid-template-columns: 20px 48px 1fr 1fr 1fr auto;
             align-items: center;
             gap: 8px;
-            padding: 6px 12px 6px 24px;
+            padding: 7px 12px;
             border-bottom: 1px solid var(--border-color);
             cursor: pointer;
             transition: background 0.15s;
@@ -5411,67 +5416,138 @@
             background: rgba(59, 130, 246, 0.05);
         }
         .external-vacancy-item.selected {
-            background: rgba(59, 130, 246, 0.1);
-            border-left: 3px solid var(--accent-color);
-            padding-left: 21px;
+            background: #f0fdf4;
+            border-left: 3px solid #16a34a;
+            padding-left: 9px;
         }
         .external-vacancy-item .vacancy-check {
-            width: 16px;
-            height: 16px;
-            border: 2px solid var(--border-color);
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            color: var(--accent-color);
-            background: var(--bg-primary);
-        }
-        .external-vacancy-item.selected .vacancy-check {
-            background: var(--accent-color);
-            border-color: var(--accent-color);
-            color: white;
+            width: 16px; height: 16px;
+            accent-color: #2563eb;
+            cursor: pointer;
         }
         .external-vacancy-item .vacancy-floor {
             font-weight: 700;
             color: #1e3a5f;
-            min-width: 32px;
+            background: #e0e7ff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-align: center;
             font-size: 11px;
         }
         .external-vacancy-item .vacancy-area {
             color: var(--text-secondary);
             font-size: 11px;
         }
+        .external-vacancy-item .vacancy-deposit {
+            color: #334155;
+            font-size: 11px;
+        }
+        .external-vacancy-item .vacancy-rent {
+            color: #334155;
+            font-size: 11px;
+        }
         .external-vacancy-item .vacancy-price {
             color: var(--text-muted);
             font-size: 10px;
-            margin-left: auto;
         }
+        /* 그룹 헤더에도 같은 grid 컬럼 헤더 표시 */
+        .external-vacancy-group-th {
+            display: grid;
+            grid-template-columns: 20px 48px 1fr 1fr 1fr auto;
+            gap: 8px;
+            padding: 5px 12px;
+            background: #f1f5f9;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        /* 카트 태그 아이템 */
+        .ext-cart-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            background: white;
+            border: 1px solid #bae6fd;
+            border-radius: 12px;
+            font-size: 11px;
+            color: #0369a1;
+            white-space: nowrap;
+        }
+        .ext-cart-tag .tag-remove {
+            width: 14px; height: 14px;
+            border: none;
+            background: #e0f2fe;
+            color: #0369a1;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 10px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .ext-cart-tag .tag-remove:hover { background: #dc2626; color: white; }
+        /* ★ v5.5: 카트 = 하단 선택 현황 패널 */
         .external-vacancy-cart {
-            border: 1px solid var(--accent-color);
-            border-radius: 8px;
+            border: 1px solid #0369a1;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
+            background: #f0f9ff;
         }
         .external-vacancy-cart-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 8px 10px;
-            background: rgba(59, 130, 246, 0.1);
-            border-bottom: 1px solid var(--accent-color);
+            padding: 8px 12px;
+            background: #e0f2fe;
+            border-bottom: 1px solid #bae6fd;
+            flex-wrap: nowrap;
+            gap: 8px;
+            white-space: nowrap;
         }
         .external-vacancy-cart-header h5 {
             margin: 0;
-            font-size: 11px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #0369a1;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .ext-cart-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        .ext-cart-actions button {
+            white-space: nowrap;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
             font-weight: 600;
+            cursor: pointer;
+            border: none;
+        }
+        .ext-cart-actions .btn-reset {
+            background: white;
+            color: #64748b;
+            border: 1px solid #e2e8f0 !important;
+        }
+        .ext-cart-actions .btn-apply {
+            background: #0369a1;
+            color: white;
         }
         .external-vacancy-cart-body {
-            flex: 1;
-            padding: 6px;
-            max-height: 350px;
+            padding: 6px 12px;
+            max-height: 120px;
             overflow-y: auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            align-content: flex-start;
         }
         .external-vacancy-cart .cart-item {
             display: flex;

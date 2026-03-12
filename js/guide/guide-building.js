@@ -60,7 +60,161 @@ import {
     getUniqueDatesHtml, 
     renderExternalVacancyGroups, 
     renderExternalCartItems 
+
 } from './guide-vacancy.js?v=5.1';
+
+// ★ v5.5: 타사공실 카트 태그 렌더 (하단 선택 현황 패널용)
+function renderExternalCartTagItems(pending, idx) {
+    if (!pending || !pending.length) {
+        return '<span style="color:#94a3b8; font-size:11px; padding:4px 0; display:block;">선택된 공실이 없습니다</span>';
+    }
+    return pending.map((v, i) => {
+        const floor = v.floor || v.floorLabel || '-';
+        const area = v.area || v.leaseArea || '';
+        return '<span class="ext-cart-tag">'
+            + '<span>' + floor + (area ? ' · ' + area + '평' : '') + '</span>'
+            + '<button class="tag-remove" onclick="removeExternalCartItem(' + idx + ',' + i + ')" title="제거">✕</button>'
+            + '</span>';
+    }).join('');
+}
+
+// ★ v5.5: 타사공실 체크박스 토글 → pending 배열 관리 + 카트 UI 갱신
+export function toggleExternalVacancyItem(idx, vacId, vacObj) {
+    const item = state.tocItems?.[idx];
+    if (!item) return;
+    if (!item.pendingExternalVacancies) item.pendingExternalVacancies = [];
+    const existIdx = item.pendingExternalVacancies.findIndex(v => (v.id || v.vacancyId) === vacId);
+    if (existIdx >= 0) {
+        // 이미 있으면 제거
+        item.pendingExternalVacancies.splice(existIdx, 1);
+    } else {
+        // 없으면 추가
+        const obj = typeof vacObj === 'string' ? JSON.parse(decodeURIComponent(vacObj)) : vacObj;
+        item.pendingExternalVacancies.push(obj);
+    }
+    _refreshExternalCart(idx);
+    // 아이템 UI 선택 상태 갱신
+    const el = document.getElementById('extVacItem_' + idx + '_' + vacId);
+    if (el) el.classList.toggle('selected', existIdx < 0);
+}
+
+// ★ v5.5: 카트 아이템 단건 제거
+export function removeExternalCartItem(idx, i) {
+    const item = state.tocItems?.[idx];
+    if (!item || !item.pendingExternalVacancies) return;
+    item.pendingExternalVacancies.splice(i, 1);
+    _refreshExternalCart(idx);
+    // 리스트 체크박스 연동
+    const body = document.getElementById('extVacancyBody_' + idx);
+    if (body) {
+        const cbs = body.querySelectorAll('input[type="checkbox"]');
+        cbs.forEach(cb => {
+            const vid = cb.dataset.vacId;
+            const isIn = item.pendingExternalVacancies.some(v => (v.id || v.vacancyId) === vid);
+            cb.checked = isIn;
+            const row = cb.closest('.external-vacancy-item');
+            if (row) row.classList.toggle('selected', isIn);
+        });
+    }
+}
+
+// ★ v5.5: 카트 전체 초기화
+export function clearExternalCart(idx) {
+    const item = state.tocItems?.[idx];
+    if (!item) return;
+    item.pendingExternalVacancies = [];
+    _refreshExternalCart(idx);
+    // 리스트 체크 해제
+    const body = document.getElementById('extVacancyBody_' + idx);
+    if (body) {
+        body.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = false; });
+        body.querySelectorAll('.external-vacancy-item.selected').forEach(el => el.classList.remove('selected'));
+    }
+}
+
+// ★ v5.5: pending → selectedExternalVacancies 반영
+export async function applyPendingExternalVacancies(idx) {
+    const item = state.tocItems?.[idx];
+    if (!item) return;
+    if (!item.pendingExternalVacancies || !item.pendingExternalVacancies.length) {
+        showToast('선택된 공실이 없습니다.', 'warning'); return;
+    }
+    if (!item.selectedExternalVacancies) item.selectedExternalVacancies = [];
+    // 중복 제외 추가
+    item.pendingExternalVacancies.forEach(v => {
+        const dup = item.selectedExternalVacancies.some(s => (s.id || s.vacancyId) === (v.id || v.vacancyId));
+        if (!dup) item.selectedExternalVacancies.push(v);
+    });
+    item.pendingExternalVacancies = [];
+    showToast(item.selectedExternalVacancies.length + '건 공실 적용 완료', 'success');
+    // 빌딩 에디터 리렌더
+    const building = state.allBuildings?.find(b => b.id === item.buildingId);
+    if (building) window.renderBuildingEditor(item, building);
+}
+
+// ★ v5.5: 필터 적용
+export function filterExternalVacancies(idx) {
+    const srcEl = document.getElementById('extSourceFilter_' + idx);
+    const dateEl = document.getElementById('extDateFilter_' + idx);
+    const bodyEl = document.getElementById('extVacancyBody_' + idx);
+    if (!bodyEl) return;
+    const srcVal = srcEl?.value || 'all';
+    const dateVal = dateEl?.value || 'all';
+    const item = state.tocItems?.[idx];
+    if (!item) return;
+    // 원본 공실 목록 재조회
+    const buildingId = item.buildingId;
+    const allVacs = state.externalVacanciesByBuilding?.[buildingId] || [];
+    const filtered = allVacs.filter(v => {
+        if (srcVal !== 'all' && v.source !== srcVal) return false;
+        if (dateVal !== 'all' && (v.publishDate || v.date || '') !== dateVal) return false;
+        return true;
+    });
+    bodyEl.innerHTML = renderExternalVacancyGroups(filtered, item.pendingExternalVacancies || [], idx);
+    _bindExternalVacancyCheckboxes(idx);
+}
+
+// ★ v5.5: 카트 UI 갱신 (카운트 + 태그 목록)
+function _refreshExternalCart(idx) {
+    const item = state.tocItems?.[idx];
+    const pending = item?.pendingExternalVacancies || [];
+    const countEl = document.getElementById('extSelectedCount_' + idx);
+    if (countEl) countEl.textContent = pending.length;
+    const cartBody = document.getElementById('extCartBody_' + idx);
+    if (cartBody) cartBody.innerHTML = renderExternalCartTagItems(pending, idx);
+}
+
+// ★ v5.5: 체크박스 이벤트 바인딩 (renderExternalVacancyGroups 렌더 후 호출)
+export function _bindExternalVacancyCheckboxes(idx) {
+    const body = document.getElementById('extVacancyBody_' + idx);
+    if (!body) return;
+    const item = state.tocItems?.[idx];
+    const pending = item?.pendingExternalVacancies || [];
+    body.querySelectorAll('.external-vacancy-item').forEach(row => {
+        // 체크박스 클릭 이벤트 위임
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (!cb) return;
+        const vacId = cb.dataset.vacId || cb.value;
+        const isChecked = pending.some(v => (v.id || v.vacancyId) === vacId);
+        cb.checked = isChecked;
+        row.classList.toggle('selected', isChecked);
+        // 중복 바인딩 방지
+        if (cb._extBound) return;
+        cb._extBound = true;
+        cb.addEventListener('change', function() {
+            const vacDataStr = this.closest('.external-vacancy-item')?.dataset.vacData;
+            let vacObj = null;
+            try { vacObj = vacDataStr ? JSON.parse(decodeURIComponent(vacDataStr)) : null; } catch(e){}
+            if (!vacObj) vacObj = { id: vacId, vacancyId: vacId, floor: row.querySelector('.vacancy-floor')?.textContent };
+            toggleExternalVacancyItem(idx, vacId, vacObj);
+        });
+        row.addEventListener('click', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+            cb.checked = !cb.checked;
+            cb.dispatchEvent(new Event('change'));
+        });
+    });
+}
 import { initBuildingKakaoMap } from './guide-map.js?v=5.2';
 
 // ★ v5.0: 공실 최대 개수 (A4 가로 기준, 헤더/합계 포함)
@@ -186,7 +340,8 @@ export function renderBuildingEditor(item, building) {
                 // 타사 공실 영역만 업데이트
                 const extBody = document.getElementById('extVacancyBody');
                 if (extBody) {
-                    extBody.innerHTML = renderExternalVacancyGroups(vacancies, item.selectedExternalVacancies, idx);
+                    extBody.innerHTML = renderExternalVacancyGroups(vacancies, item.pendingExternalVacancies || [], idx);
+                    setTimeout(() => _bindExternalVacancyCheckboxes(idx), 50);
                 }
                 const countEl = document.querySelector('.external-vacancy-count');
                 if (countEl) {
@@ -718,18 +873,18 @@ export function renderBuildingEditor(item, building) {
                 <!-- 공실 추가 패널 -->
                 <div class="vacancy-add-panel" id="vacancyAddPanel" style="display:none;">
                     <div style="display:flex; border-bottom:2px solid #e2e8f0; margin-bottom:0; background:#f8fafc; border-radius:8px 8px 0 0; overflow:hidden;">
-                        <button id="vacTabDirect" onclick="switchAddVacancyMode('direct')"
+                        <button id="vacTabDirect_${idx}" onclick="switchAddVacancyMode('direct',${idx})"
                             style="flex:1; padding:10px 16px; font-size:13px; font-weight:700; border:none; cursor:pointer; background:#2563eb; color:white; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.15s;">
                             ✏️ 직접 입력
                         </button>
-                        <button id="vacTabExternal" onclick="switchAddVacancyMode('external')"
+                        <button id="vacTabExternal_${idx}" onclick="switchAddVacancyMode('external',${idx})"
                             style="flex:1; padding:10px 16px; font-size:13px; font-weight:700; border:none; cursor:pointer; background:#f8fafc; color:#64748b; display:flex; align-items:center; justify-content:center; gap:6px; border-left:1px solid #e2e8f0; transition:all 0.15s;">
                             🏢 타사 공실에서 선택
                         </button>
                     </div>
                     
                     <!-- 직접 입력 -->
-                    <div id="addVacancyDirect" class="vacancy-add-content">
+                    <div id="addVacancyDirect_${idx}" class="vacancy-add-content">
                         <div class="vacancy-add-grid">
                             <input type="text" id="newVacFloor" placeholder="층 (예: 15)">
                             <input type="text" id="newVacExclusive" placeholder="전용면적">
@@ -742,55 +897,55 @@ export function renderBuildingEditor(item, building) {
                         </div>
                     </div>
                     
-                    <!-- 타사 공실 (자동 로드, 다중 선택) -->
-                    <div id="addVacancyExternal" class="vacancy-add-content" style="display:none;">
+                    <!-- 타사 공실 -->
+                    <div id="addVacancyExternal_${idx}" class="vacancy-add-content" style="display:none;">
                         <div class="external-vacancy-container">
-                            <!-- 좌측: 공실 리스트 (자동 표시) -->
+                            <!-- 리스트 영역 -->
                             <div class="external-vacancy-list">
                                 <div class="external-vacancy-header">
                                     <div class="external-vacancy-filters">
-                                        <select id="extSourceFilter" onchange="filterExternalVacancies(${idx})">
+                                        <select id="extSourceFilter_${idx}" onchange="filterExternalVacancies(${idx})">
                                             <option value="all">전체 출처</option>
                                             ${getUniqueSourcesHtml(externalVacancies)}
                                         </select>
-                                        <select id="extDateFilter" onchange="filterExternalVacancies(${idx})">
+                                        <select id="extDateFilter_${idx}" onchange="filterExternalVacancies(${idx})">
                                             <option value="all">전체 날짜</option>
                                             ${getUniqueDatesHtml(externalVacancies)}
                                         </select>
                                     </div>
-                                    <span class="external-vacancy-count">${externalVacancies.length}건</span>
+                                    <span class="external-vacancy-count" style="font-size:11px; color:#64748b;">총 ${externalVacancies.length}건</span>
                                 </div>
-                                <div class="external-vacancy-body" id="extVacancyBody">
-                                    ${renderExternalVacancyGroups(externalVacancies, item.selectedExternalVacancies, idx)}
+                                <!-- 컬럼 헤더 -->
+                                <div class="external-vacancy-group-th">
+                                    <span></span>
+                                    <span>층</span>
+                                    <span>면적 (전용/임대)</span>
+                                    <span>보증금</span>
+                                    <span>임대료</span>
+                                    <span>관리비</span>
+                                </div>
+                                <div class="external-vacancy-body" id="extVacancyBody_${idx}">
+                                    ${renderExternalVacancyGroups(externalVacancies, item.pendingExternalVacancies || [], idx)}
                                 </div>
                             </div>
                             
-                            <!-- 우측: 선택된 공실 (기준가 UI와 동일 패턴) -->
-                            <div class="external-vacancy-cart">
-                                <div class="external-vacancy-cart-header" style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#f0f9ff; border-bottom:1px solid #bae6fd;">
-                                    <span style="font-size:12px; font-weight:700; color:#0369a1;">
-                                        선택된 공실 <span id="extSelectedCount_${idx}">${(item.pendingExternalVacancies?.length || 0)}</span>건
-                                    </span>
-                                    <div style="display:flex; gap:6px; align-items:center;">
-                                        <button onclick="clearExternalCart(${idx})"
-                                            style="padding:4px 10px; background:white; color:#64748b; border:1px solid #e2e8f0; border-radius:4px; font-size:11px; cursor:pointer;">초기화</button>
-                                        <button onclick="applyPendingExternalVacancies(${idx})"
-                                            style="padding:4px 12px; background:#0369a1; color:white; border:none; border-radius:4px; font-size:12px; font-weight:700; cursor:pointer;">
-                                            ✅ 전체 반영
-                                        </button>
+                            <!-- 하단 선택 현황 패널 -->
+                            <div class="external-vacancy-cart" id="extCartPanel_${idx}">
+                                <div class="external-vacancy-cart-header">
+                                    <h5>✓ 선택된 공실 <span id="extSelectedCount_${idx}" style="background:#0369a1; color:white; padding:1px 7px; border-radius:10px; font-size:11px; margin-left:4px;">${(item.pendingExternalVacancies?.length || 0)}</span></h5>
+                                    ${(item.selectedExternalVacancies?.length || 0) > 0 ? '<span style="font-size:11px; color:#16a34a; font-weight:600;">✅ 적용됨 ' + item.selectedExternalVacancies.length + '건</span>' : '<span style="font-size:11px; color:#94a3b8;">공실을 선택하세요</span>'}
+                                    <div class="ext-cart-actions">
+                                        <button class="btn-reset" onclick="clearExternalCart(${idx})">초기화</button>
+                                        <button class="btn-apply" onclick="applyPendingExternalVacancies(${idx})">✅ 전체 반영</button>
                                     </div>
                                 </div>
-                                <div class="external-vacancy-cart-body" id="extCartBody">
-                                    ${renderExternalCartItems(item.pendingExternalVacancies || [], idx)}
+                                <div class="external-vacancy-cart-body" id="extCartBody_${idx}">
+                                    ${renderExternalCartTagItems(item.pendingExternalVacancies || [], idx)}
                                 </div>
-                                ${(item.selectedExternalVacancies?.length || 0) > 0 ? `
-                                <div style="padding:8px 12px; background:#f0fdf4; border-top:1px solid #bbf7d0; font-size:11px; color:#16a34a; font-weight:600;">
-                                    ✅ 이미 적용된 공실: ${item.selectedExternalVacancies.length}건
-                                </div>` : ''}
                             </div>
                             
-                            <div class="external-vacancy-notice">
-                                💡 좌측 리스트에서 공실을 선택(체크)하면 우측에 추가됩니다. <strong>[전체 반영]</strong>으로 공실 현황에 적용하세요.
+                            <div class="external-vacancy-notice" style="border-radius:0 0 8px 8px; padding:8px 12px; font-size:11px;">
+                                💡 리스트에서 공실을 체크하면 아래 선택 현황에 추가됩니다. <strong>[전체 반영]</strong>으로 공실 현황에 적용하세요.
                             </div>
                         </div>
                     </div>
@@ -833,6 +988,9 @@ export function renderBuildingEditor(item, building) {
             </div>
         </div>
     `;
+        
+    // ★ v5.5: 타사공실 체크박스 이벤트 바인딩 (렌더 직후)
+    setTimeout(() => _bindExternalVacancyCheckboxes(idx), 100);
         
     // 숨겨진 파일 input 추가
     if (!document.getElementById('imageUploadInput')) {
@@ -1828,11 +1986,21 @@ function renderDirectInputRows(idx, building) {
 }
 
 // ========== 공실 탭 전환 ==========
-export function switchVacancyAddTab(mode) {
-    const direct = document.getElementById('addVacancyDirect');
-    const external = document.getElementById('addVacancyExternal');
-    const tabDirect = document.getElementById('vacTabDirect');
-    const tabExternal = document.getElementById('vacTabExternal');
+export function switchVacancyAddTab(mode, idx) {
+    // idx가 없으면 현재 열려있는 빌딩 에디터의 활성 idx 탐색
+    if (idx === undefined || idx === null) {
+        // fallback: 열린 패널에서 idx 추출
+        const openPanel = document.querySelector('.vacancy-add-panel[style*="block"], .vacancy-add-panel:not([style*="none"])');
+        if (openPanel) {
+            const m = openPanel.id?.match(/\d+/);
+            if (m) idx = parseInt(m[0]);
+        }
+    }
+    const sfx = (idx !== undefined && idx !== null) ? '_' + idx : '';
+    const direct = document.getElementById('addVacancyDirect' + sfx);
+    const external = document.getElementById('addVacancyExternal' + sfx);
+    const tabDirect = document.getElementById('vacTabDirect' + sfx);
+    const tabExternal = document.getElementById('vacTabExternal' + sfx);
     if (mode === 'direct') {
         if (direct) direct.style.display = '';
         if (external) external.style.display = 'none';
@@ -2196,11 +2364,15 @@ export function registerBuildingFunctions() {
     window.toggleAllFloorPricingCheck = toggleAllFloorPricingCheck;
     window.switchVacancyAddTab = switchVacancyAddTab;
     // switchAddVacancyMode 오버라이드 (guide-vacancy.js보다 나중에 등록)
-    const _origSwitch = window.switchAddVacancyMode;
-    window.switchAddVacancyMode = (mode) => {
-        if (_origSwitch) _origSwitch(mode);
-        switchVacancyAddTab(mode);
+    window.switchAddVacancyMode = (mode, idx) => {
+        switchVacancyAddTab(mode, idx);
     };
+    window.toggleExternalVacancyItem = toggleExternalVacancyItem;
+    window.removeExternalCartItem = removeExternalCartItem;
+    window.clearExternalCart = clearExternalCart;
+    window.applyPendingExternalVacancies = applyPendingExternalVacancies;
+    window.filterExternalVacancies = filterExternalVacancies;
+    window._bindExternalVacancyCheckboxes = _bindExternalVacancyCheckboxes;
     window.updateDirectRow = updateDirectRow;
     window.saveDirectRow = saveDirectRow;
     window.addDirectRow = addDirectRow;
