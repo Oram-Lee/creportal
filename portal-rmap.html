@@ -251,6 +251,21 @@ body {
 .mode-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow); }
 .mode-card.selected { border-color: var(--accent); background: var(--accent-lt); }
 .mode-card.selected.lr-mode { border-color: var(--lr-color); background: #f5f0ff; }
+.rtype-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.rtype-card {
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all .18s;
+  background: var(--surface);
+}
+.rtype-card:hover   { border-color: var(--accent); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.rtype-card.selected { border-color: var(--accent); background: #eff6ff; }
+.rtype-card-icon { font-size: 20px; margin-bottom: 6px; }
+.rtype-card-title { font-size: 13px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+.rtype-card-desc  { font-size: 11px; color: var(--muted); line-height: 1.5; margin-bottom: 8px; }
+.rtype-card-feats { font-size: 11px; color: var(--text); line-height: 1.7; }
 .mode-badge {
   display: inline-block;
   padding: 3px 10px;
@@ -2402,6 +2417,42 @@ canvas.mini-chart { width: 100% !important; }
 
       <!-- STEP 1: 모드 선택 -->
       <div class="step-panel active" id="step-panel-1">
+
+        <!-- 리포트 유형 선택 (Step 1 상단) -->
+        <div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.5px;margin-bottom:10px">STEP 0 — 리포트 유형 선택</div>
+          <div class="rtype-cards">
+            <div class="rtype-card selected" id="rtypeCardA" onclick="selectReportType('TYPE_A')">
+              <div class="rtype-card-icon">📊</div>
+              <div class="rtype-card-title">TR 컨설팅 리포트</div>
+              <div class="rtype-card-desc">임차 고객사 미팅용 시장 분석 보고서</div>
+              <div class="rtype-card-feats">
+                ✅ 경쟁사 임차 위치 분석<br>
+                ✅ 동일/타 권역 대안 빌딩<br>
+                ✅ RF·TI 협상 포인트<br>
+                ✅ 권역 미래 방향성
+              </div>
+            </div>
+            <div class="rtype-card" id="rtypeCardB" onclick="selectReportType('TYPE_B')">
+              <div class="rtype-card-icon">🤝</div>
+              <div class="rtype-card-title">서비스 소개 + TR 분석</div>
+              <div class="rtype-card-desc">S&amp;I 역량 소개 + 임차 고객사 분석 복합</div>
+              <div class="rtype-card-feats">
+                ✅ 회사 소개 (임대차 역량)<br>
+                ✅ 담당자 임대차 레퍼런스<br>
+                ✅ TYPE A 모든 기능<br>
+                ✅ PFM·인테리어 안내
+              </div>
+            </div>
+          </div>
+          <!-- TYPE_B 전용 안내 (선택 시 표시) -->
+          <div id="typeBNotice" style="display:none;font-size:11px;color:#7c3aed;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:6px;padding:8px 10px">
+            ℹ️ TYPE B는 현재 TYPE A와 동일 리포트 생성 후 별도 회사 소개 슬라이드를 수동 병합합니다. (자동 병합 기능 개발 예정)
+          </div>
+        </div>
+
+        <!-- 기존 TR/LR 모드 선택 -->
+        <div style="font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.5px;margin-bottom:10px">STEP 1 — 서비스 모드 선택</div>
         <div class="mode-cards">
           <div class="mode-card" id="card-TR" onclick="selectMode('TR')">
             <div class="mode-check">✓</div>
@@ -2787,6 +2838,31 @@ canvas.mini-chart { width: 100% !important; }
             <div class="intel-result-panel" id="intelResultPanel"></div>
           </div>
 
+          <!-- 현재 임대 조건 (대안 빌딩 필터 기준) -->
+          <div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+            <label class="form-label">
+              현재 임대 조건
+              <span style="font-size:11px;color:var(--muted);font-weight:400"> (입력 시 동일 조건 대안 빌딩 자동 검색)</span>
+            </label>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+              <div>
+                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">임대료/평 (원)</label>
+                <input type="number" class="form-input" id="curRentPy"
+                       placeholder="예: 85000" style="font-size:13px">
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">관리비/평 (원)</label>
+                <input type="number" class="form-input" id="curMaintPy"
+                       placeholder="예: 35000" style="font-size:13px">
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">보증금/평 (원)</label>
+                <input type="number" class="form-input" id="curDepositPy"
+                       placeholder="예: 850000" style="font-size:13px">
+              </div>
+            </div>
+          </div>
+
         </div>
         <!-- LR 전용 -->
         <div id="lr-fields" style="display:none">
@@ -2822,6 +2898,31 @@ canvas.mini-chart { width: 100% !important; }
       </div>
 
     </div>
+
+    <!-- 타 권역 대안 빌딩 검색 — TR/LR 공통, btnGenerate 전 -->
+    <div class="form-group" id="altDistrictGroup"
+         style="margin:0 20px 4px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+      <label class="form-label" style="margin-bottom:6px">
+        비교 권역 선택
+        <span style="font-size:11px;color:var(--muted);font-weight:400"> (타 권역 대안 빌딩 검색)</span>
+      </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label class="coverage-chip" id="altCBD">
+          <input type="checkbox" value="CBD" onchange="toggleAltDistrict(this)">CBD 도심
+        </label>
+        <label class="coverage-chip" id="altGBD">
+          <input type="checkbox" value="GBD" onchange="toggleAltDistrict(this)">GBD 강남
+        </label>
+        <label class="coverage-chip" id="altYBD">
+          <input type="checkbox" value="YBD" onchange="toggleAltDistrict(this)">YBD 여의도
+        </label>
+        <label class="coverage-chip" id="altBBD">
+          <input type="checkbox" value="BBD" onchange="toggleAltDistrict(this)">BBD 분당
+        </label>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px">현재 기준 빌딩 권역은 리포트 생성 시 자동 제외됩니다</div>
+    </div>
+
     <div class="modal-footer">
       <button class="btn btn-outline" id="btnPrev" onclick="prevStep()" style="display:none">← 이전</button>
       <button class="btn btn-primary" id="btnNext" onclick="nextStep()">다음 →</button>
@@ -2935,6 +3036,9 @@ let reportParams  = {};
 let reportHistory = [];
 let currentReport = null;
 const tags = { competitor: [], compBuilding: [] };
+let selectedReportType   = 'TYPE_A';  // 'TYPE_A' | 'TYPE_B'
+let selectedAltDistricts = [];        // 타 권역 대안 빌딩 검색용 ['CBD','YBD']
+let currentLeaseCond     = {};        // 현재 임대조건 (대안 빌딩 필터 기준)
 
 // ===== 업종코드 → 업종명 매핑 (DART 기준 주요 코드) =====
 const INDUTY_MAP = {
@@ -3037,6 +3141,21 @@ function resetModal() {
   document.getElementById('targetIndustry').value = '';
   renderTags('competitor');
   renderTags('compBuilding');
+
+  // 신규: 현재 임대조건 + 비교권역 초기화
+  selectedReportType   = 'TYPE_A';
+  selectedAltDistricts = [];
+  // 리포트 타입 UI 초기화
+  document.querySelectorAll('.rtype-card').forEach(c => c.classList.remove('selected'));
+  const rtA = document.getElementById('rtypeCardA'); if (rtA) rtA.classList.add('selected');
+  const tnB = document.getElementById('typeBNotice'); if (tnB) tnB.style.display = 'none';
+  const cr = document.getElementById('curRentPy');    if (cr) cr.value = '';
+  const cm = document.getElementById('curMaintPy');   if (cm) cm.value = '';
+  const cd = document.getElementById('curDepositPy'); if (cd) cd.value = '';
+  ['altCBD','altGBD','altYBD','altBBD'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.querySelector('input[type=checkbox]').checked = false;
+  });
 
   // 스텝 1로 초기화
   for (let i = 1; i <= 4; i++) {
@@ -4122,6 +4241,25 @@ function guessDistrict(address) {
 }
 
 // ===== 태그 입력 =====
+// ===== 리포트 타입 선택 =====
+function selectReportType(type) {
+  selectedReportType = type;
+  document.querySelectorAll('.rtype-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById(type === 'TYPE_A' ? 'rtypeCardA' : 'rtypeCardB').classList.add('selected');
+  const notice = document.getElementById('typeBNotice');
+  if (notice) notice.style.display = type === 'TYPE_B' ? 'block' : 'none';
+}
+
+// ===== 타 권역 체크박스 토글 =====
+function toggleAltDistrict(cb) {
+  const v = cb.value;
+  if (cb.checked) {
+    if (!selectedAltDistricts.includes(v)) selectedAltDistricts.push(v);
+  } else {
+    selectedAltDistricts = selectedAltDistricts.filter(d => d !== v);
+  }
+}
+
 function handleTagInput(event, type) {
   if (event.key === 'Enter') {
     event.preventDefault();
@@ -4180,6 +4318,81 @@ async function fetchNearbyVacancies(buildingIds) {
     }
     return vacancies;
   } catch { return []; }
+}
+
+// ===== OCR 최신 기준가 추출 헬퍼 =====
+function getLatestOcrPricing(floorPricingArr) {
+  // floorPricing[] 배열에서 sourceType='ocr' 우선, effectiveDate 역순 → 첫 번째 항목 반환
+  if (!floorPricingArr || !floorPricingArr.length) return null;
+  const ocr = floorPricingArr
+    .filter(fp => fp.sourceType === 'ocr' || fp.sourceType === 'ocr_basePricing')
+    .sort((a, b) => (b.effectiveDate || '').localeCompare(a.effectiveDate || ''));
+  if (ocr.length) return ocr[0];
+  // OCR 없으면 effectiveDate 기준 최신 항목
+  return [...floorPricingArr]
+    .sort((a, b) => (b.effectiveDate || '').localeCompare(a.effectiveDate || ''))[0] || null;
+}
+
+// ===== 타 권역 대안 빌딩 조회 =====
+async function fetchAltDistrictBuildings(altDistricts, curRentPy, desiredAreaMin, desiredAreaMax) {
+  // altDistricts: ['CBD','YBD'] 등 — 기준 권역 제외 후 전달받음
+  if (!altDistricts || altDistricts.length === 0) return {};
+  try {
+    const snap = await db.ref('buildings').once('value');
+    const allBuildings = snap.val() || {};
+
+    const rentMin = curRentPy > 0 ? curRentPy * 0.75 : 0;
+    const rentMax = curRentPy > 0 ? curRentPy * 1.25 : Infinity;
+
+    const result = {};  // { 'CBD': [...], 'YBD': [...] }
+
+    for (const [id, b] of Object.entries(allBuildings)) {
+      if (b.status === 'deleted' || b.status === 'hidden') continue;
+      const region = b.region || guessDistrict(b.address);
+      if (!altDistricts.includes(region)) continue;
+
+      // 임대료 필터 — curRentPy 미입력 시 전체 허용
+      const bRentPy = b.pricing?.rentPy || b.rentPy || 0;
+      if (curRentPy > 0 && bRentPy > 0) {
+        if (bRentPy < rentMin || bRentPy > rentMax) continue;
+      }
+
+      if (!result[region]) result[region] = [];
+      result[region].push({
+        id,
+        name:               b.name || b.buildingName || '',
+        address:            b.address || '',
+        region,
+        grade:              b.grade || '',
+        grossFloorPy:       b.area?.grossFloorPy || b.grossFloorPy || 0,
+        rentPy:             b.pricing?.rentPy    || b.rentPy       || 0,
+        maintenancePy:      b.pricing?.maintenancePy || b.maintenancePy || 0,
+        depositPy:          b.pricing?.depositPy || b.depositPy    || 0,
+        latestFloorPricing: getLatestOcrPricing(b.floorPricing || []),
+        nearbyStation:      b.nearbyStation || '',
+        stationDistance:    b.stationDistance || '',
+        coordinates:        b.coordinates || {},
+        incentives:         b.incentives  || [],   // 인센티브 포함
+      });
+    }
+
+    // 각 권역별 rentPy 오름차순 정렬 후 최대 10개
+    for (const dist of altDistricts) {
+      if (result[dist]) {
+        result[dist] = result[dist]
+          .sort((a, bld) => (a.rentPy || 0) - (bld.rentPy || 0))
+          .slice(0, 10);
+      }
+    }
+
+    console.log(`[대안빌딩] 조회 완료:`, Object.fromEntries(
+      Object.entries(result).map(([k,v]) => [k, v.length + '개'])
+    ));
+    return result;
+  } catch(e) {
+    console.warn('[대안빌딩] 조회 실패:', e);
+    return {};
+  }
 }
 
 function getDistance(lat1, lng1, lat2, lng2) {
@@ -4243,6 +4456,13 @@ async function generateReport() {
     if (!body.clientName) { showToast('담당자명을 입력해주세요', 'error'); return; }
   }
 
+  // ── 신규 파라미터 추가 ──
+  body.reportType   = selectedReportType;
+  body.curRentPy    = parseInt(document.getElementById('curRentPy')?.value)    || 0;
+  body.curMaintPy   = parseInt(document.getElementById('curMaintPy')?.value)   || 0;
+  body.curDepositPy = parseInt(document.getElementById('curDepositPy')?.value) || 0;
+  body.altDistricts = selectedAltDistricts.filter(d => d !== (body.district || analysisDistrict)); // 기준 권역 제외
+
   closeModal();
   showGenerating(true);
 
@@ -4291,8 +4511,43 @@ async function generateReport() {
     setGenStep(1, 'active');
     const nearbyBuildings = await fetchNearbyBuildings(reportParams.lat, reportParams.lng, selectedRadius);
     const vacancyData     = await fetchNearbyVacancies(nearbyBuildings.map(b => b.id));
+
+    // ── incentiveData: 별도 Firebase 쿼리 없이 nearbyBuildings에서 직접 추출 ──
+    // buildings/{id}/incentives[] 배열이 fetchNearbyBuildings()에서 이미 포함되어 있음
+    const incentiveData = {};
+    nearbyBuildings.forEach(b => {
+      const items = b.incentives || [];   // buildings/{id}/incentives[] 배열
+      if (items.length > 0) {
+        incentiveData[b.id] = items.map(item => ({
+          rf:          item.rf        || item.rentFree || 0,   // 렌트프리 (개월)
+          fo:          item.fo        || item.fitOut   || 0,   // Fit-Out (만원/평)
+          ti:          item.ti        || 0,                    // TI (만원/평)
+          condition:   item.condition || '',
+          startDate:   item.startDate || '',
+          endDate:     item.endDate   || '',
+          buildingName: b.name
+        }));
+      }
+    });
+    console.log(`[리포트생성] incentiveData 추출: ${Object.keys(incentiveData).length}개 빌딩`);
+
     body.nearbyBuildings  = nearbyBuildings;
     body.vacancyData      = vacancyData;
+    body.incentiveData    = incentiveData;  // ← 별도 Firebase 쿼리 없이 구성 완료
+
+    // ── 타 권역 대안 빌딩 조회 (selectedAltDistricts 선택 시만 실행) ──
+    let altDistrictBuildings = {};
+    if (body.altDistricts && body.altDistricts.length > 0) {
+      if (_statusEl) _statusEl.textContent = '타 권역 대안 빌딩 조회 중…';
+      altDistrictBuildings = await fetchAltDistrictBuildings(
+        body.altDistricts,
+        body.curRentPy    || 0,
+        body.desiredAreaMin || 0,
+        body.desiredAreaMax || 0
+      );
+      body.altDistrictBuildings = altDistrictBuildings;
+      console.log(`[리포트생성] 타 권역 대안 빌딩 주입:`, body.altDistricts.join(','));
+    }
 
     // 리서치 컨텍스트 주입 (RAG 2단계)
     if (_statusEl) _statusEl.textContent = '리서치 자료 컨텍스트 로드 중…';
@@ -4390,6 +4645,8 @@ async function generateReport() {
       result,
       nearbyBuildings,
       vacancyData,
+      incentiveData,   // ★ incentives: buildings/{id}/incentives[] 에서 직접 추출
+      altDistrictBuildings,  // ★ 타 권역 대안 빌딩 { 'CBD': [...], 'YBD': [...] }
     };
     reportHistory.unshift(report);
     renderReportList();
@@ -4397,6 +4654,49 @@ async function generateReport() {
     setGenStep(5, 'done');
     showGenerating(false);
     viewReport(report);
+
+    // ── 권역 방향성 분석 비동기 후처리 (메인 렌더 완료 후 2초 뒤 실행) ──
+    setTimeout(async () => {
+      try {
+        const rbone = report.result?.sections?.marketStats?.data || {};
+        const lv    = rbone.vacancyLatest || {};
+        const lr    = rbone.rentLatest    || {};
+        const resp  = await fetch(`${BACKEND}/api/report/district-analysis`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            baseDistrict:    report.district,
+            altDistricts:    report.params?.altDistricts    || [],
+            industry:        report.params?.clientIndustry  || report.params?.targetIndustry || '',
+            clientIssue:     report.params?.clientIssue     || '',
+            rbone: {
+              vacancyRate: lv.vacancy,
+              avgRentPy:   lr.rent,
+              period:      lv.period || lv.periodDesc,
+            },
+            researchContext: report.params?.researchContext || '',
+          }),
+          signal: AbortSignal.timeout(60000),  // 60초 타임아웃
+        });
+        if (!resp.ok) throw new Error(`district-analysis ${resp.status}`);
+        const analysis = await resp.json();
+        if (analysis.success) {
+          const el = document.getElementById(`districtDirectionSection_${report.id}`);
+          if (el) {
+            el.innerHTML = buildDistrictDirectionSection(analysis, report);
+            console.log(`[권역분석] 섹션 업데이트 완료: ${report.id}`);
+          }
+        } else {
+          console.warn('[권역분석] API 오류:', analysis.error);
+          const el = document.getElementById(`districtDirectionSection_${report.id}`);
+          if (el) el.style.display = 'none';
+        }
+      } catch (e) {
+        console.warn('[권역분석] 비동기 처리 오류 (무시):', e.message);
+        const el = document.getElementById(`districtDirectionSection_${report.id}`);
+        if (el) el.style.display = 'none';  // 실패 시 placeholder 숨김
+      }
+    }, 2000);
 
   } catch (err) {
     _clearGenTimer();
@@ -4627,6 +4927,9 @@ function renderReportHTML(report) {
       </div>
     </div>` : ''}
 
+    <!-- Section 5-B: 인센티브 협상 포인트 — buildIncentiveSection()로 동적 생성 -->
+    <div id="incentiveSection_${report.id}"></div>
+
     <!-- Section 6: 인근 빌딩 공실·임대 조건 통합 비교 -->
     ${(report.nearbyBuildings?.length || (report.vacancyData||[]).length) ? `
     <div class="report-section rent-chart-section">
@@ -4671,6 +4974,12 @@ function renderReportHTML(report) {
         </div>
       </div>
     </div>` : ''}
+
+    <!-- Section 6-B: 동일 권역 대안 빌딩 — buildSameDistrictAltSection()로 동적 생성 -->
+    <div id="sameDistrictAltSection_${report.id}"></div>
+
+    <!-- Section 6-C: 타 권역 대안 빌딩 — buildAltDistrictSection()로 동적 생성 -->
+    <div id="altDistrictSection_${report.id}"></div>
 
     <!-- Section 7: 물건 검색 결과 (신규/확장/축소 이슈) -->
     ${(() => {
@@ -4742,10 +5051,29 @@ function renderReportHTML(report) {
         </div>
       </div>
     </div>
+
+    <!-- Section 9: 권역 방향성 분석 — 비동기 후처리로 채워짐 -->
+    <div id="districtDirectionSection_${report.id}">
+      <div class="report-section" style="opacity:.5">
+        <div class="section-title">
+          <div class="section-icon">🧭</div>
+          권역 방향성 분석
+        </div>
+        <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px">
+          ⏳ 권역 방향성 분석 생성 중… (메인 리포트 완료 후 자동 업데이트)
+        </div>
+      </div>
+    </div>
   `;
 
   // Section 1 동적 빌드
   buildSection1(report);
+  // Section 5-B: 인센티브 협상 포인트 동적 빌드
+  buildIncentiveSection(report);
+  // Section 6-B: 동일 권역 대안 빌딩
+  buildSameDistrictAltSection(report);
+  // Section 6-C: 타 권역 대안 빌딩
+  buildAltDistrictSection(report);
   // 차트 렌더링 (비동기)
   setTimeout(() => renderRentCharts(report), 100);
   // R-ONE 스파크라인
@@ -4853,6 +5181,345 @@ function buildRentTableRows(report) {
       + '<td>' + (vacCount > 0 ? '<span class="pill pill-green" style="font-size:10px">' + moveIn + '</span>' : '-') + '</td>'
       + '</tr>';
   }).join('');
+}
+
+// ===== Section: 인센티브 협상 포인트 동적 빌드 =====
+function buildIncentiveSection(report) {
+  const el = document.getElementById('incentiveSection_' + report.id);
+  if (!el) return;
+
+  const incentiveData = report.incentiveData || {};
+  // incentiveData 없거나 빈 객체면 숨김
+  if (!Object.keys(incentiveData).length) {
+    el.style.display = 'none';
+    return;
+  }
+
+  // 유효 인센티브 항목 수집
+  const entries = [];
+  Object.entries(incentiveData).forEach(([bldId, items]) => {
+    (items || []).forEach(item => {
+      if (item.rf || item.fo || item.ti) entries.push(item);
+    });
+  });
+
+  if (!entries.length) {
+    el.style.display = 'none';
+    return;
+  }
+
+  // 날짜 유효성 체크 (endDate가 지난 항목 표시용 뱃지)
+  const today = new Date();
+  const isExpired = (endDate) => {
+    if (!endDate) return false;
+    return new Date(endDate) < today;
+  };
+
+  const rows = entries.map(item => {
+    const expired = isExpired(item.endDate);
+    const rfBadge = item.rf  ? `<span class="pill pill-blue" style="font-size:11px">RF ${item.rf}개월</span>` : '';
+    const foBadge = item.fo  ? `<span class="pill pill-gold" style="font-size:11px">FO ${item.fo.toLocaleString()}만원/평</span>` : '';
+    const tiBadge = item.ti  ? `<span class="pill pill-green" style="font-size:11px">TI ${item.ti.toLocaleString()}만원/평</span>` : '';
+    const expiredBadge = expired ? `<span class="pill pill-gray" style="font-size:10px;opacity:.6">기간만료</span>` : '';
+    const condStr = item.condition ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">조건: ${item.condition}</div>` : '';
+    const dateStr = (item.startDate || item.endDate)
+      ? `<div style="font-size:10px;color:var(--muted)">${item.startDate||''}${item.endDate ? ' ~ ' + item.endDate : ''}</div>`
+      : '';
+    return `
+    <tr style="${expired ? 'opacity:.55' : ''}">
+      <td style="text-align:left;font-weight:600">${item.buildingName || '-'} ${expiredBadge}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap">${rfBadge}${foBadge}${tiBadge}</div></td>
+      <td style="text-align:left">${condStr}${dateStr}</td>
+    </tr>`;
+  }).join('');
+
+  // 요약 통계
+  const rfItems = entries.filter(e => e.rf > 0);
+  const foItems = entries.filter(e => e.fo > 0);
+  const tiItems = entries.filter(e => e.ti > 0);
+  const avgRf = rfItems.length ? (rfItems.reduce((s,e)=>s+e.rf,0)/rfItems.length).toFixed(1) : null;
+  const avgFo = foItems.length ? Math.round(foItems.reduce((s,e)=>s+e.fo,0)/foItems.length) : null;
+  const avgTi = tiItems.length ? Math.round(tiItems.reduce((s,e)=>s+e.ti,0)/tiItems.length) : null;
+
+  const summaryChips = [
+    avgRf ? `<span style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:4px 10px;font-size:12px;color:#1d4ed8">🎁 평균 RF <b>${avgRf}개월</b></span>` : '',
+    avgFo ? `<span style="background:#fefce8;border:1px solid #fde68a;border-radius:6px;padding:4px 10px;font-size:12px;color:#92400e">🔨 평균 FO <b>${avgFo.toLocaleString()}만원/평</b></span>` : '',
+    avgTi ? `<span style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:4px 10px;font-size:12px;color:#166534">🏗️ 평균 TI <b>${avgTi.toLocaleString()}만원/평</b></span>` : '',
+  ].filter(Boolean).join('');
+
+  el.innerHTML = `
+  <div class="report-section">
+    <div class="section-title">
+      <div class="section-icon">💰</div>
+      인센티브 협상 포인트 (${entries.length}건)
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+      인근 빌딩에서 제공 중인 렌트프리(RF) · Fit-Out(FO) · TI 조건입니다. 협상 시 레버리지로 활용하세요.
+    </div>
+    ${summaryChips ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${summaryChips}</div>` : ''}
+    <div style="overflow-x:auto">
+    <table class="rent-summary-table">
+      <thead>
+        <tr>
+          <th style="text-align:left;min-width:140px">빌딩명</th>
+          <th style="text-align:left">인센티브 조건</th>
+          <th style="text-align:left">비고</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:8px">
+      ※ 출처: CRE Portal DB — 실제 협상 시 유효 여부 확인 필요
+    </div>
+  </div>`;
+}
+
+// ===== Section 9: 권역 방향성 분석 렌더 (비동기 후처리) =====
+function buildDistrictDirectionSection(analysis, report) {
+  // analysis: { current, future, recommendation, altDistricts: { CBD: {...}, ... } }
+  const distLabel = { CBD:'도심(CBD)', GBD:'강남(GBD)', YBD:'여의도(YBD)', BBD:'분당(BBD)' };
+
+  const renderBlock = (data, dist) => {
+    if (!data) return '';
+    return `
+    <div style="margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:10px">
+        📍 ${distLabel[dist] || dist}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#b45309;margin-bottom:4px">🔴 현재 이슈</div>
+          <div style="font-size:12px;color:var(--text);line-height:1.6">${data.current || '-'}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#1d4ed8;margin-bottom:4px">🔵 향후 전망</div>
+          <div style="font-size:12px;color:var(--text);line-height:1.6">${data.future || '-'}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#166534;margin-bottom:4px">🟢 대응 권고</div>
+          <div style="font-size:12px;color:var(--text);line-height:1.6">${data.recommendation || '-'}</div>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  const baseDistrict = report?.district || '';
+  const altHtml = Object.entries(analysis.altDistricts || {})
+    .map(([dist, data]) => renderBlock(data, dist))
+    .join('');
+
+  return `
+  <div class="report-section">
+    <div class="section-title">
+      <div class="section-icon">🧭</div>
+      권역 방향성 분석
+      <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:8px">— AI 실시간 생성</span>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+      업종·이슈 기반 권역별 현황·전망·대응 권고입니다. 고객 미팅 시 권역 선택 근거로 활용하세요.
+    </div>
+    <!-- 기준 권역 -->
+    ${renderBlock({ current: analysis.current, future: analysis.future, recommendation: analysis.recommendation }, baseDistrict)}
+    <!-- 비교 권역 -->
+    ${altHtml}
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">
+      ※ AI 생성 분석 — R-ONE 통계·리서치 자료 기반 / 실제 시장 상황과 차이가 있을 수 있음
+    </div>
+  </div>`;
+}
+
+// ===== Section: 동일 권역 대안 빌딩 동적 빌드 =====
+function buildSameDistrictAltSection(report) {
+  const el = document.getElementById('sameDistrictAltSection_' + report.id);
+  if (!el) return;
+
+  const curRentPy  = report.params?.curRentPy  || 0;
+  const buildings  = report.nearbyBuildings    || [];
+
+  // 기준 빌딩(첫 번째) 제외, curRentPy ±25% 필터 (미입력 시 전체)
+  const rentMin = curRentPy > 0 ? curRentPy * 0.75 : 0;
+  const rentMax = curRentPy > 0 ? curRentPy * 1.25 : Infinity;
+  const _n = v => { const n = parseFloat(String(v||'').replace(/[,원]/g,'')); return isNaN(n)||n===0?null:n; };
+
+  const candidates = buildings.slice(1).filter(b => {
+    const rp = _n(b.rentPy) || _n(b.pricing?.rentPy) || 0;
+    if (curRentPy > 0 && rp > 0) return rp >= rentMin && rp <= rentMax;
+    return true;
+  });
+
+  if (!candidates.length) {
+    el.style.display = 'none';
+    return;
+  }
+
+  const gradeClass = { Prime:'pill-gold', A:'pill-blue', B:'pill-blue', C:'pill-gray', D:'pill-gray', E:'pill-gray' };
+
+  const rows = candidates.slice(0, 8).map(b => {
+    const rentPy    = _n(b.rentPy) || _n(b.pricing?.rentPy);
+    const maintPy   = _n(b.maintenancePy) || _n(b.pricing?.maintenancePy);
+    const depositPy = _n(b.depositPy)     || _n(b.pricing?.depositPy);
+    const grossPy   = _n(b.grossFloorPy)  || _n(b.area?.grossFloorPy);
+    const grade     = b.grade || '-';
+    const depMult   = (depositPy && rentPy) ? (depositPy/rentPy).toFixed(0)+'개월' : '-';
+
+    // OCR 최신가 있으면 badge 표시
+    const fp = b.latestFloorPricing || getLatestOcrPricing(b.floorPricing || []);
+    const ocrBadge = fp?.rentPy
+      ? `<br><span style="font-size:10px;color:#7c3aed">OCR ${(_n(fp.rentPy)||0).toLocaleString()}원 (${fp.effectiveDate||''})</span>`
+      : '';
+
+    // 인센티브 뱃지
+    const inc = (b.incentives||[]).filter(i=>i.rf||i.fo||i.ti);
+    const incBadge = inc.length
+      ? `<span class="pill pill-blue" style="font-size:10px;margin-left:4px">+인센티브</span>`
+      : '';
+
+    // 임대료 비교 차이
+    let diffBadge = '';
+    if (curRentPy > 0 && rentPy) {
+      const diff = rentPy - curRentPy;
+      const pct  = ((diff / curRentPy) * 100).toFixed(0);
+      diffBadge  = diff > 0
+        ? `<span style="font-size:10px;color:#b91c1c">▲${Math.abs(pct)}%</span>`
+        : `<span style="font-size:10px;color:#16a34a">▼${Math.abs(pct)}%</span>`;
+    }
+
+    return `<tr>
+      <td style="text-align:left;font-weight:600">${b.name||b.buildingName||'-'}${incBadge}</td>
+      <td><span class="pill ${gradeClass[grade]||'pill-gray'}">${grade}</span></td>
+      <td>${b.distanceM!=null?b.distanceM+'m':'-'}</td>
+      <td>${grossPy?grossPy.toLocaleString()+'평':'-'}</td>
+      <td class="highlight">${rentPy?rentPy.toLocaleString()+'원':'-'} ${diffBadge}${ocrBadge}</td>
+      <td>${maintPy?maintPy.toLocaleString()+'원':'-'}</td>
+      <td>${depMult}</td>
+      <td style="color:var(--muted);font-size:11px">${b.nearbyStation||'-'}</td>
+    </tr>`;
+  }).join('');
+
+  const curLabel = curRentPy
+    ? `현재 임대료 ${curRentPy.toLocaleString()}원/평 기준 ±25% 범위`
+    : '동일 권역 인근 빌딩';
+
+  el.innerHTML = `
+  <div class="report-section">
+    <div class="section-title">
+      <div class="section-icon">🔄</div>
+      동일 권역 대안 빌딩 비교 — ${report.district} (${candidates.length}개)
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${curLabel}</div>
+    <div style="overflow-x:auto">
+    <table class="rent-summary-table">
+      <thead>
+        <tr>
+          <th style="text-align:left;min-width:130px">빌딩명</th>
+          <th>등급</th><th>거리</th><th>연면적</th>
+          <th>임대료/평</th><th>관리비/평</th><th>보증금배수</th><th>역세권</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px">※ 보라색 OCR 수치는 최신 안내문 기준가 / +인센티브 표시 빌딩은 RF·FO·TI 조건 협상 가능</div>
+  </div>`;
+}
+
+// ===== Section: 타 권역 대안 빌딩 동적 빌드 =====
+function buildAltDistrictSection(report) {
+  const el = document.getElementById('altDistrictSection_' + report.id);
+  if (!el) return;
+
+  const altData = report.altDistrictBuildings || {};
+  if (!Object.keys(altData).length) {
+    el.style.display = 'none';
+    return;
+  }
+
+  const _n = v => { const n=parseFloat(String(v||'').replace(/[,원]/g,'')); return isNaN(n)||n===0?null:n; };
+  const gradeClass = { Prime:'pill-gold', A:'pill-blue', B:'pill-blue', C:'pill-gray', D:'pill-gray', E:'pill-gray' };
+  const districtLabel = { CBD:'도심(CBD)', GBD:'강남(GBD)', YBD:'여의도(YBD)', BBD:'분당(BBD)' };
+  const curRentPy = report.params?.curRentPy || 0;
+
+  let allHtml = '';
+  for (const [dist, buildings] of Object.entries(altData)) {
+    if (!buildings || !buildings.length) continue;
+
+    const rows = buildings.map(b => {
+      const rentPy    = _n(b.rentPy);
+      const maintPy   = _n(b.maintenancePy);
+      const depositPy = _n(b.depositPy);
+      const grossPy   = _n(b.grossFloorPy);
+      const grade     = b.grade || '-';
+      const depMult   = (depositPy && rentPy) ? (depositPy/rentPy).toFixed(0)+'개월' : '-';
+
+      // OCR 최신가
+      const fp = b.latestFloorPricing;
+      const ocrBadge = fp?.rentPy
+        ? `<br><span style="font-size:10px;color:#7c3aed">OCR ${(_n(fp.rentPy)||0).toLocaleString()}원</span>`
+        : '';
+
+      // 인센티브 여부
+      const hasInc = (b.incentives||[]).some(i=>i.rf||i.fo||i.ti);
+      const incBadge = hasInc ? `<span class="pill pill-blue" style="font-size:10px">+인센티브</span>` : '';
+
+      // 현재 대비 임대료 차이
+      let diffBadge = '';
+      if (curRentPy > 0 && rentPy) {
+        const diff = rentPy - curRentPy;
+        const pct  = ((diff / curRentPy) * 100).toFixed(0);
+        diffBadge  = diff > 0
+          ? `<span style="font-size:10px;color:#b91c1c;margin-left:3px">▲${Math.abs(pct)}%</span>`
+          : `<span style="font-size:10px;color:#16a34a;margin-left:3px">▼${Math.abs(pct)}%</span>`;
+      }
+
+      return `<tr>
+        <td style="text-align:left;font-weight:600">${b.name||'-'} ${incBadge}</td>
+        <td><span class="pill ${gradeClass[grade]||'pill-gray'}">${grade}</span></td>
+        <td style="font-size:11px;color:var(--muted)">${(b.address||'').replace('서울특별시','').trim().slice(0,20)}</td>
+        <td>${grossPy?grossPy.toLocaleString()+'평':'-'}</td>
+        <td class="highlight">${rentPy?rentPy.toLocaleString()+'원':'-'}${diffBadge}${ocrBadge}</td>
+        <td>${maintPy?maintPy.toLocaleString()+'원':'-'}</td>
+        <td>${depMult}</td>
+        <td style="color:var(--muted);font-size:11px">${b.nearbyStation||'-'}${b.stationDistance?' '+b.stationDistance+'m':''}</td>
+      </tr>`;
+    }).join('');
+
+    allHtml += `
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px;padding-bottom:5px;border-bottom:2px solid var(--accent)">
+        📍 ${districtLabel[dist]||dist} — ${buildings.length}개 빌딩
+      </div>
+      <div style="overflow-x:auto">
+      <table class="rent-summary-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;min-width:130px">빌딩명</th>
+            <th>등급</th><th style="text-align:left">주소</th><th>연면적</th>
+            <th>임대료/평</th><th>관리비/평</th><th>보증금배수</th><th>역세권</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      </div>
+    </div>`;
+  }
+
+  const totalCount = Object.values(altData).reduce((s,v)=>s+(v?.length||0), 0);
+  const distNames  = Object.keys(altData).map(d=>districtLabel[d]||d).join(' · ');
+
+  el.innerHTML = `
+  <div class="report-section">
+    <div class="section-title">
+      <div class="section-icon">🗺️</div>
+      타 권역 대안 빌딩 — ${distNames} (${totalCount}개)
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      ${curRentPy ? `현재 임대료 ${curRentPy.toLocaleString()}원/평 ±25% 범위 내 빌딩` : '선택된 권역 빌딩 목록'}
+      — 권역 이전 검토 시 비교 참고용
+    </div>
+    ${allHtml}
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">※ 보라색 OCR 수치는 최신 안내문 기준가 / ▲▼ 수치는 현재 임대료 대비 차이율</div>
+  </div>`;
 }
 
 // ===== Section 1: 시장 현황 동적 빌드 =====
