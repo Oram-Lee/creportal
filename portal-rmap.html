@@ -149,7 +149,10 @@ body {
   width: 100%;
   max-width: 680px;
   max-height: 90vh;
-  overflow-y: auto;
+  /* ★ overflow: hidden — 모달 자체는 스크롤 안 함 */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   box-shadow: var(--shadow-lg);
   animation: modalIn .2s ease;
 }
@@ -164,9 +167,8 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  position: sticky;
-  top: 0;
   background: var(--surface);
+  flex-shrink: 0;
   z-index: 1;
 }
 .modal-header h2 { font-size: 17px; font-weight: 700; color: var(--primary); }
@@ -182,7 +184,7 @@ body {
 }
 .modal-close:hover { color: var(--text); }
 
-.modal-body { padding: 24px; }
+.modal-body { padding: 24px; flex: 1; overflow-y: auto; }
 
 /* ===== 스텝 인디케이터 ===== */
 .steps {
@@ -642,9 +644,8 @@ body {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
-  position: sticky;
-  bottom: 0;
   background: var(--surface);
+  flex-shrink: 0;
 }
 .btn {
   padding: 9px 20px;
@@ -853,6 +854,131 @@ body {
   border-radius: 50%;
   background: rgba(255,255,255,.06);
 }
+
+/* ── 표지 v2 ── */
+.report-cover-v2 {
+  background: linear-gradient(160deg, #0a1628 0%, #0d2347 55%, #1a3a6b 100%);
+  color: #fff;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+  position: relative;
+  overflow: hidden;
+}
+.report-cover-v2::before {
+  content: '';
+  position: absolute;
+  right: -60px; top: -60px;
+  width: 320px; height: 320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(41,182,246,.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.report-cover-v2::after {
+  content: '';
+  position: absolute;
+  left: -40px; bottom: -40px;
+  width: 240px; height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(100,130,200,.10) 0%, transparent 70%);
+  pointer-events: none;
+}
+/* 상단 헤더 */
+.rcv2-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 36px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.rcv2-logo {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .5px;
+  color: #fff;
+  opacity: .9;
+}
+.rcv2-mode-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 20px;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+}
+.rcv2-mode-badge.tr { background: rgba(255,255,255,.15); color: #e8f4fd; }
+.rcv2-mode-badge.lr { background: rgba(180,140,255,.3);  color: #e8d9ff; }
+/* 중앙 본문 */
+.rcv2-body {
+  flex: 1;
+  padding: 36px 36px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.rcv2-type-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,.5);
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.rcv2-title {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.25;
+  margin: 0 0 10px;
+  color: #fff;
+}
+.rcv2-subtitle {
+  font-size: 14px;
+  color: rgba(255,255,255,.65);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+.rcv2-divider {
+  width: 48px; height: 3px;
+  background: linear-gradient(90deg, #29b6f6, #1976d2);
+  border-radius: 2px;
+  margin-bottom: 24px;
+}
+/* KPI 행 */
+.rcv2-kpis {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.rcv2-kpi { display: flex; flex-direction: column; gap: 3px; }
+.rcv2-kpi-val { font-size: 16px; font-weight: 800; color: #e8f4fd; }
+.rcv2-kpi-lbl { font-size: 11px; color: rgba(255,255,255,.45); }
+/* 하단 담당자 */
+.rcv2-bottom {
+  padding: 16px 36px 20px;
+  border-top: 1px solid rgba(255,255,255,.1);
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.rcv2-manager-card {
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 8px;
+  padding: 10px 16px;
+  min-width: 180px;
+}
+.rcv2-manager-name    { font-size: 13px; font-weight: 700; color: #fff; }
+.rcv2-manager-contact { font-size: 12px; color: rgba(255,255,255,.55); margin-top: 3px; }
+.rcv2-disclaimer {
+  font-size: 10px;
+  color: rgba(255,255,255,.3);
+  line-height: 1.6;
+  max-width: 460px;
+  flex: 1;
+}
 .report-cover-mode {
   display: inline-block;
   padding: 4px 14px;
@@ -983,29 +1109,53 @@ body {
 
 /* ===== AI 분석 ===== */
 .ai-analysis-box {
-  background: linear-gradient(135deg, #f0f7ff, #e8f4f8);
+  background: linear-gradient(135deg, #f0f7ff 0%, #eaf3fb 100%);
   border: 1px solid #c3d9f0;
-  border-radius: 10px;
-  padding: 24px;
+  border-radius: 12px;
+  padding: 20px 24px;
   position: relative;
 }
 .ai-analysis-box::before {
-  content: '✦ AI';
+  content: '✦ AI 시장 분석';
   position: absolute;
-  top: -10px;
+  top: -11px;
   left: 16px;
   background: var(--accent);
   color: #fff;
-  padding: 2px 10px;
-  border-radius: 4px;
+  padding: 2px 12px;
+  border-radius: 5px;
   font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.3px;
 }
 .ai-analysis-text {
   font-size: 13.5px;
   line-height: 1.9;
   color: var(--text);
   white-space: pre-line;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+/* Q4 — 구조화 AI 분석 섹션 */
+.ai-section {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(100,140,200,0.15);
+}
+.ai-section:first-child { padding-top: 4px; }
+.ai-section:last-child  { border-bottom: none; padding-bottom: 4px; }
+.ai-headline {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a4d8f;
+  margin-bottom: 6px;
+  letter-spacing: -0.2px;
+  line-height: 1.4;
+}
+.ai-body {
+  font-size: 13px;
+  line-height: 1.85;
+  color: #2d3a4a;
   word-break: keep-all;
   overflow-wrap: break-word;
 }
@@ -2838,12 +2988,17 @@ canvas.mini-chart { width: 100% !important; }
             <div class="intel-result-panel" id="intelResultPanel"></div>
           </div>
 
-          <!-- 현재 임대 조건 (대안 빌딩 필터 기준) -->
+          <!-- 현재 임대 조건 + 경쟁사 임대조건 비교 -->
           <div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-            <label class="form-label">
-              현재 임대 조건
-              <span style="font-size:11px;color:var(--muted);font-weight:400"> (입력 시 동일 조건 대안 빌딩 자동 검색)</span>
+            <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+              <span>현재 임대 조건 <span style="font-size:11px;color:var(--muted);font-weight:400">(고객사 현재 계약 기준)</span></span>
+              <button type="button" id="compLeaseToggleBtn" onclick="toggleCompLeasePanel()"
+                style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:5px;background:var(--accent-lt);color:var(--accent);cursor:pointer;font-weight:600">
+                + 경쟁사 조건 비교
+              </button>
             </label>
+
+            <!-- 고객사 임대조건 -->
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
               <div>
                 <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">임대료/평 (원)</label>
@@ -2859,6 +3014,21 @@ canvas.mini-chart { width: 100% !important; }
                 <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">보증금/평 (원)</label>
                 <input type="number" class="form-input" id="curDepositPy"
                        placeholder="예: 850000" style="font-size:13px">
+              </div>
+            </div>
+
+            <!-- 경쟁사 임대조건 비교 패널 (선택적) -->
+            <div id="compLeasePanel" style="display:none;margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+              <div style="padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:12px;font-weight:700;color:var(--primary)">🏢 경쟁사 임대조건 입력 <span style="font-size:10px;color:var(--muted);font-weight:400">(선택 · 리포트 비교 분석에 활용)</span></span>
+                <button type="button" id="addCompLeaseBtn" onclick="addCompLeaseLine()"
+                  style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:5px;background:var(--accent-lt);color:var(--accent);cursor:pointer">+ 추가</button>
+              </div>
+              <div id="compLeaseLines" style="padding:10px 14px;display:flex;flex-direction:column;gap:8px;background:#fff">
+                <!-- 경쟁사 임대조건 행 — addCompLeaseLine()으로 동적 추가 -->
+              </div>
+              <div style="padding:7px 14px;background:var(--surface);border-top:1px solid var(--border);font-size:11px;color:var(--muted)">
+                경쟁사별 임대조건 입력 시 AI 분석에 비교 관점이 추가됩니다
               </div>
             </div>
           </div>
@@ -2895,32 +3065,84 @@ canvas.mini-chart { width: 100% !important; }
             </div>
           </div>
         </div>
+
+      <!-- TR/LR 공통 — 담당자 정보 (표지 자동 반영) -->
+      <div class="form-group" style="margin:14px 0 4px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+        <label class="form-label" style="margin-bottom:8px">
+          담당자 정보
+          <span style="font-size:11px;color:var(--muted);font-weight:400"> (표지에 자동 반영)</span>
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">담당자명</label>
+            <input type="text" class="form-input" id="reportManagerName" placeholder="예) 홍길동 대리" style="font-size:13px">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">연락처</label>
+            <input type="text" class="form-input" id="reportManagerContact" placeholder="예) 010-1234-5678" style="font-size:13px">
+          </div>
+        </div>
       </div>
 
-    </div>
-
-    <!-- 타 권역 대안 빌딩 검색 — TR/LR 공통, btnGenerate 전 -->
-    <div class="form-group" id="altDistrictGroup"
-         style="margin:0 20px 4px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
-      <label class="form-label" style="margin-bottom:6px">
-        비교 권역 선택
-        <span style="font-size:11px;color:var(--muted);font-weight:400"> (타 권역 대안 빌딩 검색)</span>
-      </label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <label class="coverage-chip" id="altCBD">
-          <input type="checkbox" value="CBD" onchange="toggleAltDistrict(this)">CBD 도심
+      <!-- 타 권역 대안 빌딩 검색 — TR/LR 공통 (step-panel-4 내부 하단) -->
+      <div class="form-group" id="altDistrictGroup"
+           style="margin:14px 0 4px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);position:relative;z-index:1">
+        <label class="form-label" style="margin-bottom:6px">
+          비교 권역 선택
+          <span style="font-size:11px;color:var(--muted);font-weight:400"> (타 권역 대안 빌딩 검색)</span>
         </label>
-        <label class="coverage-chip" id="altGBD">
-          <input type="checkbox" value="GBD" onchange="toggleAltDistrict(this)">GBD 강남
-        </label>
-        <label class="coverage-chip" id="altYBD">
-          <input type="checkbox" value="YBD" onchange="toggleAltDistrict(this)">YBD 여의도
-        </label>
-        <label class="coverage-chip" id="altBBD">
-          <input type="checkbox" value="BBD" onchange="toggleAltDistrict(this)">BBD 분당
-        </label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <label class="coverage-chip" id="altCBD">
+            <input type="checkbox" value="CBD" onchange="toggleAltDistrict(this)">CBD 도심
+          </label>
+          <label class="coverage-chip" id="altGBD">
+            <input type="checkbox" value="GBD" onchange="toggleAltDistrict(this)">GBD 강남
+          </label>
+          <label class="coverage-chip" id="altYBD">
+            <input type="checkbox" value="YBD" onchange="toggleAltDistrict(this)">YBD 여의도
+          </label>
+          <label class="coverage-chip" id="altBBD">
+            <input type="checkbox" value="BBD" onchange="toggleAltDistrict(this)">BBD 분당
+          </label>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:5px">현재 기준 빌딩 권역은 리포트 생성 시 자동 제외됩니다</div>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:5px">현재 기준 빌딩 권역은 리포트 생성 시 자동 제외됩니다</div>
+
+      <!-- 리서치 활용 범위 설정 -->
+      <div class="form-group" style="margin:8px 0 4px">
+        <button type="button" id="researchScopeToggleBtn"
+          onclick="toggleResearchScopePanel()"
+          style="width:100%;padding:9px 14px;border:1px dashed var(--accent);border-radius:8px;background:var(--accent-lt);color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;text-align:left">
+          📚 리서치 활용 범위 설정
+          <span id="researchScopeCount" style="float:right;font-size:11px;color:var(--muted);font-weight:400">전체 자동 선택</span>
+        </button>
+        <div id="researchScopePanel" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+          <!-- 패널 헤더 -->
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border)">
+            <span style="font-size:13px;font-weight:700">📚 리서치 활용 범위 설정</span>
+            <div style="display:flex;gap:6px">
+              <button type="button" onclick="researchScopeSelectAll(true)"
+                style="font-size:11px;padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:#fff;cursor:pointer">전체선택</button>
+              <button type="button" onclick="researchScopeSelectAll(false)"
+                style="font-size:11px;padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:#fff;cursor:pointer">전체해제</button>
+            </div>
+          </div>
+          <!-- 문서 목록 -->
+          <div id="researchScopeList"
+            style="max-height:220px;overflow-y:auto;padding:6px 0;background:#fff">
+            <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">로딩 중...</div>
+          </div>
+          <!-- 패널 푸터 -->
+          <div style="padding:8px 14px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+            <span id="researchScopeSelected" style="font-size:12px;color:var(--muted)">선택: 0건</span>
+            <button type="button" onclick="applyResearchScope()"
+              style="padding:5px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">적용</button>
+          </div>
+        </div>
+      </div>
+
+      </div>
+
     </div>
 
     <div class="modal-footer">
@@ -4251,6 +4473,56 @@ function selectReportType(type) {
 }
 
 // ===== 타 권역 체크박스 토글 =====
+// ===== 경쟁사 임대조건 비교 =====
+let _compLeaseCounter = 0;
+
+function toggleCompLeasePanel() {
+  const panel = document.getElementById('compLeasePanel');
+  const btn   = document.getElementById('compLeaseToggleBtn');
+  const open  = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  btn.textContent = open ? '+ 경쟁사 조건 비교' : '✕ 접기';
+  if (!open && document.getElementById('compLeaseLines').children.length === 0) {
+    addCompLeaseLine();   // 첫 오픈 시 행 1개 자동 추가
+  }
+}
+
+function addCompLeaseLine() {
+  const id  = ++_compLeaseCounter;
+  const div = document.createElement('div');
+  div.id = `compLeaseLine_${id}`;
+  div.style.cssText = 'display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 28px;gap:6px;align-items:center';
+  div.innerHTML = `
+    <input type="text"   class="form-input" placeholder="경쟁사명 (예: 네이버)" style="font-size:12px" id="clComp_${id}">
+    <input type="number" class="form-input" placeholder="임대료/평" style="font-size:12px" id="clRent_${id}">
+    <input type="number" class="form-input" placeholder="관리비/평" style="font-size:12px" id="clMaint_${id}">
+    <input type="number" class="form-input" placeholder="보증금/평" style="font-size:12px" id="clDeposit_${id}">
+    <button type="button" onclick="removeCompLeaseLine(${id})"
+      style="width:24px;height:24px;border:none;background:#fee2e2;color:#b91c1c;border-radius:4px;cursor:pointer;font-size:12px;padding:0">✕</button>
+  `;
+  document.getElementById('compLeaseLines').appendChild(div);
+}
+
+function removeCompLeaseLine(id) {
+  const el = document.getElementById(`compLeaseLine_${id}`);
+  if (el) el.remove();
+}
+
+function collectCompLeaseData() {
+  const lines = document.getElementById('compLeaseLines');
+  if (!lines) return [];
+  const result = [];
+  lines.querySelectorAll('[id^="compLeaseLine_"]').forEach(row => {
+    const id      = row.id.replace('compLeaseLine_', '');
+    const company = document.getElementById(`clComp_${id}`)?.value.trim();
+    const rent    = parseInt(document.getElementById(`clRent_${id}`)?.value) || 0;
+    const maint   = parseInt(document.getElementById(`clMaint_${id}`)?.value) || 0;
+    const deposit = parseInt(document.getElementById(`clDeposit_${id}`)?.value) || 0;
+    if (company || rent) result.push({ company: company || '경쟁사', rent, maint, deposit });
+  });
+  return result;
+}
+
 function toggleAltDistrict(cb) {
   const v = cb.value;
   if (cb.checked) {
@@ -4258,6 +4530,94 @@ function toggleAltDistrict(cb) {
   } else {
     selectedAltDistricts = selectedAltDistricts.filter(d => d !== v);
   }
+}
+
+// ===== 리서치 활용 범위 설정 =====
+let _selectedResearchDocIds = [];   // [] = 전체 사용, 배열 있으면 선택 문서만
+
+function toggleResearchScopePanel() {
+  const panel = document.getElementById('researchScopePanel');
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+  } else {
+    panel.style.display = 'block';
+    renderResearchScopeList();
+  }
+}
+
+function renderResearchScopeList() {
+  const listEl = document.getElementById('researchScopeList');
+  const docs   = (typeof _researchAllDocs !== 'undefined' ? _researchAllDocs : []);
+  if (!docs.length) {
+    listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">등록된 리서치 문서가 없습니다</div>';
+    return;
+  }
+  listEl.innerHTML = docs.map(d => {
+    const checked = _selectedResearchDocIds.length === 0 || _selectedResearchDocIds.includes(d._id);
+    const year    = d.year    ? `${d.year}년` : '';
+    const quarter = d.quarter ? `Q${d.quarter}` : '';
+    const period  = [year, quarter].filter(Boolean).join(' ');
+    return `
+    <label style="display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;border-bottom:1px solid var(--border);font-size:12px"
+           onmouseover="this.style.background='var(--accent-lt)'" onmouseout="this.style.background=''">
+      <input type="checkbox" value="${d._id}" ${checked ? 'checked' : ''}
+             onchange="onResearchScopeCheck(this)"
+             style="width:14px;height:14px;flex-shrink:0;cursor:pointer">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.title||'제목 없음'}">${d.title||'제목 없음'}</span>
+      <span style="flex-shrink:0;color:var(--muted);font-size:11px;min-width:80px;text-align:right">${d.source||''}</span>
+      <span style="flex-shrink:0;color:var(--muted);font-size:11px;min-width:60px;text-align:right">${period}</span>
+    </label>`;
+  }).join('');
+  updateResearchScopeCount();
+}
+
+function onResearchScopeCheck(cb) {
+  const id = cb.value;
+  const allDocs = (typeof _researchAllDocs !== 'undefined' ? _researchAllDocs : []);
+  // 전체 선택 상태에서 하나 해제 → 나머지 모두 명시 선택
+  if (_selectedResearchDocIds.length === 0 && !cb.checked) {
+    _selectedResearchDocIds = allDocs.map(d => d._id).filter(i => i !== id);
+  } else if (cb.checked) {
+    if (!_selectedResearchDocIds.includes(id)) _selectedResearchDocIds.push(id);
+    // 전체가 다 선택된 경우 → 전체 모드로 복귀
+    if (_selectedResearchDocIds.length === allDocs.length) _selectedResearchDocIds = [];
+  } else {
+    _selectedResearchDocIds = _selectedResearchDocIds.filter(i => i !== id);
+  }
+  updateResearchScopeCount();
+}
+
+function researchScopeSelectAll(checked) {
+  _selectedResearchDocIds = checked ? [] : [];  // 전체선택 = [] (전체), 전체해제 = 모두 체크 해제
+  const allDocs = (typeof _researchAllDocs !== 'undefined' ? _researchAllDocs : []);
+  if (!checked) _selectedResearchDocIds = [];   // 전체해제 시에도 빈 배열 → applyResearchScope에서 처리
+  document.querySelectorAll('#researchScopeList input[type=checkbox]')
+    .forEach(cb => { cb.checked = checked; });
+  if (!checked) {
+    // 전체 해제: 명시적으로 빈 배열 (생성 시 전체 미사용)
+    _selectedResearchDocIds = ['__none__'];
+  } else {
+    _selectedResearchDocIds = [];
+  }
+  updateResearchScopeCount();
+}
+
+function updateResearchScopeCount() {
+  const allDocs  = (typeof _researchAllDocs !== 'undefined' ? _researchAllDocs : []);
+  const total    = allDocs.length;
+  const selEl    = document.getElementById('researchScopeSelected');
+  const cntEl    = document.getElementById('researchScopeCount');
+  const isAll    = _selectedResearchDocIds.length === 0;
+  const isNone   = _selectedResearchDocIds[0] === '__none__';
+  const selCount = isAll ? total : (isNone ? 0 : _selectedResearchDocIds.length);
+  if (selEl) selEl.textContent = `선택: ${selCount}건 / 전체: ${total}건`;
+  if (cntEl) cntEl.textContent = isAll ? '전체 자동 선택' : `${selCount}건 선택됨`;
+}
+
+function applyResearchScope() {
+  document.getElementById('researchScopePanel').style.display = 'none';
+  updateResearchScopeCount();
 }
 
 function handleTagInput(event, type) {
@@ -4335,58 +4695,120 @@ function getLatestOcrPricing(floorPricingArr) {
 
 // ===== 타 권역 대안 빌딩 조회 =====
 async function fetchAltDistrictBuildings(altDistricts, curRentPy, desiredAreaMin, desiredAreaMax) {
-  // altDistricts: ['CBD','YBD'] 등 — 기준 권역 제외 후 전달받음
   if (!altDistricts || altDistricts.length === 0) return {};
   try {
-    const snap = await db.ref('buildings').once('value');
-    const allBuildings = snap.val() || {};
+    // ── 1. buildings + vacancies 병렬 조회 ──
+    const [bldSnap, vacSnap] = await Promise.all([
+      db.ref('buildings').once('value'),
+      db.ref('vacancies').once('value'),
+    ]);
+    const allBuildings = bldSnap.val() || {};
+    const allVacancies = vacSnap.val() || {};
 
-    const rentMin = curRentPy > 0 ? curRentPy * 0.75 : 0;
-    const rentMax = curRentPy > 0 ? curRentPy * 1.25 : Infinity;
-
-    const result = {};  // { 'CBD': [...], 'YBD': [...] }
-
+    // ── 2. 권역별 후보 필터링 ──
+    const candidates = {};
     for (const [id, b] of Object.entries(allBuildings)) {
       if (b.status === 'deleted' || b.status === 'hidden') continue;
       const region = b.region || guessDistrict(b.address);
       if (!altDistricts.includes(region)) continue;
 
-      // 임대료 필터 — curRentPy 미입력 시 전체 허용
-      const bRentPy = b.pricing?.rentPy || b.rentPy || 0;
+      const latestFP  = getLatestOcrPricing(b.floorPricing || []);
+      const ocrRentPy = latestFP?.rentPy   || 0;
+      const bRentPy   = ocrRentPy || b.pricing?.rentPy || b.rentPy || 0;
+
+      // 임대료 필터 — curRentPy ±40% (스코어링으로 넓힘)
       if (curRentPy > 0 && bRentPy > 0) {
-        if (bRentPy < rentMin || bRentPy > rentMax) continue;
+        if (bRentPy < curRentPy * 0.60 || bRentPy > curRentPy * 1.40) continue;
       }
 
-      if (!result[region]) result[region] = [];
-      result[region].push({
+      // 공실 데이터 (vacancies/{buildingId})
+      const bVacancies = Object.values(allVacancies[id] || {});
+      const totalVacantArea = bVacancies.reduce((s, v) => {
+        const a = parseFloat(String(v.rentArea||'').replace(/[,평]/g,'')) || 0;
+        return s + a;
+      }, 0);
+
+      // 인센티브 합산 (RF: 임대료 면제 개월, FO: fit-out, TI: tenant improvement)
+      const incentives    = b.incentives || [];
+      const rfMonths      = incentives.filter(i => i.type === 'RF').reduce((s,i) => s + (i.months||0), 0);
+      const foVal         = incentives.filter(i => i.type === 'FO').reduce((s,i) => s + (i.amount||0), 0);
+      const tiVal         = incentives.filter(i => i.type === 'TI').reduce((s,i) => s + (i.amount||0), 0);
+      const incentiveScore = Math.min((rfMonths * 2) + (foVal > 0 ? 20 : 0) + (tiVal > 0 ? 15 : 0), 100);
+
+      // 등급 점수 (Prime=100, A=80, B=60, C=40, D=20, E=10)
+      const gradeMap = { Prime: 100, A: 80, B: 60, C: 40, D: 20, E: 10 };
+      const gradeScore = gradeMap[b.grade] || 30;
+
+      // 역세권 점수 (stationDistance 값 기반)
+      const staDist = parseFloat(b.stationDistance) || 999;
+      const stationScore = staDist <= 3   ? 100
+                         : staDist <= 5   ?  80
+                         : staDist <= 10  ?  60
+                         : staDist <= 15  ?  40 : 20;
+
+      if (!candidates[region]) candidates[region] = [];
+      candidates[region].push({
         id,
         name:               b.name || b.buildingName || '',
         address:            b.address || '',
         region,
         grade:              b.grade || '',
         grossFloorPy:       b.area?.grossFloorPy || b.grossFloorPy || 0,
-        rentPy:             b.pricing?.rentPy    || b.rentPy       || 0,
+        rentPy:             bRentPy,
         maintenancePy:      b.pricing?.maintenancePy || b.maintenancePy || 0,
-        depositPy:          b.pricing?.depositPy || b.depositPy    || 0,
-        latestFloorPricing: getLatestOcrPricing(b.floorPricing || []),
+        depositPy:          b.pricing?.depositPy    || b.depositPy    || 0,
+        latestFloorPricing: latestFP,
         nearbyStation:      b.nearbyStation || '',
         stationDistance:    b.stationDistance || '',
         coordinates:        b.coordinates || {},
-        incentives:         b.incentives  || [],   // 인센티브 포함
+        incentives,
+        totalVacantArea,
+        // ── 스코어링 ──
+        _scores: { gradeScore, stationScore, incentiveScore },
       });
     }
 
-    // 각 권역별 rentPy 오름차순 정렬 후 최대 10개
+    // ── 3. 다중 지표 종합 점수 계산 + 정렬 ──
+    // 가중치: 임대료경쟁력 30% / 가용면적충족 25% / 인센티브 20% / 빌딩등급 15% / 역세권 10%
+    const result = {};
     for (const dist of altDistricts) {
-      if (result[dist]) {
-        result[dist] = result[dist]
-          .sort((a, bld) => (a.rentPy || 0) - (bld.rentPy || 0))
-          .slice(0, 10);
+      const blds = candidates[dist] || [];
+      if (!blds.length) continue;
+
+      // 임대료 역정규화 (낮을수록 높은 점수, 권역 내 상대 평가)
+      const rentVals = blds.map(b => b.rentPy).filter(v => v > 0);
+      const minRent  = rentVals.length ? Math.min(...rentVals) : 1;
+      const maxRent  = rentVals.length ? Math.max(...rentVals) : 1;
+      const rentRange = maxRent - minRent || 1;
+
+      // 가용면적 충족 여부 (desiredAreaMin 기준)
+      const needArea = desiredAreaMin || 0;
+
+      for (const b of blds) {
+        const rentScore     = b.rentPy > 0 ? Math.round(100 - ((b.rentPy - minRent) / rentRange) * 100) : 50;
+        const areaScore     = needArea > 0
+          ? (b.totalVacantArea >= needArea ? 100 : b.totalVacantArea > 0 ? Math.round((b.totalVacantArea / needArea) * 100) : 0)
+          : 70;  // 면적 미지정 시 중간값
+        const { gradeScore, stationScore, incentiveScore } = b._scores;
+
+        b.totalScore = Math.round(
+          rentScore      * 0.30 +
+          areaScore      * 0.25 +
+          incentiveScore * 0.20 +
+          gradeScore     * 0.15 +
+          stationScore   * 0.10
+        );
+        b._scoreDetail = { rentScore, areaScore, incentiveScore, gradeScore, stationScore };
+        delete b._scores;
       }
+
+      result[dist] = blds
+        .sort((a, b) => b.totalScore - a.totalScore)
+        .slice(0, 10);
     }
 
-    console.log(`[대안빌딩] 조회 완료:`, Object.fromEntries(
-      Object.entries(result).map(([k,v]) => [k, v.length + '개'])
+    console.log(`[대안빌딩] 스코어링 완료:`, Object.fromEntries(
+      Object.entries(result).map(([k, v]) => [k, v.length + '개 (1위:' + (v[0]?.totalScore || 0) + '점)'])
     ));
     return result;
   } catch(e) {
@@ -4457,11 +4879,16 @@ async function generateReport() {
   }
 
   // ── 신규 파라미터 추가 ──
-  body.reportType   = selectedReportType;
-  body.curRentPy    = parseInt(document.getElementById('curRentPy')?.value)    || 0;
-  body.curMaintPy   = parseInt(document.getElementById('curMaintPy')?.value)   || 0;
-  body.curDepositPy = parseInt(document.getElementById('curDepositPy')?.value) || 0;
-  body.altDistricts = selectedAltDistricts.filter(d => d !== (body.district || analysisDistrict)); // 기준 권역 제외
+  body.reportType      = selectedReportType;
+  body.curRentPy       = parseInt(document.getElementById('curRentPy')?.value)    || 0;
+  body.curMaintPy      = parseInt(document.getElementById('curMaintPy')?.value)   || 0;
+  body.curDepositPy    = parseInt(document.getElementById('curDepositPy')?.value) || 0;
+  body.compLeaseData   = collectCompLeaseData();   // 경쟁사 임대조건 비교 (선택)
+  body.altDistricts    = selectedAltDistricts.filter(d => d !== (body.district || analysisDistrict));
+  body.managerName     = document.getElementById('reportManagerName')?.value.trim()    || '';
+  body.managerContact  = document.getElementById('reportManagerContact')?.value.trim() || '';
+  // 리서치 활용 범위 ([] = 전체, ['__none__'] = 미사용, [id,...] = 선택 문서)
+  body.researchDocIds  = _selectedResearchDocIds.length === 0 ? [] : _selectedResearchDocIds;
 
   closeModal();
   showGenerating(true);
@@ -4643,10 +5070,12 @@ async function generateReport() {
       createdAt:   new Date().toISOString(),
       params:      body,
       result,
+      reportType:  body.reportType || 'TYPE_A',
       nearbyBuildings,
       vacancyData,
-      incentiveData,   // ★ incentives: buildings/{id}/incentives[] 에서 직접 추출
-      altDistrictBuildings,  // ★ 타 권역 대안 빌딩 { 'CBD': [...], 'YBD': [...] }
+      incentiveData,
+      altDistrictBuildings,
+      sourceDocs:  result.sourceDocs || [],   // ★ 출처 페이지용
     };
     reportHistory.unshift(report);
     renderReportList();
@@ -4778,6 +5207,162 @@ function closeViewer() {
   currentReport = null;
 }
 
+// ===== Section 10: 출처 및 리서치 활용 내역 =====
+function buildSourceSlide(report) {
+  const el = document.getElementById('sourceSlide_' + report.id);
+  if (!el) return;
+
+  // _researchAllDocs 캐시로 sourceDocs 메타 보완
+  const allDocs    = (typeof _researchAllDocs !== 'undefined' ? _researchAllDocs : []);
+  const sourceDocs = (report.sourceDocs || []).map(d => {
+    if (!d.title && d.id) {
+      const cached = allDocs.find(c => c._id === d.id);
+      if (cached) return { ...d, title: cached.title||'', source: cached.source||'', year: cached.year||'', quarter: cached.quarter||'' };
+    }
+    return d;
+  }).filter(d => d.title || d.id);
+  const date        = new Date(report.createdAt).toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric' });
+  const usedInLabel = { aiAnalysis:'AI 분석', districtAnalysis:'권역 방향성', marketStats:'시장 현황', newsSection:'뉴스 섹션' };
+
+  // 활용 문서 행
+  const docRows = sourceDocs.length
+    ? sourceDocs.map((d, i) => {
+        const used = (d.usedIn || []).map(u => usedInLabel[u] || u).join(', ') || '-';
+        const period = [d.year ? d.year + '년' : '', d.quarter ? d.quarter + '분기' : ''].filter(Boolean).join(' ');
+        return `<tr>
+          <td style="text-align:center;color:var(--muted)">${i+1}</td>
+          <td style="text-align:left;font-weight:600">${d.title || '-'}</td>
+          <td>${d.source || '-'}</td>
+          <td>${period || '-'}</td>
+          <td style="color:var(--muted);font-size:11px">${used}</td>
+          <td style="color:var(--muted);font-size:10px;word-break:break-all">${d.id || '-'}</td>
+        </tr>`;
+      }).join('')
+    : `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">활용된 리서치 문서 정보가 없습니다</td></tr>`;
+
+  // 고정 출처 목록 (시스템 데이터 소스)
+  const fixedSources = [
+    { label: '한국부동산원 R-ONE',  desc: '공실률·임대료·임대가격지수 (분기별 통계)',  url: 'https://www.reb.or.kr' },
+    { label: '국토교통부',           desc: '부동산 정책 및 규제 동향 (RSS)',              url: 'https://www.molit.go.kr' },
+    { label: 'S&I Corporation DB',  desc: '빌딩 시세·공실 현황·인센티브 (자체 수집)',    url: '' },
+    { label: 'Naver 뉴스',          desc: '업종·경쟁사 오피스 동향 (API)',               url: '' },
+    { label: 'DART 전자공시',        desc: '기업 정보·업종 데이터 (OpenAPI)',             url: 'https://dart.fss.or.kr' },
+  ];
+
+  const fixedRows = fixedSources.map(s => `
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:160px;font-size:12px;font-weight:700;flex-shrink:0">${s.label}</div>
+      <div style="font-size:12px;color:var(--muted);flex:1">${s.desc}</div>
+      ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);flex-shrink:0">${s.url.replace('https://','')}</a>` : ''}
+    </div>`).join('');
+
+  el.innerHTML = `
+  <div class="report-section">
+    <div class="section-title">
+      <div class="section-icon">📎</div>
+      출처 및 리서치 자료 활용 내역
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px">
+      본 리포트 작성에 활용된 자료 및 데이터 출처입니다 · 기준일: ${date}
+    </div>
+
+    <!-- 시스템 고정 출처 -->
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--primary)">📊 시스템 데이터 소스</div>
+    <div style="margin-bottom:20px">${fixedRows}</div>
+
+    ${sourceDocs.length ? `
+    <!-- 리서치 문서 활용 내역 -->
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--primary)">📚 리서치 문서 활용 내역</div>
+    <div style="overflow-x:auto">
+    <table class="rent-summary-table" style="font-size:11px">
+      <thead>
+        <tr>
+          <th style="width:30px">#</th>
+          <th style="text-align:left;min-width:160px">문서명</th>
+          <th>출처기관</th>
+          <th>기간</th>
+          <th>활용 섹션</th>
+          <th style="text-align:left">문서 ID</th>
+        </tr>
+      </thead>
+      <tbody>${docRows}</tbody>
+    </table>
+    </div>` : ''}
+
+    <div style="margin-top:16px;padding:12px 14px;background:var(--surface);border-radius:8px;font-size:11px;color:var(--muted);line-height:1.7">
+      본 자료는 S&amp;I Corporation CRE팀이 공개 통계 및 내부 수집 데이터를 기반으로 작성한 참고용 분석 자료입니다.
+      수록된 임대료·공실률 등 수치는 조사 시점 기준이며, 실제 계약 조건과 다를 수 있습니다.
+      거래·의사결정 전 반드시 현장 실사 및 담당자 확인을 권고합니다.
+    </div>
+  </div>`;
+}
+
+// ===== 표지 슬라이드 빌드 =====
+function buildCoverSlide(report) {
+  const isLR     = report.mode === 'LR';
+  const modeLabel = isLR ? 'LR — 임대인 대리' : 'TR — 임차인 대리';
+  const modeClass = isLR ? 'lr' : 'tr';
+  const typeLabel = report.reportType === 'TYPE_B' ? 'Type B · 심층 분석형' : 'Type A · 표준형';
+  const date      = new Date(report.createdAt).toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric' });
+  const title     = isLR
+    ? `${report.buildingName} 오피스 마켓 인사이트`
+    : `${report.clientName} 오피스 시장 조사 보고서`;
+  const subtitle  = isLR
+    ? `임대 전략 수립을 위한 ${report.district} 권역 시장 현황 분석`
+    : `${report.district} 권역 맞춤형 이전 검토 리포트`;
+  const managerName    = report.params?.managerName    || 'S&I Corporation CRE팀';
+  const managerContact = report.params?.managerContact || '';
+  const buildingCount  = (report.nearbyBuildings || []).length;
+  const radius         = report.params?.radius ? (report.params.radius/1000).toFixed(1) : '-';
+
+  return `
+  <div class="report-cover report-cover-v2">
+    <!-- 상단 헤더 바 -->
+    <div class="rcv2-top">
+      <div class="rcv2-logo">S&amp;I Corporation</div>
+      <div class="rcv2-mode-badge ${modeClass}">${modeLabel}</div>
+    </div>
+
+    <!-- 중앙 타이틀 블록 -->
+    <div class="rcv2-body">
+      <div class="rcv2-type-label">${typeLabel}</div>
+      <h1 class="rcv2-title">${title}</h1>
+      <p class="rcv2-subtitle">${subtitle}</p>
+      <div class="rcv2-divider"></div>
+      <div class="rcv2-kpis">
+        <div class="rcv2-kpi">
+          <span class="rcv2-kpi-val">${report.district}</span>
+          <span class="rcv2-kpi-lbl">분석 권역</span>
+        </div>
+        <div class="rcv2-kpi">
+          <span class="rcv2-kpi-val">${buildingCount}개</span>
+          <span class="rcv2-kpi-lbl">조사 빌딩</span>
+        </div>
+        <div class="rcv2-kpi">
+          <span class="rcv2-kpi-val">${radius}km</span>
+          <span class="rcv2-kpi-lbl">조사 반경</span>
+        </div>
+        <div class="rcv2-kpi">
+          <span class="rcv2-kpi-val">${date}</span>
+          <span class="rcv2-kpi-lbl">조사 기준일</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 하단 담당자 카드 + 면책 -->
+    <div class="rcv2-bottom">
+      <div class="rcv2-manager-card">
+        <div class="rcv2-manager-name">📋 ${managerName}</div>
+        ${managerContact ? `<div class="rcv2-manager-contact">${managerContact}</div>` : ''}
+      </div>
+      <div class="rcv2-disclaimer">
+        본 자료는 S&I Corporation CRE팀이 공개 자료 및 자체 수집 데이터를 기반으로 작성한 참고용 분석 자료입니다.
+        실제 거래·의사결정 전 반드시 현장 실사 및 전문가 검토를 권고합니다.
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderReportHTML(report) {
   // 이전 렌더링의 Chart 인스턴스 일괄 destroy (재렌더링 충돌 방지)
   try {
@@ -4879,16 +5464,7 @@ function renderReportHTML(report) {
 
   document.getElementById('reportContent').innerHTML = `
     <!-- 표지 -->
-    <div class="report-cover">
-      <h1>${isLR ? report.clientName + ' 오피스 마켓 인사이트 리포트' : report.clientName + ' 오피스 시장 조사 보고서'}</h1>
-      <div class="sub">${report.district} 인근 ${(report.nearbyBuildings||[]).length}개 빌딩 시세 및 시장 현황 분석 · ${new Date(report.createdAt).toLocaleDateString('ko-KR')} 기준</div>
-      <div class="report-cover-meta">
-        <span>📅 조사일: ${new Date(report.createdAt).toLocaleDateString('ko-KR')}</span>
-        <span>📍 조사 범위: ${report.district} 반경 ${(report.params.radius/1000).toFixed(1)}km</span>
-        <span>🏢 조사 빌딩: ${(report.nearbyBuildings||[]).length}개</span>
-        <span>Prepared by S&I Corporation CRE팀</span>
-      </div>
-    </div>
+    ${buildCoverSlide(report)}
 
     <!-- Section 1: 시장 현황 — buildSection1()로 동적 생성 -->
     <div id="sec1_${report.id}"></div>
@@ -4919,11 +5495,11 @@ function renderReportHTML(report) {
     ${aiAnalysis ? `
     <div class="report-section">
       <div class="section-title">
-        <div class="section-icon">🤖</div>
-        주요 시장 현황 및 협상 포인트
+        <div class="section-icon">🧠</div>
+        주요 시장 현황 및 전략 인사이트
       </div>
       <div class="ai-analysis-box">
-        <div class="ai-analysis-text">${aiAnalysis}</div>
+        <div class="ai-analysis-text" id="aiAnalysisBox_${report.id}"></div>
       </div>
     </div>` : ''}
 
@@ -4941,7 +5517,7 @@ function renderReportHTML(report) {
 
       <!-- AI 한줄 요약 -->
       <div class="rent-ai-summary" id="rentAiSummary_${report.id}">
-        <span style="color:var(--muted);font-size:11px">📊 임대 조건 분석 요약 생성 중...</span>
+        <span style="color:var(--muted);font-size:11px">📊 임대 조건 분석을 준비하고 있습니다.</span>
       </div>
 
       <!-- 통합 빌딩 비교 테이블 -->
@@ -4999,7 +5575,7 @@ function renderReportHTML(report) {
         희망 면적 조건 충족 매물 현황 (전용 ${report.params.desiredAreaMin}~${report.params.desiredAreaMax}평 · ${dedup7.length}건)
       </div>
       <div class="rent-ai-summary" id="vacAiSummary_${report.id}">
-        <span style="color:var(--muted);font-size:11px">🏗️ 조건 충족 물건 분석 중...</span>
+        <span style="color:var(--muted);font-size:11px">🏗️ 조건 충족 물건을 확인하고 있습니다.</span>
       </div>
       <div style="overflow-x:auto;margin-top:12px">
       <table class="vacancy-table">
@@ -5047,7 +5623,7 @@ function renderReportHTML(report) {
           <span style="font-size:11px;opacity:.7;font-weight:400">— ${report.district} 인근 시장 조사 · ${new Date(report.createdAt).toLocaleDateString('ko-KR')} 기준</span>
         </div>
         <div class="aic-points" id="aiInsightPoints_${report.id}">
-          <div class="aic-point"><span class="dot">⏳</span><span>시사점 생성 중...</span></div>
+          <div class="aic-point"><span class="dot">·</span><span style="color:var(--muted);font-size:12px">분석 데이터를 불러오는 중입니다.</span></div>
         </div>
       </div>
     </div>
@@ -5060,10 +5636,13 @@ function renderReportHTML(report) {
           권역 방향성 분석
         </div>
         <div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px">
-          ⏳ 권역 방향성 분석 생성 중… (메인 리포트 완료 후 자동 업데이트)
+          권역 방향성 데이터를 불러오는 중입니다.
         </div>
       </div>
     </div>
+
+    <!-- Section 10: 출처 및 리서치 활용 내역 — buildSourceSlide()로 동적 생성 -->
+    <div id="sourceSlide_${report.id}"></div>
   `;
 
   // Section 1 동적 빌드
@@ -5074,6 +5653,8 @@ function renderReportHTML(report) {
   buildSameDistrictAltSection(report);
   // Section 6-C: 타 권역 대안 빌딩
   buildAltDistrictSection(report);
+  // Section 10: 출처 페이지
+  buildSourceSlide(report);
   // 차트 렌더링 (비동기)
   setTimeout(() => renderRentCharts(report), 100);
   // R-ONE 스파크라인
@@ -5088,9 +5669,19 @@ function renderReportHTML(report) {
   // AI 시사점 생성 (비동기)
   setTimeout(() => generateInsightPoints(report), 1500);
   // AI 종합 분석 보완 — 백엔드 응답이 짧거나 없을 때 프론트에서 직접 생성
-  const aiBox = document.querySelector(`#report-${report.id} .ai-analysis-text`);
-  if (aiBox && (!aiBox.textContent.trim() || aiBox.textContent.trim().length < 100)) {
-    setTimeout(() => fillAiAnalysisIfEmpty(report, aiBox), 500);
+  const aiBox = document.querySelector(`#aiAnalysisBox_${report.id}`);
+  if (aiBox) {
+    if (aiAnalysis && aiAnalysis.includes('<div class="ai-section">')) {
+      // 구조화 HTML 응답 — innerHTML로 직접 삽입
+      aiBox.innerHTML = aiAnalysis;
+    } else if (aiAnalysis && aiAnalysis.trim().length >= 80) {
+      // 기존 plain text 응답 — pre-line 렌더
+      aiBox.style.whiteSpace = 'pre-line';
+      aiBox.textContent = aiAnalysis;
+    } else {
+      // 짧거나 비어있으면 프론트 보완
+      setTimeout(() => fillAiAnalysisIfEmpty(report, aiBox), 500);
+    }
   }
 }
 
@@ -5314,18 +5905,11 @@ function buildDistrictDirectionSection(analysis, report) {
     <div class="section-title">
       <div class="section-icon">🧭</div>
       권역 방향성 분석
-      <span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:8px">— AI 실시간 생성</span>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
-      업종·이슈 기반 권역별 현황·전망·대응 권고입니다. 고객 미팅 시 권역 선택 근거로 활용하세요.
     </div>
     <!-- 기준 권역 -->
     ${renderBlock({ current: analysis.current, future: analysis.future, recommendation: analysis.recommendation }, baseDistrict)}
     <!-- 비교 권역 -->
     ${altHtml}
-    <div style="font-size:10px;color:var(--muted);margin-top:4px">
-      ※ AI 생성 분석 — R-ONE 통계·리서치 자료 기반 / 실제 시장 상황과 차이가 있을 수 있음
-    </div>
   </div>`;
 }
 
@@ -5444,7 +6028,7 @@ function buildAltDistrictSection(report) {
   for (const [dist, buildings] of Object.entries(altData)) {
     if (!buildings || !buildings.length) continue;
 
-    const rows = buildings.map(b => {
+    const rows = buildings.map((b, idx) => {
       const rentPy    = _n(b.rentPy);
       const maintPy   = _n(b.maintenancePy);
       const depositPy = _n(b.depositPy);
@@ -5472,8 +6056,17 @@ function buildAltDistrictSection(report) {
           : `<span style="font-size:10px;color:#16a34a;margin-left:3px">▼${Math.abs(pct)}%</span>`;
       }
 
+      // 종합점수 + 🏆 뱃지 (상위 3개)
+      const score     = b.totalScore != null ? b.totalScore : '-';
+      const trophyBadge = idx < 3
+        ? `<span style="font-size:13px;margin-right:3px">${['🥇','🥈','🥉'][idx]}</span>`
+        : '';
+      const scoreColor = typeof score === 'number'
+        ? (score >= 75 ? '#16a34a' : score >= 50 ? '#d97706' : '#6b7280')
+        : '#6b7280';
+
       return `<tr>
-        <td style="text-align:left;font-weight:600">${b.name||'-'} ${incBadge}</td>
+        <td style="text-align:left;font-weight:600">${trophyBadge}${b.name||'-'} ${incBadge}</td>
         <td><span class="pill ${gradeClass[grade]||'pill-gray'}">${grade}</span></td>
         <td style="font-size:11px;color:var(--muted)">${(b.address||'').replace('서울특별시','').trim().slice(0,20)}</td>
         <td>${grossPy?grossPy.toLocaleString()+'평':'-'}</td>
@@ -5481,6 +6074,7 @@ function buildAltDistrictSection(report) {
         <td>${maintPy?maintPy.toLocaleString()+'원':'-'}</td>
         <td>${depMult}</td>
         <td style="color:var(--muted);font-size:11px">${b.nearbyStation||'-'}${b.stationDistance?' '+b.stationDistance+'m':''}</td>
+        <td style="text-align:center;font-weight:700;color:${scoreColor}">${score !== '-' ? score+'점' : '-'}</td>
       </tr>`;
     }).join('');
 
@@ -5496,6 +6090,7 @@ function buildAltDistrictSection(report) {
             <th style="text-align:left;min-width:130px">빌딩명</th>
             <th>등급</th><th style="text-align:left">주소</th><th>연면적</th>
             <th>임대료/평</th><th>관리비/평</th><th>보증금배수</th><th>역세권</th>
+            <th>종합점수</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -6163,57 +6758,66 @@ ${issueNuance}
 
 // ===== PDF 저장 =====
 async function fillAiAnalysisIfEmpty(report, el) {
-  // report에서 직접 추출 (renderReportHTML 스코프 외부)
   const _mdf = report.result?.sections?.marketStats?.data || {};
   const lVf  = _mdf.vacancyLatest   || {};
   const lRf  = _mdf.rentLatest      || {};
   const lRIf = _mdf.rentIndexLatest || {};
   const _fvf = (v, dec=2) => { const n=parseFloat(v); return isNaN(n)?'N/A':n.toFixed(dec); };
   const existing = (report.result?.sections?.aiAnalysis || '').trim();
-  if (existing.length > 200) { el.textContent = existing; return; }
 
-  el.innerHTML = '<span style="color:var(--muted);font-size:12px">🤖 AI 분석 생성 중...</span>';
+  // 이미 구조화 HTML이면 삽입 후 종료
+  if (existing.includes('<div class="ai-section">')) { el.innerHTML = existing; return; }
+  if (existing.length > 200) { el.style.whiteSpace='pre-line'; el.textContent = existing; return; }
+
+  el.innerHTML = '<span style="color:var(--muted);font-size:12px">🧠 시장 인사이트 생성 중...</span>';
 
   const distMap = { GBD:'강남권역(GBD)', CBD:'도심권역(CBD)', YBD:'여의도권역(YBD)', BBD:'분당·판교(BBD)', ETC:'기타 서울' };
   const mode    = report.mode === 'TR' ? '임차인 대리(TR)' : '임대인 대리(LR)';
   const vacRows = (report.vacancyData||[]).slice(0,5).map(v =>
     `- ${v.buildingName||''} ${v.floor||''}층: 임대 ${v.rentArea||'-'}평, 임대료 ${v.rentPy||'-'}원/평`
-  ).join(NL);
+  ).join('\n');
   const issueLabel = { expand:'사옥이전(확장)', shrink:'사옥이전(축소)', new:'신규사무실 확보', reloc:'동일규모 이전', maintain:'관계유지 (시장정보 중심)' };
-  const issueDir = {
-    expand: '고객사는 현재 공간이 부족해 이전·확장을 검토 중입니다. S&I CRE팀이 조력해야 할 방향은 충분한 면적 확보, 성장 여지 감안한 스펙 협상, 이전 비용 최소화입니다.',
-    shrink: '고객사는 비용 효율화를 위해 축소 이전을 검토 중입니다. S&I CRE팀의 역할은 현재 계약 해지 전략, 새 공간에서 임대료·관리비 절감폭 극대화, 이전 공백 최소화입니다.',
-    new:    '고객사는 신규 사무실 또는 추가 공간 확보가 필요합니다. S&I CRE팀이 제공해야 할 가치는 신속한 후보군 발굴, 이중 임대 리스크 관리, 최적 조건 협상입니다.',
-    reloc:  '고객사는 동일 면적 기준으로 더 나은 빌딩·위치·임대조건을 찾아 이전하려 합니다. S&I CRE팀의 핵심 역할은 유사 면적 내 조건 우위 물건 발굴, 이전 비용 대비 실익 검증, 계약 협상입니다.',
-  }[report.params?.clientIssue] || 'S&I CRE팀이 최적 오피스 솔루션을 제공합니다.';
+
+  const district = distMap[report.district] || report.district;
+  const clientCo = report.params?.clientCompany || '고객사';
+  const isTR     = report.mode === 'TR';
 
   const prompt = `당신은 S&I Corporation CRE팀 소속 상업용 부동산 전문 컨설턴트입니다.
-고객에게 전달되는 맞춤형 시장 분석 리포트의 AI 종합 분석 섹션을 작성합니다.
+고객에게 전달되는 맞춤형 시장 분석 리포트의 '주요 시장 현황 및 전략 인사이트' 섹션을 작성합니다.
 
 [분석 조건]
-- 모드: ${mode} | 기준빌딩: ${report.buildingName} (${distMap[report.district]||report.district})
-- 고객사: ${report.params?.clientCompany||'미지정'} / ${report.params?.clientIndustry||'업종 미지정'}
+- 모드: ${mode} | 기준빌딩: ${report.buildingName} (${district})
+- 고객사: ${clientCo} / ${report.params?.clientIndustry||'업종 미지정'}
 - 당면 이슈: ${issueLabel[report.params?.clientIssue]||'오피스 검토'}
 - 희망 면적: ${report.params?.desiredAreaMin||0}~${report.params?.desiredAreaMax||0}평
 - 인근 빌딩: ${(report.nearbyBuildings||[]).length}개 / 확인 공실: ${(report.vacancyData||[]).length}건
+
 [R-ONE 시장지표 (${lVf?.periodDesc||lRIf?.periodDesc||'최신'})]
-- 권역 공실률: ${_fvf(lVf?.vacancy)}%${lVf?.qoq !== undefined ? ' (전분기比 '+lVf.qoq+'pp)' : ''}${lVf?.yoy !== undefined ? ' / 전년比 '+lVf.yoy+'pp' : ''}
-- 임대가격지수: ${_fvf(lRIf?.rentIdx,1)} (기준100=2021Q1${lRIf?.qoq !== undefined ? ', 전분기比 '+lRIf.qoq+'%' : ''}${lRIf?.yoy !== undefined ? ', 전년比 '+lRIf.yoy+'%' : ''})
-- 임대료 수준: ${_fvf(lRf?.rentLevel !== undefined ? lRf.rentLevel : lRf.rentIndex, 0)} ${lRf?.unit||'원/㎡'}
+- 권역 공실률: ${_fvf(lVf?.vacancy)}%${lVf?.qoq !== undefined ? ' (전분기比 '+lVf.qoq+'pp)' : ''}
+- 임대가격지수: ${_fvf(lRIf?.rentIdx,1)} (기준100=2021Q1)
+- 임대료 수준: ${_fvf(lRf?.rentLevel||lRf?.rentIndex, 0)} ${lRf?.unit||'원/㎡'}
 ${vacRows ? '[주요 인근 공실]\n' + vacRows : ''}
 
-[이슈별 방향성]
-${issueDir}
+아래 구조에 맞춰 HTML 형식으로 작성하세요. 반드시 아래 태그와 클래스명을 그대로 사용하세요.
 
-다음 구성으로 3~4문단 전문 분석을 작성하세요. 반드시 아래 모든 요소를 포함하세요:
-1. [시장 상황] 한국부동산원 R-ONE 공실률·임대가격지수 등 객관적 지표 기반 현 시장 평가
-2. [고객 상황 분석] 당면 이슈(${issueLabel[report.params?.clientIssue]||'검토'}) 맥락에서 현재 시장이 고객에게 유리/불리한 이유
-3. [S&I CRE 제안] 구체적 협상 전략, 렌트프리·인테리어·보증금 등 조건 협상 포인트, 타이밍 조언
-4. [결론] S&I CRE팀과 함께 검토해야 할 이유와 다음 단계 안내 (1~2문장, 암묵적·명시적 모두 가능)
+<div class="ai-section">
+  <div class="ai-headline">📊 ${district} 시장 흐름 — ${clientCo}에게 주는 의미</div>
+  <div class="ai-body">공실률·임대가격지수 등 R-ONE 지표 기반 현 시장 평가. ${isTR?'임차인':'임대인'}에게 유리/불리한 근거 포함. 2~3문장.</div>
+</div>
+<div class="ai-section">
+  <div class="ai-headline">💡 지금이 중요한 이유</div>
+  <div class="ai-body">현 시점 의사결정이 ${isTR?'임차인':'임대인'} 관점에서 중요한 이유. 타이밍 근거. 2~3문장.</div>
+</div>
+<div class="ai-section">
+  <div class="ai-headline">${isTR?'🏢 렌트프리·인테리어 조건 활용 인사이트':'🏆 경쟁 빌딩 대비 포지셔닝 방향'}</div>
+  <div class="ai-body">${isTR?'현재 시장 인센티브 수준 및 활용 가능한 방향. "협상"이라는 단어 사용 금지.':'인근 경쟁 빌딩 대비 차별화 포인트 및 임차 유치 방향.'} 2~3문장.</div>
+</div>
+<div class="ai-section">
+  <div class="ai-headline">🧭 전략적 접근 방향</div>
+  <div class="ai-body">${clientCo}에 적합한 구체적 행동 방향 및 다음 단계. "협상"이라는 단어 사용 금지. 2~3문장.</div>
+</div>
 
-- 수치와 데이터를 근거로 활용하되, 고객에게 실질적 도움이 되는 인사이트 중심
-- '이 리포트는 자동 생성됨' 같은 문구 절대 금지
-- 전문적이되 읽기 쉬운 문체로 작성`;
+주의: '협상'이라는 단어를 절대 사용하지 마세요. 마크다운 없이 위 HTML 구조만 출력하세요.`;
 
   try {
     const res = await fetch(`${BACKEND}/api/claude-proxy`, {
@@ -6226,9 +6830,20 @@ ${issueDir}
       })
     });
     const data = await res.json();
-    const text = data.content?.[0]?.text || '';
-    el.textContent = text || existing || '분석을 불러올 수 없습니다.';
+    let text = (data.content?.[0]?.text || '').trim();
+    // 마크다운 펜스 제거
+    text = text.replace(/^```html?\s*|\s*```$/gm, '').trim();
+    if (text.includes('<div class="ai-section">')) {
+      el.innerHTML = text;
+    } else if (text.length > 50) {
+      el.style.whiteSpace = 'pre-line';
+      el.textContent = text;
+    } else {
+      el.style.whiteSpace = 'pre-line';
+      el.textContent = existing || '분석을 불러올 수 없습니다.';
+    }
   } catch {
+    el.style.whiteSpace = 'pre-line';
     el.textContent = existing || '네트워크 오류 — 백엔드 리포트 생성 후 확인해주세요.';
   }
 }
@@ -6247,31 +6862,118 @@ function downloadReportPDF(id) {
   const el       = document.getElementById('reportContent');
   const filename = `[${report.clientName}]_${report.buildingName}_리포트_${new Date().toLocaleDateString('ko-KR').replace(/\./g,'-').replace(/ /g,'')}.pdf`;
 
-  // PDF 출력 전 표지+섹션1이 자연스럽게 이어지도록 print-specific 스타일 적용
+  // ── A4 장표 슬라이드 구조 print CSS ──────────────────────────────────────
   const pdfStyle = document.createElement('style');
   pdfStyle.id = 'pdf-temp-style';
   pdfStyle.textContent = `
-    .report-cover { page-break-after: avoid !important; margin-bottom: 0 !important; }
-    .report-section { page-break-inside: avoid; }
-    .report-section + .report-section { page-break-before: auto; }
-    .rent-chart-section { page-break-before: always; }
-    .spark-row { page-break-inside: avoid; }
-    .spark-card { page-break-inside: avoid; overflow: visible !important; }
-    canvas { display: block !important; }
+    /* ── 기본 리셋 ── */
+    #reportContent { background: #fff !important; }
+
+    /* ── 표지: A4 한 장 고정 ── */
+    .report-cover {
+      page-break-after: always !important;
+      min-height: 267mm !important;   /* A4 297mm - 여백 30mm */
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+      box-sizing: border-box !important;
+      padding: 40px 48px !important;
+    }
+
+    /* ── 각 섹션 = 장표 1장 (페이지 브레이크) ── */
+    .report-section {
+      page-break-after: always !important;
+      page-break-inside: auto !important;
+      min-height: 0 !important;
+      padding: 24px 28px !important;
+      border-bottom: none !important;
+      box-sizing: border-box !important;
+    }
+
+    /* ── 테이블: 글꼴 축소 + 가로 잘림 방지 ── */
+    .report-section table {
+      font-size: 9px !important;
+      width: 100% !important;
+      table-layout: fixed !important;
+      word-break: break-all !important;
+    }
+    .report-section table th,
+    .report-section table td {
+      padding: 4px 5px !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+    /* 테이블 컨테이너 overflow 해제 (html2pdf는 overflow:auto를 잘 못 처리) */
+    .report-section [style*="overflow-x"] {
+      overflow: visible !important;
+    }
+
+    /* ── 차트 고정 높이 ── */
+    canvas {
+      max-height: 200px !important;
+      display: block !important;
+    }
+    .spark-card canvas { max-height: 80px !important; }
+
+    /* ── 뉴스 섹션: 줄 수 제한 ── */
+    .news-item { page-break-inside: avoid !important; }
+    .news-desc { display: none !important; }          /* 스니펫 숨김 — 공간 절약 */
+
+    /* ── spark-row 단일 행 유지 ── */
+    .spark-row  { page-break-inside: avoid !important; flex-wrap: nowrap !important; }
+    .spark-card { page-break-inside: avoid !important; min-width: 0 !important; flex: 1 1 0 !important; }
+
+    /* ── AI 분석 박스 ── */
+    .ai-analysis-box { page-break-inside: avoid !important; }
+    .ai-insight-card  { page-break-inside: avoid !important; }
+    .ai-section {
+      padding: 8px 0 !important;
+      border-bottom: 1px solid rgba(100,140,200,0.15) !important;
+      page-break-inside: avoid !important;
+    }
+    .ai-section:last-child { border-bottom: none !important; }
+    .ai-headline {
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      color: #1a4d8f !important;
+      margin-bottom: 4px !important;
+    }
+    .ai-body {
+      font-size: 10px !important;
+      line-height: 1.7 !important;
+      color: #2d3a4a !important;
+    }
+
+    /* ── 섹션 타이틀 ── */
+    .section-title { page-break-after: avoid !important; margin-bottom: 12px !important; }
+
+    /* ── 인쇄 불필요 요소 숨김 ── */
+    .src-badge-row,
+    .rent-ai-summary .nc-spinner,
+    button { display: none !important; }
+
+    /* ── 마지막 섹션은 page-break 없애기 ── */
+    .report-section:last-child { page-break-after: auto !important; }
   `;
   document.head.appendChild(pdfStyle);
 
   html2pdf().set({
-    margin:     [10, 10, 10, 10],
+    margin:      [8, 8, 8, 8],
     filename,
-    image:      { type: 'jpeg', quality: 0.98 },
-    html2canvas:{ scale: 2, useCORS: true, logging: false },
-    jsPDF:      { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak:  { mode: ['avoid-all', 'css'] }
+    image:       { type: 'jpeg', quality: 0.97 },
+    html2canvas: { scale: 2, useCORS: true, logging: false, allowTaint: true },
+    jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+    pagebreak:   { mode: ['css'], before: '.report-section', avoid: ['.spark-card', '.news-item', '.ai-analysis-box'] }
   }).from(el).save().then(() => {
     const s = document.getElementById('pdf-temp-style');
     if (s) s.remove();
     showToast('PDF 저장 완료', 'success');
+  }).catch(err => {
+    const s = document.getElementById('pdf-temp-style');
+    if (s) s.remove();
+    console.error('PDF 생성 오류:', err);
+    showToast('PDF 생성 실패 — 콘솔 확인', 'error');
   });
 }
 
