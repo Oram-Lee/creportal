@@ -3491,7 +3491,7 @@ function onClientCompanyInput(val) {
   }
 
   // 타이핑 멈추면 검색 시작
-  dartDebounceTimer = setTimeout(() => searchDartCompany(val), 300);
+  dartDebounceTimer = setTimeout(() => searchDartCompany(val), 500);
 }
 
 // 직접 입력 옵션만 표시 (검색 불필요할 때)
@@ -3540,73 +3540,59 @@ async function searchDartCompany(q) {
   const abortCtrl = new AbortController();
   _searchAbort = abortCtrl;
 
-  // ── 상태 메시지 순환 (서버 준비 상황에 따라 다른 메시지) ──
-  const steps = _backendReady
-    ? [
-        { msg: '기업 검색 중…',          sub: 'DART · 금융위 · Perplexity 병렬 조회' },
-        { msg: 'AI 보완 검색 중…',        sub: '스타트업·외국계 기업 실시간 검색' },
-      ]
-    : [
-        { msg: '서버 연결 중…',           sub: 'Render 서버 준비 중 (최초 접속 시 15~30초 소요)' },
-        { msg: 'DART · 금융위 검색 중…', sub: '상장·비상장 기업 공식 DB 조회' },
-        { msg: 'AI 보완 검색 중…',        sub: 'DART 미등록 기업 Perplexity 실시간 검색' },
-      ];
+  // ── 단순 로딩 메시지 (순환 제거) ──
+  _renderLoading(q, dropdown, '기업 검색 중…', '');
 
-  let stepIdx = 0;
-  _renderLoading(q, dropdown, steps[0].msg, steps[0].sub);
-
-  const stepTimer = setInterval(() => {
-    if (abortCtrl.signal.aborted) { clearInterval(stepTimer); return; }
-    stepIdx = Math.min(stepIdx + 1, steps.length - 1);
-    _renderLoading(q, dropdown, steps[stepIdx].msg, steps[stepIdx].sub);
-  }, _backendReady ? 4000 : 8000);
-
-  // ── 재시도 전략: cold start 감지 후 즉시 1회 재시도 ──
-  const MAX_RETRY = 3;
-  const RETRY_DELAYS = [0, 800, 1500];  // 유료: cold start 없으므로 단축
+  // 재시도: 빈 결과 포함 최대 2회
+  const MAX_RETRY = 2;
+  const RETRY_DELAYS = [0, 1000];
 
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     if (abortCtrl.signal.aborted) break;
     try {
       const controller = new AbortController();
-      // 유료 플랜: cold start 없으므로 10초로 타이트하게
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      // 두 신호 합성 (사용자 취소 OR 타임아웃)
-      const signal = abortCtrl.signal.aborted ? abortCtrl.signal : controller.signal;
+      const timeoutId  = setTimeout(() => controller.abort(), 10000);
 
-      const res = await fetch(
-        `${BACKEND}/api/corp/unified?q=${encodeURIComponent(q)}&n=8`,
-        { signal }
-      );
-      clearTimeout(timeoutId);
+      // 사용자 취소 신호를 controller에 연결
+      const onUserAbort = () => controller.abort();
+      abortCtrl.signal.addEventListener('abort', onUserAbort, { once: true });
+
+      let res;
+      try {
+        res = await fetch(
+          `${BACKEND}/api/corp/unified?q=${encodeURIComponent(q)}&n=8`,
+          { signal: controller.signal }
+        );
+      } finally {
+        clearTimeout(timeoutId);
+        abortCtrl.signal.removeEventListener('abort', onUserAbort);
+      }
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data      = await res.json();
       const companies = data.companies || [];
 
-      clearInterval(stepTimer);
       _searchAbort = null;
 
       if (!companies.length) {
+        // 1차 빈 결과면 1회 재시도
+        if (attempt < MAX_RETRY) {
+          await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+          continue;
+        }
         _renderManualOnly(q, dropdown, `"${q}" 검색 결과가 없습니다. 직접 입력하세요.`);
         return;
       }
 
-      // 서버 준비 상태 갱신
       _backendReady = true;
       _backendReadyTime = Date.now();
-
-      // 캐시 저장
       _corpCacheSet(q, data);
-
       _renderCorpResults(q, data, dropdown);
       return;
 
     } catch (err) {
       if (abortCtrl.signal.aborted) break;
       console.warn(`[기업검색] ${attempt}차 실패:`, err.message);
-
-      // 유료 플랜: cold start 없으므로 메시지 없이 조용히 재시도
       if (attempt < MAX_RETRY) {
         await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
       }
@@ -3614,7 +3600,6 @@ async function searchDartCompany(q) {
   }
 
   // 최종 실패
-  clearInterval(stepTimer);
   if (abortCtrl.signal.aborted) return;
   _searchAbort = null;
   _renderManualOnly(q, dropdown, '검색 연결에 실패했습니다. 직접 입력해주세요.');
@@ -4602,6 +4587,12 @@ function renderResearchScopeList() {
 function onResearchScopeCheck(cb) {
   const id = cb.value;
   const allDocs = (typeof _researchAllDocs !== 'undefined' ? _researchAllDocs : []);
+
+  // __none__ 상태에서 개별 체크 시작 → 클린 상태로 초기화 후 처리
+  if (_selectedResearchDocIds[0] === '__none__') {
+    _selectedResearchDocIds = [];
+  }
+
   // 전체 선택 상태에서 하나 해제 → 나머지 모두 명시 선택
   if (_selectedResearchDocIds.length === 0 && !cb.checked) {
     _selectedResearchDocIds = allDocs.map(d => d._id).filter(i => i !== id);
