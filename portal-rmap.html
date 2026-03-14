@@ -3190,9 +3190,9 @@ const storage = firebase.storage();
 
 const BACKEND = 'https://portal-dsyl.onrender.com';
 
-// ── Render.com Cold Start 대응 ──
-let _backendReady     = false;   // 서버 준비 완료 여부
-let _backendReadyTime = null;    // 준비 완료 시각
+// ── Render.com 유료 플랜 — cold start 없음, 기본값 true ──
+let _backendReady     = true;    // 유료 플랜: 항상 활성 상태로 시작
+let _backendReadyTime = Date.now();
 
 (function wakeUpBackend() {
   const _ping = (attempt) => {
@@ -3205,7 +3205,7 @@ let _backendReadyTime = null;    // 준비 완료 시각
         } else { throw new Error('status ' + r.status); }
       })
       .catch(() => {
-        const delay = attempt <= 2 ? 10000 : 20000;
+        const delay = attempt <= 2 ? 3000 : 8000;  // 유료: 재시도 간격 단축
         if (attempt < 5) setTimeout(() => _ping(attempt + 1), delay);
         else console.warn('[Backend] 서버 응답 없음 — 첫 검색이 느릴 수 있습니다');
       });
@@ -3606,11 +3606,7 @@ async function searchDartCompany(q) {
       if (abortCtrl.signal.aborted) break;
       console.warn(`[기업검색] ${attempt}차 실패:`, err.message);
 
-      // cold start 감지 — 즉시 재시도 트리거
-      if (!_backendReady && attempt === 1) {
-        _renderLoading(q, dropdown, '서버 깨우는 중…', '첫 접속 시 준비 시간이 필요합니다 (최대 30초)');
-      }
-
+      // 유료 플랜: cold start 없으므로 메시지 없이 조용히 재시도
       if (attempt < MAX_RETRY) {
         await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
       }
@@ -7437,20 +7433,6 @@ async function runResearchSummarize() {
   btn.disabled    = true;
   btn.textContent = '⏳ AI 분석 중...';
 
-  // ── 백엔드 웜업 대기 (cold start 대응) ──
-  if (!_backendReady) {
-    btn.textContent = '⏳ 서버 연결 중...';
-    let waited = 0;
-    while (!_backendReady && waited < 60000) {
-      await new Promise(r => setTimeout(r, 1500));
-      waited += 1500;
-    }
-    if (!_backendReady) {
-      showToast('서버 응답 없음 — 잠시 후 다시 시도해주세요', 'error');
-      btn.disabled = false; btn.textContent = '🤖 AI 요약 생성';
-      return;
-    }
-  }
   btn.textContent = '⏳ AI 분석 중...';
 
   const source   = document.getElementById('researchSourceSelect').value;
