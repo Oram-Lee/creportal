@@ -4889,6 +4889,19 @@ async function generateReport() {
   body.managerContact  = document.getElementById('reportManagerContact')?.value.trim() || '';
   // 리서치 활용 범위 ([] = 전체, ['__none__'] = 미사용, [id,...] = 선택 문서)
   body.researchDocIds  = _selectedResearchDocIds.length === 0 ? [] : _selectedResearchDocIds;
+  // researchDocMeta: ID → {title, source, year, quarter} — 백엔드 sourceDocs 실값 채우기용
+  const _allDocsCache = (typeof _researchAllDocs !== 'undefined' ? _researchAllDocs : []);
+  const _metaTargets  = _selectedResearchDocIds.length > 0
+    ? _allDocsCache.filter(d => _selectedResearchDocIds.includes(d._id))
+    : _allDocsCache;
+  body.researchDocMeta = Object.fromEntries(
+    _metaTargets.map(d => [d._id, {
+      title:   d.title   || '',
+      source:  d.source  || '',
+      year:    d.year    || '',
+      quarter: d.quarter || '',
+    }])
+  );
 
   closeModal();
   showGenerating(true);
@@ -5104,6 +5117,7 @@ async function generateReport() {
               period:      lv.period || lv.periodDesc,
             },
             researchContext: report.params?.researchContext || '',
+            researchDocIds:  report.params?.researchDocIds  || [],
           }),
           signal: AbortSignal.timeout(60000),  // 60초 타임아웃
         });
@@ -5845,7 +5859,7 @@ function buildIncentiveSection(report) {
       인센티브 협상 포인트 (${entries.length}건)
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
-      인근 빌딩에서 제공 중인 렌트프리(RF) · Fit-Out(FO) · TI 조건입니다. 협상 시 레버리지로 활용하세요.
+      인근 빌딩에서 제공 중인 렌트프리(RF) · Fit-Out(FO) · TI 조건 현황입니다.
     </div>
     ${summaryChips ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${summaryChips}</div>` : ''}
     <div style="overflow-x:auto">
