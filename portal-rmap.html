@@ -3563,14 +3563,14 @@ async function searchDartCompany(q) {
 
   // ── 재시도 전략: cold start 감지 후 즉시 1회 재시도 ──
   const MAX_RETRY = 3;
-  const RETRY_DELAYS = [0, 2000, 4000];  // 즉시 → 2초 → 4초
+  const RETRY_DELAYS = [0, 800, 1500];  // 유료: cold start 없으므로 단축
 
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
     if (abortCtrl.signal.aborted) break;
     try {
       const controller = new AbortController();
-      // 전체 타임아웃 25초 (병렬 처리로 충분)
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      // 유료 플랜: cold start 없으므로 10초로 타이트하게
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       // 두 신호 합성 (사용자 취소 OR 타임아웃)
       const signal = abortCtrl.signal.aborted ? abortCtrl.signal : controller.signal;
 
@@ -4281,6 +4281,11 @@ function selectRadius(btn) {
 function updateStep4Fields() {
   document.getElementById('tr-fields').style.display = selectedMode === 'TR' ? '' : 'none';
   document.getElementById('lr-fields').style.display = selectedMode === 'LR' ? '' : 'none';
+
+  // 리서치 문서가 아직 로드 안 됐으면 지금 로드 (리서치 탭 미방문 시 대비)
+  if (!_researchAllDocs || _researchAllDocs.length === 0) {
+    _loadResearchDocsForScope();
+  }
 }
 
 // ===== 빌딩 주소 검색 (카카오) =====
@@ -4530,10 +4535,31 @@ function toggleAltDistrict(cb) {
   } else {
     selectedAltDistricts = selectedAltDistricts.filter(d => d !== v);
   }
+  // checkbox는 display:none이므로 부모 label에 .checked 클래스로 시각 반영
+  const lbl = cb.closest('.coverage-chip');
+  if (lbl) lbl.classList.toggle('checked', cb.checked);
 }
 
 // ===== 리서치 활용 범위 설정 =====
 let _selectedResearchDocIds = [];   // [] = 전체 사용, 배열 있으면 선택 문서만
+
+// 리포트 모달 Step4 전용 — 리서치 탭 미방문 시 Firebase에서 직접 로드
+async function _loadResearchDocsForScope() {
+  try {
+    const snap = await db.ref('researchDocs').once('value');
+    const val  = snap.val() || {};
+    _researchAllDocs = Object.entries(val)
+      .filter(([, d]) => d.active !== false)
+      .map(([id, d]) => ({ _id: id, ...d }))
+      .sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
+    // 패널이 이미 열려 있으면 즉시 렌더링
+    const panel = document.getElementById('researchScopePanel');
+    if (panel && panel.style.display !== 'none') renderResearchScopeList();
+    updateResearchScopeCount();
+  } catch(e) {
+    console.warn('[리서치 범위] 로드 오류:', e);
+  }
+}
 
 function toggleResearchScopePanel() {
   const panel = document.getElementById('researchScopePanel');
@@ -4542,7 +4568,12 @@ function toggleResearchScopePanel() {
     panel.style.display = 'none';
   } else {
     panel.style.display = 'block';
-    renderResearchScopeList();
+    // 데이터 없으면 로드 후 렌더 (비동기), 있으면 즉시 렌더
+    if (!_researchAllDocs || _researchAllDocs.length === 0) {
+      _loadResearchDocsForScope();
+    } else {
+      renderResearchScopeList();
+    }
   }
 }
 
