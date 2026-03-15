@@ -1201,6 +1201,64 @@ body {
   .ci-stat { flex: 1; min-width: 100px; }
 }
 
+/* ===== 두괄식 섹션 요약 헤더 ===== */
+.section-summary {
+  background: linear-gradient(90deg, #f0f7ff 0%, #f8faff 100%);
+  border-left: 3px solid #3b82f6;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #1e3a5f;
+}
+.section-summary-label {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: #3b82f6;
+  border-radius: 3px;
+  padding: 1px 6px;
+  margin-right: 6px;
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+}
+.section-summary-text {
+  font-weight: 600;
+  color: #1e3a5f;
+}
+.section-kw {
+  display: inline-block;
+  background: #e0edff;
+  color: #1a4d8f;
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  margin: 2px 3px 2px 0;
+}
+
+/* ===== 내부 메모 (내부용 — PDF 출력 시 자동 숨김) ===== */
+.internal-memo {
+  background: #fffbe6;
+  border: 1px dashed #f59e0b;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: #78350f;
+  line-height: 1.6;
+}
+.internal-memo-label {
+  font-weight: 700;
+  color: #b45309;
+  margin-right: 5px;
+}
+@media print {
+  .internal-memo { display: none !important; }
+}
+
 /* Q4 — 구조화 AI 분석 섹션 */
 .ai-section {
   padding: 12px 0;
@@ -4327,10 +4385,15 @@ function updateStep4Fields() {
   document.getElementById('tr-fields').style.display = selectedMode === 'TR' ? '' : 'none';
   document.getElementById('lr-fields').style.display = selectedMode === 'LR' ? '' : 'none';
 
-  // 리서치 문서가 아직 로드 안 됐으면 지금 로드 (리서치 탭 미방문 시 대비)
+  // 리서치 문서가 아직 로드 안 됐으면 지금 로드 (TR/LR/maintain 모든 모드 공통)
+  // Step4 진입 시 항상 최신 문서 목록을 확보
   if (!_researchAllDocs || _researchAllDocs.length === 0) {
     _loadResearchDocsForScope();
   }
+
+  // 리서치 버튼 항상 표시 (모든 모드 공통 영역에 위치하지만 명시적으로 보장)
+  const researchBtn = document.getElementById('researchScopeToggleBtn');
+  if (researchBtn) researchBtn.style.display = '';
 }
 
 // ===== 빌딩 주소 검색 (카카오) =====
@@ -5583,40 +5646,6 @@ function renderReportHTML(report) {
     <!-- 표지 -->
     ${buildCoverSlide(report)}
 
-    <!-- Section 0: S&I CRE1 회사 소개 (정적 — TR 모드만 표시) -->
-    ${!isLR ? `
-    <div class="report-section company-intro-section">
-      <div class="section-title" style="margin-bottom:12px">
-        <div class="section-icon">🏢</div>
-        S&amp;I Corporation CRE1팀 소개
-      </div>
-      <div class="company-intro-grid">
-        <div class="company-intro-main">
-          <div class="company-intro-tagline">서울 프라임 오피스 전문 컨설팅</div>
-          <p class="company-intro-desc">
-            S&amp;I Corporation CRE1팀은 서울 4대 오피스 권역(CBD · GBD · YBD · BBD)을 전문으로 하는
-            상업용 부동산 컨설팅 조직입니다. 임차인 대리(TR) · 임대인 대리(LR) 전 과정에서
-            자체 빌딩 DB(CRE Portal)와 실시간 시장 데이터를 결합한 맞춤형 분석을 제공합니다.
-            본 리포트는 해당 고객사만을 위해 수집·분석된 맞춤 자료입니다.
-          </p>
-        </div>
-        <div class="company-intro-stats">
-          <div class="ci-stat">
-            <span class="ci-stat-val">CBD · GBD · YBD · BBD</span>
-            <span class="ci-stat-lbl">서울 4대 권역 커버</span>
-          </div>
-          <div class="ci-stat">
-            <span class="ci-stat-val">TR · LR</span>
-            <span class="ci-stat-lbl">임차인 · 임대인 대리</span>
-          </div>
-          <div class="ci-stat">
-            <span class="ci-stat-val">CRE Portal DB</span>
-            <span class="ci-stat-lbl">자체 빌딩 정보 시스템</span>
-          </div>
-        </div>
-      </div>
-    </div>` : ''}
-
     <!-- Section 1: 시장 현황 — buildSection1()로 동적 생성 -->
     <div id="sec1_${report.id}"></div>
 
@@ -5629,6 +5658,15 @@ function renderReportHTML(report) {
         <div class="section-icon">🏛️</div>
         최근 부동산 정책 및 규제 동향
       </div>
+      <div class="section-summary">
+        <span class="section-summary-label">한줄 요약</span>
+        <span class="section-summary-text">임차인·임대인 의사결정에 영향을 줄 수 있는 최신 부동산 정책·규제 변화를 정리했습니다.</span>
+      </div>
+      <div class="internal-memo">
+        <span class="internal-memo-label">📌 내부 메모</span>
+        출처: 국토교통부 보도자료 RSS 피드 자동 수집 · 오피스·임대차·건축 관련 키워드 필터링 적용.
+        정책 뉴스는 리포트 생성 시점 기준 최신 1시간 캐시 사용. 고객사 업종·이슈와 직접 연관된 정책이 있으면 AI 분석 섹션에서 재언급.
+      </div>
       <div class="news-list">${newsHTML(policyNews, 5, 'pol_' + report.id)}</div>
     </div>` : ''}
 
@@ -5639,6 +5677,20 @@ function renderReportHTML(report) {
         <div class="section-icon">${isLR ? '🎯' : '🔍'}</div>
         ${isLR ? '업종 트렌드 및 오피스 시장 동향' : '관련 업종 및 시장 동향'}
       </div>
+      <div class="section-summary">
+        <span class="section-summary-label">한줄 요약</span>
+        <span class="section-summary-text">${isLR
+          ? `타겟 업종 기업들의 사무실 수요 동향과 서울 오피스 시장 흐름을 수집했습니다.`
+          : `${report.clientIndustry || '해당 업종'} 기업의 이전·확장 동향과 경쟁사 최근 뉴스를 수집했습니다.`
+        }</span>
+        ${!isLR && report.competitors?.length ? `<div style="margin-top:5px">${(report.competitors||[]).slice(0,4).map(c=>`<span class="section-kw">${c}</span>`).join('')}</div>` : ''}
+      </div>
+      <div class="internal-memo">
+        <span class="internal-memo-label">📌 내부 메모</span>
+        수집 쿼리: 네이버 뉴스 — "서울 ${report.clientIndustry||''} 기업 사무실 이전" / "${report.clientIndustry||''} 업계 동향 트렌드" / 경쟁사별 "사무실 이전 본사", "사업 확장".
+        Claude 관련성 필터 적용 (무관 IT·제조·해외 기사 제거). 링크 없는 AI 분석 항목(Perplexity)은 제목 앞 표시.
+        뉴스 3건 미만 시 AI 분석 섹션 분량 자동 확대.
+      </div>
       <div class="news-list" id="industryNewsList_${report.id}">${newsHTML(industryNews, 8, 'ind_' + report.id)}</div>
     </div>` : ''}
 
@@ -5648,6 +5700,20 @@ function renderReportHTML(report) {
       <div class="section-title">
         <div class="section-icon">🧠</div>
         ${isLR ? '임대 전략 인사이트' : '컨설팅 분석 — 현황 진단 · 시장 분석 · 전략 제언'}
+      </div>
+      <div class="section-summary">
+        <span class="section-summary-label">한줄 요약</span>
+        <span class="section-summary-text">${isLR
+          ? `${report.buildingName} 임대 포지셔닝 전략과 타겟 업종 유치 방향을 분석했습니다.`
+          : `${report.clientName || '고객사'}의 현황 진단부터 시장 분석, 경쟁사 위치, 조건 최적화, 다음 행동 제언까지 컨설팅 관점으로 작성했습니다.`
+        }</span>
+      </div>
+      <div class="internal-memo">
+        <span class="internal-memo-label">📌 내부 메모</span>
+        생성 모델: Claude claude-sonnet-4-20250514 (${report.mode} 모드 · ${report.reportType || 'TYPE_A'}).
+        주입 데이터: R-ONE 공실률·임대료·임대가격지수 / 인근 공실 현황 / 업종 뉴스 / 인센티브 현황 / 타 권역 대안 빌딩${report.params?.researchDocIds?.length ? ' / 리서치 문서 ' + report.params.researchDocIds.length + '건' : ''}.
+        Phase 2(업종 클러스터) · Phase 3(경쟁사 위치) Perplexity 조회 결과 포함.
+        뉴스 희소 시 max_tokens 4,500으로 자동 상향.
       </div>
       <div class="ai-analysis-box">
         <div class="ai-analysis-text" id="aiAnalysisBox_${report.id}"></div>
@@ -6365,6 +6431,24 @@ function buildSection1(report) {
     +   '<span class="src-badge">🏛️ 한국부동산원 R-ONE</span>'
     + '</div>'
 
+    // 두괄식 요약
+    + '<div class="section-summary">'
+    +   '<span class="section-summary-label">한줄 요약</span>'
+    +   '<span class="section-summary-text">'
+    +   report.district + ' 권역의 최신 공실률 · 임대료 · 임대가격지수를 부동산원 R-ONE 기준으로 정리했습니다.'
+    +   (mktLabel ? ' 현재 시장 성격: <b>' + mktLabel + '</b>.' : '')
+    +   '</span>'
+    + '</div>'
+
+    // 내부 메모
+    + '<div class="internal-memo">'
+    +   '<span class="internal-memo-label">📌 내부 메모</span>'
+    +   '출처: 한국부동산원 R-ONE Open API (STATBL_ID 자동 순차 시도). '
+    +   'START_WRTTIME YYYYQQ 포맷 · pSize 200으로 전체 시계열 수집 후 sort → 최신 추출. '
+    +   '권역 필터: CLS_FULLNM 키워드 매칭 (예: 서울>강남 → GBD). '
+    +   '캐시 TTL 6시간. 임대가격지수 기준: 2021년 1분기=100.'
+    + '</div>'
+
     // 5개 지표 카드
     + '<div class="stat-cards">'
 
@@ -6426,8 +6510,22 @@ function buildSection1(report) {
 // ===== R-ONE 스파크라인 렌더링 =====
 function renderSparklines(report) {
   const md     = report.result?.sections?.marketStats?.data || {};
-  const vacList = (md.vacancy    || []).slice(-6);
-  const riList  = (md.rentIndex  || []).slice(-6);
+
+  // ── period 중복 제거 헬퍼 (권역별 row 중복으로 동일 시점이 여러 개 들어오는 버그 방지) ──
+  function dedupByPeriod(arr, valKey) {
+    const seen = new Map();
+    (arr || []).forEach(d => {
+      const p = d.period || d.periodDesc || '';
+      if (p && !seen.has(p)) seen.set(p, d);
+    });
+    // period 오름차순 정렬 후 반환
+    return Array.from(seen.values()).sort((a, b) =>
+      String(a.period||'').localeCompare(String(b.period||''))
+    );
+  }
+
+  const vacList = dedupByPeriod(md.vacancy   || []).slice(-6);
+  const riList  = dedupByPeriod(md.rentIndex || []).slice(-6);
   // 기존 Chart 인스턴스 destroy (재생성 시 충돌 방지)
   ['spkV_' + report.id, 'spkRI_' + report.id].forEach(id => {
     const c = document.getElementById(id);
