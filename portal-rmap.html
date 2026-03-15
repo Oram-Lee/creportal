@@ -1137,6 +1137,70 @@ body {
   overflow-wrap: break-word;
 }
 
+/* ===== S&I CRE1 회사 소개 섹션 (정적) ===== */
+.company-intro-section {
+  background: linear-gradient(135deg, #f0f4ff 0%, #eaf2f8 100%);
+  border: 1px solid rgba(26,77,143,0.15);
+  border-left: 4px solid #1a4d8f;
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+}
+.company-intro-grid {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.company-intro-main {
+  flex: 1;
+}
+.company-intro-tagline {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1a4d8f;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 6px;
+}
+.company-intro-desc {
+  font-size: 13px;
+  line-height: 1.75;
+  color: #2d3a4a;
+  margin: 0;
+  word-break: keep-all;
+}
+.company-intro-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 180px;
+}
+.ci-stat {
+  background: rgba(255,255,255,0.75);
+  border: 1px solid rgba(26,77,143,0.12);
+  border-radius: 8px;
+  padding: 8px 12px;
+  text-align: center;
+}
+.ci-stat-val {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a4d8f;
+  letter-spacing: -0.3px;
+}
+.ci-stat-lbl {
+  display: block;
+  font-size: 11px;
+  color: #6b7f96;
+  margin-top: 2px;
+}
+@media (max-width: 600px) {
+  .company-intro-grid { flex-direction: column; }
+  .company-intro-stats { flex-direction: row; flex-wrap: wrap; min-width: 0; }
+  .ci-stat { flex: 1; min-width: 100px; }
+}
+
 /* Q4 — 구조화 AI 분석 섹션 */
 .ai-section {
   padding: 12px 0;
@@ -5336,12 +5400,33 @@ function buildCoverSlide(report) {
   const modeClass = isLR ? 'lr' : 'tr';
   const typeLabel = report.reportType === 'TYPE_B' ? 'Type B · 심층 분석형' : 'Type A · 표준형';
   const date      = new Date(report.createdAt).toLocaleDateString('ko-KR', { year:'numeric', month:'long', day:'numeric' });
-  const title     = isLR
-    ? `${report.buildingName} 오피스 마켓 인사이트`
-    : `${report.clientName} 오피스 시장 조사 보고서`;
-  const subtitle  = isLR
-    ? `임대 전략 수립을 위한 ${report.district} 권역 시장 현황 분석`
-    : `${report.district} 권역 맞춤형 이전 검토 리포트`;
+
+  // ── 이슈 기반 타이틀 매핑 ──
+  const clientName = report.clientName || '';
+  const issue      = report.params?.clientIssue || '';
+  const district   = report.district || '';
+
+  const issueTitleMap = {
+    expand:   `${clientName}을 위한 오피스 확장 이전 전략 보고서`,
+    shrink:   `${clientName}을 위한 오피스 효율화 이전 검토 보고서`,
+    new:      `${clientName}을 위한 신규 오피스 입지 분석 보고서`,
+    reloc:    `${clientName}을 위한 오피스 이전 조건 최적화 보고서`,
+    maintain: `${clientName}을 위한 오피스 시장 인사이트 리포트`,
+  };
+  const issueSubtitleMap = {
+    expand:   `${district} 권역 내 공간 확장 가능 옵션 및 시장 조건 분석`,
+    shrink:   `현재 임대 조건 최적화 및 적정 규모 이전 전략`,
+    new:      `${district} 권역 신규 사무실 입지 선정을 위한 시장 현황 분석`,
+    reloc:    `동일 규모 이전을 통한 임대 조건 개선 방향 분석`,
+    maintain: `${district} 권역 오피스 시장 현황 및 분기별 동향`,
+  };
+
+  const title    = isLR
+    ? `${report.buildingName} 오피스 임대 전략 보고서`
+    : (issueTitleMap[issue] || `${clientName}을 위한 맞춤형 오피스 시장 보고서`);
+  const subtitle = isLR
+    ? `임대 전략 수립을 위한 ${district} 권역 시장 현황 분석`
+    : (issueSubtitleMap[issue] || `${district} 권역 맞춤형 오피스 시장 분석`);
   const managerName    = report.params?.managerName    || 'S&I Corporation CRE팀';
   const managerContact = report.params?.managerContact || '';
   const buildingCount  = (report.nearbyBuildings || []).length;
@@ -5498,6 +5583,40 @@ function renderReportHTML(report) {
     <!-- 표지 -->
     ${buildCoverSlide(report)}
 
+    <!-- Section 0: S&I CRE1 회사 소개 (정적 — TR 모드만 표시) -->
+    ${!isLR ? `
+    <div class="report-section company-intro-section">
+      <div class="section-title" style="margin-bottom:12px">
+        <div class="section-icon">🏢</div>
+        S&amp;I Corporation CRE1팀 소개
+      </div>
+      <div class="company-intro-grid">
+        <div class="company-intro-main">
+          <div class="company-intro-tagline">서울 프라임 오피스 전문 컨설팅</div>
+          <p class="company-intro-desc">
+            S&amp;I Corporation CRE1팀은 서울 4대 오피스 권역(CBD · GBD · YBD · BBD)을 전문으로 하는
+            상업용 부동산 컨설팅 조직입니다. 임차인 대리(TR) · 임대인 대리(LR) 전 과정에서
+            자체 빌딩 DB(CRE Portal)와 실시간 시장 데이터를 결합한 맞춤형 분석을 제공합니다.
+            본 리포트는 해당 고객사만을 위해 수집·분석된 맞춤 자료입니다.
+          </p>
+        </div>
+        <div class="company-intro-stats">
+          <div class="ci-stat">
+            <span class="ci-stat-val">CBD · GBD · YBD · BBD</span>
+            <span class="ci-stat-lbl">서울 4대 권역 커버</span>
+          </div>
+          <div class="ci-stat">
+            <span class="ci-stat-val">TR · LR</span>
+            <span class="ci-stat-lbl">임차인 · 임대인 대리</span>
+          </div>
+          <div class="ci-stat">
+            <span class="ci-stat-val">CRE Portal DB</span>
+            <span class="ci-stat-lbl">자체 빌딩 정보 시스템</span>
+          </div>
+        </div>
+      </div>
+    </div>` : ''}
+
     <!-- Section 1: 시장 현황 — buildSection1()로 동적 생성 -->
     <div id="sec1_${report.id}"></div>
 
@@ -5528,7 +5647,7 @@ function renderReportHTML(report) {
     <div class="report-section">
       <div class="section-title">
         <div class="section-icon">🧠</div>
-        주요 시장 현황 및 전략 인사이트
+        ${isLR ? '임대 전략 인사이트' : '컨설팅 분석 — 현황 진단 · 시장 분석 · 전략 제언'}
       </div>
       <div class="ai-analysis-box">
         <div class="ai-analysis-text" id="aiAnalysisBox_${report.id}"></div>
