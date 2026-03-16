@@ -1104,8 +1104,8 @@ body {
 .badge-naver  { background: #03C75A22; color: #03C75A; }
 .badge-google { background: #4285F422; color: #4285F4; }
 .badge-molit  { background: #ff6b6b22; color: #dc2626; }
-.news-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; line-height: 1.4; }
-.news-desc  { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.news-title { font-size: 14.5px; font-weight: 600; margin-bottom: 3px; line-height: 1.5; }
+.news-desc  { font-size: 13px; color: var(--muted); line-height: 1.5; }
 
 /* ===== AI 분석 ===== */
 .ai-analysis-box {
@@ -1206,15 +1206,15 @@ body {
   background: linear-gradient(90deg, #f0f7ff 0%, #f8faff 100%);
   border-left: 3px solid #3b82f6;
   border-radius: 0 6px 6px 0;
-  padding: 8px 14px;
-  margin-bottom: 12px;
-  font-size: 12px;
-  line-height: 1.6;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  line-height: 1.7;
   color: #1e3a5f;
 }
 .section-summary-label {
   display: inline-block;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   color: #fff;
   background: #3b82f6;
@@ -1225,6 +1225,7 @@ body {
   vertical-align: middle;
 }
 .section-summary-text {
+  font-size: 14px;
   font-weight: 600;
   color: #1e3a5f;
 }
@@ -1278,8 +1279,8 @@ body {
   gap: 5px;
 }
 .ai-body {
-  font-size: 13.5px;
-  line-height: 2.0;
+  font-size: 15px;
+  line-height: 2.1;
   color: #1e2d3d;
   word-break: keep-all;
   overflow-wrap: break-word;
@@ -1287,15 +1288,15 @@ body {
 }
 /* 체크포인트 포인트 바디 강화 */
 .aic-point-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: #1a4d8f;
   margin-bottom: 5px;
   letter-spacing: -0.2px;
 }
 .aic-point-body {
-  font-size: 13px;
-  line-height: 1.9;
+  font-size: 14.5px;
+  line-height: 2.0;
   color: #1e2d3d;
   word-break: keep-all;
 }
@@ -4052,11 +4053,11 @@ async function collectIntelligence() {
 
     // 결과 렌더링
     const sections = [];
-    if (data.policy?.length)         sections.push({ title: '🏛️ 부동산 정책', items: data.policy });
-    if (data.clientNews?.length)      sections.push({ title: '🏢 고객사 뉴스', items: data.clientNews });
-    if (data.competitorNews?.length)  sections.push({ title: '🔍 경쟁사 동향', items: data.competitorNews });
-    if (data.industryTrend?.length)   sections.push({ title: '📊 업계 동향', items: data.industryTrend });
-    if (data.marketIssues?.length)    sections.push({ title: '💼 임차 이슈', items: data.marketIssues });
+    if (data.policy?.length)         sections.push({ title: '🏛️ 부동산 정책', cat: 'policy',          items: data.policy });
+    if (data.clientNews?.length)      sections.push({ title: '🏢 고객사 뉴스', cat: 'clientNews',      items: data.clientNews });
+    if (data.competitorNews?.length)  sections.push({ title: '🔍 경쟁사 동향', cat: 'competitorNews',  items: data.competitorNews });
+    if (data.industryTrend?.length)   sections.push({ title: '📊 업계 동향',   cat: 'industryTrend',  items: data.industryTrend });
+    if (data.marketIssues?.length)    sections.push({ title: '💼 임차 이슈',   cat: 'marketIssues',   items: data.marketIssues });
 
     if (!sections.length) {
       resultPanel.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:8px">수집된 정보가 없습니다</div>';
@@ -4064,16 +4065,33 @@ async function collectIntelligence() {
     }
 
     resultPanel.innerHTML = sections.map(s => `
-      <h4>${s.title} (${s.items.length}건)</h4>
-      ${s.items.slice(0, 3).map(n => `
-        <div class="ir-item">
-          <a href="${n.link && n.link !== '' ? n.link : 'javascript:void(0)'}" ${n.link && n.link !== '' ? 'target="_blank" rel="noopener"' : 'title="원문 링크 없음" style="cursor:default;opacity:.6"'} style="color:var(--text);text-decoration:none;font-weight:600">${n.title}</a>
-          <div class="ir-source">${n.pubDate ? formatDate(n.pubDate) + ' · ' : ''}${n.source || ''}</div>
-        </div>
-      `).join('')}
+      <div style="margin-bottom:10px">
+        <h4 style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <span>${s.title} (${s.items.length}건)</span>
+          <span style="font-size:10px;color:var(--muted);font-weight:400">✅ 체크 항목 → 리포트 우선 반영</span>
+        </h4>
+        ${s.items.slice(0, 5).map((n, idx) => `
+          <label class="ir-item" data-cat="${s.cat}" data-idx="${idx}"
+                 style="display:flex;align-items:flex-start;gap:7px;cursor:pointer;padding:5px 4px;border-radius:5px">
+            <input type="checkbox"
+              class="intel-news-check"
+              data-cat="${s.cat}"
+              data-idx="${idx}"
+              checked
+              style="margin-top:3px;flex-shrink:0;accent-color:#2563eb;width:13px;height:13px">
+            <div style="flex:1;min-width:0">
+              <a href="${n.link && n.link !== '' ? n.link : 'javascript:void(0)'}"
+                 ${n.link && n.link !== '' ? 'target="_blank" rel="noopener"' : 'style="cursor:default;opacity:.6"'}
+                 style="color:var(--text);text-decoration:none;font-weight:600;font-size:12px;line-height:1.4;display:block"
+                 onclick="event.stopPropagation()">${n.title}</a>
+              <div class="ir-source">${n.pubDate ? formatDate(n.pubDate) + ' · ' : ''}${n.source || ''}</div>
+            </div>
+          </label>
+        `).join('')}
+      </div>
     `).join('');
 
-    showToast('인텔리전스 수집 완료 — 리포트에 자동 반영됩니다', 'success');
+    showToast(`뉴스 ${sections.reduce((a,s)=>a+s.items.length,0)}건 수집 완료 — 체크 항목이 리포트에 우선 반영됩니다`, 'success');
   } catch (e) {
     resultPanel.innerHTML = '<div style="color:var(--danger);font-size:12px">수집 중 오류 발생 — 리포트 생성 시 백엔드에서 처리됩니다</div>';
   } finally {
@@ -5020,6 +5038,29 @@ async function generateReport() {
     intelData:     intelCollected    || null,
   };
 
+  // ── Step3 체크박스 선택 뉴스 수집 → selectedIntelItems ──
+  // 구조: { policy:[...], clientNews:[...], competitorNews:[...], industryTrend:[...], marketIssues:[...] }
+  if (intelCollected) {
+    const selectedIntelItems = {};
+    document.querySelectorAll('.intel-news-check:checked').forEach(cb => {
+      const cat = cb.dataset.cat;
+      const idx = parseInt(cb.dataset.idx);
+      if (!cat || isNaN(idx)) return;
+      const srcArr = intelCollected[cat];
+      if (!srcArr || !srcArr[idx]) return;
+      if (!selectedIntelItems[cat]) selectedIntelItems[cat] = [];
+      // 중복 방지
+      if (!selectedIntelItems[cat].find(n => n.title === srcArr[idx].title)) {
+        selectedIntelItems[cat].push(srcArr[idx]);
+      }
+    });
+    const totalSelected = Object.values(selectedIntelItems).reduce((a, v) => a + v.length, 0);
+    if (totalSelected > 0) {
+      body.selectedIntelItems = selectedIntelItems;
+      console.log(`[generateReport] selectedIntelItems: ${totalSelected}건 전송`);
+    }
+  }
+
   if (selectedMode === 'TR') {
     body.clientCompany  = document.getElementById('clientCompany').value.trim();
     body.clientIndustry = document.getElementById('clientIndustry').value.trim();
@@ -5488,11 +5529,11 @@ function buildCoverSlide(report) {
   const district   = report.district || '';
 
   const issueTitleMap = {
-    expand:   `${clientName}을 위한 오피스 확장 이전 전략 보고서`,
-    shrink:   `${clientName}을 위한 오피스 효율화 이전 검토 보고서`,
-    new:      `${clientName}을 위한 신규 오피스 입지 분석 보고서`,
-    reloc:    `${clientName}을 위한 오피스 이전 조건 최적화 보고서`,
-    maintain: `${clientName}을 위한 오피스 시장 인사이트 리포트`,
+    expand:   `${clientName}${josa(clientName,'을를')} 위한 오피스 확장 이전 전략 보고서`,
+    shrink:   `${clientName}${josa(clientName,'을를')} 위한 오피스 효율화 이전 검토 보고서`,
+    new:      `${clientName}${josa(clientName,'을를')} 위한 신규 오피스 입지 분석 보고서`,
+    reloc:    `${clientName}${josa(clientName,'을를')} 위한 오피스 이전 조건 최적화 보고서`,
+    maintain: `${clientName}${josa(clientName,'을를')} 위한 오피스 시장 인사이트 리포트`,
   };
   const issueSubtitleMap = {
     expand:   `${district} 권역 내 공간 확장 가능 옵션 및 시장 조건 분석`,
@@ -5504,7 +5545,7 @@ function buildCoverSlide(report) {
 
   const title    = isLR
     ? `${report.buildingName} 오피스 임대 전략 보고서`
-    : (issueTitleMap[issue] || `${clientName}을 위한 맞춤형 오피스 시장 보고서`);
+    : (issueTitleMap[issue] || `${clientName}${josa(clientName,'을를')} 위한 맞춤형 오피스 시장 보고서`);
   const subtitle = isLR
     ? `임대 전략 수립을 위한 ${district} 권역 시장 현황 분석`
     : (issueSubtitleMap[issue] || `${district} 권역 맞춤형 오피스 시장 분석`);
@@ -6390,7 +6431,14 @@ function buildSection1(report) {
   const riBase  = md.rentIndexBase    || '2021년 1분기=100';
   const vacList = md.vacancy          || [];
   const riList  = md.rentIndex        || [];
-  const dedupCnt = (report.vacancyData || []).length;
+  // 인근 공실 중복 제거 카운트 (동일 빌딩·층·면적·임대료 기준)
+  const _dedupKeyFn = v => `${v.buildingName||''}|${v.floor||''}|${v.rentArea||''}|${v.rentPy||''}`;
+  const _dedupSet   = new Set();
+  const dedupCnt = (report.vacancyData || []).filter(v => {
+    const k = _dedupKeyFn(v);
+    if (_dedupSet.has(k)) return false;
+    _dedupSet.add(k); return true;
+  }).length;
 
   // ── 헬퍼 ──
   const fv = (v, d) => {
@@ -7167,15 +7215,15 @@ function downloadReportPDF(id) {
     /* ── 기본 리셋 ── */
     #reportContent { background: #fff !important; }
 
-    /* ── 표지: A4 한 장 고정 ── */
+    /* ── 표지: A4 landscape 한 장 고정 ── */
     .report-cover {
       page-break-after: always !important;
-      min-height: 267mm !important;   /* A4 297mm - 여백 30mm */
+      min-height: 182mm !important;   /* A4 landscape 210mm - 여백 28mm */
       display: flex !important;
       flex-direction: column !important;
       justify-content: space-between !important;
       box-sizing: border-box !important;
-      padding: 40px 48px !important;
+      padding: 32px 48px !important;
     }
 
     /* ── 각 섹션 = 장표 1장 (페이지 브레이크) ── */
@@ -7232,15 +7280,26 @@ function downloadReportPDF(id) {
     }
     .ai-section:last-child { border-bottom: none !important; }
     .ai-headline {
-      font-size: 11px !important;
+      font-size: 13px !important;
       font-weight: 700 !important;
       color: #1a4d8f !important;
-      margin-bottom: 4px !important;
+      margin-bottom: 5px !important;
     }
     .ai-body {
-      font-size: 10px !important;
-      line-height: 1.7 !important;
-      color: #2d3a4a !important;
+      font-size: 12px !important;
+      line-height: 1.85 !important;
+      color: #1e2d3d !important;
+    }
+    .aic-point-title {
+      font-size: 12px !important;
+      font-weight: 700 !important;
+    }
+    .aic-point-body {
+      font-size: 11.5px !important;
+      line-height: 1.8 !important;
+    }
+    .news-title {
+      font-size: 12px !important;
     }
 
     /* ── 섹션 타이틀 ── */
@@ -7257,11 +7316,11 @@ function downloadReportPDF(id) {
   document.head.appendChild(pdfStyle);
 
   html2pdf().set({
-    margin:      [8, 8, 8, 8],
+    margin:      [8, 10, 8, 10],
     filename,
     image:       { type: 'jpeg', quality: 0.97 },
     html2canvas: { scale: 2, useCORS: true, logging: false, allowTaint: true },
-    jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
+    jsPDF:       { unit: 'mm', format: 'a4', orientation: 'landscape', compress: true },
     pagebreak:   { mode: ['css'], before: '.report-section', avoid: ['.spark-card', '.news-item', '.ai-analysis-box'] }
   }).from(el).save().then(() => {
     const s = document.getElementById('pdf-temp-style');
@@ -7276,6 +7335,28 @@ function downloadReportPDF(id) {
 }
 
 // ===== 유틸 =====
+
+/**
+ * 한국어 조사 자동 선택
+ * @param {string} word  - 앞 단어
+ * @param {string} form  - '을를' | '이가' | '은는' | '와과' | '으로로'
+ * @returns {string}
+ */
+function josa(word, form) {
+  if (!word) return form.slice(1);
+  const code = word.charCodeAt(word.length - 1) - 0xAC00;
+  const hasBatchim = code >= 0 && code % 28 !== 0;
+  const rieulEnd   = code >= 0 && code % 28 === 8; // 받침이 'ㄹ'인 경우
+  const map = {
+    '을를':  hasBatchim ? '을' : '를',
+    '이가':  hasBatchim ? '이' : '가',
+    '은는':  hasBatchim ? '은' : '는',
+    '와과':  hasBatchim ? '과' : '와',
+    '으로로': rieulEnd || !hasBatchim ? '로' : '으로',
+  };
+  return map[form] || form;
+}
+
 function formatArea(area) {
   if (!area) return '-';
   return typeof area === 'number' ? area.toFixed(1) : area;
