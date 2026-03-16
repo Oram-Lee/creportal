@@ -457,11 +457,17 @@ body {
 }
 .ac-item:last-child { border-bottom: none; }
 .ac-item:hover, .ac-item.focused { background: var(--accent-lt); }
-.ac-item-name { font-size: 13px; font-weight: 600; color: var(--text); }
-.ac-item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.ac-item-name { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.ac-item-meta { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
 .ac-item-meta .stock-badge {
   display: inline-block; padding: 1px 5px; border-radius: 3px;
   background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 700; margin-left: 4px;
+}
+/* 출처 구분선 — 같은 회사명 다른 소스 */
+.ac-item-src-divider {
+  padding: 3px 14px; font-size: 10px; color: var(--muted);
+  background: #f8faff; border-bottom: 1px solid var(--border);
+  letter-spacing: 0.3px;
 }
 .dart-loading { padding: 10px 14px; font-size: 12px; color: var(--muted); text-align: center; }
 
@@ -492,25 +498,18 @@ body {
 }
 .rent-ai-icon { font-size: 14px; flex-shrink: 0; }
 
-/* 기업 검색 소스 배지 */
+/* 기업 검색 출처 배지 */
 .corp-src-badge {
-  display: inline-block; font-size: 10px; padding: 1px 5px;
-  border-radius: 3px; margin-left: 4px; font-weight: 600; vertical-align: middle;
-}
-.src-dart  { background: #e0f2fe; color: #0369a1; }
-.src-fsc   { background: #fef3c7; color: #92400e; }
-.src-nps   { background: #d1fae5; color: #065f46; }
-.src-perp  { background: #ede9fe; color: #5b21b6; }
-
-/* ── 기업 검색 출처 배지 ── */
-.corp-src-badge {
-  display: inline-block; font-size: 9px; font-weight: 700;
-  padding: 1px 5px; border-radius: 3px; vertical-align: middle;
-  margin-left: 4px; letter-spacing: 0.3px;
+  display: inline-block; font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 4px; vertical-align: middle;
+  margin-left: 4px; letter-spacing: 0.2px; white-space: nowrap;
 }
 .src-dart { background: #dbeafe; color: #1e40af; }
 .src-fsc  { background: #d1fae5; color: #065f46; }
+.src-nps  { background: #d1fae5; color: #065f46; }
 .src-perp { background: #ede9fe; color: #5b21b6; }
+.src-ai   { background: #fef3c7; color: #92400e; }
+.src-manual { background: #f1f5f9; color: #64748b; }
 
 /* ── 기업 검색 로딩 박스 ── */
 .dart-loading-box {
@@ -1154,9 +1153,10 @@ body {
   font-weight: 600;
   margin-left: 6px;
 }
-.badge-naver  { background: #03C75A22; color: #03C75A; }
-.badge-google { background: #4285F422; color: #4285F4; }
-.badge-molit  { background: #ff6b6b22; color: #dc2626; }
+.badge-naver   { background: #03C75A22; color: #03C75A; }
+.badge-google  { background: #4285F422; color: #4285F4; }
+.badge-molit   { background: #ff6b6b22; color: #dc2626; }
+.badge-suggest { background: #fef9c322; color: #854d0e; }
 .news-title { font-size: 14.5px; font-weight: 600; margin-bottom: 3px; line-height: 1.5; }
 .news-desc  { font-size: 13px; color: var(--muted); line-height: 1.5; }
 
@@ -3421,14 +3421,18 @@ let _backendReadyTime = Date.now();
 const _corpCache = new Map();
 const _CORP_CACHE_TTL = 30 * 60 * 1000;
 
+// 정규화 키: 공백 제거 + 소문자 → 동일 기업명 다른 입력도 캐시 히트
+function _corpCacheKey(q) { return q.replace(/\s+/g, '').toLowerCase(); }
+
 function _corpCacheGet(q) {
-  const entry = _corpCache.get(q.toLowerCase());
+  const key   = _corpCacheKey(q);
+  const entry = _corpCache.get(key);
   if (!entry) return null;
-  if (Date.now() - entry.ts > _CORP_CACHE_TTL) { _corpCache.delete(q.toLowerCase()); return null; }
+  if (Date.now() - entry.ts > _CORP_CACHE_TTL) { _corpCache.delete(key); return null; }
   return entry.data;
 }
 function _corpCacheSet(q, data) {
-  _corpCache.set(q.toLowerCase(), { ts: Date.now(), data });
+  _corpCache.set(_corpCacheKey(q), { ts: Date.now(), data });
 }
 
 // ===== 전역 상태 =====
@@ -3824,65 +3828,105 @@ async function searchDartCompany(q) {
   _renderManualOnly(q, dropdown, '검색 연결에 실패했습니다. 직접 입력해주세요.');
 }
 
-// ── 결과 렌더링 (searchDartCompany에서 분리) ──
+// ── 결과 렌더링 — 소스별 그룹, 동일 기업명 다른 출처 모두 표시 ──
 function _renderCorpResults(q, data, dropdown) {
-  const companies = data.companies || [];
-  const srcBadge = (sources) => {
-    const badges = (sources || []).map(s => {
-      if (s === 'dart')       return '<span class="corp-src-badge src-dart">DART</span>';
+  var companies = data.companies || [];
+
+  var srcBadge = function(sources, label) {
+    var badges = (sources || []).map(function(s) {
+      if (s === 'dart')       return '<span class="corp-src-badge src-dart">DART 공식</span>';
       if (s === 'fsc')        return '<span class="corp-src-badge src-fsc">금융위</span>';
-      if (s === 'perplexity') return '<span class="corp-src-badge src-perp">AI</span>';
-      if (s === 'claude')     return '<span class="corp-src-badge src-perp" style="background:#7c3aed;color:#fff">Claude</span>';
+      if (s === 'perplexity') return '<span class="corp-src-badge src-perp">AI 검색</span>';
+      if (s === 'claude')     return '<span class="corp-src-badge src-ai">Claude</span>';
+      if (s === 'nps')        return '<span class="corp-src-badge src-nps">국민연금</span>';
       return '';
     });
-    return badges.filter(Boolean).join('');
+    if (label) badges.push('<span class="corp-src-badge src-ai">' + label + '</span>');
+    return badges.filter(Boolean).join(' ');
   };
-  const mktBadge = (mkt) => {
+
+  var mktBadge = function(mkt) {
     if (mkt === 'KOSPI')  return '<span class="stock-badge">KOSPI</span>';
     if (mkt === 'KOSDAQ') return '<span class="stock-badge" style="background:#e0f2fe;color:#0369a1">KOSDAQ</span>';
     return '';
   };
 
-  const directCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual' };
-  const directJson = JSON.stringify(directCorp).replace(/"/g, '&quot;');
+  // 동일 기업명 그룹화
+  var nameGroups = {};
+  var nameOrder  = [];
+  companies.forEach(function(c) {
+    var nm = c.corp_name;
+    if (!nameGroups[nm]) { nameGroups[nm] = []; nameOrder.push(nm); }
+    nameGroups[nm].push(c);
+  });
 
-  dropdown.innerHTML = companies.map((c, i) => {
-    const corp = {
-      corp_name:     c.corp_name,
-      corp_code:     c.corp_code     || '',
-      industry_name: c.industry_name || '',
-      market_name:   c.market_name   || '',
-      adres:         c.adres         || '',
-      ceo_name:      c.ceo_name      || '',
-      homepage:      c.homepage      || '',
-      phone:         c.phone         || '',
-      employee_cnt:  c.employee_cnt  || null,
-      _source:       (c._sources || [c._source])[0] || 'unknown',
-      _sources:      c._sources || [c._source || 'unknown'],
-    };
-    const cj   = JSON.stringify(corp).replace(/"/g, '&quot;');
-    const meta = [
-      c.industry_name || '업종 미상',
-      c.ceo_name  ? '대표 ' + c.ceo_name : '',
-      c.employee_cnt ? c.employee_cnt.toLocaleString() + '명' : '',
-      c.adres ? c.adres.substring(0, 16) + (c.adres.length > 16 ? '…' : '') : '',
-    ].filter(Boolean).join(' · ');
+  var html = '';
+  var globalIdx = 0;
 
-    return '<div class="ac-item" data-idx="' + i + '"'
-      + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
-      + ' data-corp="' + cj + '" onmouseover="setACFocus(' + i + ')">'
-      + '<div class="ac-item-name">' + c.corp_name + ' ' + mktBadge(c.market_name) + ' ' + srcBadge(c._sources) + '</div>'
-      + '<div class="ac-item-meta">' + meta + '</div>'
-      + '</div>';
-  }).join('')
-  + '<div class="ac-item ac-item-manual"'
-  + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
-  + ' data-corp="' + directJson + '">'
-  + '<div class="ac-item-name" style="color:var(--muted)">✏️ \"' + q + '\" 직접 입력</div>'
-  + '</div>';
+  nameOrder.forEach(function(nm) {
+    var group = nameGroups[nm];
+
+    if (group.length > 1) {
+      html += '<div class="ac-item-src-divider">🏢 ' + nm
+        + ' — 출처별 정보가 다릅니다. 원하는 출처를 선택하세요 (' + group.length + '개)</div>';
+    }
+
+    group.forEach(function(c) {
+      var corp = {
+        corp_name:     c.corp_name,
+        corp_code:     c.corp_code     || '',
+        industry_name: c.industry_name || '',
+        market_name:   c.market_name   || '',
+        adres:         c.adres         || '',
+        ceo_name:      c.ceo_name      || '',
+        homepage:      c.homepage      || '',
+        phone:         c.phone         || '',
+        employee_cnt:  c.employee_cnt  || null,
+        _source:       (c._sources || [c._source || 'unknown'])[0],
+        _sources:      c._sources || [c._source || 'unknown'],
+      };
+      var cj = JSON.stringify(corp).replace(/"/g, '&quot;');
+      var sources = c._sources || [c._source || 'unknown'];
+
+      var metaParts = [];
+      if (c.industry_name) metaParts.push(c.industry_name);
+      if (c.ceo_name)      metaParts.push('대표 ' + c.ceo_name);
+      metaParts.push(c.employee_cnt ? c.employee_cnt.toLocaleString() + '명' : '직원수 미확인');
+      if (c.adres)         metaParts.push(c.adres.substring(0, 18) + (c.adres.length > 18 ? '…' : ''));
+      metaParts.push('출처: ' + (c._sources || [c._source || '?']).join('+').toUpperCase());
+      var meta = metaParts.join(' · ');
+
+      var indent = group.length > 1 ? ' style="padding-left:22px;border-left:3px solid var(--accent-lt)"' : '';
+
+      html += '<div class="ac-item" data-idx="' + globalIdx + '"'
+        + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
+        + ' data-corp="' + cj + '"'
+        + ' onmouseover="setACFocus(' + globalIdx + ')"'
+        + indent + '>'
+        + '<div class="ac-item-name">'
+        + (group.length > 1 ? '' : (nm + ' '))
+        + mktBadge(c.market_name) + ' '
+        + srcBadge(sources, c._label || '')
+        + '</div>'
+        + '<div class="ac-item-meta">' + meta + '</div>'
+        + '</div>';
+
+      globalIdx++;
+    });
+  });
+
+  var directCorp = { corp_name: q, industry_name: '', adres: '', _source: 'manual', _sources: ['manual'] };
+  var directJson = JSON.stringify(directCorp).replace(/"/g, '&quot;');
+  html += '<div class="ac-item ac-item-manual"'
+    + ' onclick="confirmDartCompany(JSON.parse(this.dataset.corp))"'
+    + ' data-corp="' + directJson + '"'
+    + ' onmouseover="setACFocus(' + globalIdx + ')" data-idx="' + globalIdx + '">'
+    + '<div class="ac-item-name" style="color:var(--muted)">\u270f\ufe0f &quot;' + q + '&quot; 직접 입력</div>'
+    + '</div>';
+
+  dropdown.innerHTML = html;
   dropdown.classList.add('show');
 }
-
 function setACFocus(idx) {
   dartACIndex = idx;
   document.querySelectorAll('#dartDropdown .ac-item').forEach((el, i) => {
@@ -4059,10 +4103,23 @@ document.addEventListener('click', (e) => {
 });
 
 // ===== AI 경쟁사 자동 추론 =====
+// ── 경쟁사 JS 캐시 (세션 단위 — 동일 회사+업종이면 재요청 안 함) ──
+const _competitorCache = {};
+
 async function autoInferCompetitors() {
   const company  = document.getElementById('clientCompany').value.trim();
   const industry = document.getElementById('clientIndustry').value.trim();
   if (!company) { showToast('고객사명을 먼저 입력해주세요', 'error'); return; }
+
+  // 캐시 확인
+  const _compKey = (company + '|' + industry).replace(/\s+/g, '').toLowerCase();
+  if (_competitorCache[_compKey]) {
+    const cached = _competitorCache[_compKey];
+    cached.forEach(c => { if (!tags.competitor.includes(c)) tags.competitor.push(c); });
+    renderTags('competitor');
+    showToast(`경쟁사 ${cached.length}개 반영 (캐시)`, 'success');
+    return;
+  }
 
   const btn = document.getElementById('inferCompBtn');
   btn.disabled = true; btn.textContent = '⏳ 추론 중...';
@@ -4077,6 +4134,7 @@ async function autoInferCompetitors() {
     const list = data.competitors || [];
 
     if (list.length) {
+      _competitorCache[_compKey] = list;   // 캐시 저장
       list.forEach(c => {
         if (!tags.competitor.includes(c)) tags.competitor.push(c);
       });
@@ -5791,10 +5849,20 @@ function renderReportHTML(report) {
   const mode     = report.mode;
   const isLR     = mode === 'LR';
 
-  const marketStats  = sections.marketStats  || {};
-  const policyNews   = sections.policyNews   || [];
-  const industryNews = sections.industryNews || [];
-  const aiAnalysis   = sections.aiAnalysis   || '';
+  const marketStats   = sections.marketStats  || {};
+  const policyNews    = sections.policyNews   || [];
+  const industryNews  = sections.industryNews || [];
+  const aiAnalysis    = sections.aiAnalysis   || '';
+  const researchMeta  = sections.researchMeta || { used: false };
+
+  // 리서치 반영 badge HTML
+  const researchBadge = researchMeta.used
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600;margin-left:8px;">
+         📎 리서치 ${researchMeta.sources && researchMeta.sources.length ? researchMeta.sources.join('·') : ''} 반영
+       </span>`
+    : `<span style="display:inline-flex;align-items:center;background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:10px;font-size:11px;margin-left:8px;">
+         리서치 자료 없음
+       </span>`;
 
   // 중복 제거 (동일 빌딩·층·면적)
   const _dedupKey = v => `${v.buildingName}|${v.floor}|${v.rentArea}|${v.rentPy}`;
@@ -5841,18 +5909,29 @@ function renderReportHTML(report) {
       var n       = pool[i];
       var hasLink = n.link && n.link.trim() !== '';
       var isAI    = n.noLink === true || n.source === 'perplexity';
-      if (!hasLink && !isAI) continue;   // 링크 없는 일반 뉴스 제외
+      var isSuggest = n.source === 'suggest';
+      if (!hasLink && !isAI && !isSuggest) continue;   // 링크 없는 일반 뉴스 제외
       count++;
 
       var summary   = n.aiComment || n.summary || '';
       var descText  = (n.description || '').replace(/<[^>]+>/g, '').trim();
-      var snippet   = descText.length > 120 ? descText.substring(0, 120) + '…' : descText;
+      var snippet   = descText.length > 160 ? descText.substring(0, 160) + '…' : descText;
       var curatorId = sectionId ? 'nc_' + sectionId + '_' + i : '';
       var curatorHtml = summary
         ? '<div class="news-curator">💡 ' + summary + '</div>'
-        : (curatorId && !isAI ? '<div class="news-curator news-curator-loading" id="' + curatorId + '"><span class="nc-spinner"></span> AI 인사이트 생성 중...</div>' : '');
+        : (curatorId && !isAI && !isSuggest ? '<div class="news-curator news-curator-loading" id="' + curatorId + '"><span class="nc-spinner"></span> AI 인사이트 생성 중...</div>' : '');
 
-      if (isAI) {
+      if (isSuggest) {
+        // 검색 제안 카드 — 노란 박스
+        html += '<div class="news-item" style="background:linear-gradient(90deg,#fffbeb,#fefce8);border-left:3px solid #f59e0b;cursor:default">'
+          + '<div style="flex:1;min-width:0">'
+          + '<div class="news-title-row">'
+          + '<div class="news-title" style="color:#92400e">' + n.title
+          + '<span class="news-source-badge badge-suggest">검색 제안</span></div>'
+          + '</div>'
+          + (snippet ? '<div class="news-desc" style="font-size:13px;line-height:1.65;color:#78350f">' + snippet + '</div>' : '')
+          + '</div></div>';
+      } else if (isAI) {
         // Perplexity AI 분석 — 파란 박스 별도 스타일
         html += '<div class="news-item" style="background:linear-gradient(90deg,#f0f9ff,#f8faff);border-left:3px solid #3b82f6;cursor:default">'
           + '<div style="flex:1;min-width:0">'
@@ -5960,6 +6039,7 @@ function renderReportHTML(report) {
       <div class="section-title">
         <div class="section-icon">🧠</div>
         ${isLR ? '임대 전략 인사이트' : '컨설팅 분석 — 현황 진단 · 시장 분석 · 전략 제언'}
+        ${researchBadge}
       </div>
       <div class="section-summary">
         <span class="section-summary-label">한줄 요약</span>
