@@ -8707,8 +8707,19 @@ async function buildResearchContext(district, reportContextStr) {
 
     // storageUrl + pageIndex 있는 자료 → fetch-context (원본 PDF 분석)
     // 없는 자료 → summary fallback
-    const richDocs = docs.filter(d => d.storageUrl && d.pageIndex.length > 0);
-    const fallbackDocs = docs.filter(d => !d.storageUrl || d.pageIndex.length === 0);
+    // richDocs: PDF 원본 분석 대상 + 메타 포함
+    const allDocsMeta = Object.entries(snap.val() || {});
+    const richDocs = docs.map(d => {
+      // Firebase 원본에서 source/year/quarter 메타 추가
+      const raw = allDocsMeta.find(([id]) => id === d.docId);
+      const meta = raw ? raw[1] : {};
+      return { ...d, source: meta.source || '', year: meta.year || '', quarter: meta.quarter || '' };
+    }).filter(d => d.storageUrl && d.pageIndex.length > 0);
+    const fallbackDocs = docs.map(d => {
+      const raw = allDocsMeta.find(([id]) => id === d.docId);
+      const meta = raw ? raw[1] : {};
+      return { ...d, source: meta.source || '', year: meta.year || '', quarter: meta.quarter || '' };
+    }).filter(d => !d.storageUrl || d.pageIndex.length === 0);
 
     let context = '';
 
@@ -8730,10 +8741,16 @@ async function buildResearchContext(district, reportContextStr) {
       }
     }
 
-    // fallback: summary만 있는 자료
+    // fallback: summary만 있는 자료 — 제목·출처·연도 포함해 Claude가 출처 명시 가능하도록
     if (fallbackDocs.length > 0) {
       const fallback = fallbackDocs
-        .map(d => `[${d.title || d.docId}]\n${d.summary}`)
+        .map(d => {
+          const meta = [];
+          if (d.source) meta.push('출처: ' + d.source);
+          if (d.year)   meta.push(d.year + (d.quarter ? ' ' + d.quarter : ''));
+          const metaStr = meta.length ? ' (' + meta.join(', ') + ')' : '';
+          return `■ 리서치 자료: ${d.title || d.docId}${metaStr}\n${d.summary}`;
+        })
         .join('\n\n');
       context += (context ? '\n\n' : '') + fallback;
     }
