@@ -187,11 +187,17 @@ body {
 .modal-body { padding: 24px; flex: 1; overflow-y: auto; }
 
 /* ===== 스텝 인디케이터 ===== */
+/* ===== 10단계 스텝 인디케이터 ===== */
 .steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+.steps-progress-row {
   display: flex;
   align-items: center;
   gap: 0;
-  margin-bottom: 28px;
 }
 .step-item {
   display: flex;
@@ -199,12 +205,12 @@ body {
   flex: 1;
 }
 .step-num {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: var(--border);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -212,24 +218,35 @@ body {
   flex-shrink: 0;
   transition: all .2s;
 }
-.step-label {
-  font-size: 11px;
-  color: var(--muted);
-  margin-left: 6px;
-  white-space: nowrap;
-  transition: all .2s;
-}
 .step-line {
   flex: 1;
   height: 2px;
   background: var(--border);
-  margin: 0 8px;
-  transition: background .2s;
+  transition: background .25s;
 }
-.step-item.active .step-num   { background: var(--accent); color: #fff; }
-.step-item.active .step-label { color: var(--accent); font-weight: 600; }
-.step-item.done .step-num     { background: var(--success); color: #fff; }
-.step-item.done .step-line    { background: var(--success); }
+.step-label { display: none; }
+.step-item.active .step-num { background: var(--accent); color: #fff; box-shadow: 0 0 0 3px var(--accent-lt); }
+.step-item.done  .step-num  { background: var(--success); color: #fff; }
+.step-item.done  .step-line { background: var(--success); }
+
+/* 현재 스텝 제목 행 */
+.step-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+.step-current-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: .3px;
+}
+.step-counter {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 500;
+}
 
 /* ===== 스텝 패널 ===== */
 .step-panel { display: none; }
@@ -2738,24 +2755,21 @@ canvas.mini-chart { width: 100% !important; }
 
       <!-- 스텝 인디케이터 -->
       <div class="steps" id="stepsIndicator">
-        <div class="step-item active" id="step-ind-1">
-          <div class="step-num">1</div>
-          <span class="step-label">모드 선택</span>
-          <div class="step-line"></div>
+        <div class="steps-progress-row">
+          <div class="step-item active" id="step-ind-1"><div class="step-num">1</div><div class="step-line"></div></div>
+          <div class="step-item" id="step-ind-2"><div class="step-num">2</div><div class="step-line"></div></div>
+          <div class="step-item" id="step-ind-3"><div class="step-num">3</div><div class="step-line"></div></div>
+          <div class="step-item" id="step-ind-4"><div class="step-num">4</div><div class="step-line"></div></div>
+          <div class="step-item" id="step-ind-5"><div class="step-num">5</div><div class="step-line"></div></div>
+          <div class="step-item" id="step-ind-6"><div class="step-num">6</div><div class="step-line"></div></div>
+          <div class="step-item" id="step-ind-7"><div class="step-num">7</div><div class="step-line"></div></div>
+          <div class="step-item" id="step-ind-8"><div class="step-num">8</div><div class="step-line"></div></div>
+          <div class="step-item" id="step-ind-9"><div class="step-num">9</div><div class="step-line"></div></div>
+          <div class="step-item" id="step-ind-10"><div class="step-num">10</div></div>
         </div>
-        <div class="step-item" id="step-ind-2">
-          <div class="step-num">2</div>
-          <span class="step-label">기준 빌딩</span>
-          <div class="step-line"></div>
-        </div>
-        <div class="step-item" id="step-ind-3">
-          <div class="step-num">3</div>
-          <span class="step-label">분석 범위</span>
-          <div class="step-line"></div>
-        </div>
-        <div class="step-item" id="step-ind-4">
-          <div class="step-num">4</div>
-          <span class="step-label">고객사 정보</span>
+        <div class="step-title-row">
+          <span class="step-current-label" id="stepCurrentLabel">STEP 1 — 모드 선택</span>
+          <span class="step-counter" id="stepCounter">1 / 10</span>
         </div>
       </div>
 
@@ -2813,39 +2827,253 @@ canvas.mini-chart { width: 100% !important; }
         </div>
       </div>
 
-      <!-- STEP 2: 기준 빌딩 -->
+      <!-- STEP 2: 고객사 정보 입력 -->
       <div class="step-panel" id="step-panel-2">
         <div class="form-group">
-          <label class="form-label">기준 빌딩 주소 <span>*</span></label>
+          <label class="form-label">고객사명 <span>*</span></label>
+          <div class="autocomplete-wrap">
+            <input type="text" class="form-input" id="clientCompany"
+              placeholder="기업명 입력 (자동완성)"
+              autocomplete="off"
+              oninput="onClientCompanyInput(this.value)"
+              onkeydown="onClientCompanyKeydown(event)">
+            <div class="autocomplete-dropdown" id="dartDropdown">
+              <div class="dart-loading" id="dartLoading">검색 중...</div>
+            </div>
+          </div>
+          <div class="company-confirmed" id="companyConfirmed">
+            <div>
+              <div class="corp-name" id="confirmedName">-</div>
+              <div class="corp-meta" id="confirmedMeta">-</div>
+            </div>
+            <span class="corp-clear" onclick="clearConfirmedCompany()" title="기업 선택 초기화">✕</span>
+          </div>
+        </div>
+
+        <!-- 업종 -->
+        <div class="form-group">
+          <label class="form-label">업종</label>
+          <input type="text" class="form-input" id="clientIndustry"
+            placeholder="기업 선택 시 자동 입력">
+        </div>
+
+        <!-- 빌딩 주소 연동 안내 -->
+        <div id="corpAddrLinkGroup" style="display:none;margin-top:4px">
+          <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px">🏢 사옥 주소 연동</div>
+          <!-- 주소 일치 시: 자동 연동 카드 -->
+          <div id="corpAddrAutoCard" style="display:none;padding:12px 14px;border:1.5px solid var(--success);border-radius:10px;background:#f0fdf4;margin-bottom:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div>
+                <div style="font-size:12px;font-weight:700;color:#065f46;margin-bottom:4px">✅ 사옥 주소 자동 연동</div>
+                <div id="corpAddrAutoText" style="font-size:12px;color:#374151"></div>
+              </div>
+              <button type="button" onclick="applyCorpAddr()"
+                style="padding:5px 14px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:12px">
+                이 주소 사용
+              </button>
+            </div>
+          </div>
+          <!-- 주소 불일치 / 직접 입력 -->
+          <div id="corpAddrManualCard" style="padding:10px 14px;border:1px solid var(--border);border-radius:10px;background:#fff">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:8px">
+              ℹ️ 회사 정보는 확인됐으나 <b>현재 입주 빌딩 주소</b>를 직접 찾아주세요
+            </div>
+            <div class="addr-search-wrap">
+              <input type="text" class="form-input" id="buildingAddress"
+                placeholder="예) 서울 강남구 테헤란로 152"
+                onkeydown="if(event.key==='Enter') searchBuilding()">
+              <button class="btn-addr-search" onclick="searchBuilding()">검색</button>
+            </div>
+            <p class="form-hint">도로명 주소를 입력하고 검색 버튼을 누르세요</p>
+            <div class="addr-result" id="addrResult"></div>
+          </div>
+        </div>
+
+        <!-- 고객사 미선택 시 — 주소 직접 입력 fallback -->
+        <div id="corpAddrFallback" style="display:none;margin-top:4px">
+          <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px">🏢 기준 빌딩 주소</div>
           <div class="addr-search-wrap">
-            <input type="text" class="form-input" id="buildingAddress"
+            <input type="text" class="form-input" id="buildingAddressFallback"
               placeholder="예) 서울 강남구 테헤란로 152"
-              onkeydown="if(event.key==='Enter') searchBuilding()">
-            <button class="btn-addr-search" onclick="searchBuilding()">검색</button>
+              onkeydown="if(event.key==='Enter') searchBuildingFallback()">
+            <button class="btn-addr-search" onclick="searchBuildingFallback()">검색</button>
           </div>
           <p class="form-hint">도로명 주소를 입력하고 검색 버튼을 누르세요</p>
+          <div class="addr-result" id="addrResultFallback"></div>
         </div>
-        <div class="addr-result" id="addrResult"></div>
-        <div class="form-group" id="buildingNameGroup" style="display:none">
-          <label class="form-label">빌딩명 확인</label>
-          <input type="text" class="form-input" id="buildingNameInput" placeholder="빌딩명 입력">
+
+        <!-- LR 전용 담당자 -->
+        <div id="lr-fields-step2" style="display:none">
+          <div class="form-group" style="margin-top:10px">
+            <label class="form-label">빌딩 / 자산 담당자명 <span>*</span></label>
+            <input type="text" class="form-input" id="lrClientName" placeholder="예) 김철수 팀장">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">희망 임차 업종</label>
+              <input type="text" class="form-input" id="targetIndustry" placeholder="예) IT, 금융">
+            </div>
+            <div class="form-group">
+              <label class="form-label">목표 임대 기간</label>
+              <select class="form-select" id="targetLeaseTerm">
+                <option value="2">2년</option>
+                <option value="3" selected>3년</option>
+                <option value="5">5년</option>
+                <option value="0">제한 없음</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- STEP 3: 분석 범위 -->
+      <!-- STEP 3: 당면 이슈 선택 -->
       <div class="step-panel" id="step-panel-3">
+        <div class="form-group">
+          <label class="form-label">현재 고객사가 당면한 이슈 <span>*</span></label>
+          <div class="issue-cards">
+            <div class="issue-card" id="issue-expand" onclick="selectIssue('expand')">
+              <span class="issue-icon">📈</span>
+              <div class="issue-info">
+                <div class="issue-title">사옥 이전 — 확장</div>
+                <div class="issue-sub">더 넓은 공간이 필요한 성장 기업 · 이전 후 임대면적 증가</div>
+              </div>
+              <div class="issue-radio"></div>
+            </div>
+            <div class="issue-card" id="issue-shrink" onclick="selectIssue('shrink')">
+              <span class="issue-icon">📉</span>
+              <div class="issue-info">
+                <div class="issue-title">사옥 이전 — 축소</div>
+                <div class="issue-sub">비용 절감·재택 전환으로 공간 효율화 · 이전 후 임대면적 감소</div>
+              </div>
+              <div class="issue-radio"></div>
+            </div>
+            <div class="issue-card" id="issue-new" onclick="selectIssue('new')">
+              <span class="issue-icon">🏗️</span>
+              <div class="issue-info">
+                <div class="issue-title">신규 사무실 검토</div>
+                <div class="issue-sub">기존 사무실 유지 + 추가 공간 확보 · 지점·팀실·R&amp;D 센터 등</div>
+              </div>
+              <div class="issue-radio"></div>
+            </div>
+            <div class="issue-card" id="issue-reloc" onclick="selectIssue('reloc')">
+              <span class="issue-icon">🔄</span>
+              <div class="issue-info">
+                <div class="issue-title">동일 규모 이전</div>
+                <div class="issue-sub">면적은 유지하되 빌딩·위치·임대 조건 개선 목적으로 이전</div>
+              </div>
+              <div class="issue-radio"></div>
+            </div>
+            <div class="issue-card full-width maintain-card" id="issue-maintain" onclick="selectIssue('maintain')">
+              <span class="issue-icon">🤝</span>
+              <div class="issue-info">
+                <div class="issue-title">특이사항 없음 — 관계유지용</div>
+                <div class="issue-sub">현재 부동산 이슈 없음 · 시장 정보 및 권역 동향 중심 리포트</div>
+              </div>
+              <div class="issue-radio"></div>
+            </div>
+          </div>
+
+          <!-- 신규/확장/축소 공통 — 면적 + 지역 서브 패널 -->
+          <div class="issue-sub-panel" id="issue-sub-panel">
+            <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+              <div style="flex:1;min-width:100px">
+                <label class="form-label" style="font-size:12px;margin-bottom:6px">희망 전용면적 (평)</label>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <input type="number" class="form-input" id="desiredAreaMin" placeholder="최소" style="width:74px">
+                  <span style="color:var(--muted);font-size:13px">~</span>
+                  <input type="number" class="form-input" id="desiredAreaMax" placeholder="최대" style="width:74px">
+                </div>
+              </div>
+              <div style="flex:1;min-width:120px">
+                <label class="form-label" style="font-size:12px;margin-bottom:6px">현재 면적 (평, 선택)</label>
+                <input type="number" class="form-input" id="currentArea" placeholder="예) 500">
+              </div>
+            </div>
+            <label class="form-label" style="font-size:12px;margin-bottom:6px">희망 입주 지역</label>
+            <div class="area-scope-tabs">
+              <button class="area-scope-tab active" id="scopeTab-district" onclick="selectAreaScope('district')">권역 선택</button>
+              <button class="area-scope-tab" id="scopeTab-sigungu" onclick="selectAreaScope('sigungu')">시·군·구 직접 선택</button>
+            </div>
+            <div id="scopePanel-district">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="grade-check-btn" data-scope="GBD" onclick="toggleScopeDistrict(this)">GBD 강남</button>
+                <button class="grade-check-btn" data-scope="CBD" onclick="toggleScopeDistrict(this)">CBD 도심</button>
+                <button class="grade-check-btn" data-scope="YBD" onclick="toggleScopeDistrict(this)">YBD 여의도</button>
+                <button class="grade-check-btn" data-scope="BBD" onclick="toggleScopeDistrict(this)">BBD 분당·판교</button>
+                <button class="grade-check-btn" data-scope="ETC" onclick="toggleScopeDistrict(this)">기타 서울</button>
+              </div>
+            </div>
+            <div id="scopePanel-sigungu" style="display:none">
+              <div class="sigungu-wrap">
+                <input type="text" class="form-input" id="sigunguInput"
+                  placeholder="예) 강남구, 마포구, 성남시 분당구"
+                  autocomplete="off"
+                  oninput="onSigunguInput(this.value)">
+                <div class="sigungu-dropdown" id="sigunguDropdown"></div>
+              </div>
+              <div id="sigunguTags" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div>
+            </div>
+            <button type="button" class="vp-search-btn" id="vacancySearchBtn"
+              onclick="searchVacancyByArea()" style="margin-top:12px">
+              🔍 해당 조건 공실 물건 검색
+            </button>
+            <div class="vacancy-preview" id="vacancyPreview">
+              <div class="vp-header">
+                <span id="vpHeaderText">검색 결과</span>
+                <span id="vpCount" style="color:var(--accent)"></span>
+              </div>
+              <div class="vp-scroll">
+                <table class="vp-table">
+                  <thead>
+                    <tr>
+                      <th>빌딩명</th><th>층</th><th>전용률</th><th>임대면적</th>
+                      <th>전용면적</th><th>보증금/평</th><th>임대료/평</th><th>관리비/평</th><th>입주가능</th>
+                    </tr>
+                  </thead>
+                  <tbody id="vpTableBody"></tbody>
+                </table>
+              </div>
+              <div class="vp-empty" id="vpEmpty" style="display:none">해당 조건의 공실이 없습니다</div>
+            </div>
+            <div class="ai-insight-mini" id="areaInsightBox">
+              <div class="aim-title">🤖 AI 입지 분석</div>
+              <div class="aim-body" id="areaInsightBody">분석 중...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4: 고객사 현재 임대조건 -->
+      <div class="step-panel" id="step-panel-4">
+        <div class="form-group">
+          <label class="form-label">현재 임대 조건 <span style="font-size:11px;color:var(--muted);font-weight:400">(고객사 현재 계약 기준 · 선택)</span></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+            <div>
+              <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">임대료/평 (원)</label>
+              <input type="number" class="form-input" id="curRentPy" placeholder="예: 85000" style="font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">관리비/평 (원)</label>
+              <input type="number" class="form-input" id="curMaintPy" placeholder="예: 35000" style="font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">보증금/평 (원)</label>
+              <input type="number" class="form-input" id="curDepositPy" placeholder="예: 850000" style="font-size:13px">
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:6px">※ 입력하지 않아도 리포트 생성 가능합니다</p>
+        </div>
+      </div>
+
+      <!-- STEP 5: 분석 방식 선택 -->
+      <div class="step-panel" id="step-panel-5">
         <div class="form-group" style="margin-bottom:4px">
           <label class="form-label">분석 방식 선택 <span>*</span></label>
           <p style="font-size:12px;color:var(--muted);margin-bottom:10px">어떤 범위의 경쟁 빌딩을 분석에 포함할지 선택하세요</p>
           <div class="analysis-mode-cards">
-
-            <!-- 모드 A: 반경 분석 -->
             <div class="analysis-mode-card" id="amc-A" onclick="selectAnalysisMode('A')">
-              <div class="amc-header">
-                <span class="amc-badge a">A</span>
-                <span class="amc-title">반경 분석</span>
-              </div>
-              <div class="amc-desc">기준 빌딩 중심 특정 반경 내 경쟁 빌딩만 분석합니다. 인접 경쟁군 파악에 적합합니다.</div>
+              <div class="amc-header"><span class="amc-badge a">A</span><span class="amc-title">반경 분석</span></div>
+              <div class="amc-desc">기준 빌딩 중심 특정 반경 내 경쟁 빌딩만 분석합니다.</div>
               <div class="amc-check">✓</div>
             </div>
             <div class="analysis-sub-panel" id="sub-A">
@@ -2857,14 +3085,9 @@ canvas.mini-chart { width: 100% !important; }
                 <button class="radius-btn" data-val="3000" onclick="selectRadius(this)">3km</button>
               </div>
             </div>
-
-            <!-- 모드 B: 권역 전체 분석 -->
             <div class="analysis-mode-card" id="amc-B" onclick="selectAnalysisMode('B')">
-              <div class="amc-header">
-                <span class="amc-badge b">B</span>
-                <span class="amc-title">권역 전체 분석</span>
-              </div>
-              <div class="amc-desc">기준 빌딩이 속한 권역(GBD/CBD/YBD 등) 전체를 분석합니다. 권역 시장 전체를 조망할 때 적합합니다.</div>
+              <div class="amc-header"><span class="amc-badge b">B</span><span class="amc-title">권역 전체 분석</span></div>
+              <div class="amc-desc">기준 빌딩이 속한 권역(GBD/CBD/YBD 등) 전체를 분석합니다.</div>
               <div class="amc-check">✓</div>
             </div>
             <div class="analysis-sub-panel" id="sub-B">
@@ -2876,14 +3099,9 @@ canvas.mini-chart { width: 100% !important; }
                 <option value="BBD">BBD (분당·기타)</option>
               </select>
             </div>
-
-            <!-- 모드 C: 권역 + 등급 필터 -->
             <div class="analysis-mode-card" id="amc-C" onclick="selectAnalysisMode('C')">
-              <div class="amc-header">
-                <span class="amc-badge c">C</span>
-                <span class="amc-title">권역 × 빌딩 등급 필터</span>
-              </div>
-              <div class="amc-desc">권역 내 특정 등급 빌딩만 선별하여 분석합니다. 동일 등급 경쟁 빌딩 간 정밀 비교에 적합합니다.</div>
+              <div class="amc-header"><span class="amc-badge c">C</span><span class="amc-title">권역 × 빌딩 등급 필터</span></div>
+              <div class="amc-desc">권역 내 특정 등급 빌딩만 선별하여 분석합니다.</div>
               <div class="amc-check">✓</div>
             </div>
             <div class="analysis-sub-panel" id="sub-C">
@@ -2910,7 +3128,6 @@ canvas.mini-chart { width: 100% !important; }
                 </div>
               </div>
             </div>
-
           </div>
         </div>
         <div class="form-group" style="margin-top:14px">
@@ -2924,343 +3141,29 @@ canvas.mini-chart { width: 100% !important; }
         </div>
       </div>
 
-      <!-- STEP 4: 고객사 정보 -->
-      <div class="step-panel" id="step-panel-4">
-        <!-- TR 전용 -->
-        <div id="tr-fields">
-
-          <!-- 고객사명 + DART 자동완성 -->
-          <div class="form-group">
-            <label class="form-label">고객사명 <span>*</span></label>
-            <div class="autocomplete-wrap">
-              <input type="text" class="form-input" id="clientCompany"
-                placeholder="기업명 입력 (자동완성)"
-                autocomplete="off"
-                oninput="onClientCompanyInput(this.value)"
-                onkeydown="onClientCompanyKeydown(event)">
-              <div class="autocomplete-dropdown" id="dartDropdown">
-                <div class="dart-loading" id="dartLoading">검색 중...</div>
-              </div>
-            </div>
-            <!-- 기업 확정 뱃지 -->
-            <div class="company-confirmed" id="companyConfirmed">
-              <div>
-                <div class="corp-name" id="confirmedName">-</div>
-                <div class="corp-meta" id="confirmedMeta">-</div>
-              </div>
-              <span class="corp-clear" onclick="clearConfirmedCompany()" title="기업 선택 초기화">✕</span>
-            </div>
-          </div>
-
-          <!-- 업종 -->
-          <div class="form-group">
-            <label class="form-label">업종</label>
-            <input type="text" class="form-input" id="clientIndustry"
-              placeholder="기업 선택 시 자동 입력">
-          </div>
-
-          <!-- 당면 이슈 선택 -->
-          <div class="form-group">
-            <label class="form-label">현재 고객사가 당면한 이슈 <span>*</span></label>
-            <div class="issue-cards">
-
-              <div class="issue-card" id="issue-expand" onclick="selectIssue('expand')">
-                <span class="issue-icon">📈</span>
-                <div class="issue-info">
-                  <div class="issue-title">사옥 이전 — 확장</div>
-                  <div class="issue-sub">더 넓은 공간이 필요한 성장 기업 · 이전 후 임대면적 증가</div>
-                </div>
-                <div class="issue-radio"></div>
-              </div>
-
-              <div class="issue-card" id="issue-shrink" onclick="selectIssue('shrink')">
-                <span class="issue-icon">📉</span>
-                <div class="issue-info">
-                  <div class="issue-title">사옥 이전 — 축소</div>
-                  <div class="issue-sub">비용 절감·재택 전환으로 공간 효율화 · 이전 후 임대면적 감소</div>
-                </div>
-                <div class="issue-radio"></div>
-              </div>
-
-              <div class="issue-card" id="issue-new" onclick="selectIssue('new')">
-                <span class="issue-icon">🏗️</span>
-                <div class="issue-info">
-                  <div class="issue-title">신규 사무실 검토</div>
-                  <div class="issue-sub">기존 사무실 유지 + 추가 공간 확보 · 지점·팀실·R&amp;D 센터 등</div>
-                </div>
-                <div class="issue-radio"></div>
-              </div>
-
-              <div class="issue-card" id="issue-reloc" onclick="selectIssue('reloc')">
-                <span class="issue-icon">🔄</span>
-                <div class="issue-info">
-                  <div class="issue-title">동일 규모 이전</div>
-                  <div class="issue-sub">면적은 유지하되 빌딩·위치·임대 조건 개선 목적으로 이전</div>
-                </div>
-                <div class="issue-radio"></div>
-              </div>
-
-              <!-- 관계유지용 — 부동산 이슈 없는 고객 관리 -->
-              <div class="issue-card full-width maintain-card" id="issue-maintain" onclick="selectIssue('maintain')">
-                <span class="issue-icon">🤝</span>
-                <div class="issue-info">
-                  <div class="issue-title">특이사항 없음 — 관계유지용</div>
-                  <div class="issue-sub">현재 부동산 이슈 없음 · 시장 정보 및 권역 동향 중심 리포트로 자동 구성</div>
-                </div>
-                <div class="issue-radio"></div>
-              </div>
-
-            </div>
-
-            <!-- 신규/확장/축소 공통 — 면적 + 지역 서브 패널 -->
-            <div class="issue-sub-panel" id="issue-sub-panel">
-              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
-                <div style="flex:1;min-width:100px">
-                  <label class="form-label" style="font-size:12px;margin-bottom:6px">희망 전용면적 (평)</label>
-                  <div style="display:flex;gap:6px;align-items:center">
-                    <input type="number" class="form-input" id="desiredAreaMin" placeholder="최소" style="width:74px">
-                    <span style="color:var(--muted);font-size:13px">~</span>
-                    <input type="number" class="form-input" id="desiredAreaMax" placeholder="최대" style="width:74px">
-                  </div>
-                </div>
-                <div style="flex:1;min-width:120px">
-                  <label class="form-label" style="font-size:12px;margin-bottom:6px">현재 면적 (평, 선택)</label>
-                  <input type="number" class="form-input" id="currentArea" placeholder="예) 500">
-                </div>
-              </div>
-
-              <!-- 지역 범위 선택 -->
-              <label class="form-label" style="font-size:12px;margin-bottom:6px">희망 입주 지역</label>
-              <div class="area-scope-tabs">
-                <button class="area-scope-tab active" id="scopeTab-district" onclick="selectAreaScope('district')">권역 선택</button>
-                <button class="area-scope-tab" id="scopeTab-sigungu" onclick="selectAreaScope('sigungu')">시·군·구 직접 선택</button>
-              </div>
-
-              <!-- 권역 선택 -->
-              <div id="scopePanel-district">
-                <div style="display:flex;gap:8px;flex-wrap:wrap">
-                  <button class="grade-check-btn" data-scope="GBD" onclick="toggleScopeDistrict(this)">GBD 강남</button>
-                  <button class="grade-check-btn" data-scope="CBD" onclick="toggleScopeDistrict(this)">CBD 도심</button>
-                  <button class="grade-check-btn" data-scope="YBD" onclick="toggleScopeDistrict(this)">YBD 여의도</button>
-                  <button class="grade-check-btn" data-scope="BBD" onclick="toggleScopeDistrict(this)">BBD 분당·판교</button>
-                  <button class="grade-check-btn" data-scope="ETC" onclick="toggleScopeDistrict(this)">기타 서울</button>
-                </div>
-              </div>
-
-              <!-- 시군구 선택 -->
-              <div id="scopePanel-sigungu" style="display:none">
-                <div class="sigungu-wrap">
-                  <input type="text" class="form-input" id="sigunguInput"
-                    placeholder="예) 강남구, 마포구, 성남시 분당구"
-                    autocomplete="off"
-                    oninput="onSigunguInput(this.value)">
-                  <div class="sigungu-dropdown" id="sigunguDropdown"></div>
-                </div>
-                <div id="sigunguTags" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div>
-              </div>
-
-              <!-- 물건 검색 버튼 -->
-              <button type="button" class="vp-search-btn" id="vacancySearchBtn"
-                onclick="searchVacancyByArea()" style="margin-top:12px">
-                🔍 해당 조건 공실 물건 검색
-              </button>
-
-              <!-- 물건 리스트 미리보기 -->
-              <div class="vacancy-preview" id="vacancyPreview">
-                <div class="vp-header">
-                  <span id="vpHeaderText">검색 결과</span>
-                  <span id="vpCount" style="color:var(--accent)"></span>
-                </div>
-                <div class="vp-scroll">
-                  <table class="vp-table">
-                    <thead>
-                      <tr>
-                        <th>빌딩명</th>
-                        <th>층</th>
-                        <th>전용률</th>
-                        <th>임대면적</th>
-                        <th>전용면적</th>
-                        <th>보증금/평</th>
-                        <th>임대료/평</th>
-                        <th>관리비/평</th>
-                        <th>입주가능</th>
-                      </tr>
-                    </thead>
-                    <tbody id="vpTableBody"></tbody>
-                  </table>
-                </div>
-                <div class="vp-empty" id="vpEmpty" style="display:none">해당 조건의 공실이 없습니다</div>
-              </div>
-
-              <!-- AI 인사이트 (물건 없을 때 또는 항상) -->
-              <div class="ai-insight-mini" id="areaInsightBox">
-                <div class="aim-title">🤖 AI 입지 분석</div>
-                <div class="aim-body" id="areaInsightBody">분석 중...</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 경쟁사 태그 입력 -->
-          <div class="form-group">
-            <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
-              <span>경쟁사 (Enter로 추가)</span>
-              <button type="button" style="font-size:11px;padding:2px 8px;border:1px solid var(--accent);border-radius:4px;background:var(--accent-lt);color:var(--accent);cursor:pointer"
-                onclick="autoInferCompetitors()" id="inferCompBtn">
-                ✨ AI 자동 추론
-              </button>
-            </label>
-            <div class="tag-input-wrap" onclick="document.getElementById('competitorInput').focus()">
-              <div id="competitorTags"></div>
-              <input type="text" class="tag-input-field" id="competitorInput"
-                placeholder="회사명 입력 후 Enter"
-                onkeydown="handleTagInput(event, 'competitor')">
-            </div>
-          </div>
-
-          <!-- AI 인텔리전스 수집 -->
-          <div class="form-group" style="margin-top:4px;margin-bottom:0">
-            <label class="form-label" style="display:flex;align-items:center;gap:6px">
-              <span>고객사 인텔리전스 수집</span>
-              <span style="font-size:11px;color:var(--muted);font-weight:400">(선택)</span>
-            </label>
-            <p style="font-size:12px;color:var(--muted);margin-bottom:6px">
-              리포트에 포함할 정보를 AI가 자동으로 수집합니다
-            </p>
-            <button type="button" class="intel-trigger-btn" id="intelTriggerBtn"
-              onclick="toggleIntelPanel()">
-              <span class="pulse"></span>
-              🔍 인텔리전스 수집 항목 선택
+      <!-- STEP 6: 경쟁사 정보 -->
+      <div class="step-panel" id="step-panel-6">
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+            <span>경쟁사 <span style="font-size:11px;color:var(--muted);font-weight:400">(Enter로 추가)</span></span>
+            <button type="button"
+              style="font-size:11px;padding:2px 10px;border:1px solid var(--accent);border-radius:4px;background:var(--accent-lt);color:var(--accent);cursor:pointer"
+              onclick="autoInferCompetitors()" id="inferCompBtn">
+              ✨ AI 자동 추론
             </button>
-
-            <!-- 인텔리전스 항목 선택 패널 -->
-            <div class="intel-panel" id="intelPanel">
-              <div class="intel-panel-header">📋 리포트에 포함할 항목 선택</div>
-              <div class="intel-items">
-                <label class="intel-check-row">
-                  <input type="checkbox" id="ic-policy" checked>
-                  <div class="intel-check-label">
-                    🏛️ 부동산 정책 동향
-                    <span class="ic-sub">국토교통부 최신 정책·고시 (RSS 연동)</span>
-                  </div>
-                </label>
-                <label class="intel-check-row">
-                  <input type="checkbox" id="ic-client-news" checked>
-                  <div class="intel-check-label">
-                    🏢 고객사 사옥·이전 관련 뉴스
-                    <span class="ic-sub">고객사의 사무실 이전·확장·계약 소식</span>
-                  </div>
-                </label>
-                <label class="intel-check-row">
-                  <input type="checkbox" id="ic-competitor-news" checked>
-                  <div class="intel-check-label">
-                    🔍 경쟁사 오피스 동향
-                    <span class="ic-sub">경쟁사 사옥 이전·확장·축소·지점 개설 소식</span>
-                  </div>
-                </label>
-                <label class="intel-check-row">
-                  <input type="checkbox" id="ic-industry" checked>
-                  <div class="intel-check-label">
-                    📊 업계 오피스 수요 동향
-                    <span class="ic-sub">동종 업계의 사무실 이전·확장 트렌드 분석</span>
-                  </div>
-                </label>
-                <label class="intel-check-row">
-                  <input type="checkbox" id="ic-market" checked>
-                  <div class="intel-check-label">
-                    💼 임차 시장 이슈
-                    <span class="ic-sub">임대차보호법, 계약갱신, 임대료 분쟁 등 최신 이슈</span>
-                  </div>
-                </label>
-              </div>
-              <button type="button" class="intel-collect-btn" id="intelCollectBtn"
-                onclick="collectIntelligence()">
-                ⚡ 지금 수집하기
-              </button>
-            </div>
-
-            <!-- 수집 결과 -->
-            <div class="intel-result-panel" id="intelResultPanel"></div>
-
-            <!-- 수집 결과 확인 필수 바 (수집 후 표시) -->
-            <div class="intel-confirm-bar" id="intelConfirmBar">
-              <span class="ic-msg">⚠️ 위 뉴스를 확인하고 리포트에 반영할 항목을 체크한 후 확인 버튼을 눌러주세요</span>
-              <button class="intel-confirm-btn" onclick="confirmIntelligence()">✅ 확인 완료</button>
-            </div>
-            <!-- 확인 완료 뱃지 -->
-            <div class="intel-confirmed-badge" id="intelConfirmedBadge">
-              ✅ <span id="intelConfirmedText">인텔리전스 확인 완료 — 리포트에 반영됩니다</span>
-            </div>
+          </label>
+          <div class="tag-input-wrap" onclick="document.getElementById('competitorInput').focus()">
+            <div id="competitorTags"></div>
+            <input type="text" class="tag-input-field" id="competitorInput"
+              placeholder="회사명 입력 후 Enter"
+              onkeydown="handleTagInput(event, 'competitor')">
           </div>
-
-          <!-- 현재 임대 조건 + 경쟁사 임대조건 비교 -->
-          <div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-            <label class="form-label" style="display:flex;align-items:center;justify-content:space-between">
-              <span>현재 임대 조건 <span style="font-size:11px;color:var(--muted);font-weight:400">(고객사 현재 계약 기준)</span></span>
-              <button type="button" id="compLeaseToggleBtn" onclick="toggleCompLeasePanel()"
-                style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:5px;background:var(--accent-lt);color:var(--accent);cursor:pointer;font-weight:600">
-                + 경쟁사 조건 비교
-              </button>
-            </label>
-
-            <!-- 고객사 임대조건 -->
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
-              <div>
-                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">임대료/평 (원)</label>
-                <input type="number" class="form-input" id="curRentPy"
-                       placeholder="예: 85000" style="font-size:13px">
-              </div>
-              <div>
-                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">관리비/평 (원)</label>
-                <input type="number" class="form-input" id="curMaintPy"
-                       placeholder="예: 35000" style="font-size:13px">
-              </div>
-              <div>
-                <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">보증금/평 (원)</label>
-                <input type="number" class="form-input" id="curDepositPy"
-                       placeholder="예: 850000" style="font-size:13px">
-              </div>
-            </div>
-
-            <!-- 경쟁사 임대조건 비교 패널 (선택적) -->
-            <div id="compLeasePanel" style="display:none;margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
-              <div style="padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-                <span style="font-size:12px;font-weight:700;color:var(--primary)">🏢 경쟁사 임대조건 입력 <span style="font-size:10px;color:var(--muted);font-weight:400">(선택 · 리포트 비교 분석에 활용)</span></span>
-                <button type="button" id="addCompLeaseBtn" onclick="addCompLeaseLine()"
-                  style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:5px;background:var(--accent-lt);color:var(--accent);cursor:pointer">+ 추가</button>
-              </div>
-              <div id="compLeaseLines" style="padding:10px 14px;display:flex;flex-direction:column;gap:8px;background:#fff">
-                <!-- 경쟁사 임대조건 행 — addCompLeaseLine()으로 동적 추가 -->
-              </div>
-              <div style="padding:7px 14px;background:var(--surface);border-top:1px solid var(--border);font-size:11px;color:var(--muted)">
-                경쟁사별 임대조건 입력 시 AI 분석에 비교 관점이 추가됩니다
-              </div>
-            </div>
-          </div>
-
+          <p class="form-hint">경쟁사 오피스 동향이 리포트 인텔리전스에 반영됩니다</p>
         </div>
-        <!-- LR 전용 -->
-        <div id="lr-fields" style="display:none">
+        <!-- LR 전용 경쟁 빌딩 -->
+        <div id="lr-compbuilding" style="display:none">
           <div class="form-group">
-            <label class="form-label">빌딩 / 자산 담당자명 <span>*</span></label>
-            <input type="text" class="form-input" id="lrClientName" placeholder="예) 김철수 팀장">
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">희망 임차 업종</label>
-              <input type="text" class="form-input" id="targetIndustry" placeholder="예) IT, 금융">
-            </div>
-            <div class="form-group">
-              <label class="form-label">목표 임대 기간</label>
-              <select class="form-select" id="targetLeaseTerm">
-                <option value="2">2년</option>
-                <option value="3" selected>3년</option>
-                <option value="5">5년</option>
-                <option value="0">제한 없음</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">경쟁 빌딩 (Enter로 추가)</label>
+            <label class="form-label">경쟁 빌딩 <span style="font-size:11px;color:var(--muted);font-weight:400">(Enter로 추가)</span></label>
             <div class="tag-input-wrap" onclick="document.getElementById('compBuildingInput').focus()">
               <div id="compBuildingTags"></div>
               <input type="text" class="tag-input-field" id="compBuildingInput"
@@ -3269,82 +3172,159 @@ canvas.mini-chart { width: 100% !important; }
             </div>
           </div>
         </div>
+      </div>
 
-      <!-- TR/LR 공통 — 담당자 정보 (표지 자동 반영) -->
-      <div class="form-group" style="margin:14px 0 4px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
-        <label class="form-label" style="margin-bottom:8px">
-          담당자 정보
-          <span style="font-size:11px;color:var(--muted);font-weight:400"> (표지에 자동 반영)</span>
-        </label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div>
-            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">담당자명</label>
-            <input type="text" class="form-input" id="reportManagerName" placeholder="예) 홍길동 대리" style="font-size:13px">
+      <!-- STEP 7: 경쟁사 임대조건 비교 -->
+      <div class="step-panel" id="step-panel-7">
+        <div class="form-group">
+          <label class="form-label">경쟁사 임대조건 비교 <span style="font-size:11px;color:var(--muted);font-weight:400">(선택 · 리포트 비교 분석에 활용)</span></label>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">경쟁사별 임대조건을 입력하면 AI 분석에 비교 관점이 추가됩니다</p>
+          <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px">
+            <button type="button" id="addCompLeaseBtn" onclick="addCompLeaseLine()"
+              style="font-size:12px;padding:4px 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent-lt);color:var(--accent);cursor:pointer;font-weight:600">
+              + 경쟁사 추가
+            </button>
           </div>
-          <div>
-            <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">연락처</label>
-            <input type="text" class="form-input" id="reportManagerContact" placeholder="예) 010-1234-5678" style="font-size:13px">
+          <div id="compLeaseLines" style="display:flex;flex-direction:column;gap:8px">
+            <!-- addCompLeaseLine()으로 동적 추가 -->
           </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:8px">※ 입력하지 않아도 리포트 생성 가능합니다</p>
         </div>
       </div>
 
-      <!-- 타 권역 대안 빌딩 검색 — TR/LR 공통 (step-panel-4 내부 하단) -->
-      <div class="form-group" id="altDistrictGroup"
-           style="margin:14px 0 4px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);position:relative;z-index:1">
-        <label class="form-label" style="margin-bottom:6px">
-          비교 권역 선택
-          <span style="font-size:11px;color:var(--muted);font-weight:400"> (타 권역 대안 빌딩 검색)</span>
-        </label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <label class="coverage-chip" id="altCBD">
-            <input type="checkbox" value="CBD" onchange="toggleAltDistrict(this)">CBD 도심
-          </label>
-          <label class="coverage-chip" id="altGBD">
-            <input type="checkbox" value="GBD" onchange="toggleAltDistrict(this)">GBD 강남
-          </label>
-          <label class="coverage-chip" id="altYBD">
-            <input type="checkbox" value="YBD" onchange="toggleAltDistrict(this)">YBD 여의도
-          </label>
-          <label class="coverage-chip" id="altBBD">
-            <input type="checkbox" value="BBD" onchange="toggleAltDistrict(this)">BBD 분당
-          </label>
+      <!-- STEP 8: 비교 권역 선택 -->
+      <div class="step-panel" id="step-panel-8">
+        <div class="form-group" id="altDistrictGroup">
+          <label class="form-label">비교 권역 선택 <span style="font-size:11px;color:var(--muted);font-weight:400">(타 권역 대안 빌딩 검색)</span></label>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">현재 기준 빌딩 권역은 리포트 생성 시 자동 제외됩니다</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <label class="coverage-chip" id="altCBD">
+              <input type="checkbox" value="CBD" onchange="toggleAltDistrict(this)">CBD 도심
+            </label>
+            <label class="coverage-chip" id="altGBD">
+              <input type="checkbox" value="GBD" onchange="toggleAltDistrict(this)">GBD 강남
+            </label>
+            <label class="coverage-chip" id="altYBD">
+              <input type="checkbox" value="YBD" onchange="toggleAltDistrict(this)">YBD 여의도
+            </label>
+            <label class="coverage-chip" id="altBBD">
+              <input type="checkbox" value="BBD" onchange="toggleAltDistrict(this)">BBD 분당
+            </label>
+          </div>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:5px">현재 기준 빌딩 권역은 리포트 생성 시 자동 제외됩니다</div>
-      </div>
-
-      <!-- 리서치 활용 범위 설정 -->
-      <div class="form-group" style="margin:8px 0 4px">
-        <button type="button" id="researchScopeToggleBtn"
-          onclick="toggleResearchScopePanel()"
-          style="width:100%;padding:9px 14px;border:1px dashed var(--accent);border-radius:8px;background:var(--accent-lt);color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;text-align:left">
-          📚 리서치 활용 범위 설정
-          <span id="researchScopeCount" style="float:right;font-size:11px;color:var(--muted);font-weight:400">전체 자동 선택</span>
-        </button>
-        <div id="researchScopePanel" style="display:none;margin-top:8px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
-          <!-- 패널 헤더 -->
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border)">
-            <span style="font-size:13px;font-weight:700">📚 리서치 활용 범위 설정</span>
-            <div style="display:flex;gap:6px">
-              <button type="button" onclick="researchScopeSelectAll(true)"
-                style="font-size:11px;padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:#fff;cursor:pointer">전체선택</button>
-              <button type="button" onclick="researchScopeSelectAll(false)"
-                style="font-size:11px;padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:#fff;cursor:pointer">전체해제</button>
+        <!-- 담당자 정보 (표지 자동 반영) -->
+        <div class="form-group" style="margin-top:14px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)">
+          <label class="form-label" style="margin-bottom:8px">담당자 정보 <span style="font-size:11px;color:var(--muted);font-weight:400">(표지에 자동 반영)</span></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div>
+              <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">담당자명</label>
+              <input type="text" class="form-input" id="reportManagerName" placeholder="예) 홍길동 대리" style="font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">연락처</label>
+              <input type="text" class="form-input" id="reportManagerContact" placeholder="예) 010-1234-5678" style="font-size:13px">
             </div>
           </div>
-          <!-- 문서 목록 -->
-          <div id="researchScopeList"
-            style="max-height:220px;overflow-y:auto;padding:6px 0;background:#fff">
-            <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">로딩 중...</div>
+        </div>
+      </div>
+
+      <!-- STEP 9: 인텔리전스 수집 -->
+      <div class="step-panel" id="step-panel-9">
+        <div class="form-group">
+          <label class="form-label" style="display:flex;align-items:center;gap:6px">
+            <span>고객사 인텔리전스 수집</span>
+            <span style="font-size:11px;color:var(--muted);font-weight:400">(선택)</span>
+          </label>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">리포트에 포함할 정보를 AI가 자동으로 수집합니다</p>
+
+          <!-- 항목 선택 -->
+          <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:10px">
+            <div style="padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border);font-size:12px;font-weight:700">📋 수집 항목 선택</div>
+            <div class="intel-items" style="padding:6px 0">
+              <label class="intel-check-row">
+                <input type="checkbox" id="ic-policy" checked>
+                <div class="intel-check-label">
+                  🏛️ 부동산 정책 동향
+                  <span class="ic-sub">국토교통부 최신 정책·고시 (RSS 연동)</span>
+                </div>
+              </label>
+              <label class="intel-check-row">
+                <input type="checkbox" id="ic-client-news" checked>
+                <div class="intel-check-label">
+                  🏢 고객사 사옥·이전 관련 뉴스
+                  <span class="ic-sub">고객사의 사무실 이전·확장·계약 소식</span>
+                </div>
+              </label>
+              <label class="intel-check-row">
+                <input type="checkbox" id="ic-competitor-news" checked>
+                <div class="intel-check-label">
+                  🔍 경쟁사 오피스 동향
+                  <span class="ic-sub">경쟁사 사옥 이전·확장·축소·지점 개설 소식</span>
+                </div>
+              </label>
+              <label class="intel-check-row">
+                <input type="checkbox" id="ic-industry" checked>
+                <div class="intel-check-label">
+                  📊 업계 오피스 수요 동향
+                  <span class="ic-sub">동종 업계의 사무실 이전·확장 트렌드 분석</span>
+                </div>
+              </label>
+              <label class="intel-check-row">
+                <input type="checkbox" id="ic-market" checked>
+                <div class="intel-check-label">
+                  💼 임차 시장 이슈
+                  <span class="ic-sub">임대차보호법, 계약갱신, 임대료 분쟁 등</span>
+                </div>
+              </label>
+            </div>
           </div>
-          <!-- 패널 푸터 -->
-          <div style="padding:8px 14px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
-            <span id="researchScopeSelected" style="font-size:12px;color:var(--muted)">선택: 0건</span>
-            <button type="button" onclick="applyResearchScope()"
-              style="padding:5px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">적용</button>
+
+          <button type="button" class="intel-trigger-btn" id="intelTriggerBtn" onclick="collectIntelligence()" style="width:100%">
+            <span class="pulse"></span>
+            ⚡ 지금 수집하기
+          </button>
+
+          <!-- 수집 결과 -->
+          <div class="intel-result-panel" id="intelResultPanel"></div>
+
+          <!-- 수집 결과 확인 바 -->
+          <div class="intel-confirm-bar" id="intelConfirmBar">
+            <span class="ic-msg">⚠️ 위 뉴스를 확인하고 리포트에 반영할 항목을 체크한 후 확인 버튼을 눌러주세요</span>
+            <button class="intel-confirm-btn" onclick="confirmIntelligence()">✅ 확인 완료</button>
+          </div>
+          <div class="intel-confirmed-badge" id="intelConfirmedBadge">
+            ✅ <span id="intelConfirmedText">인텔리전스 확인 완료 — 리포트에 반영됩니다</span>
           </div>
         </div>
       </div>
 
+      <!-- STEP 10: 리서치 활용 범위 설정 -->
+      <div class="step-panel" id="step-panel-10">
+        <div class="form-group">
+          <label class="form-label">리서치 활용 범위 설정</label>
+          <p style="font-size:12px;color:var(--muted);margin-bottom:10px">타사 리서치 자료 중 이번 리포트에 반영할 문서를 선택하세요</p>
+          <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border)">
+              <span style="font-size:13px;font-weight:700">📚 리서치 문서 선택</span>
+              <div style="display:flex;gap:6px">
+                <button type="button" onclick="researchScopeSelectAll(true)"
+                  style="font-size:11px;padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:#fff;cursor:pointer">전체선택</button>
+                <button type="button" onclick="researchScopeSelectAll(false)"
+                  style="font-size:11px;padding:3px 10px;border:1px solid var(--border);border-radius:4px;background:#fff;cursor:pointer">전체해제</button>
+              </div>
+            </div>
+            <div id="researchScopeList"
+              style="max-height:240px;overflow-y:auto;padding:6px 0;background:#fff">
+              <div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">로딩 중...</div>
+            </div>
+            <div style="padding:8px 14px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+              <span id="researchScopeSelected" style="font-size:12px;color:var(--muted)">선택: 0건</span>
+              <button type="button" onclick="applyResearchScope()"
+                style="padding:5px 16px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">적용</button>
+            </div>
+          </div>
+          <p style="font-size:11px;color:var(--muted);margin-top:8px">※ 선택하지 않으면 전체 자료가 자동으로 활용됩니다</p>
+        </div>
       </div>
 
     </div>
@@ -3531,7 +3511,7 @@ function resetModal() {
   document.getElementById('dartDropdown').classList.remove('show');
   document.getElementById('companyConfirmed').classList.remove('show');
   document.getElementById('inferCompBtn') && (document.getElementById('inferCompBtn').disabled = false);
-  document.getElementById('intelPanel').classList.remove('show');
+  document.getElementById('intelPanel')?.classList.remove('show');
   document.getElementById('intelResultPanel').classList.remove('show');
   document.getElementById('intelResultPanel').innerHTML = '';
   // 인텔 확인 바/뱃지 초기화
@@ -3569,7 +3549,19 @@ function resetModal() {
   ['card-TR','card-LR'].forEach(id => document.getElementById(id).classList.remove('selected','lr-mode'));
   document.getElementById('buildingAddress').value = '';
   document.getElementById('addrResult').classList.remove('show');
-  document.getElementById('buildingNameGroup').style.display = 'none';
+  document.getElementById('buildingNameGroup') && (document.getElementById('buildingNameGroup').style.display = 'none');
+
+  // Step2 주소 연동 UI 초기화
+  window._pendingCorpAddr = null;
+  const _lg = document.getElementById('corpAddrLinkGroup');
+  if (_lg) _lg.style.display = 'none';
+  const _fb = document.getElementById('corpAddrFallback');
+  if (_fb) _fb.style.display = '';
+  const _baf = document.getElementById('buildingAddressFallback');
+  if (_baf) _baf.value = '';
+  const _raf = document.getElementById('addrResultFallback');
+  if (_raf) _raf.innerHTML = '';
+
   document.getElementById('clientCompany').value  = '';
   document.getElementById('clientIndustry').value = '';
   document.getElementById('desiredAreaMin').value = '';
@@ -3595,10 +3587,11 @@ function resetModal() {
   });
 
   // 스텝 1로 초기화
-  for (let i = 1; i <= 4; i++) {
-    document.getElementById(`step-panel-${i}`).classList.remove('active');
-    const ind = document.getElementById(`step-ind-${i}`);
-    ind.classList.remove('active','done');
+  for (let i = 1; i <= 10; i++) {
+    const panel = document.getElementById(`step-panel-${i}`);
+    const ind   = document.getElementById(`step-ind-${i}`);
+    if (panel) panel.classList.remove('active');
+    if (ind)   ind.classList.remove('active','done');
   }
   document.getElementById('step-panel-1').classList.add('active');
   document.getElementById('step-ind-1').classList.add('active');
@@ -3608,28 +3601,85 @@ function resetModal() {
   document.getElementById('btnGenerate').style.display = 'none';
 }
 
+// ===== 10단계 스텝 레이블 =====
+const STEP_LABELS = {
+  1:  '모드 선택',
+  2:  '고객사 + 기준 빌딩',
+  3:  '당면 이슈 선택',
+  4:  '현재 임대조건',
+  5:  '분석 방식 선택',
+  6:  '경쟁사 정보',
+  7:  '경쟁사 임대조건 비교',
+  8:  '비교 권역 + 담당자',
+  9:  '인텔리전스 수집',
+  10: '리서치 활용 범위',
+};
+const TOTAL_STEPS = 10;
+
 // ===== 스텝 이동 =====
 function updateStepUI() {
-  for (let i = 1; i <= 4; i++) {
-    document.getElementById(`step-panel-${i}`).classList.remove('active');
-    const ind = document.getElementById(`step-ind-${i}`);
-    ind.classList.remove('active','done');
-    if (i < currentStep) ind.classList.add('done');
-    if (i === currentStep) ind.classList.add('active');
+  for (let i = 1; i <= TOTAL_STEPS; i++) {
+    const panel = document.getElementById(`step-panel-${i}`);
+    const ind   = document.getElementById(`step-ind-${i}`);
+    if (panel) panel.classList.remove('active');
+    if (ind) {
+      ind.classList.remove('active','done');
+      if (i < currentStep) ind.classList.add('done');
+      if (i === currentStep) ind.classList.add('active');
+    }
   }
-  document.getElementById(`step-panel-${currentStep}`).classList.add('active');
+  const panel = document.getElementById(`step-panel-${currentStep}`);
+  if (panel) panel.classList.add('active');
+
+  // 현재 스텝 레이블·카운터
+  const lbl = document.getElementById('stepCurrentLabel');
+  const cnt = document.getElementById('stepCounter');
+  if (lbl) lbl.textContent = `STEP ${currentStep} — ${STEP_LABELS[currentStep] || ''}`;
+  if (cnt) cnt.textContent = `${currentStep} / ${TOTAL_STEPS}`;
 
   document.getElementById('btnPrev').style.display     = currentStep > 1 ? '' : 'none';
-  document.getElementById('btnNext').style.display     = currentStep < 4 ? '' : 'none';
-  document.getElementById('btnGenerate').style.display = currentStep === 4 ? '' : 'none';
+  document.getElementById('btnNext').style.display     = currentStep < TOTAL_STEPS ? '' : 'none';
+  document.getElementById('btnGenerate').style.display = currentStep === TOTAL_STEPS ? '' : 'none';
+
+  // 스텝별 진입 시 사이드 이펙트
+  if (currentStep === 2)  _onEnterStep2();
+  if (currentStep === 6)  { const lr6 = document.getElementById('lr-compbuilding'); if (lr6) lr6.style.display = selectedMode === 'LR' ? '' : 'none'; }
+  if (currentStep === 7)  _onEnterStep7();
+  if (currentStep === 10) _onEnterStep10();
+}
+
+function _onEnterStep2() {
+  // LR 모드면 LR 전용 필드 표시
+  const lr2 = document.getElementById('lr-fields-step2');
+  if (lr2) lr2.style.display = selectedMode === 'LR' ? '' : 'none';
+  const lr6 = document.getElementById('lr-compbuilding');
+  if (lr6) lr6.style.display = selectedMode === 'LR' ? '' : 'none';
+  // 주소 연동 초기 상태: 고객사 미선택이면 fallback 표시
+  const linkGroup = document.getElementById('corpAddrLinkGroup');
+  const fallback  = document.getElementById('corpAddrFallback');
+  if (!dartConfirmedCorp) {
+    if (linkGroup) linkGroup.style.display = 'none';
+    if (fallback)  fallback.style.display  = '';
+  }
+}
+
+function _onEnterStep7() {
+  // 처음 진입 시 빈 행이면 자동 1행 추가
+  const lines = document.getElementById('compLeaseLines');
+  if (lines && lines.children.length === 0) addCompLeaseLine();
+}
+
+function _onEnterStep10() {
+  if (!_researchAllDocs || _researchAllDocs.length === 0) {
+    _loadResearchDocsForScope();
+  }
 }
 
 function nextStep() {
   if (!validateStep(currentStep)) return;
-  if (currentStep < 4) {
+  if (currentStep < TOTAL_STEPS) {
     currentStep++;
     updateStepUI();
-    if (currentStep === 4) updateStep4Fields();
   }
 }
 
@@ -3645,14 +3695,31 @@ function validateStep(step) {
     if (!selectedMode) { showToast('모드를 선택해주세요', 'error'); return false; }
   }
   if (step === 2) {
-    if (!reportParams.buildingAddress) { showToast('기준 빌딩 주소를 입력해주세요', 'error'); return false; }
+    // TR: 고객사명 필수 + 빌딩 주소 필수
+    if (selectedMode === 'TR') {
+      const company = (document.getElementById('clientCompany')?.value || '').trim();
+      if (!company) { showToast('고객사명을 입력해주세요', 'error'); return false; }
+      if (!reportParams.buildingAddress) { showToast('기준 빌딩 주소를 확인해주세요', 'error'); return false; }
+    }
+    // LR: 담당자명 + 빌딩 주소 필수
+    if (selectedMode === 'LR') {
+      const lrName = (document.getElementById('lrClientName')?.value || '').trim();
+      if (!lrName) { showToast('담당자명을 입력해주세요', 'error'); return false; }
+      if (!reportParams.buildingAddress) { showToast('기준 빌딩 주소를 확인해주세요', 'error'); return false; }
+    }
   }
   if (step === 3) {
+    if (selectedMode === 'TR' && !selectedClientIssue) {
+      showToast('고객사 당면 이슈를 선택해주세요', 'error'); return false;
+    }
+  }
+  if (step === 5) {
     if (!selectedAnalysisMode) { showToast('분석 방식을 선택해주세요', 'error'); return false; }
-    // TR 모드에서 인텔 수집 후 확인 필수
+  }
+  if (step === 9) {
+    // 인텔 수집 후 미확인 시 차단
     if (selectedMode === 'TR' && intelCollected && !intelConfirmed) {
       showToast('수집된 뉴스를 확인하고 ✅ 확인 완료 버튼을 눌러주세요', 'error');
-      // 확인 바로 스크롤
       const bar = document.getElementById('intelConfirmBar');
       if (bar) { bar.classList.add('show'); bar.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
       return false;
@@ -3981,11 +4048,105 @@ function confirmDartCompany(corpOrEl) {
   document.getElementById('companyConfirmed').classList.add('show');
   document.getElementById('inferCompBtn').disabled = false;
 
+  // ── 주소 자동 연동 UI ──
+  _triggerCorpAddrLink(corp);
+
   // ── 국민연금 상세 조회 (임직원 수 → 적정 면적 자동 제안) ──
   if (corp._source !== 'manual') {
     _fetchCorpDetail(corp.corp_name);
-    // Claude로 업종 정교화 (비동기, 대분류인 경우에만)
     _refineIndustryWithClaude(corp.corp_name, industry);
+  }
+}
+
+function _triggerCorpAddrLink(corp) {
+  const linkGroup  = document.getElementById('corpAddrLinkGroup');
+  const autoCard   = document.getElementById('corpAddrAutoCard');
+  const autoText   = document.getElementById('corpAddrAutoText');
+  const manualCard = document.getElementById('corpAddrManualCard');
+  const fallback   = document.getElementById('corpAddrFallback');
+  if (!linkGroup) return;
+
+  // fallback 숨김
+  if (fallback) fallback.style.display = 'none';
+  linkGroup.style.display = '';
+
+  const addr = corp.adres || '';
+  if (addr && corp._source !== 'manual') {
+    // 주소 있음 → 자동 연동 카드 표시
+    autoCard.style.display   = '';
+    manualCard.style.display = 'none';
+    autoText.innerHTML = `<b>${corp.corp_name}</b> · ${addr}`;
+    // 빌딩 주소 임시 세팅 (미확정 상태)
+    window._pendingCorpAddr = addr;
+  } else {
+    // 주소 없음 or 직접입력 → 직접 검색 카드
+    autoCard.style.display   = 'none';
+    manualCard.style.display = '';
+    window._pendingCorpAddr  = null;
+  }
+}
+
+async function applyCorpAddr() {
+  const addr = window._pendingCorpAddr;
+  if (!addr) return;
+  // buildingAddress 필드에 세팅 후 자동 검색
+  const input = document.getElementById('buildingAddress');
+  if (input) { input.value = addr; }
+  // 카카오 주소 검색으로 좌표 확정
+  const autoCard = document.getElementById('corpAddrAutoCard');
+  const manualCard = document.getElementById('corpAddrManualCard');
+  if (autoCard) autoCard.innerHTML += '<span style="margin-left:8px;font-size:11px;color:#16a34a">🔄 좌표 확인 중...</span>';
+  try {
+    await searchBuildingByAddr(addr);
+    showToast(`✅ "${addr}" 주소가 기준 빌딩으로 설정됐습니다`, 'success', 4000);
+    if (autoCard) autoCard.style.borderColor = 'var(--success)';
+  } catch(e) {
+    // 자동 실패 → 수동 카드 표시
+    if (autoCard)   autoCard.style.display   = 'none';
+    if (manualCard) manualCard.style.display = '';
+    showToast('주소 자동 설정 실패 — 직접 검색해주세요', 'error');
+  }
+}
+
+async function searchBuildingByAddr(addr) {
+  return new Promise((resolve, reject) => {
+    const geocoder = new kakao.maps.services.Geocoder();
+    geocoder.addressSearch(addr, async (result, status) => {
+      if (status !== kakao.maps.services.Status.OK || !result.length) {
+        reject(new Error('주소 검색 실패'));
+        return;
+      }
+      const r = result[0];
+      reportParams.buildingAddress = r.address_name;
+      reportParams.roadAddress     = r.road_address?.address_name || r.address_name;
+      reportParams.lat             = parseFloat(r.y);
+      reportParams.lng             = parseFloat(r.x);
+      // 권역 감지
+      const det = await _detectDistrict(reportParams.lat, reportParams.lng);
+      if (det) {
+        reportParams.district = det;
+        const dSel = document.getElementById('districtSelect');
+        if (dSel) dSel.value = det;
+        const dSelC = document.getElementById('districtSelectC');
+        if (dSelC) dSelC.value = det;
+      }
+      resolve();
+    });
+  });
+}
+
+async function searchBuildingFallback() {
+  const addr = document.getElementById('buildingAddressFallback')?.value?.trim();
+  if (!addr) return;
+  const resEl = document.getElementById('addrResultFallback');
+  try {
+    await searchBuildingByAddr(addr);
+    if (resEl) resEl.innerHTML = `<div class="addr-match-card" style="border-color:var(--success)"><div style="font-size:12px;font-weight:600;color:#065f46">✅ 빌딩 주소 확정</div><div style="font-size:12px;margin-top:2px">${reportParams.roadAddress || addr}</div></div>`;
+    // addrResult에도 동기화
+    const mainResEl = document.getElementById('addrResult');
+    if (mainResEl) mainResEl.innerHTML = resEl.innerHTML;
+  } catch(e) {
+    if (resEl) resEl.innerHTML = `<span style="color:var(--danger);font-size:12px">⚠️ 주소를 찾을 수 없습니다</span>`;
   }
 }
 
@@ -4089,9 +4250,24 @@ async function _refineIndustryWithClaude(companyName, currentIndustry) {
 
 function clearConfirmedCompany() {
   dartConfirmedCorp = null;
+  window._pendingCorpAddr = null;
   document.getElementById('clientCompany').value = '';
   document.getElementById('clientIndustry').value = '';
   document.getElementById('companyConfirmed').classList.remove('show');
+  // 주소 연동 UI 초기화
+  const linkGroup = document.getElementById('corpAddrLinkGroup');
+  if (linkGroup) linkGroup.style.display = 'none';
+  const fallback = document.getElementById('corpAddrFallback');
+  if (fallback) fallback.style.display = '';
+  // buildingAddress 초기화
+  reportParams.buildingAddress = '';
+  reportParams.roadAddress     = '';
+  reportParams.lat             = null;
+  reportParams.lng             = null;
+  const bAddr = document.getElementById('buildingAddress');
+  if (bAddr) bAddr.value = '';
+  const addrRes = document.getElementById('addrResult');
+  if (addrRes) addrRes.innerHTML = '';
   document.getElementById('clientCompany').focus();
 }
 
@@ -4171,17 +4347,17 @@ async function collectIntelligence() {
     marketIssues:    document.getElementById('ic-market').checked,
   };
 
-  const btn          = document.getElementById('intelCollectBtn');
+  const btn          = document.getElementById('intelTriggerBtn');
   const resultPanel  = document.getElementById('intelResultPanel');
   const confirmBar   = document.getElementById('intelConfirmBar');
   const confirmedBadge = document.getElementById('intelConfirmedBadge');
 
   // 수집 시작 시 확인 상태 초기화
   intelConfirmed = false;
-  confirmBar.classList.remove('show');
-  confirmedBadge.classList.remove('show');
+  if (confirmBar) confirmBar.classList.remove('show');
+  if (confirmedBadge) confirmedBadge.classList.remove('show');
 
-  btn.disabled = true; btn.textContent = '⏳ 수집 중...';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 수집 중...'; }
   resultPanel.innerHTML = '<div class="intel-spinner">🔍 정보 수집 중...</div>';
   resultPanel.classList.add('show');
 
@@ -4237,10 +4413,10 @@ async function collectIntelligence() {
     showToast('뉴스 ' + total + '건 수집 완료 — 아래 ✅ 확인 버튼을 눌러주세요', 'success');
 
   } catch (e) {
-    resultPanel.innerHTML = '<div style="color:var(--danger);font-size:12px">수집 중 오류 발생</div>';
+    if (resultPanel) resultPanel.innerHTML = '<div style="color:var(--danger);font-size:12px">수집 중 오류 발생</div>';
     intelConfirmed = true; // 오류 시 차단 안 함
   } finally {
-    btn.disabled = false; btn.textContent = '⚡ 다시 수집';
+    if (btn) { btn.disabled = false; btn.innerHTML = '<span class="pulse"></span>⚡ 다시 수집'; }
   }
 }
 
@@ -4575,18 +4751,8 @@ function selectRadius(btn) {
 
 // ===== STEP 4 필드 토글 =====
 function updateStep4Fields() {
-  document.getElementById('tr-fields').style.display = selectedMode === 'TR' ? '' : 'none';
-  document.getElementById('lr-fields').style.display = selectedMode === 'LR' ? '' : 'none';
-
-  // 리서치 문서가 아직 로드 안 됐으면 지금 로드 (TR/LR/maintain 모든 모드 공통)
-  // Step4 진입 시 항상 최신 문서 목록을 확보
-  if (!_researchAllDocs || _researchAllDocs.length === 0) {
-    _loadResearchDocsForScope();
-  }
-
-  // 리서치 버튼 항상 표시 (모든 모드 공통 영역에 위치하지만 명시적으로 보장)
-  const researchBtn = document.getElementById('researchScopeToggleBtn');
-  if (researchBtn) researchBtn.style.display = '';
+  // 10단계 구조에서는 _onEnterStep2() / _onEnterStep10()으로 대체됨
+  // 하위 호환을 위해 빈 함수로 유지
 }
 
 // ===== 빌딩 주소 검색 (카카오) =====
@@ -5027,8 +5193,9 @@ function updateResearchScopeCount() {
 }
 
 function applyResearchScope() {
-  document.getElementById('researchScopePanel').style.display = 'none';
+  // Step10에서 패널은 항상 열려 있음 — 닫기 없이 카운트만 업데이트
   updateResearchScopeCount();
+  showToast('리서치 범위가 설정됐습니다', 'success', 2000);
 }
 
 function handleTagInput(event, type) {
