@@ -475,7 +475,7 @@ body {
 .ac-item:last-child { border-bottom: none; }
 .ac-item:hover, .ac-item.focused { background: var(--accent-lt); }
 .ac-item-name { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.ac-item-meta { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+.ac-item-meta { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.5; word-break: keep-all; white-space: normal; }
 .ac-item-meta .stock-badge {
   display: inline-block; padding: 1px 5px; border-radius: 3px;
   background: #fef3c7; color: #92400e; font-size: 10px; font-weight: 700; margin-left: 4px;
@@ -551,7 +551,7 @@ body {
 }
 .company-confirmed.show { display: flex; }
 .company-confirmed .corp-name { font-size: 13px; font-weight: 700; color: #166534; }
-.company-confirmed .corp-meta { font-size: 12px; color: #15803d; }
+.company-confirmed .corp-meta { font-size: 12px; color: #15803d; word-break: keep-all; white-space: normal; line-height: 1.6; }
 .company-confirmed .corp-clear {
   margin-left: auto; cursor: pointer; color: #6b7280; font-size: 14px;
 }
@@ -3675,14 +3675,15 @@ function _onEnterStep7() {
 }
 
 function _onEnterStep10() {
-  if (!_researchAllDocs || _researchAllDocs.length === 0) {
-    // 데이터 없으면 Firebase에서 로드 (로드 완료 후 자동 render)
-    _loadResearchDocsForScope();
-  } else {
-    // 이미 로드된 경우 → 즉시 render (패널이 새로 활성화됐으므로)
+  // _researchAllDocs가 이미 채워져 있으면 즉시 render (탭 방문 등으로 로드됨)
+  if (_researchAllDocs && _researchAllDocs.length > 0) {
+    console.log(`[Step10] 기존 데이터 재사용 (${_researchAllDocs.length}건)`);
     renderResearchScopeList();
     updateResearchScopeCount();
+    return;
   }
+  // 없으면 3단계 fallback 로드
+  _loadResearchDocsForScope();
 }
 
 function nextStep() {
@@ -3969,7 +3970,7 @@ function _renderCorpResults(q, data, dropdown) {
       if (c.industry_name) metaParts.push(c.industry_name);
       if (c.ceo_name)      metaParts.push('대표 ' + c.ceo_name);
       metaParts.push(c.employee_cnt ? c.employee_cnt.toLocaleString() + '명' : '직원수 미확인');
-      if (c.adres)         metaParts.push(c.adres.substring(0, 18) + (c.adres.length > 18 ? '…' : ''));
+      if (c.adres)         metaParts.push(c.adres);   // 전체 주소 표시 (truncation 제거)
       metaParts.push('출처: ' + (c._sources || [c._source || '?']).join('+').toUpperCase());
       var meta = metaParts.join(' · ');
 
@@ -4050,7 +4051,7 @@ function confirmDartCompany(corpOrEl) {
     corp.market_name && corp.market_name !== '비상장' ? corp.market_name : '',
     industry || '',
     corp.ceo_name ? '대표 ' + corp.ceo_name : '',
-    corp.adres ? corp.adres.substring(0, 20) + '…' : '',
+    corp.adres || '',   // 전체 주소 (truncation 제거)
   ].filter(Boolean);
 
   document.getElementById('confirmedName').textContent = corp.corp_name;
@@ -4247,8 +4248,19 @@ async function _fetchCorpDetail(corpName) {
     if (dartConfirmedCorp) {
       dartConfirmedCorp.employee_count = emp;
       dartConfirmedCorp.area_suggest   = area;
-      if (data.nps_address && !dartConfirmedCorp.adres) {
-        dartConfirmedCorp.adres = data.nps_address;
+      // NPS 주소가 더 상세하면 업데이트 (구 단위 → 도로명 전체로 보완)
+      const npsAddr = data.nps_address || '';
+      if (npsAddr && npsAddr.length > (dartConfirmedCorp.adres || '').length) {
+        dartConfirmedCorp.adres = npsAddr;
+        // 주소 연동 카드 재트리거
+        _triggerCorpAddrLink(dartConfirmedCorp);
+        // 확정 뱃지 주소 업데이트
+        const metaEl2 = document.getElementById('confirmedMeta');
+        if (metaEl2) {
+          const parts = metaEl2.textContent.split(' · ').filter(p => !p.includes('특별시') && !p.includes('광역시') && !p.includes('시 ') && !p.includes('구 '));
+          parts.push(npsAddr);
+          metaEl2.textContent = parts.join(' · ');
+        }
       }
     }
   } catch (e) {
@@ -5067,28 +5079,64 @@ function toggleAltDistrict(cb) {
 // ===== 리서치 활용 범위 설정 =====
 let _selectedResearchDocIds = [];   // [] = 전체 사용, 배열 있으면 선택 문서만
 
-// 리포트 모달 Step4 전용 — 리서치 탭 미방문 시 Firebase에서 직접 로드
+// 리포트 모달 Step10 — 리서치 문서 목록 로드 (3단계 fallback)
+// 1단계: Firebase SDK (기존 방식, 4초 타임아웃)
+// 2단계: 백엔드 REST 프록시 (/api/research/docs)
+// 3단계: 에러 표시 + 재시도 버튼
 async function _loadResearchDocsForScope() {
   const listEl = document.getElementById('researchScopeList');
-  if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">⏳ 로딩 중...</div>';
+  if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">⏳ 리서치 자료 로딩 중...</div>';
 
+  // ── 1단계: Firebase SDK (타임아웃 4초) ──
   try {
-    const snap = await db.ref('researchDocs').once('value');
-    const val  = snap.val() || {};
+    const sdkResult = await Promise.race([
+      db.ref('researchDocs').once('value'),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Firebase SDK timeout')), 4000)
+      )
+    ]);
+    const val = sdkResult.val() || {};
     _researchAllDocs = Object.entries(val)
-      .filter(([, d]) => d.active !== false)
+      .filter(([, d]) => d && d.active !== false)
       .map(([id, d]) => ({ _id: id, ...d }))
       .sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
-
-    console.log(`[리서치 범위] ${_researchAllDocs.length}건 로드 완료`);
-
-    // Step10 패널이 현재 활성화 상태면 즉시 렌더링
-    // (패널 display 조건 없이 무조건 렌더 — Step10은 항상 열린 구조)
+    console.log(`[리서치 범위] SDK → ${_researchAllDocs.length}건`);
     renderResearchScopeList();
     updateResearchScopeCount();
-  } catch(e) {
-    console.warn('[리서치 범위] 로드 오류:', e);
-    if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--danger);font-size:12px">⚠️ 로드 실패 — 새로고침 후 다시 시도해주세요</div>';
+    return;
+  } catch (sdkErr) {
+    console.warn('[리서치 범위] SDK 실패:', sdkErr.message, '→ 백엔드 프록시 시도');
+  }
+
+  // ── 2단계: 백엔드 REST 프록시 ──
+  try {
+    if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">🔄 백엔드 경유 로딩 중...</div>';
+    const resp = await fetch(`${BACKEND}/api/research/docs`, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    _researchAllDocs = (data.docs || []);
+    console.log(`[리서치 범위] 백엔드 프록시 → ${_researchAllDocs.length}건`);
+    renderResearchScopeList();
+    updateResearchScopeCount();
+    return;
+  } catch (apiErr) {
+    console.warn('[리서치 범위] 백엔드 프록시 실패:', apiErr.message);
+  }
+
+  // ── 3단계: 에러 표시 + 재시도 버튼 ──
+  if (listEl) {
+    listEl.innerHTML = `
+      <div style="text-align:center;padding:24px;color:var(--muted);font-size:12px">
+        <div style="font-size:24px;margin-bottom:8px">⚠️</div>
+        <div style="margin-bottom:12px">리서치 자료를 불러올 수 없습니다</div>
+        <button onclick="_loadResearchDocsForScope()"
+          style="padding:6px 18px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">
+          🔄 다시 시도
+        </button>
+        <div style="margin-top:10px;font-size:11px;color:#94a3b8">
+          선택하지 않으면 전체 자료가 자동으로 활용됩니다
+        </div>
+      </div>`;
   }
 }
 
