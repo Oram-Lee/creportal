@@ -5984,7 +5984,7 @@ function buildSourceSlide(report) {
     </div>`).join('');
 
   el.innerHTML = `
-  <div class="report-section">
+  <div class="report-section report-sources-section">
     <div class="section-title">
       <div class="section-icon">📎</div>
       출처 및 리서치 자료 활용 내역
@@ -7776,127 +7776,182 @@ function downloadReportPDF(id) {
   const el       = document.getElementById('reportContent');
   const filename = `[${report.clientName}]_${report.buildingName}_리포트_${new Date().toLocaleDateString('ko-KR').replace(/\./g,'-').replace(/ /g,'')}.pdf`;
 
-  // ── A4 장표 슬라이드 구조 print CSS ──────────────────────────────────────
+  // ── A4 Landscape 장표 슬라이드 구조 print CSS ─────────────────────────
   const pdfStyle = document.createElement('style');
   pdfStyle.id = 'pdf-temp-style';
   pdfStyle.textContent = `
     /* ── 기본 리셋 ── */
+    * { box-sizing: border-box !important; }
     #reportContent { background: #fff !important; }
 
-    /* ── 표지: A4 landscape 한 장 고정 ── */
+    /* ══ 1. 내부 메모 완전 숨김 (html2pdf는 @media print 무시) ══ */
+    .internal-memo { display: none !important; }
+
+    /* ══ 2. 표지: 1장 고정 ══ */
     .report-cover {
       page-break-after: always !important;
-      min-height: 182mm !important;   /* A4 landscape 210mm - 여백 28mm */
+      height: 182mm !important;
+      min-height: 182mm !important;
       display: flex !important;
       flex-direction: column !important;
       justify-content: space-between !important;
-      box-sizing: border-box !important;
-      padding: 32px 48px !important;
+      padding: 28px 44px !important;
+      overflow: hidden !important;
     }
 
-    /* ── 각 섹션 = 장표 1장 (페이지 브레이크) ── */
+    /* ══ 3. 각 섹션 = 장표 1장 ══ */
     .report-section {
-      page-break-after: always !important;
-      page-break-inside: auto !important;
-      min-height: 0 !important;
-      padding: 24px 28px !important;
+      page-break-before: always !important;
+      page-break-after: auto !important;
+      page-break-inside: avoid !important;
+      padding: 16px 22px 12px !important;
       border-bottom: none !important;
-      box-sizing: border-box !important;
+      margin: 0 !important;
+      overflow: hidden !important;
     }
 
-    /* ── 테이블: 글꼴 축소 + 가로 잘림 방지 ── */
-    .report-section table {
-      font-size: 9px !important;
+    /* ══ 4. 빈 섹션 숨김 (DOM에 있지만 내용 없는 경우) ══ */
+    .report-section:empty { display: none !important; page-break-before: avoid !important; }
+
+    /* ══ 5. 뉴스 섹션: 전체 표시, 카드 잘림 방지 ══ */
+    .news-item {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+      margin-bottom: 6px !important;
+    }
+    .news-list {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 4px !important;
+    }
+    .news-desc { display: none !important; }  /* 스니펫 숨김 — 공간 절약 */
+    .news-title { font-size: 11.5px !important; }
+    .news-curator { font-size: 10.5px !important; line-height: 1.5 !important; }
+
+    /* ══ 6. spark-row 단일 행 유지 ══ */
+    .spark-row {
+      page-break-inside: avoid !important;
+      flex-wrap: nowrap !important;
+      gap: 8px !important;
+    }
+    .spark-card {
+      page-break-inside: avoid !important;
+      min-width: 0 !important;
+      flex: 1 1 0 !important;
+    }
+    canvas {
+      max-height: 160px !important;
       width: 100% !important;
-      table-layout: fixed !important;
-      word-break: break-all !important;
+      display: block !important;
+    }
+    .spark-card canvas { max-height: 70px !important; }
+
+    /* ══ 7. AI 분석 — 컨설팅 섹션 1장 유지 ══ */
+    .ai-analysis-box {
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .ai-section {
+      padding: 6px 0 !important;
+      border-bottom: 1px solid rgba(100,140,200,0.15) !important;
+      page-break-inside: avoid !important;
+      break-inside: avoid !important;
+    }
+    .ai-section:last-child { border-bottom: none !important; }
+    .ai-headline { font-size: 12px !important; font-weight: 700 !important; color: #1a4d8f !important; margin-bottom: 4px !important; }
+    .ai-body     { font-size: 11px !important; line-height: 1.75 !important; color: #1e2d3d !important; }
+    .aic-point-title { font-size: 11px !important; font-weight: 700 !important; }
+    .aic-point-body  { font-size: 10.5px !important; line-height: 1.7 !important; }
+    .ai-insight-card { page-break-inside: avoid !important; break-inside: avoid !important; }
+    /* AI 분석 한줄요약 박스 축소 */
+    .section-summary { padding: 6px 10px !important; font-size: 11px !important; margin-bottom: 8px !important; }
+
+    /* ══ 8. 인근 빌딩 테이블 — 선명도 + 레이아웃 ══ */
+    .report-section table {
+      font-size: 8.5px !important;
+      width: 100% !important;
+      table-layout: auto !important;
+      border-collapse: collapse !important;
     }
     .report-section table th,
     .report-section table td {
-      padding: 4px 5px !important;
+      padding: 3px 4px !important;
       white-space: nowrap !important;
       overflow: hidden !important;
       text-overflow: ellipsis !important;
+      max-width: 120px !important;
     }
-    /* 테이블 컨테이너 overflow 해제 (html2pdf는 overflow:auto를 잘 못 처리) */
-    .report-section [style*="overflow-x"] {
+    /* 테이블 컨테이너 overflow 해제 */
+    .report-section [style*="overflow-x"],
+    .report-section [style*="overflow"] {
       overflow: visible !important;
     }
+    /* 빌딩 비교 차트 */
+    /* ══ 인근 빌딩 테이블+차트 섹션 ══ */
+    .rent-chart-section { page-break-inside: auto !important; }
+    .rent-chart-section canvas { max-height: 110px !important; width: 100% !important; }
+    [id^="rentBarWrap"] { height: 110px !important; max-height: 110px !important; overflow: hidden !important; }
+    .rent-ai-summary { padding: 4px 8px !important; font-size: 10.5px !important; margin-bottom: 6px !important; }
 
-    /* ── 차트 고정 높이 ── */
-    canvas {
-      max-height: 200px !important;
-      display: block !important;
-    }
-    .spark-card canvas { max-height: 80px !important; }
-
-    /* ── 뉴스 섹션: 줄 수 제한 ── */
-    .news-item { page-break-inside: avoid !important; }
-    .news-desc { display: none !important; }          /* 스니펫 숨김 — 공간 절약 */
-
-    /* ── spark-row 단일 행 유지 ── */
-    .spark-row  { page-break-inside: avoid !important; flex-wrap: nowrap !important; }
-    .spark-card { page-break-inside: avoid !important; min-width: 0 !important; flex: 1 1 0 !important; }
-
-    /* ── AI 분석 박스 ── */
-    .ai-analysis-box { page-break-inside: avoid !important; }
-    .ai-insight-card  { page-break-inside: avoid !important; }
-    .ai-section {
-      padding: 8px 0 !important;
-      border-bottom: 1px solid rgba(100,140,200,0.15) !important;
-      page-break-inside: avoid !important;
-    }
-    .ai-section:last-child { border-bottom: none !important; }
-    .ai-headline {
-      font-size: 13px !important;
-      font-weight: 700 !important;
-      color: #1a4d8f !important;
-      margin-bottom: 5px !important;
-    }
-    .ai-body {
-      font-size: 12px !important;
-      line-height: 1.85 !important;
-      color: #1e2d3d !important;
-    }
-    .aic-point-title {
-      font-size: 12px !important;
-      font-weight: 700 !important;
-    }
-    .aic-point-body {
-      font-size: 11.5px !important;
-      line-height: 1.8 !important;
-    }
-    .news-title {
-      font-size: 12px !important;
+    /* ══ 9. 섹션 타이틀 ══ */
+    .section-title {
+      page-break-after: avoid !important;
+      margin-bottom: 8px !important;
+      font-size: 15px !important;
     }
 
-    /* ── 섹션 타이틀 ── */
-    .section-title { page-break-after: avoid !important; margin-bottom: 12px !important; }
+    /* ══ 10. 출처 섹션 완전 숨김 ══ */
+    .report-sources-section { display: none !important; }
 
-    /* ── 인쇄 불필요 요소 숨김 ── */
+    /* ══ 11. 인쇄 불필요 요소 숨김 ══ */
     .src-badge-row,
     .rent-ai-summary .nc-spinner,
-    button { display: none !important; }
+    .nc-spinner,
+    .news-curator-loading,
+    .intel-confirm-bar,
+    .intel-confirmed-badge,
+    button,
+    .researchBadge { display: none !important; }
 
-    /* ── 마지막 섹션은 page-break 없애기 ── */
+    /* ══ 12. 마지막 섹션 page-break 제거 ══ */
     .report-section:last-child { page-break-after: auto !important; }
+
+    /* ══ 13. 한줄 요약 높이 조정 ══ */
+    .report-summary-bar { padding: 6px 12px !important; margin-bottom: 8px !important; }
   `;
   document.head.appendChild(pdfStyle);
 
+  // 빈 섹션 임시 숨김 (내용이 없거나 내부메모만 있는 섹션)
+  const allSections = el.querySelectorAll('.report-section');
+  const hiddenSections = [];
+  allSections.forEach(sec => {
+    // 내부메모를 제외한 실제 콘텐츠가 있는지 확인
+    const clone = sec.cloneNode(true);
+    clone.querySelectorAll('.internal-memo').forEach(m => m.remove());
+    const text = clone.innerText || clone.textContent || '';
+    if (text.trim().length < 10) {
+      sec.style.display = 'none';
+      hiddenSections.push(sec);
+    }
+  });
+
   html2pdf().set({
-    margin:      [8, 10, 8, 10],
+    margin:      [6, 8, 6, 8],
     filename,
-    image:       { type: 'jpeg', quality: 0.97 },
-    html2canvas: { scale: 2, useCORS: true, logging: false, allowTaint: true },
+    image:       { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 3, useCORS: true, logging: false, allowTaint: true, letterRendering: true },
     jsPDF:       { unit: 'mm', format: 'a4', orientation: 'landscape', compress: true },
-    pagebreak:   { mode: ['css'], before: '.report-section', avoid: ['.spark-card', '.news-item', '.ai-analysis-box'] }
+    pagebreak:   { mode: ['css', 'legacy'] }
   }).from(el).save().then(() => {
     const s = document.getElementById('pdf-temp-style');
     if (s) s.remove();
+    // 숨겼던 섹션 복원
+    hiddenSections.forEach(sec => { sec.style.display = ''; });
     showToast('PDF 저장 완료', 'success');
   }).catch(err => {
     const s = document.getElementById('pdf-temp-style');
     if (s) s.remove();
+    hiddenSections.forEach(sec => { sec.style.display = ''; });
     console.error('PDF 생성 오류:', err);
     showToast('PDF 생성 실패 — 콘솔 확인', 'error');
   });
