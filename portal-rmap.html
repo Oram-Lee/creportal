@@ -5658,51 +5658,53 @@ function renderReportHTML(report) {
   // newsHTML: aiComment 있으면 바로 표시, 없으면 placeholder → 비동기로 생성
   // noLink=true : Perplexity AI 분석 항목 (링크 없음, 별도 스타일)
   // link 없는 일반 뉴스 : 최종 리포트에서 제외 (클릭 불가 기사 노출 방지)
-  const newsHTML = (items, maxItems=5, sectionId='') => items.slice(0, maxItems * 2).reduce((acc, n, idx) => {
-    const hasLink  = n.link && n.link.trim() !== '';
-    const isAI     = n.noLink === true || n.source === 'perplexity';
-    // 링크 없는 일반 뉴스는 건너뜀 (AI 분석 항목은 예외)
-    if (!hasLink && !isAI) return acc;
-    if (acc.count >= maxItems) return acc;
-    acc.count++;
+  const newsHTML = (items, maxItems, sectionId) => {
+    maxItems  = maxItems  || 5;
+    sectionId = sectionId || '';
+    var html  = '';
+    var count = 0;
+    var pool  = items.slice(0, maxItems * 2);
+    for (var i = 0; i < pool.length; i++) {
+      if (count >= maxItems) break;
+      var n       = pool[i];
+      var hasLink = n.link && n.link.trim() !== '';
+      var isAI    = n.noLink === true || n.source === 'perplexity';
+      if (!hasLink && !isAI) continue;   // 링크 없는 일반 뉴스 제외
+      count++;
 
-    const summary   = n.aiComment || n.summary || '';
-    const descText  = (n.description || '').replace(/<[^>]+>/g,'').trim();
-    const snippet   = descText.length > 120 ? descText.substring(0, 120) + '…' : descText;
-    const curatorId = sectionId ? \`nc_\${sectionId}_\${idx}\` : '';
-    const curatorHtml = summary
-      ? \`<div class="news-curator">💡 \${summary}</div>\`
-      : (curatorId && !isAI ? \`<div class="news-curator news-curator-loading" id="\${curatorId}"><span class="nc-spinner"></span> AI 인사이트 생성 중...</div>\` : '');
+      var summary   = n.aiComment || n.summary || '';
+      var descText  = (n.description || '').replace(/<[^>]+>/g, '').trim();
+      var snippet   = descText.length > 120 ? descText.substring(0, 120) + '…' : descText;
+      var curatorId = sectionId ? 'nc_' + sectionId + '_' + i : '';
+      var curatorHtml = summary
+        ? '<div class="news-curator">💡 ' + summary + '</div>'
+        : (curatorId && !isAI ? '<div class="news-curator news-curator-loading" id="' + curatorId + '"><span class="nc-spinner"></span> AI 인사이트 생성 중...</div>' : '');
 
-    // AI 분석 항목 (Perplexity — 링크 없음) 별도 스타일
-    if (isAI) {
-      acc.html += \`
-    <div class="news-item" style="background:linear-gradient(90deg,#f0f9ff,#f8faff);border-left:3px solid #3b82f6;cursor:default">
-      <div style="flex:1;min-width:0">
-        <div class="news-title-row">
-          <div class="news-title" style="color:#1a4d8f">\${n.title}
-            <span class="news-source-badge" style="background:#dbeafe;color:#1d4ed8">AI 분석</span>
-          </div>
-          <div class="news-date">\${formatDate(n.pubDate)}</div>
-        </div>
-        \${snippet ? \`<div class="news-desc" style="font-size:13px;line-height:1.65;color:#374151">\${snippet}</div>\` : ''}
-      </div>
-    </div>\`;
-    } else {
-      acc.html += \`
-    <a class="news-item" href="\${n.link}" target="_blank" rel="noopener">
-      <div style="flex:1;min-width:0">
-        <div class="news-title-row">
-          <div class="news-title">\${n.title}<span class="news-source-badge badge-\${n.source}">\${n.source}</span></div>
-          <div class="news-date">\${formatDate(n.pubDate)}</div>
-        </div>
-        \${snippet ? \`<div class="news-desc">\${snippet}</div>\` : ''}
-        \${curatorHtml}
-      </div>
-    </a>\`;
+      if (isAI) {
+        // Perplexity AI 분석 — 파란 박스 별도 스타일
+        html += '<div class="news-item" style="background:linear-gradient(90deg,#f0f9ff,#f8faff);border-left:3px solid #3b82f6;cursor:default">'
+          + '<div style="flex:1;min-width:0">'
+          + '<div class="news-title-row">'
+          + '<div class="news-title" style="color:#1a4d8f">' + n.title
+          + '<span class="news-source-badge" style="background:#dbeafe;color:#1d4ed8">AI 분석</span></div>'
+          + '<div class="news-date">' + formatDate(n.pubDate) + '</div>'
+          + '</div>'
+          + (snippet ? '<div class="news-desc" style="font-size:13px;line-height:1.65;color:#374151">' + snippet + '</div>' : '')
+          + '</div></div>';
+      } else {
+        html += '<a class="news-item" href="' + n.link + '" target="_blank" rel="noopener">'
+          + '<div style="flex:1;min-width:0">'
+          + '<div class="news-title-row">'
+          + '<div class="news-title">' + n.title + '<span class="news-source-badge badge-' + (n.source||'') + '">' + (n.source||'') + '</span></div>'
+          + '<div class="news-date">' + formatDate(n.pubDate) + '</div>'
+          + '</div>'
+          + (snippet ? '<div class="news-desc">' + snippet + '</div>' : '')
+          + curatorHtml
+          + '</div></a>';
+      }
     }
-    return acc;
-  }, {html:'', count:0}).html;
+    return html;
+  };
 
   // R-ONE 최신 수치
   const vacancyData = marketStats.data?.vacancy    || [];
