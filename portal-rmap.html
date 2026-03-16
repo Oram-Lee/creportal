@@ -1067,7 +1067,7 @@ body {
 /* 스파크라인 */
 .spark-row { display:flex; flex-direction:column; gap:16px; margin-top:16px; }
 .spark-card { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:16px 18px; height:220px; box-sizing:border-box; }
-.spark-card .sc-title { font-size:12px; font-weight:600; color:var(--text); margin-bottom:10px; }
+.spark-card .sc-title { font-size:13px; font-weight:700; color:var(--text); margin-bottom:10px; line-height:1.4; }
 .spark-card canvas { display:block; }
 /* 출처 뱃지 */
 .src-badge-row { display:flex; justify-content:flex-end; margin-top:8px; gap:6px; align-items:center; flex-wrap:wrap; }
@@ -5655,27 +5655,54 @@ function renderReportHTML(report) {
     </tr>`;
   }).join('');
 
-  // newsHTML: aiComment 있으면 바로 표시, 없으면 placholder → 비동기로 생성
-  const newsHTML = (items, maxItems=5, sectionId='') => items.slice(0, maxItems).map((n, idx) => {
-    const summary  = n.aiComment || n.summary || '';
-    const descText = (n.description || '').replace(/<[^>]+>/g,'').trim();
-    const snippet  = descText.length > 90 ? descText.substring(0, 90) + '…' : descText;
-    const curatorId = sectionId ? `nc_${sectionId}_${idx}` : '';
+  // newsHTML: aiComment 있으면 바로 표시, 없으면 placeholder → 비동기로 생성
+  // noLink=true : Perplexity AI 분석 항목 (링크 없음, 별도 스타일)
+  // link 없는 일반 뉴스 : 최종 리포트에서 제외 (클릭 불가 기사 노출 방지)
+  const newsHTML = (items, maxItems=5, sectionId='') => items.slice(0, maxItems * 2).reduce((acc, n, idx) => {
+    const hasLink  = n.link && n.link.trim() !== '';
+    const isAI     = n.noLink === true || n.source === 'perplexity';
+    // 링크 없는 일반 뉴스는 건너뜀 (AI 분석 항목은 예외)
+    if (!hasLink && !isAI) return acc;
+    if (acc.count >= maxItems) return acc;
+    acc.count++;
+
+    const summary   = n.aiComment || n.summary || '';
+    const descText  = (n.description || '').replace(/<[^>]+>/g,'').trim();
+    const snippet   = descText.length > 120 ? descText.substring(0, 120) + '…' : descText;
+    const curatorId = sectionId ? \`nc_\${sectionId}_\${idx}\` : '';
     const curatorHtml = summary
-      ? `<div class="news-curator">💡 ${summary}</div>`
-      : (curatorId ? `<div class="news-curator news-curator-loading" id="${curatorId}"><span class="nc-spinner"></span> AI 인사이트 생성 중...</div>` : '');
-    return `
-    <a class="news-item" href="${n.link && n.link !== '' ? n.link : 'javascript:void(0)'}" ${n.link && n.link !== '' ? 'target="_blank" rel="noopener"' : ''} style="${n.link && n.link !== '' ? '' : 'cursor:default'}">
+      ? \`<div class="news-curator">💡 \${summary}</div>\`
+      : (curatorId && !isAI ? \`<div class="news-curator news-curator-loading" id="\${curatorId}"><span class="nc-spinner"></span> AI 인사이트 생성 중...</div>\` : '');
+
+    // AI 분석 항목 (Perplexity — 링크 없음) 별도 스타일
+    if (isAI) {
+      acc.html += \`
+    <div class="news-item" style="background:linear-gradient(90deg,#f0f9ff,#f8faff);border-left:3px solid #3b82f6;cursor:default">
       <div style="flex:1;min-width:0">
         <div class="news-title-row">
-          <div class="news-title">${n.title}<span class="news-source-badge badge-${n.source}">${n.source}</span></div>
-          <div class="news-date">${formatDate(n.pubDate)}</div>
+          <div class="news-title" style="color:#1a4d8f">\${n.title}
+            <span class="news-source-badge" style="background:#dbeafe;color:#1d4ed8">AI 분석</span>
+          </div>
+          <div class="news-date">\${formatDate(n.pubDate)}</div>
         </div>
-        ${snippet ? `<div class="news-desc">${snippet}</div>` : ''}
-        ${curatorHtml}
+        \${snippet ? \`<div class="news-desc" style="font-size:13px;line-height:1.65;color:#374151">\${snippet}</div>\` : ''}
       </div>
-    </a>`;
-  }).join('');
+    </div>\`;
+    } else {
+      acc.html += \`
+    <a class="news-item" href="\${n.link}" target="_blank" rel="noopener">
+      <div style="flex:1;min-width:0">
+        <div class="news-title-row">
+          <div class="news-title">\${n.title}<span class="news-source-badge badge-\${n.source}">\${n.source}</span></div>
+          <div class="news-date">\${formatDate(n.pubDate)}</div>
+        </div>
+        \${snippet ? \`<div class="news-desc">\${snippet}</div>\` : ''}
+        \${curatorHtml}
+      </div>
+    </a>\`;
+    }
+    return acc;
+  }, {html:'', count:0}).html;
 
   // R-ONE 최신 수치
   const vacancyData = marketStats.data?.vacancy    || [];
@@ -6499,13 +6526,21 @@ function buildSection1(report) {
   const spark6RI = riList.slice(-6).map(function(d){ return parseFloat(d.rentIdx)||0; });
   let sparkHtml = '';
   if (spark6V.length >= 3 || spark6RI.length >= 3) {
+    const _dist = report.district || '';
+    const _distLabel = {'CBD':'CBD 도심','GBD':'GBD 강남','YBD':'YBD 여의도','BBD':'BBD 분당'}[_dist] || _dist;
     sparkHtml = '<div class="spark-row">';
     if (spark6V.length >= 3)
-      sparkHtml += '<div class="spark-card"><div class="sc-title">📉 공실률 추이 (최근 6분기)</div>'
-        + '<canvas id="spkV_' + report.id + '" width="600" height="160" style="width:100%;height:160px"></canvas></div>';
+      sparkHtml += '<div class="spark-card">'
+        + '<div class="sc-title" style="font-size:13px;font-weight:700">📉 ' + _distLabel + ' 공실률 추이 (최근 6분기)'
+        + '<span style="font-size:10px;font-weight:400;color:#64748b;margin-left:6px">※ 권역 상위 집계 기준</span></div>'
+        + '<canvas id="spkV_' + report.id + '" width="600" height="160" style="width:100%;height:160px"></canvas>'
+        + '</div>';
     if (spark6RI.length >= 3)
-      sparkHtml += '<div class="spark-card"><div class="sc-title">📈 임대가격지수 추이 (최근 6분기)</div>'
-        + '<canvas id="spkRI_' + report.id + '" width="600" height="160" style="width:100%;height:160px"></canvas></div>';
+      sparkHtml += '<div class="spark-card">'
+        + '<div class="sc-title" style="font-size:13px;font-weight:700">📈 ' + _distLabel + ' 임대가격지수 추이 (최근 6분기)'
+        + '<span style="font-size:10px;font-weight:400;color:#64748b;margin-left:6px">※ 2021년 1분기=100 기준</span></div>'
+        + '<canvas id="spkRI_' + report.id + '" width="600" height="160" style="width:100%;height:160px"></canvas>'
+        + '</div>';
     sparkHtml += '</div>';
   }
 
