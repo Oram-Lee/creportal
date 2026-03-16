@@ -3308,7 +3308,7 @@ canvas.mini-chart { width: 100% !important; }
         <div class="form-group">
           <label class="form-label">리서치 활용 범위 설정</label>
           <p style="font-size:12px;color:var(--muted);margin-bottom:10px">타사 리서치 자료 중 이번 리포트에 반영할 문서를 선택하세요</p>
-          <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+          <div id="researchScopePanel" style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
             <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border)">
               <span style="font-size:13px;font-weight:700">📚 리서치 문서 선택</span>
               <div style="display:flex;gap:6px">
@@ -3676,7 +3676,12 @@ function _onEnterStep7() {
 
 function _onEnterStep10() {
   if (!_researchAllDocs || _researchAllDocs.length === 0) {
+    // 데이터 없으면 Firebase에서 로드 (로드 완료 후 자동 render)
     _loadResearchDocsForScope();
+  } else {
+    // 이미 로드된 경우 → 즉시 render (패널이 새로 활성화됐으므로)
+    renderResearchScopeList();
+    updateResearchScopeCount();
   }
 }
 
@@ -5064,6 +5069,9 @@ let _selectedResearchDocIds = [];   // [] = 전체 사용, 배열 있으면 선�
 
 // 리포트 모달 Step4 전용 — 리서치 탭 미방문 시 Firebase에서 직접 로드
 async function _loadResearchDocsForScope() {
+  const listEl = document.getElementById('researchScopeList');
+  if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">⏳ 로딩 중...</div>';
+
   try {
     const snap = await db.ref('researchDocs').once('value');
     const val  = snap.val() || {};
@@ -5071,23 +5079,27 @@ async function _loadResearchDocsForScope() {
       .filter(([, d]) => d.active !== false)
       .map(([id, d]) => ({ _id: id, ...d }))
       .sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
-    // 패널이 이미 열려 있으면 즉시 렌더링
-    const panel = document.getElementById('researchScopePanel');
-    if (panel && panel.style.display !== 'none') renderResearchScopeList();
+
+    console.log(`[리서치 범위] ${_researchAllDocs.length}건 로드 완료`);
+
+    // Step10 패널이 현재 활성화 상태면 즉시 렌더링
+    // (패널 display 조건 없이 무조건 렌더 — Step10은 항상 열린 구조)
+    renderResearchScopeList();
     updateResearchScopeCount();
   } catch(e) {
     console.warn('[리서치 범위] 로드 오류:', e);
+    if (listEl) listEl.innerHTML = '<div style="text-align:center;padding:20px;color:var(--danger);font-size:12px">⚠️ 로드 실패 — 새로고침 후 다시 시도해주세요</div>';
   }
 }
 
 function toggleResearchScopePanel() {
   const panel = document.getElementById('researchScopePanel');
+  if (!panel) return;  // Step10에서는 항상 열려 있음
   const isOpen = panel.style.display !== 'none';
   if (isOpen) {
     panel.style.display = 'none';
   } else {
     panel.style.display = 'block';
-    // 데이터 없으면 로드 후 렌더 (비동기), 있으면 즉시 렌더
     if (!_researchAllDocs || _researchAllDocs.length === 0) {
       _loadResearchDocsForScope();
     } else {
