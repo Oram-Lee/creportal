@@ -4082,18 +4082,23 @@ function _triggerCorpAddrLink(corp) {
   linkGroup.style.display = '';
 
   const addr = corp.adres || '';
-  if (addr && corp._source !== 'manual') {
-    // 주소 있음 → 자동 연동 카드 표시
+  // 전체 도로명주소 여부 검증 (번지 숫자 포함 필수 — 구 단위는 자동연동 불가)
+  const isFullAddr = addr && addr.length >= 12 && /\d/.test(addr);
+  if (isFullAddr && corp._source !== 'manual') {
+    // 전체 주소 있음 → 자동 연동 카드 표시
     autoCard.style.display   = '';
     manualCard.style.display = 'none';
     autoText.innerHTML = `<b>${corp.corp_name}</b> · ${addr}`;
     // 빌딩 주소 임시 세팅 (미확정 상태)
     window._pendingCorpAddr = addr;
   } else {
-    // 주소 없음 or 직접입력 → 직접 검색 카드
+    // 주소 없음 / 구 단위 / 직접입력 → 직접 검색 카드
     autoCard.style.display   = 'none';
     manualCard.style.display = '';
     window._pendingCorpAddr  = null;
+    if (addr && !isFullAddr) {
+      console.log('[AddrLink] 구 단위 주소 — 자동연동 건너뜀:', addr);
+    }
   }
 }
 
@@ -4248,19 +4253,25 @@ async function _fetchCorpDetail(corpName) {
     if (dartConfirmedCorp) {
       dartConfirmedCorp.employee_count = emp;
       dartConfirmedCorp.area_suggest   = area;
-      // NPS 주소가 더 상세하면 업데이트 (구 단위 → 도로명 전체로 보완)
+      // NPS 주소가 전체 도로명이고 더 상세하면 업데이트 (구 단위 제외)
       const npsAddr = data.nps_address || '';
-      if (npsAddr && npsAddr.length > (dartConfirmedCorp.adres || '').length) {
+      const _isFullAddr = (a) => a && a.length >= 12 && /\d/.test(a); // 번지 숫자 포함 여부
+      if (npsAddr && _isFullAddr(npsAddr) && npsAddr.length > (dartConfirmedCorp.adres || '').length) {
         dartConfirmedCorp.adres = npsAddr;
+        console.log('[Corp Detail] NPS 주소 업데이트:', npsAddr);
         // 주소 연동 카드 재트리거
         _triggerCorpAddrLink(dartConfirmedCorp);
-        // 확정 뱃지 주소 업데이트
+        // 확정 뱃지 주소 업데이트 (기존 구 단위 주소 제거 후 교체)
         const metaEl2 = document.getElementById('confirmedMeta');
         if (metaEl2) {
-          const parts = metaEl2.textContent.split(' · ').filter(p => !p.includes('특별시') && !p.includes('광역시') && !p.includes('시 ') && !p.includes('구 '));
+          const parts = metaEl2.textContent.split(' · ').filter(p =>
+            !p.includes('특별시') && !p.includes('광역시') && !p.includes('시 ') && !p.includes('구 ')
+          );
           parts.push(npsAddr);
           metaEl2.textContent = parts.join(' · ');
         }
+      } else if (npsAddr && !_isFullAddr(npsAddr)) {
+        console.log('[Corp Detail] NPS 주소 구 단위 무시:', npsAddr);
       }
     }
   } catch (e) {
