@@ -4120,6 +4120,7 @@ function _renderCorpResults(q, data, dropdown) {
         homepage:      c.homepage      || '',
         phone:         c.phone         || '',
         employee_cnt:  c.employee_cnt  || null,
+        branches:      c.branches      || [],
         _source:       (c._sources || [c._source || 'unknown'])[0],
         _sources:      c._sources || [c._source || 'unknown'],
       };
@@ -4130,9 +4131,29 @@ function _renderCorpResults(q, data, dropdown) {
       if (c.industry_name) metaParts.push(c.industry_name);
       if (c.ceo_name)      metaParts.push('대표 ' + c.ceo_name);
       metaParts.push(c.employee_cnt ? c.employee_cnt.toLocaleString() + '명' : '직원수 미확인');
-      if (c.adres)         metaParts.push(c.adres);   // 전체 주소 표시 (truncation 제거)
+      if (c.adres)         metaParts.push('<b>본사:</b> ' + c.adres);
+      else                 metaParts.push('<span style="color:#ef4444">본사주소 미확인</span>');
       metaParts.push('출처: ' + (c._sources || [c._source || '?']).join('+').toUpperCase());
       var meta = metaParts.join(' · ');
+
+      // branches UI
+      var branchesHtml = '';
+      var branches = c.branches || [];
+      if (branches.length > 0) {
+        branchesHtml = '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">';
+        branchesHtml += '<span style="font-size:10px;color:var(--muted)">지점/사무소:</span>';
+        branches.forEach(function(b) {
+          var bCorpJson = JSON.stringify(Object.assign({}, corp, {adres: b.address})).replace(/"/g, '&quot;');
+          branchesHtml += '<button '
+            + 'onclick="event.stopPropagation();confirmDartCompany(JSON.parse(this.dataset.corp))" '
+            + 'data-corp="' + bCorpJson + '" '
+            + 'title="' + b.address + '" '
+            + 'style="font-size:10px;padding:2px 7px;border:1px solid #d1d5db;border-radius:3px;'
+            + 'background:#f9fafb;cursor:pointer;color:#374151">'
+            + (b.type || '지점') + '</button>';
+        });
+        branchesHtml += '</div>';
+      }
 
       var indent = group.length > 1 ? ' style="padding-left:22px;border-left:3px solid var(--accent-lt)"' : '';
 
@@ -4147,6 +4168,7 @@ function _renderCorpResults(q, data, dropdown) {
         + srcBadge(sources, c._label || '')
         + '</div>'
         + '<div class="ac-item-meta">' + meta + '</div>'
+        + branchesHtml
         + '</div>';
 
       globalIdx++;
