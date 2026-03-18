@@ -3052,7 +3052,34 @@ canvas.mini-chart { width: 100% !important; }
       <div class="step-panel" id="step-panel-4">
         <div class="form-group">
           <label class="form-label">현재 임대 조건 <span style="font-size:11px;color:var(--muted);font-weight:400">(고객사 현재 계약 기준 · 선택)</span></label>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+
+          <!-- 기준가 리스트 UI (Firebase 로드 후 표시) -->
+          <div id="step4-pricing-area" style="margin-top:8px;margin-bottom:12px">
+            <!-- 로딩 -->
+            <div id="step4-pricing-loading" style="display:none;font-size:12px;color:var(--muted);padding:8px 0">
+              ⏳ 빌딩 기준가 정보 조회 중…
+            </div>
+
+            <!-- 기준가 있는 경우 -->
+            <div id="step4-pricing-list" style="display:none">
+              <div style="font-size:11px;color:var(--accent);background:var(--accent-lt);border:1px solid var(--accent);border-radius:6px;padding:8px 10px;margin-bottom:8px;line-height:1.6">
+                📋 CRE Portal에 저장된 해당 빌딩의 기준가 정보 리스트입니다.<br>
+                선택하면 아래 입력란에 자동으로 채워집니다. 없는 경우 직접 입력하세요.
+              </div>
+              <div id="step4-pricing-cards" style="display:flex;flex-direction:column;gap:6px"></div>
+            </div>
+
+            <!-- 기준가 없는 경우 -->
+            <div id="step4-pricing-empty" style="display:none">
+              <div style="font-size:11px;color:var(--muted);background:#f8f8f8;border:1px dashed #ddd;border-radius:6px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span>저장된 기준가 정보가 없습니다. 직접 입력해주세요.</span>
+                <button onclick="step4FocusDirectInput()" style="font-size:11px;padding:4px 10px;border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:4px;cursor:pointer;white-space:nowrap">✏️ 직접입력</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 입력 필드 (항상 표시) -->
+          <div id="step4-input-fields" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
             <div>
               <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">임대료/평 (원)</label>
               <input type="number" class="form-input" id="curRentPy" placeholder="예: 85000" style="font-size:13px">
@@ -3648,6 +3675,7 @@ function updateStepUI() {
 
   // 스텝별 진입 시 사이드 이펙트
   if (currentStep === 2)  _onEnterStep2();
+  if (currentStep === 4)  _onEnterStep4();
   if (currentStep === 6)  { const lr6 = document.getElementById('lr-compbuilding'); if (lr6) lr6.style.display = selectedMode === 'LR' ? '' : 'none'; }
   if (currentStep === 7)  _onEnterStep7();
   if (currentStep === 10) _onEnterStep10();
@@ -3672,6 +3700,138 @@ function _onEnterStep7() {
   // 처음 진입 시 빈 행이면 자동 1행 추가
   const lines = document.getElementById('compLeaseLines');
   if (lines && lines.children.length === 0) addCompLeaseLine();
+}
+
+// ── Step 4 진입: 빌딩 기준가 로드 ──
+async function _onEnterStep4() {
+  const elLoading = document.getElementById('step4-pricing-loading');
+  const elList    = document.getElementById('step4-pricing-list');
+  const elCards   = document.getElementById('step4-pricing-cards');
+  const elEmpty   = document.getElementById('step4-pricing-empty');
+  if (!elLoading || !elList || !elCards || !elEmpty) return;
+
+  // 초기화
+  elLoading.style.display = 'none';
+  elList.style.display    = 'none';
+  elEmpty.style.display   = 'none';
+  elCards.innerHTML       = '';
+
+  const bid = reportParams.buildingId;
+  if (!bid) {
+    elEmpty.style.display = '';
+    return;
+  }
+
+  elLoading.style.display = '';
+  try {
+    const snap = await db.ref(`buildings/${bid}`).once('value');
+    const bldg = snap.val();
+    elLoading.style.display = 'none';
+
+    if (!bldg) { elEmpty.style.display = ''; return; }
+
+    // floorPricing 배열 추출 — 배열 또는 객체 양쪽 대응
+    let fpArr = [];
+    if (Array.isArray(bldg.floorPricing)) {
+      fpArr = bldg.floorPricing.filter(Boolean);
+    } else if (bldg.floorPricing && typeof bldg.floorPricing === 'object') {
+      fpArr = Object.values(bldg.floorPricing).filter(Boolean);
+    }
+
+    // OCR 우선, effectiveDate 역순 정렬
+    fpArr.sort((a, b) => {
+      const aOcr = (a.sourceType === 'ocr' || a.sourceType === 'ocr_basePricing') ? 1 : 0;
+      const bOcr = (b.sourceType === 'ocr' || b.sourceType === 'ocr_basePricing') ? 1 : 0;
+      if (bOcr !== aOcr) return bOcr - aOcr;
+      return (b.effectiveDate || '').localeCompare(a.effectiveDate || '');
+    });
+
+    // 유효 항목 필터 (임대료·관리비·보증금 중 하나라도 있어야)
+    const valid = fpArr.filter(fp =>
+      (fp.rentPy > 0 || fp.maintenancePy > 0 || fp.depositPy > 0)
+    );
+
+    if (!valid.length) { elEmpty.style.display = ''; return; }
+
+    // 카드 렌더링
+    valid.forEach((fp, idx) => {
+      const fmt   = n => n > 0 ? Number(n).toLocaleString() + '원' : '-';
+      const isOcr = fp.sourceType === 'ocr' || fp.sourceType === 'ocr_basePricing';
+      const date  = fp.effectiveDate ? fp.effectiveDate.slice(0, 7).replace('-', '.') : '';
+      const floor = fp.floorInfo || fp.areaName || fp.floorType || '';
+      const srcBadge = isOcr
+        ? `<span style="font-size:10px;background:#ede9fe;color:#7c3aed;border-radius:3px;padding:1px 5px;margin-left:4px">OCR</span>`
+        : `<span style="font-size:10px;background:#f0fdf4;color:#16a34a;border-radius:3px;padding:1px 5px;margin-left:4px">수동</span>`;
+
+      const card = document.createElement('div');
+      card.style.cssText = [
+        'display:flex', 'align-items:center', 'justify-content:space-between',
+        'padding:8px 12px', 'border:1.5px solid #e5e7eb', 'border-radius:7px',
+        'cursor:pointer', 'transition:border-color .15s,background .15s',
+        'background:#fff', 'gap:8px'
+      ].join(';');
+      card.onmouseenter = () => { card.style.borderColor = 'var(--accent)'; card.style.background = 'var(--accent-lt)'; };
+      card.onmouseleave = () => { card.style.borderColor = '#e5e7eb';        card.style.background = '#fff'; };
+
+      card.innerHTML = `
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:#222;display:flex;align-items:center;flex-wrap:wrap;gap:2px">
+            ${idx === 0 ? '<span style="font-size:10px;background:#fef3c7;color:#d97706;border-radius:3px;padding:1px 5px;margin-right:3px">최신</span>' : ''}
+            ${floor ? `<span style="color:var(--muted)">${floor}</span>&nbsp;·&nbsp;` : ''}
+            임대 ${fmt(fp.rentPy)} · 관리 ${fmt(fp.maintenancePy)} · 보증 ${fmt(fp.depositPy)}
+            ${srcBadge}
+          </div>
+          ${date ? `<div style="font-size:10px;color:var(--muted);margin-top:2px">기준일: ${date}</div>` : ''}
+        </div>
+        <button style="font-size:11px;padding:4px 12px;border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:4px;cursor:pointer;white-space:nowrap;flex-shrink:0"
+          onclick="step4ApplyPricing(${fp.rentPy||0},${fp.maintenancePy||0},${fp.depositPy||0},this)">
+          선택
+        </button>`;
+      elCards.appendChild(card);
+    });
+
+    elList.style.display = '';
+
+    // 기준가 1개면 자동 적용 (최신 1건)
+    if (valid.length === 1) {
+      const fp = valid[0];
+      step4ApplyPricing(fp.rentPy||0, fp.maintenancePy||0, fp.depositPy||0, null);
+    }
+
+  } catch (e) {
+    console.warn('[Step4] floorPricing 로드 오류:', e);
+    elLoading.style.display = 'none';
+    elEmpty.style.display   = '';
+  }
+}
+
+function step4ApplyPricing(rent, maint, deposit, btn) {
+  // 입력 필드 채우기
+  const r = document.getElementById('curRentPy');
+  const m = document.getElementById('curMaintPy');
+  const d = document.getElementById('curDepositPy');
+  if (r) r.value = rent    > 0 ? rent    : '';
+  if (m) m.value = maint   > 0 ? maint   : '';
+  if (d) d.value = deposit > 0 ? deposit : '';
+
+  // 선택된 카드 하이라이트
+  document.querySelectorAll('#step4-pricing-cards > div').forEach(el => {
+    el.style.borderColor = '#e5e7eb';
+    el.style.background  = '#fff';
+  });
+  if (btn) {
+    const card = btn.closest('div[style]');
+    if (card) {
+      card.style.borderColor = 'var(--accent)';
+      card.style.background  = 'var(--accent-lt)';
+    }
+  }
+  showToast('기준가 정보가 적용되었습니다', 'success');
+}
+
+function step4FocusDirectInput() {
+  const el = document.getElementById('curRentPy');
+  if (el) { el.focus(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 }
 
 function _onEnterStep10() {
