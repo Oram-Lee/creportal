@@ -4116,6 +4116,8 @@ function _renderCorpResults(q, data, dropdown) {
         industry_name: c.industry_name || '',
         market_name:   c.market_name   || '',
         adres:         c.adres         || '',
+        road_addr:     c.road_addr     || '',   // 도로명주소 (NPS)
+        jibun_addr:    c.jibun_addr    || '',   // 지번주소 (NPS)
         ceo_name:      c.ceo_name      || '',
         homepage:      c.homepage      || '',
         phone:         c.phone         || '',
@@ -4130,10 +4132,23 @@ function _renderCorpResults(q, data, dropdown) {
       var metaParts = [];
       if (c.industry_name) metaParts.push(c.industry_name);
       if (c.ceo_name)      metaParts.push('대표 ' + c.ceo_name);
-      metaParts.push(c.employee_cnt ? c.employee_cnt.toLocaleString() + '명' : '직원수 미확인');
-      if (c.adres)         metaParts.push('<b>본사:</b> ' + c.adres);
-      else                 metaParts.push('<span style="color:#ef4444">본사주소 미확인</span>');
-      metaParts.push('출처: ' + (c._sources || [c._source || '?']).join('+').toUpperCase());
+      metaParts.push(c.employee_cnt ? c.employee_cnt.toLocaleString() + '명' : '<span style="color:#f59e0b">직원수 미확인</span>');
+
+      // ── 주소 표시: 도로명 / 지번 분리 ──
+      var roadA  = c.road_addr  || '';
+      var jibunA = c.jibun_addr || '';
+      var adres  = c.adres      || '';
+      if (roadA || jibunA || adres) {
+        var addrHtml = '';
+        if (roadA)        addrHtml += '<span style="color:#1d4ed8">🏢 ' + roadA + '</span>';
+        if (jibunA)       addrHtml += (roadA ? ' <span style="color:#6b7280;font-size:11px">/ 지번: ' + jibunA + '</span>' : '<span style="color:#374151">📍 ' + jibunA + '</span>');
+        if (!roadA && !jibunA && adres) addrHtml += '<span style="color:#374151">🏢 ' + adres + '</span>';
+        metaParts.push(addrHtml);
+      } else {
+        metaParts.push('<span style="color:#ef4444">📍 주소 미확인</span>');
+      }
+
+      metaParts.push('<span style="color:#9ca3af;font-size:11px">출처: ' + (c._sources || [c._source || '?']).join('+').toUpperCase() + '</span>');
       var meta = metaParts.join(' · ');
 
       // branches UI
@@ -4229,11 +4244,19 @@ function confirmDartCompany(corpOrEl) {
   }
 
   // 확정 뱃지 표시
+  const roadA  = corp.road_addr  || '';
+  const jibunA = corp.jibun_addr || '';
+  const adres  = corp.adres      || '';
+  const addrDisplay = roadA
+    ? roadA + (jibunA ? ' (지번: ' + jibunA + ')' : '')
+    : (jibunA || adres || '');
+
   const metaParts = [
     corp.market_name && corp.market_name !== '비상장' ? corp.market_name : '',
     industry || '',
     corp.ceo_name ? '대표 ' + corp.ceo_name : '',
-    corp.adres || '',   // 전체 주소 (truncation 제거)
+    corp.employee_cnt ? corp.employee_cnt.toLocaleString() + '명' : '',
+    addrDisplay || '',
   ].filter(Boolean);
 
   document.getElementById('confirmedName').textContent = corp.corp_name;
@@ -4263,16 +4286,20 @@ function _triggerCorpAddrLink(corp) {
   if (fallback) fallback.style.display = 'none';
   linkGroup.style.display = '';
 
-  const addr = corp.adres || '';
-  // 전체 도로명주소 여부 검증 (번지 숫자 포함 필수 — 구 단위는 자동연동 불가)
-  const isFullAddr = addr && addr.length >= 12 && /\d/.test(addr);
+  // 도로명 우선 → 지번 → adres 순으로 사용
+  const addr = corp.road_addr || corp.jibun_addr || corp.adres || '';
+  // 전체 도로명주소 여부 검증 (숫자 포함 or 로/길+구 조합 — 구 단위 단독은 자동연동 불가)
+  const isFullAddr = addr && addr.length >= 10 && (/\d/.test(addr) || (/[로길]/.test(addr) && /[구시군]/.test(addr)));
   if (isFullAddr && corp._source !== 'manual') {
     // 전체 주소 있음 → 자동 연동 카드 표시
     autoCard.style.display   = '';
     manualCard.style.display = 'none';
-    autoText.innerHTML = `<b>${corp.corp_name}</b> · ${addr}`;
-    // 빌딩 주소 임시 세팅 (미확정 상태)
-    window._pendingCorpAddr = addr;
+    const addrLabel = corp.road_addr
+      ? corp.road_addr + (corp.jibun_addr ? ' · 지번 ' + corp.jibun_addr : '')
+      : addr;
+    autoText.innerHTML = `<b>${corp.corp_name}</b> · ${addrLabel}`;
+    // 빌딩 주소 임시 세팅 — 도로명 우선
+    window._pendingCorpAddr = corp.road_addr || addr;
   } else {
     // 주소 없음 / 구 단위 / 직접입력 → 직접 검색 카드
     autoCard.style.display   = 'none';
@@ -4435,21 +4462,32 @@ async function _fetchCorpDetail(corpName) {
     if (dartConfirmedCorp) {
       dartConfirmedCorp.employee_count = emp;
       dartConfirmedCorp.area_suggest   = area;
-      // NPS 주소가 전체 도로명이고 더 상세하면 업데이트 (구 단위 제외)
-      const npsAddr = data.nps_address || '';
-      const _isFullAddr = (a) => a && a.length >= 12 && /\d/.test(a); // 번지 숫자 포함 여부
-      if (npsAddr && _isFullAddr(npsAddr) && npsAddr.length > (dartConfirmedCorp.adres || '').length) {
-        dartConfirmedCorp.adres = npsAddr;
-        console.log('[Corp Detail] NPS 주소 업데이트:', npsAddr);
+      // ── NPS 도로명 / 지번 분리 저장 ──
+      const npsRoad  = data.nps_road_addr  || '';
+      const npsJibun = data.nps_jibun_addr || '';
+      const npsAddr  = data.nps_address    || npsRoad || npsJibun || '';
+      const _isFullAddr = (a) => a && a.length >= 10 && (/\d/.test(a) || (/[로길]/.test(a) && /[구시군]/.test(a)));
+
+      if (npsRoad  && _isFullAddr(npsRoad))  { dartConfirmedCorp.road_addr  = npsRoad; }
+      if (npsJibun && _isFullAddr(npsJibun)) { dartConfirmedCorp.jibun_addr = npsJibun; }
+
+      // adres 갱신 (도로명 우선)
+      const bestNpsAddr = npsRoad || npsJibun || npsAddr;
+      if (bestNpsAddr && _isFullAddr(bestNpsAddr) && bestNpsAddr.length > (dartConfirmedCorp.adres || '').length) {
+        dartConfirmedCorp.adres = bestNpsAddr;
+        console.log('[Corp Detail] NPS 주소 업데이트 → 도로명:', npsRoad, '/ 지번:', npsJibun);
         // 주소 연동 카드 재트리거
         _triggerCorpAddrLink(dartConfirmedCorp);
-        // 확정 뱃지 주소 업데이트 (기존 구 단위 주소 제거 후 교체)
+        // 확정 뱃지 주소 업데이트
         const metaEl2 = document.getElementById('confirmedMeta');
         if (metaEl2) {
+          const addrLabel = npsRoad
+            ? npsRoad + (npsJibun ? ' (지번: ' + npsJibun + ')' : '')
+            : bestNpsAddr;
           const parts = metaEl2.textContent.split(' · ').filter(p =>
             !p.includes('특별시') && !p.includes('광역시') && !p.includes('시 ') && !p.includes('구 ')
           );
-          parts.push(npsAddr);
+          parts.push(addrLabel);
           metaEl2.textContent = parts.join(' · ');
         }
       } else if (npsAddr && !_isFullAddr(npsAddr)) {
