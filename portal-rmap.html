@@ -8935,6 +8935,12 @@ async function saveResearchDoc() {
     showToast(`✅ 저장 완료 — 페이지 색인 ${payload.pageIndex.length}건 / 텍스트 ${Object.keys(payload.pageTexts).length}p`, 'success');
     console.log('[research] 저장:', docId, `pageIndex: ${payload.pageIndex.length}p | pageTexts: ${Object.keys(payload.pageTexts).length}p`);
 
+    // ── 인텔리전스 사전생성 (백그라운드, non-blocking) ──
+    // 저장 직후 비동기로 실행 — 완료될 때까지 UI를 블로킹하지 않음
+    _triggerPrebuildIntel(docId, payload).catch(e =>
+      console.warn('[prebuild-intel] 백그라운드 오류 (무시):', e)
+    );
+
     // localStorage 캐시 삭제
     if (_rexFileHash) { _rexClearProgress(_rexFileHash); _rexFileHash = null; }
 
@@ -9061,6 +9067,20 @@ function renderResearchList(docs, groupBy) {
     const ext = (doc.fileType||'txt').toLowerCase();
     const covStr  = (doc.coverage||['?']).join('·');
     const typeClass = REPORT_TYPE_CLASS[doc.reportType] || '';
+
+    // 인텔리전스 상태 배지
+    const intelDistricts = Object.keys(doc.prebuiltIntel || {});
+    let intelBadge = '';
+    if (doc.intelStatus === 'building') {
+      intelBadge = `<span style="color:var(--color-text-warning);font-size:11px">🔄 인텔리전스 생성중...</span>`;
+    } else if (doc.intelStatus === 'ready' && intelDistricts.length > 0) {
+      intelBadge = `<span style="color:var(--color-text-success);font-size:11px" title="사전생성된 권역: ${intelDistricts.join(', ')}">🧠 인텔리전스 준비됨 (${intelDistricts.join('·')})</span>`;
+    } else if (doc.intelStatus === 'failed') {
+      intelBadge = `<span style="color:var(--color-text-danger);font-size:11px;cursor:pointer" onclick="rebuildDocIntel('${doc._id}')">⚠️ 인텔리전스 실패 — 재시도</span>`;
+    } else if ((doc.pageIndex||[]).length > 0) {
+      intelBadge = `<span style="color:var(--color-text-secondary);font-size:11px;cursor:pointer" onclick="rebuildDocIntel('${doc._id}')">💡 인텔리전스 생성</span>`;
+    }
+
     return `<div class="research-doc-item">
       <div class="rdi-icon ${ext}">${iconMap[ext]||'📄'}</div>
       <div class="rdi-body">
@@ -9072,6 +9092,7 @@ function renderResearchList(docs, groupBy) {
           <span>🗺 ${covStr}</span>
           ${ts ? `<span>${ts}</span>` : ''}
         </div>
+        ${intelBadge ? `<div style="margin-top:4px">${intelBadge}</div>` : ''}
       </div>
       <div class="rdi-actions">
         <button class="rdi-btn" onclick="viewResearchDoc('${doc._id}')" title="요약 보기">👁️</button>
@@ -9498,13 +9519,76 @@ function _relativeTime(ts) {
 // =============================================================================
 // ■ RAG 리포트 컨텍스트 — 원본 PDF 직접 분석 (고품질)
 // =============================================================================
+// =============================================================================
+// ■ 인텔리전스 사전생성 트리거 (저장 직후 백그라운드 실행)
+// =============================================================================
+async function _triggerPrebuildIntel(docId, payload) {
+  if (!payload.pageIndex || payload.pageIndex.length === 0) return;
+
+  console.log(`[prebuild-intel] 시작: ${docId}`);
+
+  // 상태 업데이트: intelStatus = 'building'
+  await db.ref(`researchDocs/${docId}/intelStatus`).set('building');
+
+  try {
+    const res = await fetch(`${BACKEND}/api/research/prebuild-intel`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        docId,
+        title:      payload.title      || '',
+        source:     payload.source     || '',
+        year:       payload.year       || '',
+        quarter:    payload.periodType === 'Q' ? payload.period?.replace(/^\d{4}\s*/, '') : '',
+        storageUrl: payload.storageUrl || '',
+        pageIndex:  payload.pageIndex  || [],
+        pageTexts:  payload.pageTexts  || {},
+        coverage:   payload.coverage   || ['전국'],
+      })
+    });
+    const data = await res.json();
+
+    if (data.success && data.intel && Object.keys(data.intel).length > 0) {
+      // RTDB에 prebuiltIntel 저장
+      await db.ref(`researchDocs/${docId}/prebuiltIntel`).set(data.intel);
+      await db.ref(`researchDocs/${docId}/intelStatus`).set('ready');
+      await db.ref(`researchDocs/${docId}/intelBuiltAt`).set(Date.now());
+
+      const builtList = data.builtDistricts?.join(', ') || '';
+      showToast(`🧠 인텔리전스 생성 완료 (${builtList})`, 'success');
+      console.log(`[prebuild-intel] 완료: ${docId} | ${builtList}`);
+
+      // 목록 갱신 (인텔리전스 배지 표시)
+      loadResearchDocs();
+    } else {
+      await db.ref(`researchDocs/${docId}/intelStatus`).set('failed');
+      console.warn('[prebuild-intel] 생성 실패:', data.error || '알 수 없는 오류');
+    }
+  } catch (e) {
+    await db.ref(`researchDocs/${docId}/intelStatus`).set('failed').catch(()=>{});
+    console.error('[prebuild-intel] 오류:', e);
+  }
+}
+
+// =============================================================================
+// ■ 인텔리전스 재생성 (문서 카드에서 수동 트리거)
+// =============================================================================
+async function rebuildDocIntel(docId) {
+  const snap = await db.ref(`researchDocs/${docId}`).once('value');
+  const doc  = snap.val();
+  if (!doc) { showToast('문서를 찾을 수 없습니다', 'error'); return; }
+
+  showToast('🔄 인텔리전스 재생성 중...', 'info');
+  await _triggerPrebuildIntel(docId, doc);
+}
+
 async function buildResearchContext(district, reportContextStr) {
   try {
     const snap = await db.ref('researchDocs').once('value');
     const val  = snap.val() || {};
 
     // 해당 권역 관련 자료 최신 5건
-    const docs = Object.entries(val)
+    const allDocs = Object.entries(val)
       .filter(([, d]) => d.active !== false)
       .filter(([, d]) => {
         const cov = d.coverage || ['전국'];
@@ -9512,67 +9596,83 @@ async function buildResearchContext(district, reportContextStr) {
       })
       .sort((a, b) => (b[1].uploadedAt || 0) - (a[1].uploadedAt || 0))
       .slice(0, 5)
-      .map(([id, d]) => ({
-        docId:      id,
-        title:      d.title || '',
-        storageUrl: d.storageUrl || '',
-        pageIndex:  d.pageIndex || [],
-        summary:    d.summary || '',
-      }));
+      .map(([id, d]) => ({ _id: id, ...d }));
 
-    if (!docs.length) return '';
+    if (!allDocs.length) return '';
 
-    // storageUrl + pageIndex 있는 자료 → fetch-context (원본 PDF 분석)
-    // 없는 자료 → summary fallback
-    // richDocs: PDF 원본 분석 대상 + 메타 포함
-    const allDocsMeta = Object.entries(snap.val() || {});
-    const richDocs = docs.map(d => {
-      // Firebase 원본에서 source/year/quarter 메타 추가
-      const raw = allDocsMeta.find(([id]) => id === d.docId);
-      const meta = raw ? raw[1] : {};
-      return { ...d, source: meta.source || '', year: meta.year || '', quarter: meta.quarter || '' };
-    }).filter(d => d.storageUrl && d.pageIndex.length > 0);
-    const fallbackDocs = docs.map(d => {
-      const raw = allDocsMeta.find(([id]) => id === d.docId);
-      const meta = raw ? raw[1] : {};
-      return { ...d, source: meta.source || '', year: meta.year || '', quarter: meta.quarter || '' };
-    }).filter(d => !d.storageUrl || d.pageIndex.length === 0);
+    const ctxParts = [];
+    // ── 분류 1: prebuiltIntel 있는 자료 → 즉시 사용 ──
+    // ── 분류 2: prebuiltIntel 없고 storageUrl 있는 자료 → fetch-context 실시간 호출 ──
+    // ── 분류 3: summary만 있는 자료 → summary fallback ──
+    const prebuiltDocs  = [];
+    const fetchDocs     = [];
+    const fallbackDocs  = [];
 
-    let context = '';
-
-    if (richDocs.length > 0) {
-      console.log(`[RAG] fetch-context 호출: ${richDocs.length}개 자료 원본 분석`);
-      const res = await fetch(`${BACKEND}/api/research/fetch-context`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          reportContext: reportContextStr,
-          district,
-          docs: richDocs,
-        })
-      });
-      const data = await res.json();
-      if (data.context) {
-        context += data.context;
-        console.log(`[RAG] 원본 분석 완료: ${data.context.length}자`);
+    for (const d of allDocs) {
+      const distKey = district in (d.prebuiltIntel || {}) ? district :
+                      'ALL' in (d.prebuiltIntel || {}) ? 'ALL' : null;
+      if (distKey) {
+        prebuiltDocs.push({ ...d, _intelKey: distKey });
+      } else if (d.storageUrl && (d.pageIndex || []).length > 0) {
+        fetchDocs.push(d);
+      } else if (d.summary) {
+        fallbackDocs.push(d);
       }
     }
 
-    // fallback: summary만 있는 자료 — 제목·출처·연도 포함해 Claude가 출처 명시 가능하도록
-    if (fallbackDocs.length > 0) {
-      const fallback = fallbackDocs
-        .map(d => {
-          const meta = [];
-          if (d.source) meta.push('출처: ' + d.source);
-          if (d.year)   meta.push(d.year + (d.quarter ? ' ' + d.quarter : ''));
-          const metaStr = meta.length ? ' (' + meta.join(', ') + ')' : '';
-          return `■ 리서치 자료: ${d.title || d.docId}${metaStr}\n${d.summary}`;
-        })
-        .join('\n\n');
-      context += (context ? '\n\n' : '') + fallback;
+    console.log(`[RAG] ${district} — prebuilt:${prebuiltDocs.length} fetch:${fetchDocs.length} fallback:${fallbackDocs.length}`);
+
+    // 1. prebuiltIntel 직접 수집 (API 호출 없음)
+    for (const d of prebuiltDocs) {
+      const intel = d.prebuiltIntel[d._intelKey] || '';
+      if (!intel) continue;
+      const meta  = [];
+      if (d.source) meta.push(d.source);
+      if (d.year)   meta.push(`${d.year}${d.quarter ? ' ' + d.quarter : ''}`);
+      const label = meta.length ? `(${meta.join(', ')})` : '';
+      ctxParts.push(`■ ${d.title || d._id} ${label}\n${intel}`);
     }
 
-    return context.trim();
+    // 2. prebuiltIntel 없는 자료는 fetch-context 실시간 호출 (소수)
+    if (fetchDocs.length > 0) {
+      console.log(`[RAG] fetch-context 실시간 호출: ${fetchDocs.length}개 자료`);
+      try {
+        const res = await fetch(`${BACKEND}/api/research/fetch-context`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({
+            reportContext: reportContextStr,
+            district,
+            docs: fetchDocs.map(d => ({
+              docId:      d._id,
+              title:      d.title || '',
+              storageUrl: d.storageUrl || '',
+              pageIndex:  d.pageIndex  || [],
+              pageTexts:  d.pageTexts  || {},
+              summary:    d.summary    || '',
+            }))
+          })
+        });
+        const data = await res.json();
+        if (data.context) {
+          ctxParts.push(data.context);
+          console.log(`[RAG] fetch-context 완료: ${data.context.length}자`);
+        }
+      } catch (e) {
+        console.warn('[RAG] fetch-context 오류 (무시):', e);
+      }
+    }
+
+    // 3. summary fallback
+    for (const d of fallbackDocs) {
+      const meta = [];
+      if (d.source) meta.push('출처: ' + d.source);
+      if (d.year)   meta.push(d.year + (d.quarter ? ' ' + d.quarter : ''));
+      const metaStr = meta.length ? ` (${meta.join(', ')})` : '';
+      ctxParts.push(`■ 리서치 자료: ${d.title || d._id}${metaStr}\n${d.summary}`);
+    }
+
+    return ctxParts.join('\n\n').trim();
 
   } catch (e) {
     console.warn('[buildResearchContext]', e);
