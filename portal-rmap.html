@@ -2631,6 +2631,19 @@ canvas.mini-chart { width: 100% !important; }
           <div class="research-list-header-top">
             <h3>📚 등록된 리서치 자료</h3>
             <span class="research-list-count" id="researchListCount">0건</span>
+            <button id="btnBatchIntel" onclick="batchBuildIntel()"
+              style="margin-left:auto;padding:4px 10px;font-size:12px;border-radius:6px;
+                     background:var(--color-background-info);color:var(--color-text-info);
+                     border:1px solid var(--color-border-info);cursor:pointer;white-space:nowrap"
+              title="인텔리전스가 없는 자료를 모두 일괄 생성">
+              🧠 기존 자료 인텔리전스 일괄생성
+            </button>
+          </div>
+          <!-- 일괄처리 진행 상태 -->
+          <div id="batchIntelProgress" style="display:none;margin:6px 0;padding:8px 10px;
+               border-radius:6px;background:var(--color-background-secondary);font-size:12px;
+               color:var(--color-text-secondary)">
+            <span id="batchIntelMsg">준비 중...</span>
           </div>
           <!-- 메인 필터 탭 -->
           <div class="research-filter-tabs">
@@ -9580,6 +9593,108 @@ async function rebuildDocIntel(docId) {
 
   showToast('🔄 인텔리전스 재생성 중...', 'info');
   await _triggerPrebuildIntel(docId, doc);
+}
+
+// =============================================================================
+// ■ 기존 자료 인텔리전스 일괄생성
+// =============================================================================
+async function batchBuildIntel() {
+  const btn      = document.getElementById('btnBatchIntel');
+  const progDiv  = document.getElementById('batchIntelProgress');
+  const msgEl    = document.getElementById('batchIntelMsg');
+
+  // ── 대상 문서 수집: intelStatus != 'ready' 이고 pageIndex 있는 것 ──
+  const snap = await db.ref('researchDocs').once('value');
+  const val  = snap.val() || {};
+
+  const targets = Object.entries(val)
+    .filter(([, d]) => d.active !== false)
+    .filter(([, d]) => (d.pageIndex || []).length > 0)
+    .filter(([, d]) => d.intelStatus !== 'ready' ||
+                       !d.prebuiltIntel || Object.keys(d.prebuiltIntel).length === 0)
+    .map(([id, d]) => ({ _id: id, ...d }))
+    .sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
+
+  if (targets.length === 0) {
+    showToast('✅ 모든 자료에 인텔리전스가 이미 생성되어 있습니다', 'info');
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `인텔리전스가 없는 자료 ${targets.length}건을 일괄 생성합니다.\n` +
+    `자료당 약 30~60초 소요됩니다.\n\n계속하시겠습니까?`
+  );
+  if (!confirmed) return;
+
+  btn.disabled  = true;
+  btn.textContent = '⏳ 생성 중...';
+  progDiv.style.display = 'block';
+
+  let done = 0, failed = 0;
+
+  for (const doc of targets) {
+    msgEl.textContent =
+      `처리 중 (${done + failed + 1}/${targets.length}): ${doc.title || doc._id} …`;
+
+    try {
+      // intelStatus: building 먼저 표시
+      await db.ref(`researchDocs/${doc._id}/intelStatus`).set('building');
+      loadResearchDocs(); // UI 즉시 갱신
+
+      const res = await fetch(`${BACKEND}/api/research/prebuild-intel`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          docId:      doc._id,
+          title:      doc.title      || '',
+          source:     doc.source     || '',
+          year:       doc.year       || '',
+          quarter:    doc.periodType === 'Q'
+                        ? (doc.period || '').replace(/^\d{4}\s*/, '')
+                        : '',
+          storageUrl: doc.storageUrl || '',
+          pageIndex:  doc.pageIndex  || [],
+          pageTexts:  doc.pageTexts  || {},
+          coverage:   doc.coverage   || ['전국'],
+        })
+      });
+      const data = await res.json();
+
+      if (data.success && data.intel && Object.keys(data.intel).length > 0) {
+        await db.ref(`researchDocs/${doc._id}/prebuiltIntel`).set(data.intel);
+        await db.ref(`researchDocs/${doc._id}/intelStatus`).set('ready');
+        await db.ref(`researchDocs/${doc._id}/intelBuiltAt`).set(Date.now());
+        done++;
+        console.log(`[batch-intel] ✅ ${doc.title} — ${data.builtDistricts?.join(', ')}`);
+      } else {
+        await db.ref(`researchDocs/${doc._id}/intelStatus`).set('failed');
+        failed++;
+        console.warn(`[batch-intel] ❌ ${doc.title}:`, data.error);
+      }
+    } catch (e) {
+      await db.ref(`researchDocs/${doc._id}/intelStatus`).set('failed').catch(() => {});
+      failed++;
+      console.error(`[batch-intel] 오류 (${doc._id}):`, e);
+    }
+
+    // 목록 중간 갱신
+    loadResearchDocs();
+
+    // Render.com 과부하 방지: 문서 사이 2초 대기
+    if (done + failed < targets.length) {
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+
+  progDiv.style.display = 'none';
+  btn.disabled    = false;
+  btn.textContent = '🧠 기존 자료 인텔리전스 일괄생성';
+
+  showToast(
+    `일괄생성 완료 — 성공 ${done}건 / 실패 ${failed}건`,
+    failed > 0 ? 'warning' : 'success'
+  );
+  loadResearchDocs();
 }
 
 async function buildResearchContext(district, reportContextStr) {
