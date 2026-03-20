@@ -7329,28 +7329,6 @@ function buildSection1(report) {
       + '</div></div>';
   }
 
-  // ── ISSUE D FIX: 임대료 수준 해설 ──
-  let rentGuide = '';
-  if (rentLv !== '' && rentLv !== undefined) {
-    const _rentUnit  = lR.unit || '천원/㎡';
-    const _rentNum   = parseFloat(rentLv);
-    // 천원/㎡ → 원/평 환산 (1평 = 3.3058㎡)
-    const _wonPerPy  = !isNaN(_rentNum) ? Math.round(_rentNum * 1000 * 3.3058).toLocaleString() : null;
-    const _rentPeriod = period(lR) || '최신 분기';
-    rentGuide = '<div class="ridx-guide" style="margin-top:8px">'
-      + '<div class="ridx-guide-title">💰 임대료 수준 해설</div>'
-      + '<div style="font-size:11px;line-height:1.8;color:#1e293b">'
-      + '부동산원 R-ONE이 제공하는 <b>오피스 임대료 수준</b>은 해당 권역 임대 계약 실적을 집계한 '
-      + '<b>월 평균 실질 임대료</b>입니다.<br>'
-      + '단위 <b>' + _rentUnit + '</b>는 <b>1㎡당 월 임대료를 천원 단위</b>로 표기한 것입니다.<br>'
-      + '예시: 현재 값 <b>' + fv(rentLv, 0) + ' ' + _rentUnit + '</b> = 1㎡당 월 '
-      + fv(rentLv, 0) + ',000원'
-      + (_wonPerPy ? ' (≒ 평당 월 <b>' + _wonPerPy + '원</b>)' : '')
-      + '<br>'
-      + '<span style="font-size:10px;color:#64748b">기준 시점: ' + _rentPeriod
-      + '&nbsp;|&nbsp;R-ONE 집계 기준으로, 개별 건물 협의 임대료와 차이가 있을 수 있습니다.</span>'
-      + '</div></div>';
-  }
   const spark6V  = vacList.slice(-6).map(function(d){ return parseFloat(d.vacancy)||0; });
   const spark6RI = riList.slice(-6).map(function(d){ return parseFloat(d.rentIdx)||0; });
   let sparkHtml = '';
@@ -7377,6 +7355,29 @@ function buildSection1(report) {
   const rentLv  = (lR.rentLevel !== undefined && lR.rentLevel !== '') ? lR.rentLevel : (lR.rentIndex || '');
   const riDisp  = (lRI.rentIdx  !== undefined && lRI.rentIdx  !== '') ? fv(lRI.rentIdx, 1) : 'N/A';
   const periodTxt = period(lV) || period(lRI) || '';
+
+  // ── ISSUE D FIX: 임대료 수준 해설 (rentLv 선언 이후에 배치) ──
+  let rentGuide = '';
+  if (rentLv !== '' && rentLv !== undefined) {
+    const _rentUnit   = lR.unit || '천원/㎡';
+    const _rentNum    = parseFloat(rentLv);
+    // 천원/㎡ → 원/평 환산 (1평 = 3.3058㎡)
+    const _wonPerPy   = !isNaN(_rentNum) ? Math.round(_rentNum * 1000 * 3.3058).toLocaleString() : null;
+    const _rentPeriod = period(lR) || '최신 분기';
+    rentGuide = '<div class="ridx-guide" style="margin-top:8px">'
+      + '<div class="ridx-guide-title">💰 임대료 수준 해설</div>'
+      + '<div style="font-size:11px;line-height:1.8;color:#1e293b">'
+      + '부동산원 R-ONE이 제공하는 <b>오피스 임대료 수준</b>은 해당 권역 임대 계약 실적을 집계한 '
+      + '<b>월 평균 실질 임대료</b>입니다.<br>'
+      + '단위 <b>' + _rentUnit + '</b>는 <b>1㎡당 월 임대료를 천원 단위</b>로 표기한 것입니다.<br>'
+      + '예시: 현재 값 <b>' + fv(rentLv, 0) + ' ' + _rentUnit + '</b> = 1㎡당 월 '
+      + fv(rentLv, 0) + ',000원'
+      + (_wonPerPy ? ' (≒ 평당 월 <b>' + _wonPerPy + '원</b>)' : '')
+      + '<br>'
+      + '<span style="font-size:10px;color:#64748b">기준 시점: ' + _rentPeriod
+      + '&nbsp;|&nbsp;R-ONE 집계 기준으로, 개별 건물 협의 임대료와 차이가 있을 수 있습니다.</span>'
+      + '</div></div>';
+  }
 
   el.innerHTML = '<div class="report-section">'
     // 제목 + 출처
