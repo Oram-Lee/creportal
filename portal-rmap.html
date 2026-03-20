@@ -2666,6 +2666,33 @@ canvas.mini-chart { width: 100% !important; }
       </div>
 
     </div>
+
+    <!-- ── R-ONE 최신 분기 확인 패널 (관리자용) ── -->
+    <div style="margin-top:20px;border:1px solid #e2e8f0;border-radius:10px;padding:16px;background:#f8fafc">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:#1e40af">🏛️ 한국부동산원 R-ONE 최신 데이터 확인</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="roneCheckDistrict" style="font-size:12px;padding:4px 8px;border:1px solid #e2e8f0;border-radius:6px">
+            <option value="all">전체 권역</option>
+            <option value="CBD">CBD 도심</option>
+            <option value="GBD" selected>GBD 강남</option>
+            <option value="YBD">YBD 여의도</option>
+            <option value="BBD">BBD 분당</option>
+          </select>
+          <button onclick="checkRoneLatest()" style="font-size:12px;padding:5px 12px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer">
+            🔍 최신 분기 조회
+          </button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:8px">
+        명세서 기준: <code>SttsApiTblData.do</code> WRTTIME_IDTFR_ID 정렬 → 최신 분기 자동 추출 /
+        <code>SttsApiTblItm.do</code> UI_NM 단위 확인
+      </div>
+      <div id="roneCheckResult" style="font-size:12px;min-height:40px;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px;color:#334155">
+        조회 버튼을 눌러 R-ONE API의 실제 최신 제공 분기와 단위를 확인하세요.
+      </div>
+    </div>
+
   </div><!-- /tabPanelResearch -->
 
   <!-- ── 리서치 자료 미리보기 모달 ── -->
@@ -8328,6 +8355,72 @@ function switchPageTab(tab) {
     btnEl.style.display = '';
   }
 }
+
+// =============================================================================
+// ■ R-ONE 최신 분기 확인 (관리자용) — 명세서 기반
+// =============================================================================
+async function checkRoneLatest() {
+  const district = document.getElementById('roneCheckDistrict')?.value || 'GBD';
+  const resultEl = document.getElementById('roneCheckResult');
+  if (!resultEl) return;
+
+  resultEl.innerHTML = '<span style="color:#64748b">⏳ R-ONE API 조회 중… (10~20초 소요)</span>';
+
+  try {
+    const resp = await fetch(`${BACKEND}/api/rbone/check-latest?district=${district}`, {
+      signal: AbortSignal.timeout(30000)
+    });
+    if (!resp.ok) throw new Error(`서버 오류 ${resp.status}`);
+    const data = await resp.json();
+
+    if (data.error) {
+      resultEl.innerHTML = `<span style="color:#dc2626">❌ ${data.error}</span>`;
+      return;
+    }
+
+    // ── 단위 테이블 렌더 ──
+    const unitRows = Object.entries(data.units || {}).map(([tid, unit]) =>
+      `<tr><td style="padding:2px 8px;font-family:monospace;font-size:11px">${tid}</td>` +
+      `<td style="padding:2px 8px;font-weight:700;color:#1d4ed8">${unit || '—'}</td></tr>`
+    ).join('');
+
+    // ── 권역별 최신 분기 렌더 ──
+    const distRows = Object.entries(data.latestByDistrict || {}).map(([dist, types]) => {
+      const rows = Object.entries(types).map(([type, info]) => {
+        if (info.error) return `<tr><td>${dist}</td><td>${type}</td><td colspan="4" style="color:#dc2626">${info.error}</td></tr>`;
+        const periodStyle = 'font-weight:700;color:#15803d';
+        return `<tr>` +
+          `<td style="padding:2px 8px">${dist}</td>` +
+          `<td style="padding:2px 8px">${type}</td>` +
+          `<td style="padding:2px 8px;${periodStyle}">${info.latestPeriodDesc}</td>` +
+          `<td style="padding:2px 8px;font-family:monospace;font-size:10px">${info.latestPeriodId}</td>` +
+          `<td style="padding:2px 8px">${info.latestValue ?? '—'} ${info.unit}</td>` +
+          `<td style="padding:2px 8px;font-size:10px;color:#64748b">${info.filteredItems}건 / 전체 ${info.totalItems}건</td>` +
+        `</tr>`;
+      }).join('');
+      return rows;
+    }).join('');
+
+    resultEl.innerHTML =
+      `<div style="margin-bottom:10px">` +
+      `<b style="font-size:12px">📋 통계표별 단위 (SttsApiTblItm 기준)</b>` +
+      `<table style="border-collapse:collapse;margin-top:4px;font-size:11px">` +
+      `<thead><tr style="background:#f1f5f9"><th style="padding:2px 8px">STATBL_ID</th><th style="padding:2px 8px">UI_NM (단위)</th></tr></thead>` +
+      `<tbody>${unitRows}</tbody></table></div>` +
+
+      `<div><b style="font-size:12px">📅 권역별 최신 제공 분기 (SttsApiTblData 기준)</b>` +
+      `<table style="border-collapse:collapse;margin-top:4px;font-size:11px;width:100%">` +
+      `<thead><tr style="background:#f1f5f9">` +
+      `<th style="padding:2px 8px">권역</th><th style="padding:2px 8px">구분</th>` +
+      `<th style="padding:2px 8px">최신 분기</th><th style="padding:2px 8px">WRTTIME_IDTFR_ID</th>` +
+      `<th style="padding:2px 8px">최신값</th><th style="padding:2px 8px">건수</th>` +
+      `</tr></thead><tbody>${distRows}</tbody></table></div>`;
+
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:#dc2626">❌ 조회 실패: ${e.message}</span>`;
+  }
+}
+
 
 // =============================================================================
 // ■ 리서치 자료 관리 v2
