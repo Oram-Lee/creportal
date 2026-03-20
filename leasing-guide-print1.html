@@ -117,7 +117,7 @@
             align-items: center;
             padding-bottom: 3mm;
             margin-bottom: 3mm;
-            border-bottom: 2px solid #ec4899;
+            border-bottom: 2px solid #E8332A;
         }
         
         .building-title {
@@ -216,7 +216,7 @@
             font-weight: 700;
             color: #1e293b;
             padding: 1.5mm 0;
-            border-bottom: 1px solid #ec4899;
+            border-bottom: 1px solid #e2e8f0;
             margin-bottom: 1.5mm;
         }
         
@@ -360,13 +360,12 @@
         
         /* ===== NOTE 섹션 ===== */
         .note-box {
-            background: rgba(236, 72, 153, 0.08);
-            border: 1px solid rgba(236, 72, 153, 0.5);
-            border-left: 3px solid rgba(236, 72, 153, 0.5);
+            background: #fffbeb;
+            border: 1px solid #fcd34d;
             border-radius: 4px;
             padding: 1.5mm 2.5mm;
             font-size: 8pt;
-            color: #1e293b;
+            color: #92400e;
         }
         
         .note-item {
@@ -1456,7 +1455,7 @@
                             ${item.exclusive ? '<span class="exclusive-badge">전속</span>' : ''}
                         </div>
                         <div class="region-info" style="text-align:right; line-height:1.5;">
-                            ${guideData.coverSettings?.logoImage ? `<img src="${guideData.coverSettings.logoImage}" alt="로고" style="height:20pt; display:block; margin-left:auto; margin-bottom:2pt;">` : ''}
+                            <div style="font-size:10pt; font-weight:700; color:#1e3a5f;">S&I Corporation</div>
                             <div>Leasing Information (${region})</div>
                         </div>
                     </div>
@@ -1489,7 +1488,7 @@
                                     <tr><th>연면적</th><td>${formatArea(building.grossFloorPy || building.area?.grossFloorPy)} 평</td></tr>
                                     <tr><th>규모</th><td>B${building.floorsBelow || building.floors?.below || 0} / ${building.floorsAbove || building.floors?.above || 0}F</td></tr>
                                     <tr><th>준공년도</th><td>${building.completionYear || building.specs?.completionYear || '-'}</td></tr>
-                                    <tr><th>기준층(전용)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy || building.area?.typicalFloorPy) + ' 평' : '-'}</td></tr>
+                                    <tr><th>기준층(임대)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy || building.area?.typicalFloorPy) + ' 평' : '-'}</td></tr>
                                     <tr><th>전용률</th><td>${(()=>{ const v = building.exclusiveRate || building.area?.exclusiveRate; const n = parseFloat(v); return (!v || isNaN(n) || n === 0) ? '-' : n.toFixed(2) + '%'; })()}</td></tr>
                                     <tr><th>E/V</th><td>총 ${getElevatorTotal(building)}대</td></tr>
                                     <tr><th>주차</th><td>총 ${String(getParkingTotal(building) || '-').replace(/대+$/, '')}대${getParkingNote(building) ? '<br><span style="font-size:inherit; color:inherit;">' + String(getParkingNote(building)).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>

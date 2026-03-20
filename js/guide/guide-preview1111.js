@@ -612,10 +612,7 @@ function renderBuildingPreviewPage(data) {
                     🏢 ${building.name || '빌딩명'}
                     ${item.exclusive ? '<span class="exclusive-badge">전속</span>' : ''}
                 </div>
-                <div class="fullpreview-region" style="text-align:right; line-height:1.5;">
-                    ${state.coverSettings?.logoImage ? `<img src="${state.coverSettings.logoImage}" alt="로고" style="height:20px; display:block; margin-left:auto; margin-bottom:2px;">` : ''}
-                    <span>Leasing Information (${region})</span>
-                </div>
+                <div class="fullpreview-region">Leasing Information (${region})</div>
             </div>
             
             <div class="fullpreview-building-body">

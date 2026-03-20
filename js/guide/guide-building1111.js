@@ -481,7 +481,7 @@ export function renderBuildingEditor(item, building) {
                     <button onclick="window.open('https://oram-lee.github.io/portal-rmap.html?buildingId=${building.id}&panel=info', '_blank')" title="CRE Portal 상세패널 열기" style="font-size:11px; padding:3px 8px; border:1px solid #94a3b8; border-radius:4px; background:white; color:#475569; cursor:pointer; font-weight:500; margin-left:6px;">🔗 Portal</button>
                 </div>
                 <div class="region-info" style="text-align:right; line-height:1.5;">
-                    ${(() => { const logo = state.coverSettings?.logoImage; return logo ? `<img src="${logo}" alt="로고" style="height:22px; display:block; margin-left:auto; margin-bottom:2px;">` : ''; })()}
+                    <div style="font-size:13px; font-weight:700; color:#1e3a5f; letter-spacing:0.3px;">S&I Corporation</div>
                     <div>Leasing Information (${region})</div>
                 </div>
             </div>
@@ -560,7 +560,7 @@ export function renderBuildingEditor(item, building) {
                             <tr><th>연면적</th><td>${formatArea(building.grossFloorPy)} 평 (${formatNumber((building.grossFloorPy || 0) * 3.3058)}㎡)</td></tr>
                             <tr><th>규모</th><td>B${building.floorsBelow || 0} / ${building.floorsAbove || 0}F</td></tr>
                             <tr><th>준공년도</th><td>${building.completionYear || '-'}</td></tr>
-                            <tr><th>기준층(전용)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy) + ' 평' : '-'}</td></tr>
+                            <tr><th>기준층(임대)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy) + ' 평' : '-'}</td></tr>
                             <tr><th>전용률</th><td>${(()=>{ const v = building.exclusiveRate || building.area?.exclusiveRate; const n = parseFloat(v); return (!v || isNaN(n) || n === 0) ? '-' : n.toFixed(2) + '%'; })()}</td></tr>
                             <tr><th>E/V</th><td>총 ${(()=>{ const n=cleanUnitValue(building.elevatorTotal??building.specs?.passengerElevator); return n!==null?n+'대':'-'; })()}</td></tr>
                             <tr><th>주차</th><td>총 ${(()=>{ const n=cleanUnitValue(building.parkingTotal??building.parking?.total); return n!==null?n+'대':'-'; })()}${building.parkingNote ? '<br><span style="font-size:10px; color:#555;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
