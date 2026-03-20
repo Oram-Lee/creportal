@@ -8026,7 +8026,13 @@ function downloadReportPDF(id) {
   pdfStyle.textContent = `
     /* ── 기본 리셋 ── */
     * { box-sizing: border-box !important; }
-    #reportContent { background: #fff !important; }
+    #reportContent {
+      background: #fff !important;
+      width: 1200px !important;        /* ISSUE 2 FIX: windowWidth와 동일하게 고정 */
+      max-width: 1200px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
 
     /* ══ 1. 내부 메모 완전 숨김 (html2pdf는 @media print 무시) ══ */
     .internal-memo { display: none !important; }
@@ -8180,10 +8186,18 @@ function downloadReportPDF(id) {
   });
 
   html2pdf().set({
-    margin:      [6, 8, 6, 8],
+    margin:      [6, 0, 6, 0],
     filename,
     image:       { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 3, useCORS: true, logging: false, allowTaint: true, letterRendering: true },
+    html2canvas: {
+      scale:       3,
+      useCORS:     true,
+      logging:     false,
+      allowTaint:  true,
+      letterRendering: true,
+      windowWidth: 1200,          // ISSUE 2 FIX: 고정 뷰포트로 좌우폭 잘림 방지
+      width:       el.scrollWidth // ISSUE 2 FIX: 전체 콘텐츠 너비 캡처
+    },
     jsPDF:       { unit: 'mm', format: 'a4', orientation: 'landscape', compress: true },
     pagebreak:   { mode: ['css', 'legacy'] }
   }).from(el).save().then(() => {
@@ -9702,9 +9716,18 @@ async function buildResearchContext(district, reportContextStr) {
     const snap = await db.ref('researchDocs').once('value');
     const val  = snap.val() || {};
 
-    // 해당 권역 관련 자료 최신 5건
+    // ── ISSUE 1 FIX: _selectedResearchDocIds 필터 적용 ──
+    // ['__none__'] = 리서치 미사용, [] = 전체, [id,...] = 선택 문서만
+    const _selIds = (typeof _selectedResearchDocIds !== 'undefined') ? _selectedResearchDocIds : [];
+    if (_selIds.length === 1 && _selIds[0] === '__none__') {
+      console.log('[buildResearchContext] 리서치 미사용 선택 → 빈 컨텍스트 반환');
+      return '';
+    }
+
+    // 해당 권역 관련 자료 최신 5건 (선택 문서 필터 포함)
     const allDocs = Object.entries(val)
       .filter(([, d]) => d.active !== false)
+      .filter(([id]) => _selIds.length === 0 || _selIds.includes(id))  // ← 선택 문서 필터
       .filter(([, d]) => {
         const cov = d.coverage || ['전국'];
         return cov.includes('전국') || cov.includes(district);
@@ -9712,6 +9735,10 @@ async function buildResearchContext(district, reportContextStr) {
       .sort((a, b) => (b[1].uploadedAt || 0) - (a[1].uploadedAt || 0))
       .slice(0, 5)
       .map(([id, d]) => ({ _id: id, ...d }));
+
+    // 선택된 소스명 목록 (프롬프트 지침용)
+    const _selectedSourceNames = [...new Set(allDocs.map(d => d.source).filter(Boolean))];
+    console.log(`[buildResearchContext] 선택 소스: ${_selectedSourceNames.join(', ') || '전체'}, 문서: ${allDocs.length}건`);
 
     if (!allDocs.length) return '';
 
@@ -9787,7 +9814,16 @@ async function buildResearchContext(district, reportContextStr) {
       ctxParts.push(`■ 리서치 자료: ${d.title || d._id}${metaStr}\n${d.summary}`);
     }
 
-    return ctxParts.join('\n\n').trim();
+    if (!ctxParts.length) return '';
+
+    // ── ISSUE 1 FIX: 선택 소스명을 컨텍스트 헤더에 명시 ──
+    // 백엔드 프롬프트가 "CBRE 자료를 우선 인용" 지침을 정확히 수행하도록
+    const sourceHeader = _selectedSourceNames.length
+      ? `【선택된 리서치 소스: ${_selectedSourceNames.join(', ')}】\n` +
+        `※ 아래 자료는 사용자가 직접 선택한 리서치 소스입니다. 다른 출처(젠스타메이트 등 미선택 소스)의 데이터를 이 소스 데이터인 것처럼 표현하지 마세요.\n`
+      : '';
+
+    return (sourceHeader + ctxParts.join('\n\n')).trim();
 
   } catch (e) {
     console.warn('[buildResearchContext]', e);
