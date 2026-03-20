@@ -4674,6 +4674,10 @@ async function collectIntelligence() {
   const company    = document.getElementById('clientCompany').value.trim();
   const industry   = document.getElementById('clientIndustry').value.trim();
   const competitors = tags.competitor;
+  // ISSUE 3: 현재 선택된 빌딩의 권역 전달 (marketIssues 권역 특화에 활용)
+  const district   = (typeof reportParams !== 'undefined' && reportParams?.district)
+    ? reportParams.district
+    : (document.getElementById('districtSelect')?.value || '');
 
   if (!company) { showToast('고객사명을 먼저 입력해주세요', 'error'); return; }
 
@@ -4703,7 +4707,7 @@ async function collectIntelligence() {
     const res = await fetch(`${BACKEND}/api/intelligence/collect`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ company, industry, competitors, items })
+      body: JSON.stringify({ company, industry, competitors, items, district })
     });
     const data = await res.json();
     intelCollected = data;
