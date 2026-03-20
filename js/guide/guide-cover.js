@@ -81,6 +81,7 @@ export function renderCoverEditor() {
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-sm btn-secondary" onclick="openEndingEditor()">📄 엔딩 설정</button>
                     <button class="btn btn-sm btn-secondary" onclick="openRegionManager()">🗺️ 권역 관리</button>
+                    <button class="btn btn-sm btn-secondary" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0;" onclick="promptSaveAsTemplate()">💾 템플릿 저장</button>
                     <button class="btn btn-sm btn-primary" onclick="openPrintPage()">🖨️ 출력</button>
                 </div>
             </div>
@@ -808,6 +809,18 @@ export function clearRegionAlias(code) {
     openRegionManager(); // 새로고침
 }
 
+// ★ v5.6: 현재 표지/엔딩 설정을 템플릿으로 저장
+export function promptSaveAsTemplate() {
+    const name = prompt('템플릿 이름을 입력하세요 (예: 2025 S&I 기본)', '');
+    if (!name || !name.trim()) return;
+    if (typeof window.saveAsTemplate === 'function') {
+        window.saveAsTemplate(name.trim(), state.coverSettings, state.endingSettings);
+        showToast(`"${name.trim()}" 템플릿이 저장되었습니다`, 'success');
+    } else {
+        showToast('템플릿 저장 함수를 찾을 수 없습니다', 'error');
+    }
+}
+
 // 전역 함수 등록
 export function registerCoverFunctions() {
     window.renderCoverEditor = renderCoverEditor;
@@ -836,4 +849,6 @@ export function registerCoverFunctions() {
     window.closeRegionAliasEditor = closeRegionAliasEditor;
     window.saveRegionAlias = saveRegionAlias;
     window.clearRegionAlias = clearRegionAlias;
+    // ★ v5.6: 템플릿 저장
+    window.promptSaveAsTemplate = promptSaveAsTemplate;
 }

@@ -148,6 +148,9 @@ export function openCreateModal() {
                 monthSelect.innerHTML += `<option value="${m}" ${selected}>${m}월</option>`;
             }
         }
+
+        // ★ v5.6: 저장된 표지/엔딩 템플릿 목록 갱신
+        refreshTemplateSelect();
     }
 }
 
@@ -165,6 +168,55 @@ export function selectCreateType(type) {
     document.querySelector(`.template-card[data-type="${type}"]`)?.classList.add('active');
 }
 
+// ★ v5.6: 표지/엔딩 템플릿 로컬스토리지 키
+const TEMPLATE_STORAGE_KEY = 'cre_leasing_cover_templates';
+
+// 저장된 템플릿 목록 불러오기
+export function loadSavedTemplates() {
+    try {
+        const raw = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch(e) { return []; }
+}
+
+// 템플릿 저장 (guide-cover.js에서 호출)
+export function saveAsTemplate(name, coverSettings, endingSettings) {
+    const templates = loadSavedTemplates();
+    const newTpl = {
+        id: Date.now().toString(),
+        name,
+        coverSettings: JSON.parse(JSON.stringify(coverSettings || {})),
+        endingSettings: JSON.parse(JSON.stringify(endingSettings || {})),
+        createdAt: new Date().toLocaleString('ko-KR')
+    };
+    templates.push(newTpl);
+    localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+    return newTpl;
+}
+
+// 템플릿 삭제
+export function deleteTemplate(id) {
+    const templates = loadSavedTemplates().filter(t => t.id !== id);
+    localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+}
+
+// 신규 생성 모달 오픈 시 템플릿 셀렉트박스 갱신
+function refreshTemplateSelect() {
+    const sel = document.getElementById('coverTemplateSelect');
+    if (!sel) return;
+    const templates = loadSavedTemplates();
+    sel.innerHTML = '<option value="">-- 없음 (기본값) --</option>';
+    templates.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = `${t.name}  (${t.createdAt})`;
+        sel.appendChild(opt);
+    });
+    // 삭제 버튼 갱신
+    const delBtn = document.getElementById('deleteTemplateBtn');
+    if (delBtn) delBtn.style.display = templates.length ? 'inline-block' : 'none';
+}
+
 // 안내문 생성
 export async function createGuide() {
     const titleInput = document.getElementById('createTitle');
@@ -179,6 +231,18 @@ export async function createGuide() {
     const publishYear = document.getElementById('createYear')?.value || '';
     const publishMonth = document.getElementById('createMonth')?.value || '';
 
+    // ★ v5.6: 선택된 표지/엔딩 템플릿 적용
+    const selectedTplId = document.getElementById('coverTemplateSelect')?.value || '';
+    let appliedCoverSettings = null;
+    let appliedEndingSettings = null;
+    if (selectedTplId) {
+        const tpl = loadSavedTemplates().find(t => t.id === selectedTplId);
+        if (tpl) {
+            appliedCoverSettings = JSON.parse(JSON.stringify(tpl.coverSettings));
+            appliedEndingSettings = JSON.parse(JSON.stringify(tpl.endingSettings));
+        }
+    }
+
     try {
         const newGuideRef = push(ref(db, 'leasingGuides'));
         const newGuide = {
@@ -189,6 +253,8 @@ export async function createGuide() {
             items: [],
             regionSummary: {},
             status: 'draft',
+            coverSettings: appliedCoverSettings || {},
+            endingSettings: appliedEndingSettings || {},
             createdAt: new Date().toISOString(),
             createdBy: state.currentUser?.email || 'unknown',
             updatedAt: new Date().toISOString()
@@ -199,6 +265,14 @@ export async function createGuide() {
         state.leasingGuides[newGuideRef.key] = newGuide;
         state.currentGuide = { id: newGuideRef.key, ...newGuide };
         state.tocItems = [];
+
+        // ★ v5.6: state에도 바로 반영 (loadCoverSettings가 openEditor에서 처리)
+        if (appliedCoverSettings) {
+            state.coverSettings = appliedCoverSettings;
+        }
+        if (appliedEndingSettings) {
+            state.endingSettings = { ...state.endingSettings, ...appliedEndingSettings };
+        }
         
         closeCreateModal();
         if (titleInput) titleInput.value = '';
@@ -428,4 +502,9 @@ export function registerListFunctions() {
     window.saveDraft = saveDraft;
     window.saveFinal = saveFinal;
     window.renderGuideList = renderGuideList;
+    // ★ v5.6: 템플릿 관련 함수
+    window.loadSavedTemplates = loadSavedTemplates;
+    window.saveAsTemplate = saveAsTemplate;
+    window.deleteTemplate = deleteTemplate;
+    window.refreshTemplateSelect = refreshTemplateSelect;
 }
