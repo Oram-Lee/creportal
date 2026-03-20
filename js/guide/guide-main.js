@@ -17,7 +17,7 @@ import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-ut
 // Modules
 import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.6';
 import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.1';
-import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.6';
+import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.7';
 import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=5.5';
 import { registerVacancyFunctions } from './guide-vacancy.js?v=5.1';
 import { registerMapFunctions } from './guide-map.js?v=5.2';

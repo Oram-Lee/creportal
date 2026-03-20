@@ -81,7 +81,7 @@ export function renderCoverEditor() {
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-sm btn-secondary" onclick="openEndingEditor()">📄 엔딩 설정</button>
                     <button class="btn btn-sm btn-secondary" onclick="openRegionManager()">🗺️ 권역 관리</button>
-                    <button class="btn btn-sm btn-secondary" style="background:#f0fdf4; color:#166534; border-color:#bbf7d0;" onclick="promptSaveAsTemplate()">💾 템플릿 저장</button>
+                    <button class="btn btn-sm btn-secondary" style="background:#fdf2f8; color:#be185d; border-color:#f9a8d4;" onclick="openTemplateManager()">💾 템플릿 관리</button>
                     <button class="btn btn-sm btn-primary" onclick="openPrintPage()">🖨️ 출력</button>
                 </div>
             </div>
@@ -809,17 +809,191 @@ export function clearRegionAlias(code) {
     openRegionManager(); // 새로고침
 }
 
-// ★ v5.6: 현재 표지/엔딩 설정을 템플릿으로 저장
-export function promptSaveAsTemplate() {
-    const name = prompt('템플릿 이름을 입력하세요 (예: 2025 S&I 기본)', '');
-    if (!name || !name.trim()) return;
-    if (typeof window.saveAsTemplate === 'function') {
-        window.saveAsTemplate(name.trim(), state.coverSettings, state.endingSettings);
-        showToast(`"${name.trim()}" 템플릿이 저장되었습니다`, 'success');
-    } else {
-        showToast('템플릿 저장 함수를 찾을 수 없습니다', 'error');
-    }
+// ★ v5.7: 템플릿 관리 모달 열기 (prompt 방식 대체)
+export function openTemplateManager() {
+    // 기존 모달 제거
+    const existing = document.getElementById('templateManagerModal');
+    if (existing) existing.remove();
+
+    const templates = typeof window.loadSavedTemplates === 'function'
+        ? window.loadSavedTemplates()
+        : [];
+
+    const listHtml = templates.length === 0
+        ? `<div style="text-align:center; padding:28px 0; color:var(--text-muted); font-size:13px;">
+               저장된 템플릿이 없습니다.<br>
+               <span style="font-size:12px; opacity:.7;">아래에서 현재 설정을 저장해보세요.</span>
+           </div>`
+        : templates.map(tpl => {
+            const date = tpl.createdAt
+                ? new Date(tpl.createdAt).toLocaleDateString('ko-KR', { year:'numeric', month:'short', day:'numeric' })
+                : '';
+            const logoHtml = tpl.coverSettings?.logoImage
+                ? `<img src="${tpl.coverSettings.logoImage}" style="height:18px; max-width:60px; object-fit:contain; border-radius:2px;">`
+                : `<span style="font-size:10px; color:var(--text-muted);">로고 없음</span>`;
+            return `
+                <div class="tpl-manager-card" id="tpl-card-${tpl.id}"
+                     style="display:flex; align-items:center; gap:12px;
+                            padding:12px 14px; border:1px solid var(--border-color);
+                            border-radius:8px; margin-bottom:8px; background:var(--bg-secondary);
+                            transition: border-color .15s;">
+                    <div style="flex:0 0 44px; height:44px; border-radius:6px; overflow:hidden;
+                                background:linear-gradient(135deg,#1e3a5f,#2d5a8e);
+                                display:flex; align-items:center; justify-content:center;">
+                        ${logoHtml}
+                    </div>
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:14px; font-weight:600; color:var(--text-primary);
+                                    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${tpl.name}
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                            ${tpl.coverSettings?.title || '—'} · ${date}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-shrink:0;">
+                        <button class="btn btn-sm btn-primary"
+                                onclick="applyTemplateFromManager('${tpl.id}')"
+                                style="font-size:12px; padding:4px 10px;">
+                            ✅ 적용
+                        </button>
+                        <button class="btn btn-sm btn-danger"
+                                onclick="deleteTemplateFromManager('${tpl.id}')"
+                                style="font-size:12px; padding:4px 10px; background:#fef2f2; color:#dc2626; border-color:#fca5a5;">
+                            🗑️
+                        </button>
+                    </div>
+                </div>`;
+        }).join('');
+
+    const modalHtml = `
+        <div class="modal-overlay show" id="templateManagerModal"
+             onclick="if(event.target===this)closeTemplateManager()"
+             style="z-index:10002;">
+            <div class="modal" style="max-width:520px; width:92%;">
+                <div class="modal-header"
+                     style="background:linear-gradient(135deg,#ec4899 0%,#be185d 100%); color:white;">
+                    <h2 class="modal-title">💾 표지/엔딩 템플릿 관리</h2>
+                    <button class="modal-close" onclick="closeTemplateManager()" style="color:white;">×</button>
+                </div>
+
+                <div class="modal-body" style="padding:20px 22px;">
+
+                    <!-- 저장된 템플릿 목록 -->
+                    <div style="font-size:12px; font-weight:600; color:var(--text-secondary);
+                                text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px;">
+                        저장된 템플릿 (${templates.length}개)
+                    </div>
+                    <div id="tplManagerList" style="max-height:280px; overflow-y:auto; margin-bottom:20px;">
+                        ${listHtml}
+                    </div>
+
+                    <!-- 구분선 -->
+                    <div style="border-top:1px solid var(--border-color); margin-bottom:18px;"></div>
+
+                    <!-- 현재 설정 저장 -->
+                    <div style="font-size:12px; font-weight:600; color:var(--text-secondary);
+                                text-transform:uppercase; letter-spacing:.05em; margin-bottom:10px;">
+                        현재 설정을 새 템플릿으로 저장
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="text" id="newTemplateName"
+                               placeholder="템플릿 이름 (예: 2025 S&I 기본)"
+                               style="flex:1; padding:8px 12px; border:1px solid var(--border-color);
+                                      border-radius:6px; font-size:13px; outline:none;"
+                               onkeydown="if(event.key==='Enter')saveCurrentAsTemplate()"
+                               onfocus="this.style.borderColor='#ec4899'"
+                               onblur="this.style.borderColor='var(--border-color)'">
+                        <button class="btn btn-primary"
+                                onclick="saveCurrentAsTemplate()"
+                                style="background:#ec4899; border-color:#ec4899;
+                                       padding:8px 16px; font-size:13px; flex-shrink:0;">
+                            저장
+                        </button>
+                    </div>
+                    <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">
+                        현재 표지 설정(로고·타이틀·슬로건)과 엔딩 설정이 함께 저장됩니다.
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeTemplateManager()">닫기</button>
+                </div>
+            </div>
+        </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // 이름 입력창에 자동 포커스
+    setTimeout(() => document.getElementById('newTemplateName')?.focus(), 120);
 }
+
+export function closeTemplateManager() {
+    const modal = document.getElementById('templateManagerModal');
+    if (modal) modal.remove();
+}
+
+// 현재 설정을 새 템플릿으로 저장
+export function saveCurrentAsTemplate() {
+    const nameInput = document.getElementById('newTemplateName');
+    const name = nameInput?.value.trim();
+    if (!name) {
+        nameInput?.focus();
+        showToast('템플릿 이름을 입력하세요', 'warning');
+        return;
+    }
+    if (typeof window.saveAsTemplate !== 'function') {
+        showToast('템플릿 저장 함수를 찾을 수 없습니다', 'error');
+        return;
+    }
+    window.saveAsTemplate(name, state.coverSettings, state.endingSettings);
+    showToast(`"${name}" 템플릿이 저장되었습니다`, 'success');
+    // 모달 목록 새로고침
+    closeTemplateManager();
+    openTemplateManager();
+}
+
+// 템플릿 적용
+export function applyTemplateFromManager(id) {
+    const templates = typeof window.loadSavedTemplates === 'function'
+        ? window.loadSavedTemplates() : [];
+    const tpl = templates.find(t => t.id === id);
+    if (!tpl) { showToast('템플릿을 찾을 수 없습니다', 'error'); return; }
+
+    if (tpl.coverSettings)  state.coverSettings  = JSON.parse(JSON.stringify(tpl.coverSettings));
+    if (tpl.endingSettings) state.endingSettings = JSON.parse(JSON.stringify(tpl.endingSettings));
+
+    // guide-list.js의 state도 동기화
+    if (typeof window.saveAsTemplate === 'function') {
+        // loadSavedTemplates가 존재하면 guide-list state도 공유됨 — 에디터 재렌더만 필요
+    }
+
+    closeTemplateManager();
+    renderCoverEditor();
+    showToast(`"${tpl.name}" 템플릿이 적용되었습니다`, 'success');
+}
+
+// 템플릿 삭제 후 목록 새로고침
+export function deleteTemplateFromManager(id) {
+    const templates = typeof window.loadSavedTemplates === 'function'
+        ? window.loadSavedTemplates() : [];
+    const tpl = templates.find(t => t.id === id);
+    if (!tpl) return;
+    if (!confirm(`"${tpl.name}" 템플릿을 삭제하시겠습니까?`)) return;
+
+    if (typeof window.deleteTemplate === 'function') {
+        window.deleteTemplate(id);
+        // guide-list의 refreshTemplateSelect 호출 (있으면)
+        if (typeof window.refreshTemplateSelect === 'function') window.refreshTemplateSelect();
+    }
+    showToast(`"${tpl.name}" 템플릿이 삭제되었습니다`, 'info');
+    // 목록 새로고침
+    closeTemplateManager();
+    openTemplateManager();
+}
+
+// ★ 하위호환: 기존 promptSaveAsTemplate 호출부가 있을 경우를 위한 alias
+export const promptSaveAsTemplate = openTemplateManager;
 
 // 전역 함수 등록
 export function registerCoverFunctions() {
@@ -849,6 +1023,11 @@ export function registerCoverFunctions() {
     window.closeRegionAliasEditor = closeRegionAliasEditor;
     window.saveRegionAlias = saveRegionAlias;
     window.clearRegionAlias = clearRegionAlias;
-    // ★ v5.6: 템플릿 저장
-    window.promptSaveAsTemplate = promptSaveAsTemplate;
+    // ★ v5.7: 템플릿 관리 모달
+    window.openTemplateManager = openTemplateManager;
+    window.closeTemplateManager = closeTemplateManager;
+    window.saveCurrentAsTemplate = saveCurrentAsTemplate;
+    window.applyTemplateFromManager = applyTemplateFromManager;
+    window.deleteTemplateFromManager = deleteTemplateFromManager;
+    window.promptSaveAsTemplate = promptSaveAsTemplate; // 하위호환
 }
