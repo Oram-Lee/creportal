@@ -9133,6 +9133,7 @@ async function saveResearchDoc() {
       tags:       _researchSummary.tags || [],
       fileName:   _researchFile.name, fileType: ext, fileSize: _researchFile.size,
       storagePath, storageUrl,
+      geminiFileUri: _researchSummary.geminiFileUri || '',  // ← Gemini Files API URI
       uploadedAt: Date.now(), active: true,
     };
     await db.ref(`researchDocs/${docId}`).set(payload);
@@ -9740,14 +9741,15 @@ async function _triggerPrebuildIntel(docId, payload) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         docId,
-        title:      payload.title      || '',
-        source:     payload.source     || '',
-        year:       payload.year       || '',
-        quarter:    payload.periodType === 'Q' ? payload.period?.replace(/^\d{4}\s*/, '') : '',
-        storageUrl: payload.storageUrl || '',
-        pageIndex:  payload.pageIndex  || [],
-        pageTexts:  payload.pageTexts  || {},
-        coverage:   payload.coverage   || ['전국'],
+        title:          payload.title      || '',
+        source:         payload.source     || '',
+        year:           payload.year       || '',
+        quarter:        payload.periodType === 'Q' ? payload.period?.replace(/^\d{4}\s*/, '') : '',
+        storageUrl:     payload.storageUrl || '',
+        geminiFileUri:  payload.geminiFileUri || '',  // ← Files API URI 전달
+        pageIndex:      payload.pageIndex  || [],
+        pageTexts:      payload.pageTexts  || {},
+        coverage:       payload.coverage   || ['전국'],
       })
     });
     const data = await res.json();
