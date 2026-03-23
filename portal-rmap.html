@@ -8232,11 +8232,10 @@ function downloadReportPDF(id) {
       display: flex; flex-direction: column; gap: 20px; align-items: center;
     }
 
-    /* ── 개별 페이지: A4 Landscape 고정 ── */
+    /* ── 개별 페이지: A4 Landscape 고정 (297mm × 210mm) ── */
     .print-page {
       width: 297mm;
-      min-height: 210mm;
-      max-height: 210mm;
+      height: 210mm;
       background: white;
       box-shadow: 0 4px 20px rgba(0,0,0,0.15);
       overflow: hidden;
@@ -8244,20 +8243,109 @@ function downloadReportPDF(id) {
       page-break-after: always;
       page-break-inside: avoid;
     }
-    /* 표지는 딱 맞게 */
+
+    /* ── 표지: 커버가 print-page를 꽉 채우도록 ──
+       .report-cover-v2의 min-height:500px(화면용)을 덮어쓰고
+       flex 구조로 상단/중앙/하단이 210mm 안에 균형있게 배치 */
     .print-page.is-cover {
-      display: flex; flex-direction: column;
-      height: 210mm; max-height: 210mm;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
     }
-    /* 일반 섹션은 패딩 포함 */
+    .print-page.is-cover .report-cover,
+    .print-page.is-cover .report-cover-v2 {
+      flex: 1;
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      display: flex !important;
+      flex-direction: column !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
+    /* 표지 각 영역 비율 고정 */
+    .print-page.is-cover .rcv2-top    { flex: 0 0 auto; padding: 14px 28px 12px !important; }
+    .print-page.is-cover .rcv2-body   { flex: 1 1 auto; padding: 24px 28px 16px !important; justify-content: center !important; }
+    .print-page.is-cover .rcv2-bottom { flex: 0 0 auto; padding: 12px 28px 14px !important; }
+    .print-page.is-cover .rcv2-title  { font-size: 22px !important; margin-bottom: 8px !important; }
+    .print-page.is-cover .rcv2-subtitle { font-size: 12px !important; margin-bottom: 16px !important; }
+    .print-page.is-cover .rcv2-kpis   { gap: 20px !important; }
+    .print-page.is-cover .rcv2-kpi-val { font-size: 14px !important; }
+    .print-page.is-cover .rcv2-divider { margin-bottom: 16px !important; }
+
+    /* ── 일반 섹션: 패딩은 print-page에만, report-section 이중 패딩 제거 ── */
     .print-page.is-section {
-      padding: 10mm 12mm 8mm;
+      padding: 8mm 10mm 6mm;
+      display: flex;
+      flex-direction: column;
     }
-    /* 콘텐츠가 210mm를 넘는 섹션은 자연 흐름으로 다음 페이지까지 허용 */
-    .print-page.is-section.overflow-allowed {
-      max-height: none;
-      page-break-after: always;
+    /* report-section 자체 padding/margin 제거 (화면용 32px 40px → 0) */
+    .print-page.is-section > .report-section {
+      padding: 0 !important;
+      margin: 0 !important;
+      border: none !important;
+      flex: 1;
+      overflow: hidden;
     }
+
+    /* ── 섹션 내 콘텐츠 스케일 조정 (297mm 너비 기준 최적화) ── */
+    .print-page .section-title   { font-size: 13px !important; margin-bottom: 10px !important; padding-bottom: 7px !important; }
+    .print-page .section-icon    { width: 24px !important; height: 24px !important; font-size: 12px !important; }
+    .print-page .section-summary { padding: 6px 10px !important; font-size: 11px !important; margin-bottom: 8px !important; }
+    .print-page .section-summary-text { font-size: 11px !important; }
+
+    /* 뉴스 */
+    .print-page .news-title    { font-size: 11px !important; line-height: 1.45 !important; }
+    .print-page .news-curator  { font-size: 10px !important; line-height: 1.4 !important; }
+    .print-page .news-desc     { display: none !important; }
+    .print-page .news-item     { padding: 6px 8px !important; margin-bottom: 3px !important; }
+    .print-page .news-list     { gap: 3px !important; }
+
+    /* AI 분석 */
+    .print-page .ai-analysis-box { padding: 12px 14px !important; }
+    .print-page .ai-headline      { font-size: 11px !important; margin-bottom: 4px !important; }
+    .print-page .ai-body          { font-size: 10.5px !important; line-height: 1.65 !important; }
+    .print-page .ai-section       { padding: 5px 0 !important; }
+
+    /* 시사점 카드 */
+    .print-page .ai-insight-card   { padding: 10px 14px !important; margin-top: 8px !important; }
+    .print-page .aic-point         { padding: 7px 10px !important; }
+    .print-page .aic-point-title   { font-size: 10.5px !important; }
+    .print-page .aic-point-body    { font-size: 10px !important; line-height: 1.55 !important; }
+    .print-page .aic-header        { font-size: 11px !important; margin-bottom: 6px !important; }
+
+    /* 스파크라인 */
+    .print-page .spark-row  { gap: 8px !important; margin-top: 8px !important; flex-direction: row !important; }
+    .print-page .spark-card { height: 140px !important; padding: 10px 12px !important; }
+    .print-page .sc-title   { font-size: 10.5px !important; margin-bottom: 6px !important; }
+
+    /* 시장 통계 카드 */
+    .print-page .stat-cards  { gap: 6px !important; margin-bottom: 8px !important; }
+    .print-page .stat-card   { padding: 8px 6px !important; }
+    .print-page .stat-card .label { font-size: 9px !important; min-height: 20px !important; }
+    .print-page .stat-card .value { font-size: 15px !important; }
+    .print-page .stat-card .unit  { font-size: 9px !important; }
+    .print-page .ridx-guide       { padding: 8px 10px !important; font-size: 10px !important; margin-top: 6px !important; }
+
+    /* 테이블 */
+    .print-page table            { font-size: 9px !important; }
+    .print-page table th,
+    .print-page table td         { padding: 4px 5px !important; }
+    .print-page .rent-ai-summary { padding: 5px 8px !important; font-size: 10px !important; }
+
+    /* 빌딩 비교 차트 */
+    .print-page [id^="rentBarWrap"] { height: 130px !important; max-height: 130px !important; }
+    .print-page .rent-chart-section canvas { max-height: 130px !important; }
+
+    /* 내부 메모, 스피너, 버튼 숨김 */
+    .print-page .internal-memo,
+    .print-page .nc-spinner,
+    .print-page .news-curator-loading,
+    .print-page button,
+    .print-page .src-badge-row,
+    .print-page .researchBadge,
+    .print-page .intel-confirm-bar { display: none !important; }
 
     @media print {
       @page { size: A4 landscape; margin: 0; }
@@ -8267,6 +8355,7 @@ function downloadReportPDF(id) {
       .print-page {
         box-shadow: none;
         width: 100%;
+        height: 100vh;
         margin: 0;
       }
     }
