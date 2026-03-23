@@ -5551,6 +5551,16 @@ export function selectTransferBuilding(buildingId) {
         el.style.background = el.dataset.buildingId === buildingId ? '#dbeafe' : '';
     });
     
+    // ★ Fix: portal-crud.js의 동적 생성 모달 transferBtn 활성화
+    const transferBtn = document.getElementById('transferBtn');
+    if (transferBtn) {
+        transferBtn.disabled = false;
+        transferBtn.style.opacity = '1';
+        transferBtn.style.cursor = 'pointer';
+        transferBtn.style.background = '#2563eb';
+    }
+    
+    // portal-detail.js 자체 이관 모달용 (기존 호환)
     const selectedDiv = document.getElementById('selectedTransferBuilding');
     const nameSpan = document.getElementById('selectedBuildingName');
     const executeBtn = document.getElementById('executeTransferBtn');
