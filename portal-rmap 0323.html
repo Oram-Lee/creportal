@@ -8151,25 +8151,19 @@ function downloadReportPDF(id) {
   if (!el) { showToast('리포트 콘텐츠를 찾을 수 없습니다', 'error'); return; }
 
   // ── ① canvas → img 변환 (차트 정적화) ──
-  // cloneNode는 canvas 픽셀을 복사하지 못하므로 toDataURL()로 이미지로 교체.
-  // offsetWidth/Height는 hidden 부모에서 0으로 잡히므로 canvas.width/height(픽셀) 사용.
+  // cloneNode는 canvas 픽셀을 복사하지 못하므로 toDataURL()로 이미지로 교체
   const clone = el.cloneNode(true);
   const origCanvases = el.querySelectorAll('canvas');
   const cloneCanvases = clone.querySelectorAll('canvas');
   origCanvases.forEach((cv, i) => {
     try {
-      if (!cv.width || !cv.height) return; // 픽셀 없는 빈 canvas 스킵
       const dataUrl = cv.toDataURL('image/png');
       const img = document.createElement('img');
       img.src = dataUrl;
-      // offsetWidth/Height가 0일 수 있으므로 실제 렌더 크기 우선, fallback으로 canvas 픽셀 크기
-      const dispW = cv.offsetWidth  || cv.style.width  || cv.width;
-      const dispH = cv.offsetHeight || cv.style.height || cv.height;
-      img.style.display    = 'block';
-      img.style.width      = '100%';          // 컨테이너 너비에 맞춤
-      img.style.height     = dispH ? (typeof dispH === 'number' ? dispH + 'px' : dispH) : 'auto';
-      img.style.maxWidth   = '100%';
-      img.style.objectFit  = 'contain';
+      img.style.cssText = cv.style.cssText;
+      img.style.width  = cv.offsetWidth  + 'px';
+      img.style.height = cv.offsetHeight + 'px';
+      img.style.display = 'block';
       if (cloneCanvases[i] && cloneCanvases[i].parentNode) {
         cloneCanvases[i].parentNode.replaceChild(img, cloneCanvases[i]);
       }
@@ -8209,7 +8203,7 @@ function downloadReportPDF(id) {
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
       background: #e2e8f0;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
@@ -8257,7 +8251,6 @@ function downloadReportPDF(id) {
       padding: 0;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
     }
     .print-page.is-cover .report-cover,
     .print-page.is-cover .report-cover-v2 {
@@ -8286,7 +8279,6 @@ function downloadReportPDF(id) {
       padding: 8mm 10mm 6mm;
       display: flex;
       flex-direction: column;
-      overflow: visible;   /* 차트가 컨테이너 경계를 넘어도 잘리지 않도록 */
     }
     /* report-section 자체 padding/margin 제거 (화면용 32px 40px → 0) */
     .print-page.is-section > .report-section {
@@ -8325,11 +8317,8 @@ function downloadReportPDF(id) {
 
     /* 스파크라인 */
     .print-page .spark-row  { gap: 8px !important; margin-top: 8px !important; flex-direction: row !important; }
-    .print-page .spark-card { height: 160px !important; min-height: 160px !important; max-height: 160px !important;
-                               padding: 8px 10px !important; overflow: visible !important; }
-    .print-page .spark-card img { width: 100% !important; height: 130px !important;
-                                   object-fit: contain !important; display: block !important; }
-    .print-page .sc-title   { font-size: 10px !important; margin-bottom: 4px !important; }
+    .print-page .spark-card { height: 140px !important; padding: 10px 12px !important; }
+    .print-page .sc-title   { font-size: 10.5px !important; margin-bottom: 6px !important; }
 
     /* 시장 통계 카드 */
     .print-page .stat-cards  { gap: 6px !important; margin-bottom: 8px !important; }
@@ -8345,12 +8334,9 @@ function downloadReportPDF(id) {
     .print-page table td         { padding: 4px 5px !important; }
     .print-page .rent-ai-summary { padding: 5px 8px !important; font-size: 10px !important; }
 
-    /* 빌딩 비교 차트 — overflow visible 허용, height를 img 기준으로 */
-    .print-page [id^="rentBarWrap"] { height: 150px !important; max-height: 150px !important;
-                                       overflow: visible !important; position: relative !important; }
-    .print-page [id^="rentBarWrap"] img { width: 100% !important; height: 140px !important;
-                                           object-fit: contain !important; display: block !important; }
-    .print-page .rent-chart-section { overflow: visible !important; }
+    /* 빌딩 비교 차트 */
+    .print-page [id^="rentBarWrap"] { height: 130px !important; max-height: 130px !important; }
+    .print-page .rent-chart-section canvas { max-height: 130px !important; }
 
     /* 내부 메모, 스피너, 버튼 숨김 */
     .print-page .internal-memo,
@@ -8395,11 +8381,6 @@ function downloadReportPDF(id) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${filename}</title>
-<link rel="preconnect" href="https://cdn.jsdelivr.net">
-<link rel="stylesheet" as="style" onload="this.rel='stylesheet'"
-  href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
 ${portalCss}
 ${cssVars}
