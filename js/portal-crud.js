@@ -446,6 +446,48 @@ export async function deleteVacancy(buildingId, vacancyKey) {
 
 // ★ 이슈3: 공실 이관 (다른 빌딩으로 옮기기)
 export function openTransferVacancyModal(buildingId, vacancyKey, vacancyData) {
+    // ★ Fix: 모달 HTML이 없으면 동적 생성 (portal.html 버전과 무관하게 동작)
+    if (!document.getElementById('vacancyTransferModal')) {
+        const modalEl = document.createElement('div');
+        modalEl.id = 'vacancyTransferModal';
+        modalEl.style.cssText = 'display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card,#fff); border-radius:12px; padding:24px; width:90%; max-width:560px; z-index:1002; box-shadow:0 10px 40px rgba(0,0,0,0.25);';
+        modalEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="font-size:18px; font-weight:600; margin:0;">↗️ 공실 이관</h3>
+                <button onclick="closeTransferVacancyModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:#666;">×</button>
+            </div>
+            <div style="margin-bottom:16px;">
+                <div style="font-size:12px; color:#888; margin-bottom:6px;">이관할 안내문 정보</div>
+                <div id="transferVacancyInfo"></div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <div style="font-size:12px; color:#888; margin-bottom:6px;">이관 대상 빌딩 검색</div>
+                <input type="text" id="transferBuildingSearch"
+                       placeholder="빌딩명 또는 주소 입력 (2자 이상)..."
+                       oninput="searchTransferBuilding()"
+                       style="width:100%; padding:10px 14px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; box-sizing:border-box;">
+            </div>
+            <div id="transferBuildingResults"
+                 style="max-height:220px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:8px; margin-bottom:16px; background:#f9fafb;">
+                <div style="padding:20px; text-align:center; color:#666;">빌딩명 또는 주소로 검색하세요</div>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; padding-top:16px; border-top:1px solid #e5e7eb;">
+                <button onclick="closeTransferVacancyModal()"
+                        style="padding:10px 20px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer;">취소</button>
+                <button id="transferBtn" onclick="executeTransferVacancy()" disabled
+                        style="padding:10px 20px; border:none; border-radius:6px; background:#2563eb; color:white; cursor:not-allowed; font-weight:600; opacity:0.45;">이관 실행</button>
+            </div>
+        `;
+        document.body.appendChild(modalEl);
+        // CSS show 규칙 동적 등록
+        if (!document.getElementById('_transferModalStyle')) {
+            const styleEl = document.createElement('style');
+            styleEl.id = '_transferModalStyle';
+            styleEl.textContent = '#vacancyTransferModal.show{display:block!important;} #transferBtn:not([disabled]){opacity:1!important;cursor:pointer!important;} #transferBtn[disabled]{opacity:0.45!important;cursor:not-allowed!important;}';
+            document.head.appendChild(styleEl);
+        }
+    }
+
     state.transferVacancy = { buildingId, vacancyKey, vacancyData };
     
     // 검색 결과 초기화
