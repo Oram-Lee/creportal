@@ -1083,8 +1083,11 @@ export function openOcrManageModal() {
                         ? `<button onclick="window.openTransferVacancyModal('${buildingId}', '${transferKey}', window._ocrTransferMap['${mapKey}'])" style="padding: 2px 6px; background: #dbeafe; color: #2563eb; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;" title="다른 빌딩으로 이관">이관</button>`
                         : '';
                     const vacancyBadgesHtml = isNoVacancy
-                        ? `<span style="padding: 2px 8px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 3px; font-size: 10px; color: #92400e; font-weight: 500;">🏢 공실 없음 (만실)</span>`
-                        : regularVacs.map(v => `<span style="padding: 2px 6px; background: white; border: 1px solid #e2e8f0; border-radius: 3px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px;">${v.floor || \'-\'}층<button onclick="deleteVacancy(\'${buildingId}\', \'${v._key}\')" style="padding: 0 3px; background: none; border: none; cursor: pointer; color: #dc2626; font-size: 9px;" title="이 공실만 삭제">×</button></span>`).join(\'\');
+                        ? '<span style="padding: 2px 8px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 3px; font-size: 10px; color: #92400e; font-weight: 500;">🏢 공실 없음 (만실)</span>'
+                        : regularVacs.map(v => '<span style="padding: 2px 6px; background: white; border: 1px solid #e2e8f0; border-radius: 3px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px;">'
+                            + (v.floor || '-') + '층'
+                            + '<button onclick="deleteVacancy(\''+ buildingId +'\', \''+ v._key +'\')" style="padding: 0 3px; background: none; border: none; cursor: pointer; color: #dc2626; font-size: 9px;" title="이 공실만 삭제">×</button>'
+                            + '</span>').join('');
 
                     html += `
                         <div style="margin-bottom: 6px; padding: 8px; background: #f1f5f9; border-radius: 4px;">
