@@ -8166,11 +8166,15 @@ function downloadReportPDF(id) {
       overflow: hidden !important;
     }
 
-    /* ══ 3. 각 섹션 = 장표 1장 ══ */
+    /* ══ 3. 각 섹션: 새 장에서 시작, 내부 자연 흐름 허용 ══
+       ※ avoid였던 page-break-inside를 auto로 변경:
+          콘텐츠가 1페이지 초과 시 avoid가 섹션 전체를 다음 페이지로 밀려다가
+          여전히 넘쳐서 빈 페이지가 생기는 현상 해결.
+          원자 단위(news-item / ai-section / spark-row 등)는 각자 avoid 유지. ══ */
     .report-section {
       page-break-before: always !important;
       page-break-after: auto !important;
-      page-break-inside: avoid !important;
+      page-break-inside: auto !important;
       padding: 16px 22px 12px !important;
       border-bottom: none !important;
       margin: 0 !important;
@@ -8213,10 +8217,10 @@ function downloadReportPDF(id) {
     }
     .spark-card canvas { max-height: 70px !important; }
 
-    /* ══ 7. AI 분석 — 컨설팅 섹션 1장 유지 ══ */
+    /* ══ 7. AI 분석 — 단락(ai-section) 단위 잘림 방지, 박스 전체는 자연 흐름 ══ */
     .ai-analysis-box {
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
+      page-break-inside: auto !important;
+      break-inside: auto !important;
     }
     .ai-section {
       padding: 6px 0 !important;
@@ -8256,8 +8260,8 @@ function downloadReportPDF(id) {
     /* 빌딩 비교 차트 */
     /* ══ 인근 빌딩 테이블+차트 섹션 ══ */
     .rent-chart-section { page-break-inside: auto !important; }
-    .rent-chart-section canvas { max-height: 110px !important; width: 100% !important; }
-    [id^="rentBarWrap"] { height: 110px !important; max-height: 110px !important; overflow: hidden !important; }
+    .rent-chart-section canvas { max-height: 150px !important; width: 100% !important; }
+    [id^="rentBarWrap"] { height: 150px !important; max-height: 150px !important; overflow: hidden !important; }
     .rent-ai-summary { padding: 4px 8px !important; font-size: 10.5px !important; margin-bottom: 6px !important; }
 
     /* ══ 9. 섹션 타이틀 ══ */
@@ -8312,8 +8316,7 @@ function downloadReportPDF(id) {
       logging:     false,
       allowTaint:  true,
       letterRendering: true,
-      windowWidth: 1200,          // ISSUE 2 FIX: 고정 뷰포트로 좌우폭 잘림 방지
-      width:       el.scrollWidth // ISSUE 2 FIX: 전체 콘텐츠 너비 캡처
+      windowWidth: 1200           // 고정 뷰포트로 좌우폭 잘림 방지 (scrollWidth 미사용 — 1200px 초과 시 레이아웃 깨짐 방지)
     },
     jsPDF:       { unit: 'mm', format: 'a4', orientation: 'landscape', compress: true },
     pagebreak:   { mode: ['css', 'legacy'] }
