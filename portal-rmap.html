@@ -4541,12 +4541,20 @@ async function _fetchCorpDetail(corpName) {
 }
 
 async function _refineIndustryWithClaude(companyName, currentIndustry) {
-  // 업종이 이미 구체적(15자 이상)이면 스킵
-  if (currentIndustry && currentIndustry.length > 14) return;
-  // 대분류 키워드 체크: 이런 업종이면 정교화 필요
+  // 업종이 이미 구체적(20자 이상이고 비즈니스 모델 키워드 포함)이면 스킵
+  const _bizKw = ['유통','플랫폼','서비스','솔루션','테크','리테일','수입','제조','컨설팅','에이전시','B2B','B2C','SaaS','이커머스'];
+  if (currentIndustry && currentIndustry.length > 19 && _bizKw.some(k => currentIndustry.includes(k))) return;
+
+  // 정교화가 필요한 케이스:
+  // ① 대분류 표준 업종코드 (DART/NPS 반환값)
   const broadTerms = ['정보통신업','제조업','금융 및 보험업','도매 및 소매업','전문·과학·기술',
                       '부동산업','운수 및 창고업','교육 서비스','보건업','건설업','기타',''];
-  const needsRefine = broadTerms.some(t => (currentIndustry || '').includes(t) || !currentIndustry);
+  // ② 단순 제품명 (비즈니스 모델 미포함, 10자 이하 단어 단독)
+  const isSimpleProductName = currentIndustry && currentIndustry.length <= 10
+    && !_bizKw.some(k => currentIndustry.includes(k));
+  const needsRefine = !currentIndustry
+    || broadTerms.some(t => t && (currentIndustry || '').includes(t))
+    || isSimpleProductName;
   if (!needsRefine) return;
 
   // 업종 필드에 로딩 표시
@@ -4643,7 +4651,11 @@ async function autoInferCompetitors() {
     const res = await fetch(`${BACKEND}/api/dart/competitors`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ company, industry })
+      body: JSON.stringify({
+        company,
+        industry,
+        employee_count: dartConfirmedCorp?.employee_count || null
+      })
     });
     const data = await res.json();
     const list = data.competitors || [];
@@ -6765,7 +6777,7 @@ function renderReportHTML(report) {
           <div class="aic-point"><span class="dot">·</span><span style="color:var(--muted);font-size:12px">분석 데이터를 불러오는 중입니다.</span></div>
         </div>
         <div style="margin-top:10px;font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px">
-          📌 출처: S&amp;I CRE Portal 자체 수집 데이터 · 한국부동산원 R-ONE · Claude AI 분석 (${new Date(report.createdAt).toLocaleDateString('ko-KR')} 생성)
+          📌 출처: S&amp;I CRE Portal 자체 수집 데이터 · ${report.params?.researchContext ? '전문 리서치 자료(1순위) · 한국부동산원 R-ONE(참고)' : '한국부동산원 R-ONE'} · Claude AI 분석 (${new Date(report.createdAt).toLocaleDateString('ko-KR')} 생성)
         </div>
       </div>
     </div>
@@ -7910,6 +7922,9 @@ async function generateInsightPoints(report) {
     maintain: '부동산 이슈 없는 고객이므로 시장 정보 전달에 집중. 향후 의사결정에 참고가 될 권역 동향·시세 변화·정책 이슈를 중심으로 구성.',
   }[report.params?.clientIssue] || '오피스 최적화 전략에 집중.';
 
+  // 리서치 컨텍스트 추출 (report.params에 저장된 RAG 컨텍스트)
+  const _researchCtx = report.params?.researchContext || '';
+
   const prompt = `당신은 S&I Corporation CRE팀 상업용 부동산 전문 컨설턴트입니다.
 고객에게 전달할 전략 시사점 카드를 JSON으로만 반환하세요 (마크다운 없이).
 
@@ -7919,7 +7934,16 @@ async function generateInsightPoints(report) {
 분석모드: ${report.mode==='TR'?'임차인대리(TR)':'임대인대리(LR)'}
 인근빌딩: ${(report.nearbyBuildings||[]).length}개 / 확인공실: ${(report.vacancyData||[]).length}건
 희망면적: ${report.params?.desiredAreaMin||0}~${report.params?.desiredAreaMax||0}평
-[R-ONE 지표] 공실률 ${_fv(lVi?.vacancy)}%${lVi?.qoq!==undefined?' (전분기比 '+lVi.qoq+'pp)':''} / 임대가격지수 ${_fv(lRIi?.rentIdx,1)}${lRIi?.yoy!==undefined?' (전년比 '+lRIi.yoy+'%)':''} / 임대료 ${_fv(lRi?.rentLevel!==undefined?lRi?.rentLevel:lRi?.rentIndex,0)} ${lRi?.unit||'원/㎡'}
+
+【데이터 우선순위 — 반드시 준수】
+${_researchCtx ? `[1순위 — 전문 리서치 자료] 아래 리서치 자료의 공실률·임대료 수치를 최우선으로 사용하세요.
+한국부동산원 R-ONE 지표는 통계 발표 시차(1분기 이상)로 인해 현재 시장을 반영하지 못합니다.
+리서치 자료에 명시된 최근 분기 수치를 실제 현황으로 간주하고 시사점을 작성하세요.
+
+${_researchCtx.slice(0, 1200)}
+
+[참고용 — R-ONE 지표 (1분기 이상 시차 있음, 비교 참조만 허용)]` : `[시장 지표]`}
+공실률 ${_fv(lVi?.vacancy)}%${lVi?.qoq!==undefined?' (전분기比 '+lVi.qoq+'pp)':''}${_researchCtx ? ' ← R-ONE 참고값 (리서치 자료 수치 우선)' : ''} / 임대가격지수 ${_fv(lRIi?.rentIdx,1)}${lRIi?.yoy!==undefined?' (전년比 '+lRIi.yoy+'%)':''} / 임대료 ${_fv(lRi?.rentLevel!==undefined?lRi?.rentLevel:lRi?.rentIndex,0)} ${lRi?.unit||'원/㎡'}
 
 [이슈 방향성]
 ${issueNuance}
@@ -7927,10 +7951,11 @@ ${issueNuance}
 작성 기준:
 - 각 시사점은 두괄식으로 핵심 결론을 먼저 제시한 뒤, 구체적 근거·수치·이유·S&I CRE팀 역할을 상세히 서술
 - 각 body는 3~4문장, 총 80~120자 분량으로 실질적 내용을 충분히 담을 것
-- 수치·지표(공실률, 임대가격지수, 빌딩 수 등) 반드시 언급
+- 수치·지표(공실률, 임대가격지수, 빌딩 수 등) 반드시 언급 — 리서치 자료 수치 우선, R-ONE은 보조
 - 추상적 표현 금지 — "적절합니다", "중요합니다" 같은 공허한 문장 대신 구체적 행동과 기대 효과 서술
 - S&I CRE팀과 협력해야 하는 이유나 역할을 자연스럽게 1개 항목에 포함
 - 실행 가능한 next step이 느껴지는 문체
+- 특정 리서치사명(젠스타메이트·알스퀘어·CBRE·JLL 등)을 본문에 직접 표기하지 말고 "전문 리서치 자료 기준", "복수의 마켓리포트 기준" 등 포괄 표현 사용
 
 형식 (반드시 준수):
 - icon: 내용에 맞는 이모지 1개
