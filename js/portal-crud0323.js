@@ -560,11 +560,8 @@ export async function executeTransferVacancy() {
         delete newVacancyData._vacancyId;
         
         // 새 vacancyKey 생성
-        // ★ Fix: _meta 키 이관 시 suffix 보존 (공실없음 메타 레코드)
-        const isMeta = vacancyKey?.endsWith('_meta');
-        const newVacancyKey = isMeta
-            ? `${vacancyData.source || 'UNKNOWN'}_${(vacancyData.publishDate || '').replace('.', '_')}_meta`
-            : `${vacancyData.source || 'UNKNOWN'}_${(vacancyData.publishDate || '').replace('.', '_')}_${(vacancyData.floor || 'UNK').replace(/[\/\s]/g, '_')}`
+        const newVacancyKey = `${vacancyData.source || 'UNKNOWN'}_${(vacancyData.publishDate || '').replace('.', '_')}_${(vacancyData.floor || 'UNK').replace(/[\/\s]/g, '_')}`;
+        
         await set(ref(db, `vacancies/${targetBuilding.id}/${newVacancyKey}`), newVacancyData);
         
         // 2. 원본 삭제
@@ -960,14 +957,12 @@ export function openOcrManageModal() {
         const period = v.publishDate || '미정';
         const buildingId = v.buildingId;
         const buildingName = v.buildingName;
-        // ★ Fix: _meta 레코드는 그룹에 포함하되 total 카운트에서 제외
-        const isMeta = v._key?.endsWith('_meta');
         
         if (!sourceGroups[source]) sourceGroups[source] = { total: 0, periods: {} };
-        if (!isMeta) sourceGroups[source].total++;
+        sourceGroups[source].total++;
         
         if (!sourceGroups[source].periods[period]) sourceGroups[source].periods[period] = { total: 0, buildings: {} };
-        if (!isMeta) sourceGroups[source].periods[period].total++;
+        sourceGroups[source].periods[period].total++;
         
         if (!sourceGroups[source].periods[period].buildings[buildingId]) {
             sourceGroups[source].periods[period].buildings[buildingId] = { 
@@ -991,9 +986,6 @@ export function openOcrManageModal() {
     } else {
         const sourceCount = Object.keys(sourceGroups).length;
         const buildingCount = new Set(allVacancies.map(v => v.buildingId)).size;
-        // ★ Fix: _meta 레코드 제외한 실제 공실 건수
-        const realVacancyCount = allVacancies.filter(v => !v._key?.endsWith('_meta')).length;
-        const noVacancyBuildingCount = allVacancies.filter(v => v._key?.endsWith('_meta') && v.noVacancy === true).length;
         
         let html = `
             <div style="margin-bottom: 16px; padding: 12px; background: #f1f5f9; border-radius: 8px;">
@@ -1001,8 +993,7 @@ export function openOcrManageModal() {
                 <div style="font-size: 12px; color: #666; display: flex; gap: 16px;">
                     <span>🏢 ${sourceCount}개 회사</span>
                     <span>🏗️ ${buildingCount}개 빌딩</span>
-                    <span>📄 ${realVacancyCount}건 공실</span>
-                    ${noVacancyBuildingCount > 0 ? `<span style="color:#92400e;">🏢 ${noVacancyBuildingCount}건 공실없음</span>` : ''}
+                    <span>📄 ${allVacancies.length}건 공실</span>
                 </div>
             </div>
         `;
@@ -1066,40 +1057,24 @@ export function openOcrManageModal() {
                 
                 // 빌딩별로 표시
                 Object.entries(periodData.buildings).forEach(([buildingId, buildingData]) => {
-                    // ★ Fix: _meta 레코드와 일반 공실 분리 (공실없음 이관 지원)
-                    const metaVac = buildingData.vacancies.find(v => v._key?.endsWith('_meta'));
-                    const regularVacs = buildingData.vacancies.filter(v => !v._key?.endsWith('_meta'));
-                    const isNoVacancy = metaVac?.noVacancy === true && regularVacs.length === 0;
-
-                    // 이관 키: _meta 우선 → 공실없음도 이관 가능
-                    const transferKey = metaVac?._key || regularVacs[0]?._key || null;
-                    const transferVacData = metaVac || regularVacs[0] || null;
-                    if (transferKey && transferVacData) {
-                        window._ocrTransferMap = window._ocrTransferMap || {};
-                        window._ocrTransferMap[buildingId + '_' + transferKey] = transferVacData;
-                    }
-                    const mapKey = buildingId + '_' + (transferKey || '');
-                    const transferBtnHtml = transferKey
-                        ? `<button onclick="window.openTransferVacancyModal('${buildingId}', '${transferKey}', window._ocrTransferMap['${mapKey}'])" style="padding: 2px 6px; background: #dbeafe; color: #2563eb; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;" title="다른 빌딩으로 이관">이관</button>`
-                        : '';
-                    const vacancyBadgesHtml = isNoVacancy
-                        ? `<span style="padding: 2px 8px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 3px; font-size: 10px; color: #92400e; font-weight: 500;">🏢 공실 없음 (만실)</span>`
-                        : regularVacs.map(v => `<span style="padding: 2px 6px; background: white; border: 1px solid #e2e8f0; border-radius: 3px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px;">${v.floor || \'-\'}층<button onclick="deleteVacancy(\'${buildingId}\', \'${v._key}\')" style="padding: 0 3px; background: none; border: none; cursor: pointer; color: #dc2626; font-size: 9px;" title="이 공실만 삭제">×</button></span>`).join(\'\');
-
                     html += `
                         <div style="margin-bottom: 6px; padding: 8px; background: #f1f5f9; border-radius: 4px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                                 <span style="font-size: 12px; font-weight: 500;">🏗️ ${buildingData.name}</span>
-                                <div style="display: flex; gap: 4px;">
-                                    ${transferBtnHtml}
-                                    <button onclick="deleteOcrData(\'${buildingId}\', \'${source}\', \'${period}\')" 
-                                            style="padding: 2px 6px; background: #fee2e2; color: #dc2626; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">
-                                        삭제
-                                    </button>
-                                </div>
+                                <button onclick="deleteOcrData('${buildingId}', '${source}', '${period}')" 
+                                        style="padding: 2px 6px; background: #fee2e2; color: #dc2626; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">
+                                    삭제
+                                </button>
                             </div>
                             <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                                ${vacancyBadgesHtml}
+                                ${buildingData.vacancies.map(v => `
+                                    <span style="padding: 2px 6px; background: white; border: 1px solid #e2e8f0; border-radius: 3px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px;">
+                                        ${v.floor || '-'}층
+                                        <button onclick="deleteVacancy('${buildingId}', '${v._key}')" 
+                                                style="padding: 0 3px; background: none; border: none; cursor: pointer; color: #dc2626; font-size: 9px;"
+                                                title="이 공실만 삭제">×</button>
+                                    </span>
+                                `).join('')}
                             </div>
                         </div>
                     `;
