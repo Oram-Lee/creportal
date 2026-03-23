@@ -1945,20 +1945,6 @@ export function renderIncentiveSection() {
 
 // ===== 임대안내문(문서) 섹션 =====
 
-// ★ Fix: 공실없음 이관 헬퍼 (onclick에서 객체 직접 전달 불가 문제 우회)
-window._noVacTransfer = function(buildingId, metaKey) {
-    const cachedMeta = (window._noVacMetaCache || {})[buildingId + '_' + metaKey];
-    if (!cachedMeta) {
-        // 캐시 miss 시 state에서 직접 조회
-        const bld = window.state?.allBuildings?.find(b => b.id === buildingId);
-        const metaVac = bld?.vacancies?.find(v => v._key === metaKey);
-        if (!metaVac) { alert('이관 데이터를 찾을 수 없습니다'); return; }
-        window.openTransferVacancyModal(buildingId, metaKey, metaVac);
-        return;
-    }
-    window.openTransferVacancyModal(buildingId, metaKey, cachedMeta);
-};
-
 export function renderDocumentSection() {
     const b = state.selectedBuilding;
     let docs = [...(b.documents || [])];
@@ -2331,13 +2317,6 @@ export function renderDocumentSection() {
                                     style="padding: 8px 14px; background: #92400e; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;">
                                 <span>📋</span> 빌딩 정보만 담기
                             </button>
-                            <!-- ★ Fix: 공실없음 이관 버튼 -->
-                            ${(() => {
-                                if (!docMeta?._key) return '';
-                                window._noVacMetaCache = window._noVacMetaCache || {};
-                                window._noVacMetaCache[b.id + '_' + docMeta._key] = docMeta;
-                                return `<button onclick="window._noVacTransfer('${b.id}', '${docMeta._key}')" style="padding: 8px 14px; background: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 4px;" title="공실없음 안내문을 다른 빌딩으로 이관"><span>↗️</span> 이관</button>`;
-                            })()}
                         </div>
                     </div>
                     ${inlineInputFormHtml}
