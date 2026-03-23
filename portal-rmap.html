@@ -3420,6 +3420,7 @@ canvas.mini-chart { width: 100% !important; }
     <div class="gen-step" id="gen-step-2"><span class="gen-step-icon">○</span> 정책 뉴스 수집 (국토부)</div>
     <div class="gen-step" id="gen-step-3"><span class="gen-step-icon">○</span> 업종·경쟁사 뉴스 수집</div>
     <div class="gen-step" id="gen-step-4"><span class="gen-step-icon">○</span> AI 종합 분석 생성</div>
+    <div class="gen-step" id="gen-step-4b" style="display:none"><span class="gen-step-icon">○</span> AI 리포트 본문 작성 (2단계)</div>
     <div class="gen-step" id="gen-step-5"><span class="gen-step-icon">○</span> 리포트 조립 완료</div>
   </div>
 </div>
@@ -5894,8 +5895,23 @@ async function generateReport() {
   closeModal();
   showGenerating(true);
 
-  // ── 생성 진행 메시지 순환 ──
-  const _genMsgs = [
+  // TR 모드: 2단계 체인 구조 반영 — gen-step 라벨 업데이트
+  if (selectedMode === 'TR') {
+    const _s4 = document.getElementById('gen-step-4');
+    const _s4b = document.getElementById('gen-step-4b');
+    if (_s4) _s4.querySelector('.gen-step-icon').nextSibling.textContent = ' AI 시장 데이터 분석 (1단계)';
+    if (_s4b) _s4b.style.display = '';
+  }
+
+  // ── 생성 진행 메시지 순환 (TR: 2단계 체인 반영) ──
+  const _genMsgs = selectedMode === 'TR' ? [
+    '시장 데이터 수집 중… (R-ONE · 정책뉴스 · 업종뉴스 병렬 조회)',
+    'R-ONE 부동산원 통계 처리 중…',
+    'AI 뉴스 인사이트 생성 중…',
+    '1단계: 고객사 핵심 인사이트 분석 중…',
+    '2단계: Claude AI 리포트 본문 작성 중… (최대 75초 소요)',
+    '마지막 단계 처리 중…',
+  ] : [
     '시장 데이터 수집 중… (R-ONE · 정책뉴스 · 업종뉴스 병렬 조회)',
     'R-ONE 부동산원 통계 처리 중…',
     'AI 뉴스 인사이트 생성 중…',
@@ -5904,17 +5920,19 @@ async function generateReport() {
   ];
   let _genMsgIdx = 0;
   const _statusEl = document.getElementById('generatingStatus');
+  const _genMsgInterval = selectedMode === 'TR' ? 10000 : 12000;
   const _genMsgTimer = setInterval(() => {
     _genMsgIdx = Math.min(_genMsgIdx + 1, _genMsgs.length - 1);
     if (_statusEl) _statusEl.textContent = _genMsgs[_genMsgIdx];
-  }, 12000);
+  }, _genMsgInterval);
 
   const _clearGenTimer = () => clearInterval(_genMsgTimer);
 
   const _callReportAPI = async (bodyData, attempt) => {
     const controller = new AbortController();
-    // 90초 타임아웃 (병렬화로 실제 ~35초, 여유 있게 설정)
-    const tid = setTimeout(() => controller.abort(), 90000);
+    // TR: 2단계 체인으로 ~15초 추가 → 110초 / LR·관계유지: 90초
+    const _apiTimeout = selectedMode === 'TR' ? 110000 : 90000;
+    const tid = setTimeout(() => controller.abort(), _apiTimeout);
     try {
       const resp = await fetch(`${BACKEND}/api/report/generate`, {
         method:  'POST',
