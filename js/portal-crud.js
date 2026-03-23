@@ -497,7 +497,8 @@ export function openTransferVacancyModal(buildingId, vacancyKey, vacancyData) {
             빌딩명 또는 주소로 검색하세요
         </div>
     `;
-    document.getElementById('transferBtn').disabled = true;
+    const _tBtn = document.getElementById('transferBtn');
+    if (_tBtn) { _tBtn.disabled = true; _tBtn.style.opacity = '0.45'; _tBtn.style.cursor = 'not-allowed'; }
     state.transferTargetBuilding = null;
     
     // 현재 공실 정보 표시
@@ -572,7 +573,14 @@ window.selectTransferBuilding = function(buildingId) {
         el.style.background = el.dataset.buildingId === buildingId ? '#dbeafe' : '';
     });
     
-    document.getElementById('transferBtn').disabled = false;
+    // ★ Fix: disabled 해제 + 인라인 스타일 직접 갱신 (CSS !important 의존 제거)
+    const btn = document.getElementById('transferBtn');
+    if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+        btn.style.background = '#2563eb';
+    }
 };
 
 // ★ 이슈3: 공실 이관 실행
