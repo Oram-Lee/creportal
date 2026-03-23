@@ -17,8 +17,7 @@
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-<!-- html2pdf -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- html2pdf 제거됨 — window.print() 방식으로 대체 -->
 
 <style>
 /* ===== CSS 변수 ===== */
@@ -8133,211 +8132,197 @@ function downloadPDF() {
   downloadReportPDF(currentReport.id);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF 저장 — window.print() 방식 (html2pdf.js 완전 대체)
+// 임대안내문(leasing-guide-print.html)과 동일한 구조:
+//   각 섹션을 정확히 297mm × 210mm (A4 Landscape) 페이지로 감싸 새 창에서 인쇄.
+//   브라우저 네이티브 렌더링 → 벡터 텍스트, 선명한 표/차트 보장.
+//   차트 canvas → toDataURL()로 정적 이미지 변환 후 주입.
+// ─────────────────────────────────────────────────────────────────────────────
 function downloadReportPDF(id) {
   const report = reportHistory.find(r => r.id === id);
   if (!report) return;
 
-  showToast('PDF 생성 중...');
-  const el       = document.getElementById('reportContent');
+  showToast('PDF 창 열기 중...');
+
+  const el = document.getElementById('reportContent');
+  if (!el) { showToast('리포트 콘텐츠를 찾을 수 없습니다', 'error'); return; }
+
+  // ── ① canvas → img 변환 (차트 정적화) ──
+  // cloneNode는 canvas 픽셀을 복사하지 못하므로 toDataURL()로 이미지로 교체
+  const clone = el.cloneNode(true);
+  const origCanvases = el.querySelectorAll('canvas');
+  const cloneCanvases = clone.querySelectorAll('canvas');
+  origCanvases.forEach((cv, i) => {
+    try {
+      const dataUrl = cv.toDataURL('image/png');
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.style.cssText = cv.style.cssText;
+      img.style.width  = cv.offsetWidth  + 'px';
+      img.style.height = cv.offsetHeight + 'px';
+      img.style.display = 'block';
+      if (cloneCanvases[i] && cloneCanvases[i].parentNode) {
+        cloneCanvases[i].parentNode.replaceChild(img, cloneCanvases[i]);
+      }
+    } catch(e) { /* cross-origin 등 실패 시 빈 canvas 유지 */ }
+  });
+
+  // ── ② 내부 메모, 로딩 스피너, 불필요 버튼 제거 ──
+  clone.querySelectorAll('.internal-memo, .nc-spinner, .news-curator-loading, button, .intel-confirm-bar, .intel-confirmed-badge, .src-badge-row, .researchBadge').forEach(el => el.remove());
+
+  // ── ③ 섹션 분리: .report-cover + .report-section 각각을 print-page로 감싸기 ──
+  // 빈 섹션(내용 10자 미만) 제거 후, 각 섹션을 297mm × 210mm 컨테이너로 래핑
+  const pageSections = [];
+  const coverEl = clone.querySelector('.report-cover, .report-cover-v2');
+  if (coverEl) pageSections.push(coverEl.outerHTML);
+
+  clone.querySelectorAll('.report-section').forEach(sec => {
+    const txt = (sec.innerText || sec.textContent || '').trim();
+    if (txt.length < 10) return; // 빈 섹션 스킵
+    pageSections.push(sec.outerHTML);
+  });
+
+  // ── ④ 새 창 HTML 조립 ──
+  const cssVars = `
+    :root {
+      --primary:    #1a3c5e;
+      --accent:     #2e7dca;
+      --accent-lt:  #e8f2fb;
+      --success:    #1a8a5a;
+      --warning:    #d97706;
+      --danger:     #dc2626;
+      --bg:         #f4f6f9;
+      --surface:    #ffffff;
+      --border:     #dde3ea;
+      --text:       #1e293b;
+      --muted:      #64748b;
+      --radius:     8px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+      background: #e2e8f0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    /* ── 컨트롤 바 (화면 전용) ── */
+    .pdf-control-bar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+      background: #1a3c5e; color: #fff;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 24px; gap: 12px;
+      font-size: 14px; font-weight: 600;
+    }
+    .pdf-control-bar button {
+      background: #2e7dca; color: #fff; border: none;
+      padding: 8px 20px; border-radius: 6px;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .pdf-control-bar button:hover { background: #1a5fa0; }
+    .pdf-tip { font-size: 12px; font-weight: 400; opacity: .75; }
+
+    /* ── 페이지 컨테이너 ── */
+    .pages-container {
+      margin-top: 56px;
+      padding: 24px;
+      display: flex; flex-direction: column; gap: 20px; align-items: center;
+    }
+
+    /* ── 개별 페이지: A4 Landscape 고정 ── */
+    .print-page {
+      width: 297mm;
+      min-height: 210mm;
+      max-height: 210mm;
+      background: white;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      overflow: hidden;
+      position: relative;
+      page-break-after: always;
+      page-break-inside: avoid;
+    }
+    /* 표지는 딱 맞게 */
+    .print-page.is-cover {
+      display: flex; flex-direction: column;
+      height: 210mm; max-height: 210mm;
+    }
+    /* 일반 섹션은 패딩 포함 */
+    .print-page.is-section {
+      padding: 10mm 12mm 8mm;
+    }
+    /* 콘텐츠가 210mm를 넘는 섹션은 자연 흐름으로 다음 페이지까지 허용 */
+    .print-page.is-section.overflow-allowed {
+      max-height: none;
+      page-break-after: always;
+    }
+
+    @media print {
+      @page { size: A4 landscape; margin: 0; }
+      body { background: white; }
+      .pdf-control-bar { display: none !important; }
+      .pages-container { margin-top: 0; padding: 0; gap: 0; }
+      .print-page {
+        box-shadow: none;
+        width: 100%;
+        margin: 0;
+      }
+    }
+  `;
+
+  // 원본 포털의 리포트 관련 CSS 전체 추출 (style 태그)
+  // 단순히 핵심 CSS만 재선언하는 대신, 원본 페이지에서 스타일 직접 추출
+  let portalCss = '';
+  document.querySelectorAll('style').forEach(s => { portalCss += s.textContent + '\n'; });
+
+  // 섹션 HTML 조합
+  const pagesHtml = pageSections.map((html, i) => {
+    const isCover = html.includes('report-cover');
+    const cls = isCover ? 'print-page is-cover' : 'print-page is-section';
+    return `<div class="${cls}">${html}</div>`;
+  }).join('\n');
+
   const filename = `[${report.clientName}]_${report.buildingName}_리포트_${new Date().toLocaleDateString('ko-KR').replace(/\./g,'-').replace(/ /g,'')}.pdf`;
 
-  // ── A4 Landscape 장표 슬라이드 구조 print CSS ─────────────────────────
-  const pdfStyle = document.createElement('style');
-  pdfStyle.id = 'pdf-temp-style';
-  pdfStyle.textContent = `
-    /* ── 기본 리셋 ── */
-    * { box-sizing: border-box !important; }
-    #reportContent {
-      background: #fff !important;
-      width: 1200px !important;        /* ISSUE 2 FIX: windowWidth와 동일하게 고정 */
-      max-width: 1200px !important;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
+  const fullHtml = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${filename}</title>
+<style>
+${portalCss}
+${cssVars}
+</style>
+</head>
+<body>
+<div class="pdf-control-bar">
+  <span>📄 ${filename}</span>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="pdf-tip">💡 인쇄 대화상자에서 "PDF로 저장" 또는 "Microsoft Print to PDF" 선택</span>
+    <button onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
+    <button onclick="window.close()" style="background:#64748b;">✕ 닫기</button>
+  </div>
+</div>
+<div class="pages-container">
+${pagesHtml}
+</div>
+</body>
+</html>`;
 
-    /* ══ 1. 내부 메모 완전 숨김 (html2pdf는 @media print 무시) ══ */
-    .internal-memo { display: none !important; }
+  // ── ⑤ 새 창 열기 ──
+  const printWin = window.open('', '_blank', 'width=1400,height=900,scrollbars=yes');
+  if (!printWin) {
+    showToast('팝업이 차단됐습니다. 브라우저 팝업 허용 후 다시 시도하세요.', 'error');
+    return;
+  }
+  printWin.document.open();
+  printWin.document.write(fullHtml);
+  printWin.document.close();
 
-    /* ══ 2. 표지: 1장 고정 ══ */
-    .report-cover {
-      page-break-after: always !important;
-      height: 182mm !important;
-      min-height: 182mm !important;
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: space-between !important;
-      padding: 28px 44px !important;
-      overflow: hidden !important;
-    }
-
-    /* ══ 3. 각 섹션: 새 장에서 시작, 내부 자연 흐름 허용 ══
-       ※ avoid였던 page-break-inside를 auto로 변경:
-          콘텐츠가 1페이지 초과 시 avoid가 섹션 전체를 다음 페이지로 밀려다가
-          여전히 넘쳐서 빈 페이지가 생기는 현상 해결.
-          원자 단위(news-item / ai-section / spark-row 등)는 각자 avoid 유지. ══ */
-    .report-section {
-      page-break-before: always !important;
-      page-break-after: auto !important;
-      page-break-inside: auto !important;
-      padding: 16px 22px 12px !important;
-      border-bottom: none !important;
-      margin: 0 !important;
-      overflow: hidden !important;
-    }
-
-    /* ══ 4. 빈 섹션 숨김 (DOM에 있지만 내용 없는 경우) ══ */
-    .report-section:empty { display: none !important; page-break-before: avoid !important; }
-
-    /* ══ 5. 뉴스 섹션: 전체 표시, 카드 잘림 방지 ══ */
-    .news-item {
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
-      margin-bottom: 6px !important;
-    }
-    .news-list {
-      display: flex !important;
-      flex-direction: column !important;
-      gap: 4px !important;
-    }
-    .news-desc { display: none !important; }  /* 스니펫 숨김 — 공간 절약 */
-    .news-title { font-size: 11.5px !important; }
-    .news-curator { font-size: 10.5px !important; line-height: 1.5 !important; }
-
-    /* ══ 6. spark-row 단일 행 유지 ══ */
-    .spark-row {
-      page-break-inside: avoid !important;
-      flex-wrap: nowrap !important;
-      gap: 8px !important;
-    }
-    .spark-card {
-      page-break-inside: avoid !important;
-      min-width: 0 !important;
-      flex: 1 1 0 !important;
-    }
-    canvas {
-      max-height: 160px !important;
-      width: 100% !important;
-      display: block !important;
-    }
-    .spark-card canvas { max-height: 70px !important; }
-
-    /* ══ 7. AI 분석 — 단락(ai-section) 단위 잘림 방지, 박스 전체는 자연 흐름 ══ */
-    .ai-analysis-box {
-      page-break-inside: auto !important;
-      break-inside: auto !important;
-    }
-    .ai-section {
-      padding: 6px 0 !important;
-      border-bottom: 1px solid rgba(100,140,200,0.15) !important;
-      page-break-inside: avoid !important;
-      break-inside: avoid !important;
-    }
-    .ai-section:last-child { border-bottom: none !important; }
-    .ai-headline { font-size: 12px !important; font-weight: 700 !important; color: #1a4d8f !important; margin-bottom: 4px !important; }
-    .ai-body     { font-size: 11px !important; line-height: 1.75 !important; color: #1e2d3d !important; }
-    .aic-point-title { font-size: 11px !important; font-weight: 700 !important; }
-    .aic-point-body  { font-size: 10.5px !important; line-height: 1.7 !important; }
-    .ai-insight-card { page-break-inside: avoid !important; break-inside: avoid !important; }
-    /* AI 분석 한줄요약 박스 축소 */
-    .section-summary { padding: 6px 10px !important; font-size: 11px !important; margin-bottom: 8px !important; }
-
-    /* ══ 8. 인근 빌딩 테이블 — 선명도 + 레이아웃 ══ */
-    .report-section table {
-      font-size: 8.5px !important;
-      width: 100% !important;
-      table-layout: auto !important;
-      border-collapse: collapse !important;
-    }
-    .report-section table th,
-    .report-section table td {
-      padding: 3px 4px !important;
-      white-space: nowrap !important;
-      overflow: hidden !important;
-      text-overflow: ellipsis !important;
-      max-width: 120px !important;
-    }
-    /* 테이블 컨테이너 overflow 해제 */
-    .report-section [style*="overflow-x"],
-    .report-section [style*="overflow"] {
-      overflow: visible !important;
-    }
-    /* 빌딩 비교 차트 */
-    /* ══ 인근 빌딩 테이블+차트 섹션 ══ */
-    .rent-chart-section { page-break-inside: auto !important; }
-    .rent-chart-section canvas { max-height: 150px !important; width: 100% !important; }
-    [id^="rentBarWrap"] { height: 150px !important; max-height: 150px !important; overflow: hidden !important; }
-    .rent-ai-summary { padding: 4px 8px !important; font-size: 10.5px !important; margin-bottom: 6px !important; }
-
-    /* ══ 9. 섹션 타이틀 ══ */
-    .section-title {
-      page-break-after: avoid !important;
-      margin-bottom: 8px !important;
-      font-size: 15px !important;
-    }
-
-    /* ══ 10. 출처 섹션 완전 숨김 ══ */
-    .report-sources-section { display: none !important; }
-
-    /* ══ 11. 인쇄 불필요 요소 숨김 ══ */
-    .src-badge-row,
-    .rent-ai-summary .nc-spinner,
-    .nc-spinner,
-    .news-curator-loading,
-    .intel-confirm-bar,
-    .intel-confirmed-badge,
-    button,
-    .researchBadge { display: none !important; }
-
-    /* ══ 12. 마지막 섹션 page-break 제거 ══ */
-    .report-section:last-child { page-break-after: auto !important; }
-
-    /* ══ 13. 한줄 요약 높이 조정 ══ */
-    .report-summary-bar { padding: 6px 12px !important; margin-bottom: 8px !important; }
-  `;
-  document.head.appendChild(pdfStyle);
-
-  // 빈 섹션 임시 숨김 (내용이 없거나 내부메모만 있는 섹션)
-  const allSections = el.querySelectorAll('.report-section');
-  const hiddenSections = [];
-  allSections.forEach(sec => {
-    // 내부메모를 제외한 실제 콘텐츠가 있는지 확인
-    const clone = sec.cloneNode(true);
-    clone.querySelectorAll('.internal-memo').forEach(m => m.remove());
-    const text = clone.innerText || clone.textContent || '';
-    if (text.trim().length < 10) {
-      sec.style.display = 'none';
-      hiddenSections.push(sec);
-    }
-  });
-
-  html2pdf().set({
-    margin:      [6, 0, 6, 0],
-    filename,
-    image:       { type: 'jpeg', quality: 0.98 },
-    html2canvas: {
-      scale:       3,
-      useCORS:     true,
-      logging:     false,
-      allowTaint:  true,
-      letterRendering: true,
-      windowWidth: 1200           // 고정 뷰포트로 좌우폭 잘림 방지 (scrollWidth 미사용 — 1200px 초과 시 레이아웃 깨짐 방지)
-    },
-    jsPDF:       { unit: 'mm', format: 'a4', orientation: 'landscape', compress: true },
-    pagebreak:   { mode: ['css', 'legacy'] }
-  }).from(el).save().then(() => {
-    const s = document.getElementById('pdf-temp-style');
-    if (s) s.remove();
-    // 숨겼던 섹션 복원
-    hiddenSections.forEach(sec => { sec.style.display = ''; });
-    showToast('PDF 저장 완료', 'success');
-  }).catch(err => {
-    const s = document.getElementById('pdf-temp-style');
-    if (s) s.remove();
-    hiddenSections.forEach(sec => { sec.style.display = ''; });
-    console.error('PDF 생성 오류:', err);
-    showToast('PDF 생성 실패 — 콘솔 확인', 'error');
-  });
+  showToast('PDF 창이 열렸습니다 — 인쇄 버튼을 눌러주세요', 'success');
 }
+
 
 // ===== 유틸 =====
 
