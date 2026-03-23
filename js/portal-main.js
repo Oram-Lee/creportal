@@ -13,15 +13,15 @@ import { state, API_BASE_URL } from './portal-state.js';
 import { db, ref, get, set, push, update, remove } from './portal-firebase.js';
 import { showToast, formatNumber, formatPyPrice, debounce, detectRegion, autoSetRegion, formatFloors, formatStation, isRecentlyUpdated } from './portal-utils.js';
 import { handleLogin, handleLogout, showApp, checkAuth, hasPermission } from './portal-auth.js';
-import { loadData, processBuildings } from './portal-data.js?v=4.1';
+import { loadData, processBuildings } from './portal-data.js?v=4.2';
 import { initKakaoMap, updateMapMarkers, updateViewportBuildings, zoomIn, zoomOut, resetMap, panToBuilding, openKakaoMap } from './portal-map.js';
 import { applyFilter, clearFilter, quickFilter, toggleVacancyFilter, toggleLeasingGuideFilter, resetAllFilters, applyFilters, setupSearchListener } from './portal-filter.js';
 import { renderBuildingList, renderTableView, selectBuildingFromList, loadStarredBuildings, toggleBuildingExpand, setViewMode, setListTab, toggleTheme, updateSelectedCount, renderVacancyBadge, renderRentrollBadge, renderMemoBadge, renderIncentiveBadge, renderDocumentSelect, renderVacancyTable, toggleStar, setupUIListeners } from './portal-ui.js';
-import { registerDetailGlobals } from './portal-detail.js?v=4.1';
+import { registerDetailGlobals } from './portal-detail.js?v=4.2';
 import { registerPopupGlobals } from './portal-popup.js';
-import { registerCrudGlobals, isAdmin, canDeleteBuilding } from './portal-crud.js?v=4.1';
+import { registerCrudGlobals, isAdmin, canDeleteBuilding } from './portal-crud.js?v=4.2';
 import { registerPreviewGlobals } from './portal-preview.js';
-import { registerMiscGlobals } from './portal-misc.js?v=4.1';
+import { registerMiscGlobals } from './portal-misc.js?v=4.2';
 // 🆕 다각형 검색 모듈
 import { initDrawing, setDrawingMode, clearDrawing, toggleDrawingTools } from './portal-drawing.js';
 // 🆕 Comp List 모듈
