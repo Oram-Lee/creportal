@@ -7928,6 +7928,10 @@ async function generateInsightPoints(report) {
   const prompt = `당신은 S&I Corporation CRE팀 상업용 부동산 전문 컨설턴트입니다.
 고객에게 전달할 전략 시사점 카드를 JSON으로만 반환하세요 (마크다운 없이).
 
+🚫 출력 금지 사항 (최우선 규칙):
+- 젠스타메이트·알스퀘어·교보리얼코·세빌스·쿠시먼·CBRE·JLL·네오밸류 등 특정 리서치·중개사명을 본문에 직접 표기하는 것은 절대 금지.
+  수치·사실 인용 시 반드시 "전문 리서치 자료 기준", "복수의 마켓리포트 기준", "전문 리서치 분석에 따르면" 등 포괄 표현만 사용.
+
 기준빌딩: ${report.buildingName} / 권역: ${distMap[report.district]||report.district}
 고객사: ${report.params?.clientCompany||''} / 업종: ${report.params?.clientIndustry||''}
 당면이슈: ${issueMap[report.params?.clientIssue]||'오피스 검토'}
@@ -7937,13 +7941,14 @@ async function generateInsightPoints(report) {
 
 【데이터 우선순위 — 반드시 준수】
 ${_researchCtx ? `[1순위 — 전문 리서치 자료] 아래 리서치 자료의 공실률·임대료 수치를 최우선으로 사용하세요.
-한국부동산원 R-ONE 지표는 통계 발표 시차(1분기 이상)로 인해 현재 시장을 반영하지 못합니다.
-리서치 자료에 명시된 최근 분기 수치를 실제 현황으로 간주하고 시사점을 작성하세요.
+이 수치가 "현재 공실률"입니다. R-ONE 공실률 수치(아래 [참고용] 블록)는 구체적 % 수치를 직접 인용하지 말고,
+전분기 대비 방향(상승/하락/보합)을 보완 서술하는 용도로만 활용하세요.
+⛔ 두 공실률(리서치 수치 vs R-ONE 수치)을 같은 문장·단락에 별개 숫자로 나란히 쓰는 것은 독자 혼란을 유발하므로 금지.
 
 ${_researchCtx.slice(0, 1200)}
 
-[참고용 — R-ONE 지표 (1분기 이상 시차 있음, 비교 참조만 허용)]` : `[시장 지표]`}
-공실률 ${_fv(lVi?.vacancy)}%${lVi?.qoq!==undefined?' (전분기比 '+lVi.qoq+'pp)':''}${_researchCtx ? ' ← R-ONE 참고값 (리서치 자료 수치 우선)' : ''} / 임대가격지수 ${_fv(lRIi?.rentIdx,1)}${lRIi?.yoy!==undefined?' (전년比 '+lRIi.yoy+'%)':''} / 임대료 ${_fv(lRi?.rentLevel!==undefined?lRi?.rentLevel:lRi?.rentIndex,0)} ${lRi?.unit||'원/㎡'}
+[참고용 — R-ONE 지표 (통계 발표 시차 1분기 이상 — 추세 방향 보완에만 활용, % 수치 직접 인용 금지)]` : `[시장 지표]`}
+공실률 ${_fv(lVi?.vacancy)}%${lVi?.qoq!==undefined?' (전분기比 '+lVi.qoq+'pp)':''}${_researchCtx ? ' ← R-ONE 참고값, 리서치 수치를 현재 공실률로 사용' : ''} / 임대가격지수 ${_fv(lRIi?.rentIdx,1)}${lRIi?.yoy!==undefined?' (전년比 '+lRIi.yoy+'%)':''} / 임대료 ${_fv(lRi?.rentLevel!==undefined?lRi?.rentLevel:lRi?.rentIndex,0)} ${lRi?.unit||'원/㎡'}
 
 [이슈 방향성]
 ${issueNuance}
@@ -7951,11 +7956,10 @@ ${issueNuance}
 작성 기준:
 - 각 시사점은 두괄식으로 핵심 결론을 먼저 제시한 뒤, 구체적 근거·수치·이유·S&I CRE팀 역할을 상세히 서술
 - 각 body는 3~4문장, 총 80~120자 분량으로 실질적 내용을 충분히 담을 것
-- 수치·지표(공실률, 임대가격지수, 빌딩 수 등) 반드시 언급 — 리서치 자료 수치 우선, R-ONE은 보조
+- 수치·지표(공실률, 임대가격지수, 빌딩 수 등) 반드시 언급 — 리서치 자료 수치 우선, R-ONE은 추세 방향 보조만
 - 추상적 표현 금지 — "적절합니다", "중요합니다" 같은 공허한 문장 대신 구체적 행동과 기대 효과 서술
 - S&I CRE팀과 협력해야 하는 이유나 역할을 자연스럽게 1개 항목에 포함
 - 실행 가능한 next step이 느껴지는 문체
-- 특정 리서치사명(젠스타메이트·알스퀘어·CBRE·JLL 등)을 본문에 직접 표기하지 말고 "전문 리서치 자료 기준", "복수의 마켓리포트 기준" 등 포괄 표현 사용
 
 형식 (반드시 준수):
 - icon: 내용에 맞는 이모지 1개
