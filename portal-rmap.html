@@ -2630,33 +2630,86 @@ canvas.mini-chart { width: 100% !important; }
           <div class="research-list-header-top">
             <h3>📚 등록된 리서치 자료</h3>
             <span class="research-list-count" id="researchListCount">0건</span>
-            <button id="btnBatchIntel" onclick="batchBuildIntel()"
-              style="margin-left:auto;padding:4px 10px;font-size:12px;border-radius:6px;
-                     background:var(--color-background-info);color:var(--color-text-info);
-                     border:1px solid var(--color-border-info);cursor:pointer;white-space:nowrap"
-              title="인텔리전스가 없는 자료를 모두 일괄 생성">
-              🧠 기존 자료 인텔리전스 일괄생성
-            </button>
-            <button id="btnCleanFirmNames" onclick="cleanFirmNamesIntel()"
-              style="margin-left:6px;padding:4px 10px;font-size:12px;border-radius:6px;
-                     background:#fef3c7;color:#92400e;
-                     border:1px solid #fcd34d;cursor:pointer;white-space:nowrap"
-              title="기존 인텔리전스에서 회사명만 찾아 치환 (빠름, API 호출 없음)">
-              🧹 회사명 일괄 제거
-            </button>
-            <button id="btnForceRebuildIntel" onclick="forceRebuildAllIntel()"
-              style="margin-left:6px;padding:4px 10px;font-size:12px;border-radius:6px;
-                     background:#fce7f3;color:#9d174d;
-                     border:1px solid #f9a8d4;cursor:pointer;white-space:nowrap"
-              title="기존 인텔리전스 포함 전체 재생성 (느림, AI 재분석)">
-              🔁 전체 강제 재생성
-            </button>
           </div>
+
+          <!-- 인텔리전스 관리 패널 -->
+          <div id="intelMgmtPanel" style="margin:8px 0 4px;padding:10px 12px;border-radius:8px;
+               background:var(--color-background-secondary);border:1px solid var(--color-border)">
+
+            <!-- 상태 요약 바 -->
+            <div id="intelStatusBar" style="display:flex;gap:12px;font-size:12px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+              <span style="font-weight:600;color:var(--color-text)">🧠 인텔리전스 현황</span>
+              <span id="intelStat_total"  style="color:var(--color-text-secondary)">전체 –건</span>
+              <span id="intelStat_ready"  style="color:var(--color-text-success)">✅ 완료 –건</span>
+              <span id="intelStat_pending" style="color:var(--color-text-warning)">⏳ 미완료 –건</span>
+              <span id="intelStat_failed"  style="color:var(--color-text-danger)">❌ 실패 –건</span>
+              <button onclick="refreshIntelStatusBar()" style="margin-left:auto;padding:2px 8px;font-size:11px;
+                border-radius:4px;background:none;border:1px solid var(--color-border);cursor:pointer;color:var(--color-text-secondary)"
+                title="상태 새로고침">🔄 새로고침</button>
+            </div>
+
+            <!-- 배치 크기 + 버튼 행 -->
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <span style="font-size:12px;color:var(--color-text-secondary);white-space:nowrap">배치:</span>
+              <select id="intelBatchSize" style="padding:3px 6px;font-size:12px;border-radius:5px;
+                border:1px solid var(--color-border);background:var(--color-background);color:var(--color-text);cursor:pointer">
+                <option value="5">5건씩</option>
+                <option value="10" selected>10건씩</option>
+                <option value="20">20건씩</option>
+                <option value="999">전체</option>
+              </select>
+
+              <button id="btnBatchIntel" onclick="batchBuildIntel()"
+                style="padding:4px 10px;font-size:12px;border-radius:6px;
+                       background:var(--color-background-info);color:var(--color-text-info);
+                       border:1px solid var(--color-border-info);cursor:pointer;white-space:nowrap"
+                title="인텔리전스가 없는 자료를 모두 일괄 생성">
+                🧠 미완료만 재생성
+              </button>
+
+              <button id="btnRebuildSelected" onclick="rebuildSelectedIntel()"
+                style="padding:4px 10px;font-size:12px;border-radius:6px;
+                       background:#f0fdf4;color:#166534;
+                       border:1px solid #86efac;cursor:pointer;white-space:nowrap"
+                title="체크된 항목만 선택 재생성">
+                ☑️ 선택 재생성
+              </button>
+
+              <button id="btnCleanFirmNames" onclick="cleanFirmNamesIntel()"
+                style="padding:4px 10px;font-size:12px;border-radius:6px;
+                       background:#fef3c7;color:#92400e;
+                       border:1px solid #fcd34d;cursor:pointer;white-space:nowrap"
+                title="기존 인텔리전스에서 회사명만 찾아 치환 (빠름, API 호출 없음)">
+                🧹 회사명 일괄 제거
+              </button>
+
+              <button id="btnForceRebuildIntel" onclick="forceRebuildAllIntel()"
+                style="padding:4px 10px;font-size:12px;border-radius:6px;
+                       background:#fce7f3;color:#9d174d;
+                       border:1px solid #f9a8d4;cursor:pointer;white-space:nowrap"
+                title="기존 인텔리전스 포함 전체 재생성 (느림, AI 재분석)">
+                🔁 전체 강제 재생성
+              </button>
+            </div>
+          </div>
+
           <!-- 일괄처리 진행 상태 -->
-          <div id="batchIntelProgress" style="display:none;margin:6px 0;padding:8px 10px;
+          <div id="batchIntelProgress" style="display:none;margin:6px 0;padding:10px 12px;
                border-radius:6px;background:var(--color-background-secondary);font-size:12px;
-               color:var(--color-text-secondary)">
-            <span id="batchIntelMsg">준비 중...</span>
+               color:var(--color-text-secondary);border:1px solid var(--color-border)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span id="batchIntelMsg" style="font-weight:500">준비 중...</span>
+              <button onclick="cancelIntelBatch()" id="btnCancelBatch"
+                style="padding:2px 8px;font-size:11px;border-radius:4px;background:#fee2e2;
+                       color:#991b1b;border:1px solid #fca5a5;cursor:pointer">
+                ⏹ 중단
+              </button>
+            </div>
+            <div style="background:var(--color-border);border-radius:4px;height:6px;overflow:hidden">
+              <div id="batchIntelProgressBar" style="height:100%;width:0%;background:var(--accent);
+                   border-radius:4px;transition:width 0.3s ease"></div>
+            </div>
+            <div id="batchIntelSubMsg" style="margin-top:4px;font-size:11px;color:var(--color-text-secondary)"></div>
           </div>
           <!-- 메인 필터 탭 -->
           <div class="research-filter-tabs">
@@ -9309,6 +9362,7 @@ async function loadResearchDocs() {
 
     document.getElementById('researchListCount').textContent = `${_researchAllDocs.length}건`;
     applyResearchFilter();
+    refreshIntelStatusBar();
   } catch(e) {
     listEl.innerHTML = `<div class="research-empty"><div class="icon">⚠️</div><p>로드 오류: ${e.message}</p></div>`;
   }
@@ -9411,7 +9465,12 @@ function renderResearchList(docs, groupBy) {
       intelBadge = `<span style="color:var(--color-text-secondary);font-size:11px;cursor:pointer" onclick="rebuildDocIntel('${doc._id}')">💡 인텔리전스 생성</span>`;
     }
 
-    return `<div class="research-doc-item">
+    return `<div class="research-doc-item" data-docid="${doc._id}">
+      <label style="display:flex;align-items:center;padding:0 4px 0 2px;cursor:pointer" title="선택 재생성용 체크">
+        <input type="checkbox" class="intel-select-cb" data-docid="${doc._id}"
+          style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)"
+          onclick="event.stopPropagation()">
+      </label>
       <div class="rdi-icon ${ext}">${iconMap[ext]||'📄'}</div>
       <div class="rdi-body">
         <div class="rdi-title" title="${(doc.title||'').replace(/"/g,'&quot;')}">${doc.title||'제목 없음'}</div>
@@ -9914,14 +9973,9 @@ async function rebuildDocIntel(docId) {
 }
 
 // =============================================================================
-// ■ 기존 자료 인텔리전스 일괄생성
+// ■ 기존 자료 인텔리전스 일괄생성 (미완료만 — 스마트 재생성)
 // =============================================================================
 async function batchBuildIntel() {
-  const btn      = document.getElementById('btnBatchIntel');
-  const progDiv  = document.getElementById('batchIntelProgress');
-  const msgEl    = document.getElementById('batchIntelMsg');
-
-  // ── 대상 문서 수집: intelStatus != 'ready' 이고 pageIndex 있는 것 ──
   const snap = await db.ref('researchDocs').once('value');
   const val  = snap.val() || {};
 
@@ -9935,84 +9989,24 @@ async function batchBuildIntel() {
 
   if (targets.length === 0) {
     showToast('✅ 모든 자료에 인텔리전스가 이미 생성되어 있습니다', 'info');
+    await refreshIntelStatusBar();
     return;
   }
 
+  const batchSize = parseInt(document.getElementById('intelBatchSize')?.value || '10');
+  const willProcess = batchSize < 999 ? Math.min(batchSize, targets.length) : targets.length;
   const confirmed = window.confirm(
-    `인텔리전스가 없는 자료 ${targets.length}건을 일괄 생성합니다.\n` +
-    `자료당 약 30~60초 소요됩니다.\n\n계속하시겠습니까?`
+    `미완료 자료 ${targets.length}건 중 ${willProcess}건을 재생성합니다.\n(배치 크기: ${batchSize < 999 ? batchSize + '건' : '전체'})\n\n계속하시겠습니까?`
   );
   if (!confirmed) return;
 
-  btn.disabled  = true;
-  btn.textContent = '⏳ 생성 중...';
-  progDiv.style.display = 'block';
-
-  let done = 0, failed = 0;
-
-  for (const doc of targets) {
-    msgEl.textContent =
-      `처리 중 (${done + failed + 1}/${targets.length}): ${doc.title || doc._id} …`;
-
-    try {
-      // intelStatus: building 먼저 표시
-      await db.ref(`researchDocs/${doc._id}/intelStatus`).set('building');
-      loadResearchDocs(); // UI 즉시 갱신
-
-      const res = await fetch(`${BACKEND}/api/research/prebuild-intel`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          docId:      doc._id,
-          title:      doc.title      || '',
-          source:     doc.source     || '',
-          year:       doc.year       || '',
-          quarter:    doc.periodType === 'Q'
-                        ? (doc.period || '').replace(/^\d{4}\s*/, '')
-                        : '',
-          storageUrl: doc.storageUrl || '',
-          pageIndex:  doc.pageIndex  || [],
-          pageTexts:  doc.pageTexts  || {},
-          coverage:   doc.coverage   || ['전국'],
-        })
-      });
-      const data = await res.json();
-
-      if (data.success && data.intel && Object.keys(data.intel).length > 0) {
-        await db.ref(`researchDocs/${doc._id}/prebuiltIntel`).set(data.intel);
-        await db.ref(`researchDocs/${doc._id}/intelStatus`).set('ready');
-        await db.ref(`researchDocs/${doc._id}/intelBuiltAt`).set(Date.now());
-        done++;
-        console.log(`[batch-intel] ✅ ${doc.title} — ${data.builtDistricts?.join(', ')}`);
-      } else {
-        await db.ref(`researchDocs/${doc._id}/intelStatus`).set('failed');
-        failed++;
-        console.warn(`[batch-intel] ❌ ${doc.title}:`, data.error);
-      }
-    } catch (e) {
-      await db.ref(`researchDocs/${doc._id}/intelStatus`).set('failed').catch(() => {});
-      failed++;
-      console.error(`[batch-intel] 오류 (${doc._id}):`, e);
-    }
-
-    // 목록 중간 갱신
-    loadResearchDocs();
-
-    // Render.com 과부하 방지: 문서 사이 2초 대기
-    if (done + failed < targets.length) {
-      await new Promise(r => setTimeout(r, 2000));
-    }
-  }
-
-  progDiv.style.display = 'none';
-  btn.disabled    = false;
-  btn.textContent = '🧠 기존 자료 인텔리전스 일괄생성';
-
-  showToast(
-    `일괄생성 완료 — 성공 ${done}건 / 실패 ${failed}건`,
-    failed > 0 ? 'warning' : 'success'
-  );
-  loadResearchDocs();
+  const allBtns = [
+    document.getElementById('btnBatchIntel'),
+    document.getElementById('btnRebuildSelected'),
+    document.getElementById('btnForceRebuildIntel'),
+    document.getElementById('btnCleanFirmNames'),
+  ];
+  await _runIntelBatch(targets, '미완료 재생성', allBtns);
 }
 
 // =============================================================================
@@ -10078,43 +10072,61 @@ AI 재분석 없이 즉시 처리됩니다.
 }
 
 // =============================================================================
-// ■ 인텔리전스 전체 강제 재생성 (intelStatus 조건 무시, 새 프롬프트로 전체 재분석)
+// ■ 인텔리전스 상태 요약 바 업데이트
 // =============================================================================
-async function forceRebuildAllIntel() {
-  const btn     = document.getElementById('btnForceRebuildIntel');
-  const progDiv = document.getElementById('batchIntelProgress');
-  const msgEl   = document.getElementById('batchIntelMsg');
-
+async function refreshIntelStatusBar() {
   const snap = await db.ref('researchDocs').once('value');
   const val  = snap.val() || {};
-  const targets = Object.entries(val)
-    .filter(([, d]) => d.active !== false)
-    .filter(([, d]) => (d.pageIndex || []).length > 0)
-    .map(([id, d]) => ({ _id: id, ...d }))
-    .sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
+  const docs = Object.values(val).filter(d => d.active !== false);
+  const total   = docs.length;
+  const ready   = docs.filter(d => d.intelStatus === 'ready' && Object.keys(d.prebuiltIntel||{}).length > 0).length;
+  const failed  = docs.filter(d => d.intelStatus === 'failed' || d.intelStatus === 'error').length;
+  const pending = total - ready - failed;
 
-  if (targets.length === 0) { showToast('재생성할 자료가 없습니다', 'info'); return; }
+  document.getElementById('intelStat_total').textContent   = `전체 ${total}건`;
+  document.getElementById('intelStat_ready').textContent   = `✅ 완료 ${ready}건`;
+  document.getElementById('intelStat_pending').textContent = `⏳ 미완료 ${pending}건`;
+  document.getElementById('intelStat_failed').textContent  = `❌ 실패 ${failed}건`;
+}
 
-  const estMin = Math.ceil(targets.length * 1.2);
-  const confirmed = window.confirm(
-    `전체 ${targets.length}건을 AI로 강제 재생성합니다.
-자료당 약 20초 대기 + 매 5건마다 40초 배치 휴식 포함.
-전체 약 ${estMin}분 소요 예상 (서버 메모리 보호 모드).
+// =============================================================================
+// ■ 공통 배치 처리 엔진
+// =============================================================================
+let _intelBatchCancelled = false;
 
-계속하시겠습니까?`
-  );
-  if (!confirmed) return;
+function cancelIntelBatch() {
+  _intelBatchCancelled = true;
+  document.getElementById('batchIntelMsg').textContent = '⏹ 중단 요청됨 — 현재 건 완료 후 정지합니다...';
+}
 
-  btn.disabled = true;
-  btn.textContent = '⏳ 재생성 중...';
+async function _runIntelBatch(targets, label, allBtns) {
+  _intelBatchCancelled = false;
+  const progDiv  = document.getElementById('batchIntelProgress');
+  const msgEl    = document.getElementById('batchIntelMsg');
+  const subMsgEl = document.getElementById('batchIntelSubMsg');
+  const barEl    = document.getElementById('batchIntelProgressBar');
+  const batchSize = parseInt(document.getElementById('intelBatchSize')?.value || '10');
+
+  allBtns.forEach(b => { if(b) b.disabled = true; });
   progDiv.style.display = 'block';
+  barEl.style.width = '0%';
 
-  let done = 0, failed = 0;
-  for (const doc of targets) {
-    msgEl.textContent = `재생성 중 (${done + failed + 1}/${targets.length}): ${doc.title || doc._id} …`;
+  // 배치 크기 적용 (999 = 전체)
+  const limited = batchSize < 999 ? targets.slice(0, batchSize) : targets;
+  const total = limited.length;
+  let done = 0, failed = 0, skipped = 0;
+
+  for (let i = 0; i < total; i++) {
+    if (_intelBatchCancelled) {
+      subMsgEl.textContent = `⏹ 중단됨 — ${i}/${total}건 처리 후 정지`;
+      break;
+    }
+    const doc = limited[i];
+    msgEl.textContent = `[${label}] ${i + 1}/${total}: ${doc.title || doc._id}`;
+    barEl.style.width = `${Math.round(((i) / total) * 100)}%`;
+
     try {
       await db.ref(`researchDocs/${doc._id}/intelStatus`).set('building');
-      loadResearchDocs();
 
       const res = await fetch(`${BACKEND}/api/research/prebuild-intel`, {
         method: 'POST',
@@ -10138,33 +10150,110 @@ async function forceRebuildAllIntel() {
         await db.ref(`researchDocs/${doc._id}/prebuiltIntel`).set(data.intel);
         await db.ref(`researchDocs/${doc._id}/intelStatus`).set('ready');
         await db.ref(`researchDocs/${doc._id}/intelBuiltAt`).set(Date.now());
+        subMsgEl.textContent = `✅ 완료: ${doc.title || doc._id} (권역: ${Object.keys(data.intel).join('·')})`;
         done++;
       } else {
-        await db.ref(`researchDocs/${doc._id}/intelStatus`).set('error');
+        await db.ref(`researchDocs/${doc._id}/intelStatus`).set('failed');
+        subMsgEl.textContent = `❌ 실패: ${doc.title || doc._id} — ${data.error || '응답 없음'}`;
         failed++;
       }
     } catch (e) {
-      console.error('[force-rebuild]', e);
-      await db.ref(`researchDocs/${doc._id}/intelStatus`).set('error');
+      console.error('[intel-batch]', e);
+      await db.ref(`researchDocs/${doc._id}/intelStatus`).set('failed').catch(()=>{});
+      subMsgEl.textContent = `❌ 오류: ${doc.title || doc._id} — ${e.message}`;
       failed++;
     }
-    if (done + failed < targets.length) {
-      // 매 5건마다 40초 배치 휴식 (서버 GC 확보)
-      const processed = done + failed;
-      const batchPause = (processed % 5 === 0);
-      const waitSec = batchPause ? 40 : 20;
+
+    barEl.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+
+    if (i + 1 < total && !_intelBatchCancelled) {
+      const processed = i + 1;
+      const isBatchBreak = processed % 5 === 0;
+      const waitSec = isBatchBreak ? 40 : 20;
       for (let s = waitSec; s > 0; s--) {
-        msgEl.textContent = `[${processed}/${targets.length}] 다음 요청까지 ${s}초 대기${batchPause ? ' (배치 휴식)' : ''} …`;
+        if (_intelBatchCancelled) break;
+        msgEl.textContent = `[${label}] ${processed}/${total} 완료 — 다음 요청까지 ${s}초${isBatchBreak ? ' (배치 휴식)' : ''}`;
         await new Promise(r => setTimeout(r, 1000));
       }
     }
   }
 
   progDiv.style.display = 'none';
-  btn.disabled = false;
-  btn.textContent = '🔁 전체 강제 재생성';
-  showToast(`강제 재생성 완료 — 성공 ${done}건 / 실패 ${failed}건`, failed > 0 ? 'warning' : 'success');
+  allBtns.forEach(b => { if(b) b.disabled = false; });
+
+  const remaining = targets.length - limited.length;
+  const remainMsg = remaining > 0 ? ` (나머지 ${remaining}건은 배치 크기 초과로 미처리)` : '';
+  showToast(
+    `${label} 완료 — ✅ ${done}건 / ❌ ${failed}건${remainMsg}`,
+    failed > 0 ? 'warning' : 'success'
+  );
+  await refreshIntelStatusBar();
   loadResearchDocs();
+}
+
+// =============================================================================
+// ■ 선택 항목 재생성
+// =============================================================================
+async function rebuildSelectedIntel() {
+  const cbs = document.querySelectorAll('.intel-select-cb:checked');
+  if (cbs.length === 0) {
+    showToast('재생성할 항목을 먼저 체크해주세요', 'info');
+    return;
+  }
+  const ids = Array.from(cbs).map(cb => cb.dataset.docid);
+  const snap = await db.ref('researchDocs').once('value');
+  const val  = snap.val() || {};
+  const targets = ids
+    .filter(id => val[id])
+    .map(id => ({ _id: id, ...val[id] }));
+
+  if (!window.confirm(`선택된 ${targets.length}건을 재생성합니다. 계속하시겠습니까?`)) return;
+
+  const allBtns = [
+    document.getElementById('btnBatchIntel'),
+    document.getElementById('btnRebuildSelected'),
+    document.getElementById('btnForceRebuildIntel'),
+    document.getElementById('btnCleanFirmNames'),
+  ];
+  await _runIntelBatch(targets, '선택 재생성', allBtns);
+  // 체크 해제
+  cbs.forEach(cb => { cb.checked = false; });
+}
+
+// =============================================================================
+// ■ 인텔리전스 전체 강제 재생성 (intelStatus 조건 무시, 새 프롬프트로 전체 재분석)
+// =============================================================================
+async function forceRebuildAllIntel() {
+  const btn     = document.getElementById('btnForceRebuildIntel');
+  const progDiv = document.getElementById('batchIntelProgress');
+  const msgEl   = document.getElementById('batchIntelMsg');
+
+  const snap = await db.ref('researchDocs').once('value');
+  const val  = snap.val() || {};
+  const targets = Object.entries(val)
+    .filter(([, d]) => d.active !== false)
+    .filter(([, d]) => (d.pageIndex || []).length > 0)
+    .map(([id, d]) => ({ _id: id, ...d }))
+    .sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
+
+  if (targets.length === 0) { showToast('재생성할 자료가 없습니다', 'info'); return; }
+
+  const batchSize = parseInt(document.getElementById('intelBatchSize')?.value || '10');
+  const willProcess = batchSize < 999 ? Math.min(batchSize, targets.length) : targets.length;
+  const estMin = Math.ceil(willProcess * 1.2);
+
+  const confirmed = window.confirm(
+    `전체 ${targets.length}건 중 ${willProcess}건을 강제 재생성합니다.\n(배치 크기: ${batchSize < 999 ? batchSize + '건' : '전체'})\n자료당 약 20초 대기 + 매 5건마다 40초 배치 휴식.\n약 ${estMin}분 소요 예상.\n\n계속하시겠습니까?`
+  );
+  if (!confirmed) return;
+
+  const allBtns = [
+    document.getElementById('btnBatchIntel'),
+    document.getElementById('btnRebuildSelected'),
+    document.getElementById('btnForceRebuildIntel'),
+    document.getElementById('btnCleanFirmNames'),
+  ];
+  await _runIntelBatch(targets, '전체 강제', allBtns);
 }
 
 async function buildResearchContext(district, reportContextStr) {
