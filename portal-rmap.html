@@ -2637,6 +2637,20 @@ canvas.mini-chart { width: 100% !important; }
               title="인텔리전스가 없는 자료를 모두 일괄 생성">
               🧠 기존 자료 인텔리전스 일괄생성
             </button>
+            <button id="btnCleanFirmNames" onclick="cleanFirmNamesIntel()"
+              style="margin-left:6px;padding:4px 10px;font-size:12px;border-radius:6px;
+                     background:#fef3c7;color:#92400e;
+                     border:1px solid #fcd34d;cursor:pointer;white-space:nowrap"
+              title="기존 인텔리전스에서 회사명만 찾아 치환 (빠름, API 호출 없음)">
+              🧹 회사명 일괄 제거
+            </button>
+            <button id="btnForceRebuildIntel" onclick="forceRebuildAllIntel()"
+              style="margin-left:6px;padding:4px 10px;font-size:12px;border-radius:6px;
+                     background:#fce7f3;color:#9d174d;
+                     border:1px solid #f9a8d4;cursor:pointer;white-space:nowrap"
+              title="기존 인텔리전스 포함 전체 재생성 (느림, AI 재분석)">
+              🔁 전체 강제 재생성
+            </button>
           </div>
           <!-- 일괄처리 진행 상태 -->
           <div id="batchIntelProgress" style="display:none;margin:6px 0;padding:8px 10px;
@@ -9998,6 +10012,147 @@ async function batchBuildIntel() {
     `일괄생성 완료 — 성공 ${done}건 / 실패 ${failed}건`,
     failed > 0 ? 'warning' : 'success'
   );
+  loadResearchDocs();
+}
+
+// =============================================================================
+// ■ 회사명 일괄 제거 (API 호출 없이 Firebase 저장값만 치환)
+// =============================================================================
+async function cleanFirmNamesIntel() {
+  const btn = document.getElementById('btnCleanFirmNames');
+  const _FIRM_REPLACE = [
+    [/젠스타메이트/g,                               '전문 리서치 자료'],
+    [/알스퀘어/g,                                   '전문 리서치 자료'],
+    [/교보리얼코/g,                                 '전문 리서치 자료'],
+    [/세빌스/g,                                     '글로벌 리서치 자료'],
+    [/쿠시먼[\s]*(앤드웨이크필드|&\s*웨이크필드)?/g,  '글로벌 리서치 자료'],
+    [/CBRE/g,                                   '글로벌 리서치 자료'],
+    [/JLL/g,                                    '글로벌 리서치 자료'],
+    [/네오밸류/g,                                   '전문 리서치 자료'],
+    [/젠스타(?!메이트)/g,                            '전문 리서치 자료'],
+  ];
+
+  const snap = await db.ref('researchDocs').once('value');
+  const val  = snap.val() || {};
+  const targets = Object.entries(val)
+    .filter(([, d]) => d.prebuiltIntel && Object.keys(d.prebuiltIntel).length > 0)
+    .map(([id, d]) => ({ _id: id, ...d }));
+
+  if (targets.length === 0) { showToast('처리할 인텔리전스가 없습니다', 'info'); return; }
+
+  const confirmed = window.confirm(
+    `인텔리전스가 있는 자료 ${targets.length}건의 회사명을 포괄 표현으로 치환합니다.
+AI 재분석 없이 즉시 처리됩니다.
+
+계속하시겠습니까?`
+  );
+  if (!confirmed) return;
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 처리 중...';
+
+  let done = 0, skipped = 0;
+  for (const doc of targets) {
+    const intel = doc.prebuiltIntel;
+    const updated = {};
+    let changed = false;
+    for (const [dist, text] of Object.entries(intel)) {
+      if (typeof text !== 'string') { updated[dist] = text; continue; }
+      let replaced = text;
+      for (const [pat, rep] of _FIRM_REPLACE) replaced = replaced.replace(pat, rep);
+      updated[dist] = replaced;
+      if (replaced !== text) changed = true;
+    }
+    if (changed) {
+      await db.ref(`researchDocs/${doc._id}/prebuiltIntel`).set(updated);
+      done++;
+    } else {
+      skipped++;
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🧹 회사명 일괄 제거';
+  showToast(`회사명 치환 완료 — 변경 ${done}건 / 변경없음 ${skipped}건`, 'success');
+  loadResearchDocs();
+}
+
+// =============================================================================
+// ■ 인텔리전스 전체 강제 재생성 (intelStatus 조건 무시, 새 프롬프트로 전체 재분석)
+// =============================================================================
+async function forceRebuildAllIntel() {
+  const btn     = document.getElementById('btnForceRebuildIntel');
+  const progDiv = document.getElementById('batchIntelProgress');
+  const msgEl   = document.getElementById('batchIntelMsg');
+
+  const snap = await db.ref('researchDocs').once('value');
+  const val  = snap.val() || {};
+  const targets = Object.entries(val)
+    .filter(([, d]) => d.active !== false)
+    .filter(([, d]) => (d.pageIndex || []).length > 0)
+    .map(([id, d]) => ({ _id: id, ...d }))
+    .sort((a, b) => (b.uploadedAt || 0) - (a.uploadedAt || 0));
+
+  if (targets.length === 0) { showToast('재생성할 자료가 없습니다', 'info'); return; }
+
+  const confirmed = window.confirm(
+    `전체 ${targets.length}건을 AI로 강제 재생성합니다.
+자료당 약 30~60초, 전체 약 ${Math.ceil(targets.length * 0.7)}분 소요됩니다.
+
+계속하시겠습니까?`
+  );
+  if (!confirmed) return;
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 재생성 중...';
+  progDiv.style.display = 'block';
+
+  let done = 0, failed = 0;
+  for (const doc of targets) {
+    msgEl.textContent = `재생성 중 (${done + failed + 1}/${targets.length}): ${doc.title || doc._id} …`;
+    try {
+      await db.ref(`researchDocs/${doc._id}/intelStatus`).set('building');
+      loadResearchDocs();
+
+      const res = await fetch(`${BACKEND}/api/research/prebuild-intel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          docId:      doc._id,
+          title:      doc.title      || '',
+          source:     doc.source     || '',
+          year:       doc.year       || '',
+          quarter:    doc.periodType === 'Q'
+                        ? (doc.period || '').replace(/^\d{4}\s*/, '')
+                        : '',
+          storageUrl: doc.storageUrl || '',
+          pageIndex:  doc.pageIndex  || [],
+          pageTexts:  doc.pageTexts  || {},
+          coverage:   doc.coverage   || ['전국'],
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.intel && Object.keys(data.intel).length > 0) {
+        await db.ref(`researchDocs/${doc._id}/prebuiltIntel`).set(data.intel);
+        await db.ref(`researchDocs/${doc._id}/intelStatus`).set('ready');
+        await db.ref(`researchDocs/${doc._id}/intelBuiltAt`).set(Date.now());
+        done++;
+      } else {
+        await db.ref(`researchDocs/${doc._id}/intelStatus`).set('error');
+        failed++;
+      }
+    } catch (e) {
+      console.error('[force-rebuild]', e);
+      await db.ref(`researchDocs/${doc._id}/intelStatus`).set('error');
+      failed++;
+    }
+    if (done + failed < targets.length) await new Promise(r => setTimeout(r, 2000));
+  }
+
+  progDiv.style.display = 'none';
+  btn.disabled = false;
+  btn.textContent = '🔁 전체 강제 재생성';
+  showToast(`강제 재생성 완료 — 성공 ${done}건 / 실패 ${failed}건`, failed > 0 ? 'warning' : 'success');
   loadResearchDocs();
 }
 
