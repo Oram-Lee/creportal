@@ -10095,9 +10095,11 @@ async function forceRebuildAllIntel() {
 
   if (targets.length === 0) { showToast('재생성할 자료가 없습니다', 'info'); return; }
 
+  const estMin = Math.ceil(targets.length * 1.2);
   const confirmed = window.confirm(
     `전체 ${targets.length}건을 AI로 강제 재생성합니다.
-자료당 약 30~60초, 전체 약 ${Math.ceil(targets.length * 0.7)}분 소요됩니다.
+자료당 약 20초 대기 + 매 5건마다 40초 배치 휴식 포함.
+전체 약 ${estMin}분 소요 예상 (서버 메모리 보호 모드).
 
 계속하시겠습니까?`
   );
@@ -10146,7 +10148,16 @@ async function forceRebuildAllIntel() {
       await db.ref(`researchDocs/${doc._id}/intelStatus`).set('error');
       failed++;
     }
-    if (done + failed < targets.length) await new Promise(r => setTimeout(r, 2000));
+    if (done + failed < targets.length) {
+      // 매 5건마다 40초 배치 휴식 (서버 GC 확보)
+      const processed = done + failed;
+      const batchPause = (processed % 5 === 0);
+      const waitSec = batchPause ? 40 : 20;
+      for (let s = waitSec; s > 0; s--) {
+        msgEl.textContent = `[${processed}/${targets.length}] 다음 요청까지 ${s}초 대기${batchPause ? ' (배치 휴식)' : ''} …`;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
   }
 
   progDiv.style.display = 'none';
