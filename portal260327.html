@@ -7,8 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/portal.css">
-    <!-- SheetJS (Excel 다운로드 — portal-stats.js ISSUE-5) -->
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <!-- 로그인 -->
@@ -50,7 +48,6 @@
                 <a href="admin-leasing.html" class="nav-item"><span class="nav-icon">⚙️</span> OCR관리</a>
                 <div class="nav-item" onclick="openDuplicateManager()" title="동일주소 빌딩 통합 관리"><span class="nav-icon">🔗</span> 중복관리</div>
                 <div class="nav-item" onclick="openVacancyContamModal()" title="이관된 공실의 buildingName 오염 진단·정정"><span class="nav-icon">🧹</span> 오염정정</div>
-                <div class="nav-item" onclick="openStatResearchModal()" title="권역별 공실·임대가 통계 및 리서치 분석"><span class="nav-icon">📈</span> 통계/리서치</div>
             </nav>
             <div class="header-right">
                 <button class="theme-btn" onclick="toggleTheme()" title="다크모드">🌙</button>
@@ -1150,11 +1147,6 @@
         s1.type = 'module';
         s1.src = `js/portal-main.js?v=${_v}`;
         document.currentScript.after(s1);
-        // ★ 통계/리서치 모듈 (portal-stats.js)
-        const sStats = document.createElement('script');
-        sStats.type = 'module';
-        sStats.src = `js/portal-stats.js?v=${_v}`;
-        document.currentScript.after(sStats);
     </script>
 
     
@@ -1720,289 +1712,6 @@
         #addressEditModal.show { display: block !important; }
     </style>
     
-    <!-- ══════════════════════════════════════════════════════════
-         통계/리서치 모달  (openStatResearchModal)
-         ══════════════════════════════════════════════════════════ -->
-    <div id="statResearchModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:14px; padding:0; width:97%; max-width:1200px; z-index:1020; box-shadow:0 16px 56px rgba(0,0,0,0.35); max-height:93vh; overflow:hidden; flex-direction:column;">
-
-        <!-- 헤더 -->
-        <div style="padding:16px 24px; background:linear-gradient(135deg,#0f4c81,#1a73e8); border-radius:14px 14px 0 0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
-            <div>
-                <div style="font-size:16px; font-weight:700; color:#fff;">📈 통계 / 리서치 대시보드</div>
-                <div id="srModalSubtitle" style="font-size:12px; color:rgba(255,255,255,0.8); margin-top:2px;">서울 오피스 시장 — 실시간 집계</div>
-            </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <!-- 이상값 제외 토글 -->
-                <label id="sr-exclude-toggle-wrap"
-                    style="display:flex; align-items:center; gap:6px; cursor:pointer;
-                           background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25);
-                           border-radius:7px; padding:5px 10px; font-size:12px; color:#fff; user-select:none;"
-                    title="이상값으로 감지된 공실을 통계에서 제외합니다">
-                    <input type="checkbox" id="sr-exclude-anomalies"
-                        style="accent-color:#fbbf24; width:13px; height:13px; cursor:pointer;"
-                        onchange="window._srToggleAnomalyExclusion && window._srToggleAnomalyExclusion(this.checked)">
-                    <span>⚠️ 이상값 제외</span>
-                    <span id="sr-exclude-badge"
-                        style="display:none; background:#fbbf24; color:#92400e; border-radius:10px;
-                               padding:1px 7px; font-size:10px; font-weight:700;"></span>
-                </label>
-                <button onclick="refreshStatResearch()" style="padding:6px 14px; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.35); color:#fff; border-radius:7px; cursor:pointer; font-size:12px; font-weight:600;">🔄 새로고침</button>
-                <button onclick="closeStatResearchModal()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:20px; width:34px; height:34px; border-radius:8px; cursor:pointer;">×</button>
-            </div>
-        </div>
-
-        <!-- 탭 버튼 -->
-        <div style="display:flex; background:var(--bg-secondary); border-bottom:2px solid var(--border-color); flex-shrink:0; overflow-x:auto;">
-            <button class="sr-tab active" id="srtab-vacancy"  onclick="switchSRTab('vacancy')"  style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:#1a73e8; border-bottom:2px solid #1a73e8; margin-bottom:-2px;">📊 권역별 공실현황</button>
-            <button class="sr-tab"        id="srtab-rent"     onclick="switchSRTab('rent')"     style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">💰 임대가 분석</button>
-            <button class="sr-tab"        id="srtab-building" onclick="switchSRTab('building')" style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">🏢 빌딩 현황</button>
-            <button class="sr-tab"        id="srtab-table"    onclick="switchSRTab('table')"    style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">🔍 빌딩 검색 테이블</button>
-            <button class="sr-tab"        id="srtab-anomaly"  onclick="switchSRTab('anomaly')"  style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">⚠️ 이상값 감지</button>
-        </div>
-
-        <!-- 탭 패널 공통 래퍼 -->
-        <div style="overflow-y:auto; flex:1; min-height:0;">
-
-            <!-- ── TAB 1: 권역별 공실현황 ── -->
-            <div id="srpanel-vacancy" style="padding:16px 24px 20px; display:block;">
-                <!-- 공통 필터 바 -->
-                <div id="sr-filter-bar"></div>
-                <!-- KPI 카드 행 -->
-                <div id="sr-kpi-row" style="display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin:14px 0;"></div>
-                <!-- 권역별 공실률 요약 바 -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">📊 권역별 공실률</div>
-                <div id="sr-region-bars" style="margin-bottom:20px;"></div>
-                <!-- 시계열 차트 -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">📈 시계열 공실면적 추이 (출처 발행일 기준)</div>
-                <div id="sr-timeseries-wrap" style="margin-bottom:20px;"></div>
-                <!-- 권역×등급 교차 테이블 -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">📋 권역 × 등급 교차 (공실건수 / 전용면적)</div>
-                <div id="sr-vacancy-cross" style="overflow-x:auto; margin-bottom:20px;"></div>
-                <!-- Top20 -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">🏆 공실면적 Top 20 빌딩</div>
-                <div id="sr-top20" style="overflow-x:auto;"></div>
-            </div>
-
-            <!-- ── TAB 2: 임대가 분석 ── -->
-            <div id="srpanel-rent" style="padding:16px 24px 20px; display:none;">
-                <!-- 공통 필터 바 (TAB1과 공유 DOM) -->
-                <div id="sr-rent-filter-bar"></div>
-                <!-- KPI 카드 -->
-                <div id="sr-rent-kpi" style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:14px 0;"></div>
-                <!-- 권역×등급 평균 임대가 테이블 -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">💰 권역 × 등급별 평균 임대가 (만원/평/月)</div>
-                <div id="sr-rent-cross" style="overflow-x:auto; margin-bottom:20px;"></div>
-                <!-- 분기별 시계열 꺾은선 -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">
-                    📈 분기별 권역 평균 임대가 추이
-                    <select id="sr-rent-metric" onchange="_srRenderRent()"
-                        style="margin-left:10px; padding:3px 8px; border:1px solid var(--border-color); border-radius:5px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; font-weight:400; cursor:pointer;">
-                        <option value="rent">임대료</option>
-                        <option value="deposit">보증금</option>
-                        <option value="maint">관리비</option>
-                    </select>
-                </div>
-                <div id="sr-rent-trend" style="margin-bottom:20px;"></div>
-                <!-- 분기 비교 뷰 -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">
-                    🔄 분기 비교
-                    <span style="margin-left:10px; font-weight:400; font-size:12px; color:var(--text-muted);">
-                        기준
-                        <select id="sr-cmp-a" onchange="_srRenderRentCompare()"
-                            style="padding:3px 8px; border:1px solid var(--border-color); border-radius:5px;
-                                   background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        </select>
-                        vs
-                        <select id="sr-cmp-b" onchange="_srRenderRentCompare()"
-                            style="padding:3px 8px; border:1px solid var(--border-color); border-radius:5px;
-                                   background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        </select>
-                    </span>
-                </div>
-                <div id="sr-rent-compare" style="overflow-x:auto; margin-bottom:20px;"></div>
-                <!-- 보증금/관리비 분포 -->
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
-                    <div>
-                        <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">🏦 보증금 배수 분포</div>
-                        <div id="sr-deposit-dist"></div>
-                    </div>
-                    <div>
-                        <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">🔧 관리비 구간 분포</div>
-                        <div id="sr-maint-dist"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ── TAB 3: 빌딩 현황 ── -->
-            <div id="srpanel-building" style="padding:16px 24px 20px; display:none;">
-                <!-- 상단 2열 그리드 -->
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
-                    <div>
-                        <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">🏅 등급(자동) 분포</div>
-                        <div id="sr-grade-bars"></div>
-                    </div>
-                    <div>
-                        <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">📅 완공연도 분포</div>
-                        <div id="sr-year-bars"></div>
-                    </div>
-                </div>
-                <!-- 권역×등급 교차 히트맵 -->
-                <div style="margin-bottom:16px;">
-                    <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">🗺️ 권역 × 등급 교차 현황 (빌딩 수)</div>
-                    <div id="sr-cross-table" style="overflow-x:auto;"></div>
-                </div>
-                <!-- PM사별 현황 -->
-                <div>
-                    <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">🏗️ PM사별 관리 현황</div>
-                    <div id="sr-pm-table" style="overflow-x:auto;"></div>
-                </div>
-            </div>
-
-            <!-- ── TAB 4: 빌딩 검색 테이블 ── -->
-            <div id="srpanel-table" style="padding:16px 24px 20px; display:none;">
-                <!-- 필터 행 -->
-                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-                    <select id="srT-region" onchange="_srTableFilterChange()"
-                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        <option value="">전체 권역</option>
-                        <option value="CBD">CBD</option>
-                        <option value="GBD">GBD</option>
-                        <option value="YBD">YBD</option>
-                        <option value="BBD">BBD</option>
-                        <option value="ETC">ETC</option>
-                    </select>
-                    <select id="srT-grade" onchange="_srTableFilterChange()"
-                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        <option value="">전체 등급</option>
-                        <option value="Prime">Prime</option>
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                        <option value="D">D</option>
-                        <option value="E">E</option>
-                    </select>
-                    <select id="srT-size" onchange="_srTableFilterChange()"
-                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        <option value="">전체 규모</option>
-                        <option value="대형">대형(2만평↑)</option>
-                        <option value="중대형">중대형(1만~2만)</option>
-                        <option value="중형">중형(5천~1만)</option>
-                        <option value="소형">소형(5천↓)</option>
-                    </select>
-                    <select id="srT-vacancy" onchange="_srTableFilterChange()"
-                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        <option value="">공실 전체</option>
-                        <option value="yes">공실 있음</option>
-                        <option value="no">공실 없음</option>
-                    </select>
-                    <select id="srT-pm" onchange="_srTableFilterChange()"
-                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        <option value="">전체 PM사</option>
-                    </select>
-                    <input id="srT-search" oninput="_srTableFilterChange()" placeholder="빌딩명 검색..."
-                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; min-width:140px;">
-                    <button onclick="_srTableFilterReset()"
-                        style="padding:5px 12px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-muted); font-size:12px; cursor:pointer;">
-                        ↺ 초기화
-                    </button>
-                    <button onclick="window._srDownloadExcel && window._srDownloadExcel()"
-                        style="padding:5px 12px; border:none; border-radius:6px;
-                               background:#16a34a; color:#fff; font-size:12px; cursor:pointer; font-weight:600;">
-                        📥 Excel 다운로드
-                    </button>
-                    <span id="srT-count" style="margin-left:auto; font-size:11px; color:var(--text-muted); white-space:nowrap;"></span>
-                </div>
-                <div id="sr-building-table" style="overflow-x:auto; max-height:520px; overflow-y:auto;"></div>
-            </div>
-
-            <!-- ── TAB 5: 이상값 감지 ── -->
-            <div id="srpanel-anomaly" style="padding:16px 24px 20px; display:none;">
-                <!-- 스캔 컨트롤 -->
-                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
-                    <button id="sr-anomaly-scan-btn" onclick="window._srRunAnomalyScan && window._srRunAnomalyScan()"
-                        style="padding:7px 18px; background:#1a73e8; color:#fff; border:none; border-radius:7px;
-                               cursor:pointer; font-size:13px; font-weight:600;">
-                        🔍 전체 이상값 스캔
-                    </button>
-                    <span id="sr-anomaly-scan-msg" style="font-size:12px; color:var(--text-muted);"></span>
-                    <div id="sr-anomaly-severity-badges" style="display:flex; gap:6px; margin-left:auto;"></div>
-                </div>
-                <!-- 이상값 제외 안내 배너 (제외 적용 시 표시) -->
-                <div id="sr-anomaly-exclude-banner"
-                    style="display:none; background:#fffbeb; border:1px solid #fcd34d; border-radius:8px;
-                           padding:8px 14px; font-size:12px; color:#92400e; margin-bottom:12px;">
-                    ⚠️ <strong>이상값 제외 모드 ON</strong> —
-                    감지된 이상값 공실이 TAB1~4 통계에서 제외됩니다.
-                    <span id="sr-anomaly-exclude-cnt"></span>
-                </div>
-                <!-- 필터 바 -->
-                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
-                    <select id="srA-severity" onchange="_srAnomalyFilterChange()"
-                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        <option value="">전체 심각도</option>
-                        <option value="HIGH">🔴 HIGH</option>
-                        <option value="MEDIUM">🟠 MEDIUM</option>
-                        <option value="LOW">🟡 LOW</option>
-                    </select>
-                    <select id="srA-type" onchange="_srAnomalyFilterChange()"
-                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        <option value="">전체 유형</option>
-                        <option value="PRICE_RANGE">가격 범위 이상</option>
-                        <option value="UNIT_MISMATCH">단위 오류 (총액 입력)</option>
-                        <option value="AREA_BASIS">면적 기준 혼재</option>
-                        <option value="MONTH_GAP">월 데이터 누락</option>
-                        <option value="BUILDING_MISMATCH">빌딩 오매칭 의심</option>
-                    </select>
-                    <select id="srA-region" onchange="_srAnomalyFilterChange()"
-                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-                        <option value="">전체 권역</option>
-                        <option value="CBD">CBD</option>
-                        <option value="GBD">GBD</option>
-                        <option value="YBD">YBD</option>
-                        <option value="BBD">BBD</option>
-                        <option value="ETC">ETC</option>
-                    </select>
-                    <button onclick="_srAnomalyFilterReset()"
-                        style="padding:5px 12px; border:1px solid var(--border-color); border-radius:6px;
-                               background:var(--bg-primary); color:var(--text-muted); font-size:12px; cursor:pointer;">
-                        ↺ 초기화
-                    </button>
-                    <span id="srA-count" style="margin-left:auto; font-size:11px; color:var(--text-muted);"></span>
-                </div>
-                <!-- 이상값 상세 테이블 -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px;
-                            padding-bottom:5px; border-bottom:2px solid var(--border-color);">📋 이상값 상세 목록</div>
-                <div id="sr-anomaly-table" style="overflow-x:auto; max-height:320px; overflow-y:auto; margin-bottom:20px;">
-                    <div style="padding:32px; text-align:center; color:var(--text-muted);">
-                        🔍 스캔 버튼을 눌러 이상값을 감지하세요.
-                    </div>
-                </div>
-                <!-- 빌딩별 요약 -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary); margin-bottom:8px;
-                            padding-bottom:5px; border-bottom:2px solid var(--border-color);">🏢 빌딩별 이상값 요약</div>
-                <div id="sr-anomaly-bldg-table" style="overflow-x:auto; max-height:260px; overflow-y:auto;"></div>
-            </div>
-
-        </div>
-
-        <!-- 푸터 -->
-        <div style="padding:10px 24px; background:var(--bg-secondary); border-top:1px solid var(--border-color); flex-shrink:0; display:flex; justify-content:space-between; align-items:center;">
-            <span id="sr-footer-msg" style="font-size:12px; color:var(--text-muted);"></span>
-            <button onclick="closeStatResearchModal()" style="padding:6px 18px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary); cursor:pointer; font-size:13px;">닫기</button>
-        </div>
-    </div>
-
     <!-- 상세 필터 모달 -->
     <div id="detailFilterModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:24px; width:90%; max-width:500px; z-index:1001; box-shadow:0 10px 40px rgba(0,0,0,0.2);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -5426,11 +5135,6 @@
         };
 
         // ── 모달 열기/닫기 ────────────────────────────────────────
-        // ══════════════════════════════════════════════════════════
-        //  통계/리서치 모달 — js/portal-stats.js 에서 처리
-        //  (window.openStatResearchModal, closeStatResearchModal 등)
-        // ══════════════════════════════════════════════════════════
-
         window.openVacancyContamModal = function() {
             document.getElementById('vacancyContamModal').style.display = 'flex';
         };
@@ -6561,8 +6265,6 @@
                     showToast('임대안내문에서 빌딩 정보가 업데이트되었습니다', 'success');
             }
         }
-
-        // ── 통계/리서치 모달 ESC 키: portal-stats.js에서 처리 (_srEscRegistered guard) ──
 
         // ── BroadcastChannel 수신 (별도 탭의 안내문에서 pushToPortal 호출 시) ──
         try {
