@@ -50,7 +50,7 @@
                 <a href="admin-leasing.html" class="nav-item"><span class="nav-icon">⚙️</span> OCR관리</a>
                 <div class="nav-item" onclick="openDuplicateManager()" title="동일주소 빌딩 통합 관리"><span class="nav-icon">🔗</span> 중복관리</div>
                 <div class="nav-item" onclick="openVacancyContamModal()" title="이관된 공실의 buildingName 오염 진단·정정"><span class="nav-icon">🧹</span> 오염정정</div>
-                <div class="nav-item" onclick="openStatResearchModal()" title="권역별 공실·임대가 통계 및 리서치 분석" style="display:none;"><span class="nav-icon">📈</span> 통계/리서치</div>
+                <div class="nav-item" onclick="openStatResearchModal()" title="권역별 공실·임대가 통계 및 리서치 분석"><span class="nav-icon">📈</span> 통계/리서치</div>
             </nav>
             <div class="header-right">
                 <button class="theme-btn" onclick="toggleTheme()" title="다크모드">🌙</button>
@@ -58,14 +58,6 @@
                     <span class="user-email" id="userName">사용자</span>
                     <span class="user-role">admin</span>
                 </div>
-                <button onclick="openStatResearchModal()"
-                    title="통계 / 리서치 대시보드"
-                    style="background:none; border:none; cursor:pointer; font-size:18px;
-                           padding:4px 6px; color:var(--text-primary); opacity:0.65;
-                           border-radius:6px; transition:opacity 0.15s, background 0.15s;"
-                    onmouseover="this.style.opacity='1'; this.style.background='var(--bg-secondary)'"
-                    onmouseout="this.style.opacity='0.65'; this.style.background='none'"
-                    >📊</button>
                 <button class="logout-btn" onclick="handleLogout()">로그아웃</button>
             </div>
         </header>
@@ -1869,8 +1861,65 @@
 
             <!-- ── TAB 4: 빌딩 검색 테이블 ── -->
             <div id="srpanel-table" style="padding:16px 24px 20px; display:none;">
-                <!-- 필터 행 — 동적 렌더 (portal-stats.js _srRenderTableFilterRow) -->
-                <div id="sr-table-filter-row" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;"></div>
+                <!-- 필터 행 -->
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+                    <select id="srT-region" onchange="_srTableFilterChange()"
+                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+                        <option value="">전체 권역</option>
+                        <option value="CBD">CBD</option>
+                        <option value="GBD">GBD</option>
+                        <option value="YBD">YBD</option>
+                        <option value="BBD">BBD</option>
+                        <option value="ETC">ETC</option>
+                    </select>
+                    <select id="srT-grade" onchange="_srTableFilterChange()"
+                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+                        <option value="">전체 등급</option>
+                        <option value="Prime">Prime</option>
+                        <option value="A">A</option>
+                        <option value="B">B</option>
+                        <option value="C">C</option>
+                        <option value="D">D</option>
+                        <option value="E">E</option>
+                    </select>
+                    <select id="srT-size" onchange="_srTableFilterChange()"
+                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+                        <option value="">전체 규모</option>
+                        <option value="대형">대형(2만평↑)</option>
+                        <option value="중대형">중대형(1만~2만)</option>
+                        <option value="중형">중형(5천~1만)</option>
+                        <option value="소형">소형(5천↓)</option>
+                    </select>
+                    <select id="srT-vacancy" onchange="_srTableFilterChange()"
+                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+                        <option value="">공실 전체</option>
+                        <option value="yes">공실 있음</option>
+                        <option value="no">공실 없음</option>
+                    </select>
+                    <select id="srT-pm" onchange="_srTableFilterChange()"
+                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+                        <option value="">전체 PM사</option>
+                    </select>
+                    <input id="srT-search" oninput="_srTableFilterChange()" placeholder="빌딩명 검색..."
+                        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+                               background:var(--bg-primary); color:var(--text-primary); font-size:12px; min-width:140px;">
+                    <button onclick="_srTableFilterReset()"
+                        style="padding:5px 12px; border:1px solid var(--border-color); border-radius:6px;
+                               background:var(--bg-primary); color:var(--text-muted); font-size:12px; cursor:pointer;">
+                        ↺ 초기화
+                    </button>
+                    <button onclick="window._srDownloadExcel && window._srDownloadExcel()"
+                        style="padding:5px 12px; border:none; border-radius:6px;
+                               background:#16a34a; color:#fff; font-size:12px; cursor:pointer; font-weight:600;">
+                        📥 Excel 다운로드
+                    </button>
+                    <span id="srT-count" style="margin-left:auto; font-size:11px; color:var(--text-muted); white-space:nowrap;"></span>
+                </div>
                 <div id="sr-building-table" style="overflow-x:auto; max-height:520px; overflow-y:auto;"></div>
             </div>
 

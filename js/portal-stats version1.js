@@ -448,19 +448,19 @@ function _srUpdateExcludeBanner() {
  * @returns {Array}
  */
 export function srApplyFilter(normBuildings, filter = {}) {
-    // 배열/단일값 모두 지원하는 매칭 헬퍼
-    const match = (filterVal, itemVal) => {
-        if (!filterVal || (Array.isArray(filterVal) && filterVal.length === 0)) return true;
-        return Array.isArray(filterVal) ? filterVal.includes(itemVal) : filterVal === itemVal;
-    };
-
     return normBuildings.filter(b => {
-        if (!match(filter.region,    b._region))    return false;
-        if (!match(filter.grade,     b._gradeAuto)) return false;
-        if (!match(filter.sizeBand,  b._sizeBand))  return false;
+        // 권역
+        if (filter.region && b._region !== filter.region) return false;
+        // 등급 (자동 계산 기준)
+        if (filter.grade && b._gradeAuto !== filter.grade) return false;
+        // 규모 구간
+        if (filter.sizeBand && b._sizeBand !== filter.sizeBand) return false;
+        // 공실 여부
         if (filter.vacFilter === 'yes' && b._activeVacs.length === 0) return false;
         if (filter.vacFilter === 'no'  && b._activeVacs.length  >  0) return false;
+        // PM사
         if (filter.pm && (b.pm || '') !== filter.pm) return false;
+        // 빌딩명 검색
         if (filter.search) {
             const q = filter.search.toLowerCase();
             const n = (b.name || '').toLowerCase();
@@ -662,151 +662,14 @@ window.srLib = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 공통: 복수 선택 멀티픽커 (MultiPicker)
-// 권역·등급·규모 필터를 단일 선택 → 복수 선택으로 지원
-// ═══════════════════════════════════════════════════════════════
-
-/** 멀티픽커 레지스트리: id → { values:Set, placeholder:string, onChange:fn } */
-const _srMultiReg = {};
-
-/**
- * 멀티픽커 HTML 생성 (체크박스 드롭다운)
- * @param {string}   id          고유 식별자 (예: 'srF-region')
- * @param {string}   placeholder 미선택 시 표시 텍스트 (예: '전체 권역')
- * @param {Array}    options     [[value, label], ...] 형식
- * @param {Function} onChangeFn  값 변경 시 호출할 콜백
- * @returns {string} HTML 문자열
- */
-function _srMultiPicker(id, placeholder, options, onChangeFn) {
-    if (!_srMultiReg[id]) _srMultiReg[id] = { values: new Set() };
-    const reg = _srMultiReg[id];
-    reg.placeholder = placeholder;
-    reg.onChange    = onChangeFn;
-
-    const vals  = reg.values;
-    const label = _srMultiBtnLabel(id);
-    const active = vals.size > 0;
-
-    const optHtml = options.map(([v, l]) => `
-        <label style="display:flex;align-items:center;gap:7px;padding:6px 12px;cursor:pointer;
-                       font-size:12px;white-space:nowrap;border-radius:5px;transition:background 0.1s;"
-               onmouseover="this.style.background='var(--bg-secondary)'"
-               onmouseout="this.style.background='transparent'"
-               onclick="event.stopPropagation()">
-          <input type="checkbox" value="${v}" ${vals.has(v)?'checked':''}
-                 onchange="window._srMultiToggle('${id}','${v}',this.checked)"
-                 style="accent-color:#1a73e8;cursor:pointer;width:13px;height:13px;flex-shrink:0;">
-          <span>${l}</span>
-        </label>`).join('');
-
-    return `
-    <div class="sr-multi-wrap" id="${id}-wrap"
-         style="position:relative;display:inline-block;flex-shrink:0;">
-      <button type="button"
-          onclick="event.stopPropagation();window._srMultiOpen('${id}')"
-          style="padding:5px 10px;border:1px solid ${active?'#93c5fd':'var(--border-color)'};
-                 border-radius:6px;background:${active?'#eff6ff':'var(--bg-primary)'};
-                 color:${active?'#1e40af':'var(--text-primary)'};
-                 font-size:12px;cursor:pointer;white-space:nowrap;min-width:80px;text-align:left;
-                 display:flex;align-items:center;justify-content:space-between;gap:6px;">
-        <span id="${id}-label">${label}</span>
-        <span style="opacity:0.45;font-size:9px;flex-shrink:0;">▾</span>
-      </button>
-      <div id="${id}-dropdown" class="sr-multi-dd"
-           style="display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:9999;
-                  background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;
-                  box-shadow:0 6px 20px rgba(0,0,0,0.15);padding:6px 4px;min-width:148px;"
-           onclick="event.stopPropagation()">
-        <div style="display:flex;justify-content:space-between;padding:4px 10px 6px;
-                    border-bottom:1px solid var(--border-color);margin-bottom:3px;">
-          <span style="font-size:10px;color:var(--text-muted);">${placeholder}</span>
-          <button type="button" onclick="window._srMultiClear('${id}')"
-              style="font-size:10px;color:#1a73e8;background:none;border:none;cursor:pointer;padding:0;">
-            전체해제
-          </button>
-        </div>
-        ${optHtml}
-      </div>
-    </div>`;
-}
-
-/** 버튼 레이블 텍스트 계산 */
-function _srMultiBtnLabel(id) {
-    const reg = _srMultiReg[id];
-    if (!reg || reg.values.size === 0) return reg?.placeholder || '';
-    const vals = [...reg.values];
-    if (vals.length === 1) return vals[0];
-    if (vals.length === 2) return vals.join(', ');
-    return `${vals[0]} 외 ${vals.length - 1}`;
-}
-
-/** 드롭다운 열기/닫기 토글 */
-window._srMultiOpen = function(id) {
-    document.querySelectorAll('.sr-multi-dd').forEach(dd => {
-        if (dd.id !== `${id}-dropdown`) dd.style.display = 'none';
-    });
-    const dd = document.getElementById(`${id}-dropdown`);
-    if (dd) dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
-};
-
-/** 체크박스 토글 */
-window._srMultiToggle = function(id, value, checked) {
-    const reg = _srMultiReg[id];
-    if (!reg) return;
-    if (checked) reg.values.add(value);
-    else         reg.values.delete(value);
-    _srMultiRefreshBtn(id);
-    if (reg.onChange) reg.onChange();
-};
-
-/** 전체 해제 */
-window._srMultiClear = function(id) {
-    const reg = _srMultiReg[id];
-    if (!reg) return;
-    reg.values.clear();
-    const dd = document.getElementById(`${id}-dropdown`);
-    if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-    _srMultiRefreshBtn(id);
-    if (reg.onChange) reg.onChange();
-};
-
-/** 버튼 텍스트 + 색상 갱신 */
-function _srMultiRefreshBtn(id) {
-    const reg   = _srMultiReg[id];
-    if (!reg) return;
-    const label = document.getElementById(`${id}-label`);
-    const btn   = label?.closest('button');
-    const active = reg.values.size > 0;
-    if (label) label.textContent = _srMultiBtnLabel(id);
-    if (btn) {
-        btn.style.borderColor  = active ? '#93c5fd' : 'var(--border-color)';
-        btn.style.background   = active ? '#eff6ff'  : 'var(--bg-primary)';
-        btn.style.color        = active ? '#1e40af'  : 'var(--text-primary)';
-    }
-}
-
-/** 멀티픽커 현재 선택 값 배열 반환 */
-window._srGetMultiValues = function(id) {
-    return _srMultiReg[id] ? [..._srMultiReg[id].values] : [];
-};
-
-/** 클릭 외부 시 모든 드롭다운 닫기 (1회 등록) */
-if (!window._srMultiClickRegistered) {
-    window._srMultiClickRegistered = true;
-    document.addEventListener('click', () => {
-        document.querySelectorAll('.sr-multi-dd').forEach(dd => { dd.style.display = 'none'; });
-    });
-}
-
-// ═══════════════════════════════════════════════════════════════
 // ISSUE-2: TAB1 — 공실 현황 대시보드
 // ═══════════════════════════════════════════════════════════════
 
 // ── 공통 필터 UI 상태 (모든 탭이 공유) ──
 const _srUI = {
-    region:    [],   // 복수 선택 배열
-    grade:     [],
-    sizeBand:  [],
+    region:    '',
+    grade:     '',
+    sizeBand:  '',
     dateFrom:  '',
     dateTo:    '',
     sortCol:   'vacancyPy',
@@ -824,20 +687,29 @@ function _srRenderFilterBar(containerId, onChangeCb) {
     const allDates = srGetAllPublishDates(window.state?.allBuildings || []);
     const dateOpts = allDates.map(d => `<option value="${d}">${d}</option>`).join('');
 
-    const regionPicker = _srMultiPicker('srF-region', '전체 권역',
-        SR_REGIONS.map(r => [r, r]), window._srOnFilterChange);
-    const gradePicker = _srMultiPicker('srF-grade', '전체 등급',
-        SR_GRADES.map(g => [g, g]), window._srOnFilterChange);
-    const sizePicker = _srMultiPicker('srF-size', '전체 규모', [
-        ['대형','대형 (2만평↑)'],['중대형','중대형 (1만~2만)'],
-        ['중형','중형 (5천~1만)'],['소형','소형 (5천↓)'],
-    ], window._srOnFilterChange);
-
     wrap.innerHTML = `
     <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 0 4px;">
-      ${regionPicker}
-      ${gradePicker}
-      ${sizePicker}
+      <select id="srF-region" onchange="_srOnFilterChange()"
+        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+        <option value="">전체 권역</option>
+        ${SR_REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('')}
+      </select>
+      <select id="srF-grade" onchange="_srOnFilterChange()"
+        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+        <option value="">전체 등급</option>
+        ${SR_GRADES.map(g=>`<option value="${g}">${g}</option>`).join('')}
+      </select>
+      <select id="srF-size" onchange="_srOnFilterChange()"
+        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+        <option value="">전체 규모</option>
+        <option value="대형">대형 (2만평↑)</option>
+        <option value="중대형">중대형 (1만~2만)</option>
+        <option value="중형">중형 (5천~1만)</option>
+        <option value="소형">소형 (5천↓)</option>
+      </select>
       <span style="font-size:12px; color:var(--text-muted); white-space:nowrap;">발행월</span>
       <select id="srF-from" onchange="_srOnFilterChange()"
         style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
@@ -859,34 +731,30 @@ function _srRenderFilterBar(containerId, onChangeCb) {
         style="margin-left:auto; font-size:11px; color:var(--text-muted); white-space:nowrap;"></span>
     </div>`;
 
-    // 날짜 상태 복원
+    // 현재 상태 복원
+    const rEl = document.getElementById('srF-region');
+    const gEl = document.getElementById('srF-grade');
+    const sEl = document.getElementById('srF-size');
     const fEl = document.getElementById('srF-from');
     const tEl = document.getElementById('srF-to');
+    if (rEl) rEl.value = _srUI.region;
+    if (gEl) gEl.value = _srUI.grade;
+    if (sEl) sEl.value = _srUI.sizeBand;
     if (fEl) fEl.value = _srUI.dateFrom;
     if (tEl) tEl.value = _srUI.dateTo;
 }
 
 window._srOnFilterChange = function() {
-    _srUI.region   = window._srGetMultiValues('srF-region');
-    _srUI.grade    = window._srGetMultiValues('srF-grade');
-    _srUI.sizeBand = window._srGetMultiValues('srF-size');
-    _srUI.dateFrom = document.getElementById('srF-from')?.value || '';
-    _srUI.dateTo   = document.getElementById('srF-to')?.value   || '';
+    _srUI.region   = document.getElementById('srF-region')?.value || '';
+    _srUI.grade    = document.getElementById('srF-grade')?.value  || '';
+    _srUI.sizeBand = document.getElementById('srF-size')?.value   || '';
+    _srUI.dateFrom = document.getElementById('srF-from')?.value   || '';
+    _srUI.dateTo   = document.getElementById('srF-to')?.value     || '';
     window._srRenderVacancy();
 };
 
 window._srResetFilter = function() {
-    ['srF-region','srF-grade','srF-size'].forEach(id => {
-        if (_srMultiReg[id]) { _srMultiReg[id].values.clear(); _srMultiRefreshBtn(id); }
-        const dd = document.getElementById(`${id}-dropdown`);
-        if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-    });
-    _srUI.region = _srUI.grade = _srUI.sizeBand = [];
-    _srUI.dateFrom = _srUI.dateTo = '';
-    const fEl = document.getElementById('srF-from');
-    const tEl = document.getElementById('srF-to');
-    if (fEl) fEl.value = '';
-    if (tEl) tEl.value = '';
+    _srUI.region = _srUI.grade = _srUI.sizeBand = _srUI.dateFrom = _srUI.dateTo = '';
     window._srRenderVacancy();
 };
 
@@ -1240,7 +1108,7 @@ function _srRenderRegionBars(filtered) {
 window._srRenderVacancy = function() {
     const normBuildings = _srGetFilteredNormBuildings();
     const filtered = srApplyFilter(normBuildings, {
-        region:   _srUI.region,    // 배열 or 빈배열
+        region:   _srUI.region,
         grade:    _srUI.grade,
         sizeBand: _srUI.sizeBand,
     });
@@ -1259,9 +1127,9 @@ window._srRenderVacancy = function() {
     const summary = document.getElementById('sr-filter-summary');
     if (summary) {
         const parts = [];
-        if (_srUI.region.length)   parts.push(_srUI.region.join(','));
-        if (_srUI.grade.length)    parts.push(_srUI.grade.join(',') + '등급');
-        if (_srUI.sizeBand.length) parts.push(_srUI.sizeBand.join(','));
+        if (_srUI.region)   parts.push(_srUI.region);
+        if (_srUI.grade)    parts.push(_srUI.grade + '등급');
+        if (_srUI.sizeBand) parts.push(_srUI.sizeBand);
         if (_srUI.dateFrom || _srUI.dateTo)
             parts.push(`${_srUI.dateFrom||'~'}~${_srUI.dateTo||'현재'}`);
         summary.textContent = parts.length ? `필터: ${parts.join(' · ')} (${filtered.length}개 빌딩)` :
@@ -1282,10 +1150,10 @@ window._srRenderVacancy = function() {
 // 3-A. 필터 바 (TAB2 전용 — TAB1과 독립적으로 관리)
 // ─────────────────────────────────────────────────────────────
 const _srRentUI = {
-    region:    [],   // 복수 선택 배열
-    grade:     [],
-    sizeBand:  [],
-    priceFrom: '',
+    region:    '',
+    grade:     '',
+    sizeBand:  '',
+    priceFrom: '',   // effectiveDate 기준
     priceTo:   '',
 };
 
@@ -1296,20 +1164,29 @@ function _srRentFilterBar() {
     const allDates = srGetAllEffectiveDates(window.state?.allBuildings || []);
     const opts = allDates.map(d => `<option value="${d}">${d}</option>`).join('');
 
-    const rPicker = _srMultiPicker('srR-region', '전체 권역',
-        SR_REGIONS.map(r=>[r,r]), window._srRentFilterChange);
-    const gPicker = _srMultiPicker('srR-grade', '전체 등급',
-        SR_GRADES.map(g=>[g,g]), window._srRentFilterChange);
-    const sPicker = _srMultiPicker('srR-size', '전체 규모', [
-        ['대형','대형 (2만평↑)'],['중대형','중대형 (1만~2만)'],
-        ['중형','중형 (5천~1만)'],['소형','소형 (5천↓)'],
-    ], window._srRentFilterChange);
-
     wrap.innerHTML = `
     <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 0 4px;">
-      ${rPicker}
-      ${gPicker}
-      ${sPicker}
+      <select id="srR-region" onchange="_srRentFilterChange()"
+        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+        <option value="">전체 권역</option>
+        ${SR_REGIONS.map(r=>`<option value="${r}">${r}</option>`).join('')}
+      </select>
+      <select id="srR-grade" onchange="_srRentFilterChange()"
+        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+        <option value="">전체 등급</option>
+        ${SR_GRADES.map(g=>`<option value="${g}">${g}</option>`).join('')}
+      </select>
+      <select id="srR-size" onchange="_srRentFilterChange()"
+        style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
+               background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
+        <option value="">전체 규모</option>
+        <option value="대형">대형 (2만평↑)</option>
+        <option value="중대형">중대형 (1만~2만)</option>
+        <option value="중형">중형 (5천~1만)</option>
+        <option value="소형">소형 (5천↓)</option>
+      </select>
       <span style="font-size:12px; color:var(--text-muted); white-space:nowrap;">기준가 적용일</span>
       <select id="srR-from" onchange="_srRentFilterChange()"
         style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
@@ -1330,34 +1207,30 @@ function _srRentFilterBar() {
       <span id="sr-rent-filter-summary" style="margin-left:auto; font-size:11px; color:var(--text-muted);"></span>
     </div>`;
 
-    // 날짜 상태 복원
-    const fR = document.getElementById('srR-from');
-    const tR = document.getElementById('srR-to');
-    if (fR) fR.value = _srRentUI.priceFrom;
-    if (tR) tR.value = _srRentUI.priceTo;
+    // 현재 상태 복원
+    ['region','grade','size','from','to'].forEach(k => {
+        const el = document.getElementById(`srR-${k}`);
+        if (!el) return;
+        if (k === 'region')   el.value = _srRentUI.region;
+        else if (k === 'grade') el.value = _srRentUI.grade;
+        else if (k === 'size')  el.value = _srRentUI.sizeBand;
+        else if (k === 'from')  el.value = _srRentUI.priceFrom;
+        else if (k === 'to')    el.value = _srRentUI.priceTo;
+    });
 }
 
 window._srRentFilterChange = function() {
-    _srRentUI.region    = window._srGetMultiValues('srR-region');
-    _srRentUI.grade     = window._srGetMultiValues('srR-grade');
-    _srRentUI.sizeBand  = window._srGetMultiValues('srR-size');
-    _srRentUI.priceFrom = document.getElementById('srR-from')?.value || '';
-    _srRentUI.priceTo   = document.getElementById('srR-to')?.value   || '';
+    _srRentUI.region    = document.getElementById('srR-region')?.value || '';
+    _srRentUI.grade     = document.getElementById('srR-grade')?.value  || '';
+    _srRentUI.sizeBand  = document.getElementById('srR-size')?.value   || '';
+    _srRentUI.priceFrom = document.getElementById('srR-from')?.value   || '';
+    _srRentUI.priceTo   = document.getElementById('srR-to')?.value     || '';
     window._srRenderRent();
 };
 
 window._srRentFilterReset = function() {
-    ['srR-region','srR-grade','srR-size'].forEach(id => {
-        if (_srMultiReg[id]) { _srMultiReg[id].values.clear(); _srMultiRefreshBtn(id); }
-        const dd = document.getElementById(`${id}-dropdown`);
-        if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-    });
-    _srRentUI.region = _srRentUI.grade = _srRentUI.sizeBand = [];
+    _srRentUI.region = _srRentUI.grade = _srRentUI.sizeBand =
     _srRentUI.priceFrom = _srRentUI.priceTo = '';
-    const fR = document.getElementById('srR-from');
-    const tR = document.getElementById('srR-to');
-    if (fR) fR.value = '';
-    if (tR) tR.value = '';
     window._srRenderRent();
 };
 
@@ -1822,9 +1695,9 @@ window._srRenderRent = function() {
     const summary = document.getElementById('sr-rent-filter-summary');
     if (summary) {
         const parts = [];
-        if (_srRentUI.region.length)   parts.push(_srRentUI.region.join(','));
-        if (_srRentUI.grade.length)    parts.push(_srRentUI.grade.join(',') + '등급');
-        if (_srRentUI.sizeBand.length) parts.push(_srRentUI.sizeBand.join(','));
+        if (_srRentUI.region)    parts.push(_srRentUI.region);
+        if (_srRentUI.grade)     parts.push(_srRentUI.grade + '등급');
+        if (_srRentUI.sizeBand)  parts.push(_srRentUI.sizeBand);
         if (_srRentUI.priceFrom || _srRentUI.priceTo)
             parts.push(`${_srRentUI.priceFrom||''}~${_srRentUI.priceTo||'현재'}`);
         summary.textContent = parts.length
@@ -2062,11 +1935,11 @@ window._srRenderBuilding = function() {
 // 4-F. TAB4: 검색 테이블 필터 상태
 // ─────────────────────────────────────────────────────────────
 const _srTableUI = {
-    region:    [],   // 복수 선택 배열
-    grade:     [],
-    sizeBand:  [],
+    region:    '',
+    grade:     '',
+    sizeBand:  '',
     vacFilter: '',
-    pm:        '',   // 히든 처리 (데이터 미완성)
+    pm:        '',
     search:    '',
     sortCol:   'grossFloorPy',
     sortDir:   'desc',
@@ -2089,27 +1962,20 @@ function _srPopulatePMSelect() {
 }
 
 window._srTableFilterChange = function() {
-    _srTableUI.region    = window._srGetMultiValues('srT-region');
-    _srTableUI.grade     = window._srGetMultiValues('srT-grade');
-    _srTableUI.sizeBand  = window._srGetMultiValues('srT-size');
+    _srTableUI.region    = document.getElementById('srT-region')?.value  || '';
+    _srTableUI.grade     = document.getElementById('srT-grade')?.value   || '';
+    _srTableUI.sizeBand  = document.getElementById('srT-size')?.value    || '';
     _srTableUI.vacFilter = document.getElementById('srT-vacancy')?.value || '';
-    _srTableUI.pm        = '';   // 히든 처리 중
+    _srTableUI.pm        = document.getElementById('srT-pm')?.value      || '';
     _srTableUI.search    = document.getElementById('srT-search')?.value  || '';
     _srRenderTableBody();
 };
 
 window._srTableFilterReset = function() {
-    ['srT-region','srT-grade','srT-size'].forEach(id => {
-        if (_srMultiReg[id]) { _srMultiReg[id].values.clear(); _srMultiRefreshBtn(id); }
-        const dd = document.getElementById(`${id}-dropdown`);
-        if (dd) dd.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-    });
-    _srTableUI.region = _srTableUI.grade = _srTableUI.sizeBand = [];
+    _srTableUI.region = _srTableUI.grade = _srTableUI.sizeBand =
     _srTableUI.vacFilter = _srTableUI.pm = _srTableUI.search = '';
-    const vacEl    = document.getElementById('srT-vacancy');
-    const searchEl = document.getElementById('srT-search');
-    if (vacEl)    vacEl.value    = '';
-    if (searchEl) searchEl.value = '';
+    ['srT-region','srT-grade','srT-size','srT-vacancy','srT-pm','srT-search']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     _srRenderTableBody();
 };
 
@@ -2263,59 +2129,17 @@ function _srRenderTableBody() {
 // ─────────────────────────────────────────────────────────────
 // 4-I. TAB4 메인 렌더 (탭 진입 시)
 // ─────────────────────────────────────────────────────────────
-// ─────────────────────────────────────────────────────────────
-// 4-I. TAB4 필터 행 동적 렌더
-// ─────────────────────────────────────────────────────────────
-function _srRenderTableFilterRow() {
-    const wrap = document.getElementById('sr-table-filter-row');
-    if (!wrap) return;
-
-    const regionPicker = _srMultiPicker('srT-region', '전체 권역',
-        SR_REGIONS.map(r => [r, r]), window._srTableFilterChange);
-    const gradePicker = _srMultiPicker('srT-grade', '전체 등급',
-        SR_GRADES.map(g => [g, g]), window._srTableFilterChange);
-    const sizePicker = _srMultiPicker('srT-size', '전체 규모', [
-        ['대형','대형(2만평↑)'], ['중대형','중대형(1만~2만)'],
-        ['중형','중형(5천~1만)'], ['소형','소형(5천↓)'],
-    ], window._srTableFilterChange);
-
-    wrap.innerHTML = `
-        ${regionPicker}
-        ${gradePicker}
-        ${sizePicker}
-        <select id="srT-vacancy" onchange="_srTableFilterChange()"
-            style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                   background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;">
-            <option value="">공실 전체</option>
-            <option value="yes">공실 있음</option>
-            <option value="no">공실 없음</option>
-        </select>
-        <!-- srT-pm: 히든 (데이터 미완성) -->
-        <input id="srT-search" oninput="_srTableFilterChange()" placeholder="빌딩명 검색..."
-            style="padding:5px 10px; border:1px solid var(--border-color); border-radius:6px;
-                   background:var(--bg-primary); color:var(--text-primary); font-size:12px; min-width:140px;">
-        <button onclick="_srTableFilterReset()"
-            style="padding:5px 12px; border:1px solid var(--border-color); border-radius:6px;
-                   background:var(--bg-primary); color:var(--text-muted); font-size:12px; cursor:pointer;">
-            ↺ 초기화
-        </button>
-        <button onclick="window._srDownloadExcel && window._srDownloadExcel()"
-            style="padding:5px 12px; border:none; border-radius:6px;
-                   background:#16a34a; color:#fff; font-size:12px; cursor:pointer; font-weight:600;">
-            📥 Excel 다운로드
-        </button>
-        <span id="srT-count" style="margin-left:auto; font-size:11px; color:var(--text-muted); white-space:nowrap;"></span>`;
-
-    // 상태 복원 (재진입 시)
-    const vacEl    = document.getElementById('srT-vacancy');
-    const searchEl = document.getElementById('srT-search');
-    if (vacEl)    vacEl.value    = _srTableUI.vacFilter;
-    if (searchEl) searchEl.value = _srTableUI.search;
-}
-
 window._srRenderTable = function() {
-    // 필터 행 동적 렌더
-    _srRenderTableFilterRow();
+    _srPopulatePMSelect();
+    // 현재 UI 상태 복원
+    const ids = ['srT-region','srT-grade','srT-size','srT-vacancy','srT-pm'];
+    const keys = ['region','grade','sizeBand','vacFilter','pm'];
+    ids.forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) el.value = _srTableUI[keys[i]];
+    });
+    const searchEl = document.getElementById('srT-search');
+    if (searchEl) searchEl.value = _srTableUI.search;
     _srRenderTableBody();
 };
 
@@ -2567,13 +2391,12 @@ window._srDownloadExcel = function() {
     }
 
     // 현재 필터 옵션 수집 (파일명용)
-    const _pickFirst = v => Array.isArray(v) ? (v[0] || '') : (v || '');
     const opts = {
-        region:    _pickFirst(_srTableUI.region)   || _pickFirst(_srUI.region)   || '',
-        grade:     _pickFirst(_srTableUI.grade)    || _pickFirst(_srUI.grade)    || '',
-        sizeBand:  _pickFirst(_srTableUI.sizeBand) || _pickFirst(_srUI.sizeBand) || '',
-        dateFrom:  _srUI.dateFrom || '',
-        dateTo:    _srUI.dateTo   || '',
+        region:    _srTableUI.region    || _srUI.region    || '',
+        grade:     _srTableUI.grade     || _srUI.grade     || '',
+        sizeBand:  _srTableUI.sizeBand  || _srUI.sizeBand  || '',
+        dateFrom:  _srUI.dateFrom       || '',
+        dateTo:    _srUI.dateTo         || '',
     };
 
     // 날짜 범위 (공실용 / 기준가용)
