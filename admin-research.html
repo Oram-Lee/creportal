@@ -1173,6 +1173,12 @@ function detectFieldDiff(excelRow, portalBuilding) {
     const diff = {};
     let warnCount = 0;
 
+    // BUG FIX: parseFloat() || null 패턴은 0을 null로 처리함 → NaN만 null로 처리
+    const _toNum = v => {
+        const n = parseFloat(String(v ?? '').replace(/,/g, ''));
+        return isNaN(n) ? null : n;
+    };
+
     COMPARE_FIELDS.forEach(f => {
         const excelRaw  = excelRow[f.excel];
         const portalRaw = portalBuilding[f.portal];
@@ -1182,10 +1188,10 @@ function detectFieldDiff(excelRow, portalBuilding) {
 
         const excelVal  = f.type === 'exact'
             ? String(excelRaw  ?? '').trim()
-            : parseFloat(String(excelRaw  ?? '').replace(/,/g,'')) || null;
+            : _toNum(excelRaw);
         const portalVal = f.type === 'exact'
             ? String(portalRaw ?? '').trim()
-            : parseFloat(String(portalRaw ?? '').replace(/,/g,'')) || null;
+            : _toNum(portalRaw);
 
         let status = 'ok';
         let diffPct = null;
@@ -1203,11 +1209,15 @@ function detectFieldDiff(excelRow, portalBuilding) {
                 status = 'warn'; // 포털에 없음
             }
         } else if (f.type === 'abs') { // 전용률 ±3%p
+            // BUG FIX: 전용률이 decimal(0~1) 또는 percent(0~100) 혼용 저장될 수 있음
+            // → 비교 전 반드시 퍼센트(0~100) 단위로 정규화
             if (excelVal != null) {
+                const excelPct = excelVal <= 1 ? excelVal * 100 : excelVal;
                 if (portalVal == null) {
                     status = 'warn'; // 포털에 없음
                 } else {
-                    const absDiff = Math.abs(excelVal - portalVal);
+                    const portalPct = portalVal <= 1 ? portalVal * 100 : portalVal;
+                    const absDiff = Math.abs(excelPct - portalPct);
                     if (absDiff > f.tolerance) { status = 'warn'; diffPct = absDiff; }
                 }
             }
