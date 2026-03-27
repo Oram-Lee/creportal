@@ -1073,12 +1073,22 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
 <script type="module">
 
 // ─────────────────────────────────────────────────────────────
+// ★ bfcache 복원 시 강제 리로드 (분석 완료 상태로 복원되는 현상 방지)
+window.addEventListener('pageshow', e => {
+    if (e.persisted) location.reload();
+});
+
 // 0. 전역 상태
 // ─────────────────────────────────────────────────────────────
 let _portalBuildings = [];   // Firebase buildings 배열
 let _matchResults    = [];   // 최종 매칭 결과
 let _currentTab      = 'all';
 let _pendingAssignRow = null; // 수동 지정 대기 행
+
+// 초기 화면 상태 보장 (DOM이 올바른 초기 상태인지 확인)
+document.getElementById('upload-section').style.display = '';
+document.getElementById('progress-section').style.display = 'none';
+document.getElementById('dashboard-section').style.display = 'none';
 
 // ─────────────────────────────────────────────────────────────
 // 1. 유틸 — Dice bigram (portal-merge.js와 동일 로직 인라인)
