@@ -274,12 +274,6 @@ window.applyFilter = applyFilter;
 window.clearFilter = clearFilter;
 window.resetAllFilters = resetAllFilters;
 
-// 🔬 R5: 리서치 필터 (실제 구현은 portal.html 인라인 스크립트에 있음)
-// — portal-main.js에서는 전역 변수만 초기화하고 래핑은 DOMContentLoaded 후 portal.html이 처리
-window._researchFilterActive = false;
-// toggleResearchFilter는 portal.html 인라인 스크립트에서 정의됨
-// (portal-map.js보다 나중에 실행되어야 하므로 portal.html 말미에 위치)
-
 // 🆕 다각형 검색 함수 전역 노출
 window.toggleDrawingTools = toggleDrawingTools;
 window.setDrawingMode = setDrawingMode;

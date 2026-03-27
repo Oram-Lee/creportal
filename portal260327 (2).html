@@ -48,7 +48,6 @@
                 <a href="leasing-guide.html" class="nav-item"><span class="nav-icon">📄</span> 임대안내문</a>
                 <div class="nav-item"><span class="nav-icon">📊</span> 시계열</div>
                 <a href="admin-leasing.html" class="nav-item"><span class="nav-icon">⚙️</span> OCR관리</a>
-                <a href="admin-research.html" class="nav-item"><span class="nav-icon">🔬</span> 리서치관리</a>
                 <div class="nav-item" onclick="openDuplicateManager()" title="동일주소 빌딩 통합 관리"><span class="nav-icon">🔗</span> 중복관리</div>
                 <div class="nav-item" onclick="openVacancyContamModal()" title="이관된 공실의 buildingName 오염 진단·정정"><span class="nav-icon">🧹</span> 오염정정</div>
                 <div class="nav-item" onclick="openStatResearchModal()" title="권역별 공실·임대가 통계 및 리서치 분석" style="display:none;"><span class="nav-icon">📈</span> 통계/리서치</div>
@@ -172,10 +171,6 @@
                 <input type="checkbox" id="hasVacancyCheck" checked onchange="toggleVacancyFilter(this.checked)">
                 <span>공실 있는 빌딩만</span>
             </label>
-            <label class="vacancy-filter-check" style="background:#eff6ff; border:1px solid #bfdbfe; color:#1a73e8;">
-                <input type="checkbox" id="researchFilterCheck" onchange="toggleResearchFilter(this.checked)" style="accent-color:#1a73e8;">
-                <span>🔬 리서치 대상</span>
-            </label>
             <span class="filter-reset" onclick="resetAllFilters()">필터 초기화</span>
         </div>
 
@@ -215,12 +210,7 @@
                             <option value="area_desc">면적 ↓</option>
                             <option value="area_asc">면적 ↑</option>
                             <option value="name_asc">이름순</option>
-                            <option value="research">🔬 리서치 우선</option>
                         </select>
-                        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;user-select:none;white-space:nowrap;">
-                            <input type="checkbox" id="listResearchFilter" onchange="toggleListResearchFilter(this.checked)" style="accent-color:#1a73e8;">
-                            <span>🔬 리서치만</span>
-                        </label>
                     </div>
                     <!-- ★ 관심영역 그룹 필터 (관심 탭에서만 표시) -->
                     <div id="starredGroupBar" style="display:none; padding:6px 12px; background:#fffbeb; border-bottom:1px solid #fde68a;">
@@ -6091,10 +6081,6 @@
             });
         }
         
-        // 🔬 R6: 리서치 필터
-        const _researchOnly = document.getElementById('listResearchFilter')?.checked || false;
-        if (_researchOnly) list = list.filter(b => b.isResearchTarget === true);
-
         // ★ 정렬 적용
         list.sort((a, b) => {
             // NEW 빌딩 항상 최상위
@@ -6103,12 +6089,7 @@
             // hidden 빌딩 하위
             if (a.status === 'hidden' && b.status !== 'hidden') return 1;
             if (a.status !== 'hidden' && b.status === 'hidden') return -1;
-            // 🔬 리서치 우선 정렬
-            if (sortBy === 'research') {
-                const d = (a.isResearchTarget ? 0 : 1) - (b.isResearchTarget ? 0 : 1);
-                if (d !== 0) return d;
-                return (parseFloat(b.grossFloorPy) || 0) - (parseFloat(a.grossFloorPy) || 0);
-            }
+            
             if (sortBy === 'area_desc') {
                 return (parseFloat(b.grossFloorPy) || 0) - (parseFloat(a.grossFloorPy) || 0) || (a.name || '').localeCompare(b.name || '');
             } else if (sortBy === 'area_asc') {
@@ -6553,325 +6534,6 @@
 
         // ── 전역 노출 (portal-main.js에서도 호출 가능하도록) ──
         window.applyBuildingUpdateFromGuide = applyBuildingUpdate;
-    })();
-    </script>
-    <!-- ═══ R5/R6/R7: 리서치 필터·마커·배지·상세 패널 ═══════════════ -->
-    <script>
-    (function() {
-        // ─── 공통 상태 ───────────────────────────────────────────────
-        window._researchFilterActive = false;
-
-        // ─── R5: 지도 필터 토글 ──────────────────────────────────────
-        // portal-main.js에서도 노출됨 — 여기서 실제 구현
-        window.toggleResearchFilter = function(checked) {
-            window._researchFilterActive = !!checked;
-
-            // 리스트 체크박스 동기화
-            const listCb = document.getElementById('listResearchFilter');
-            if (listCb && listCb.checked !== checked) listCb.checked = checked;
-
-            // 필터바 체크박스 동기화
-            const topCb = document.getElementById('researchFilterCheck');
-            if (topCb && topCb.checked !== checked) topCb.checked = checked;
-
-            // 버튼 스타일 업데이트
-            const label = document.querySelector('label:has(#researchFilterCheck)');
-            if (label) {
-                label.style.background = checked ? '#1a73e8' : '#eff6ff';
-                label.style.color      = checked ? '#fff'     : '#1a73e8';
-            }
-
-            // 지도 마커 갱신
-            if (typeof window.updateMapMarkers === 'function') window.updateMapMarkers();
-            // 리스트 갱신
-            if (typeof window.applyListSort === 'function') window.applyListSort();
-        };
-
-        // ─── R6: 리스트 토글 (지도와 동기화) ─────────────────────────
-        window.toggleListResearchFilter = function(checked) {
-            window.toggleResearchFilter(checked);
-        };
-
-        // ─── R5: updateMapMarkers 후처리 — 리서치 배지 오버레이 ──────
-        // portal-map.js의 updateMapMarkers가 완료된 후 배지를 추가한다.
-        // window.updateMapMarkers를 래핑해서 배지 레이어를 붙임
-        let _researchBadgeOverlays = [];
-
-        function _clearResearchBadges() {
-            _researchBadgeOverlays.forEach(o => { try { o.setMap(null); } catch(e){} });
-            _researchBadgeOverlays = [];
-        }
-
-        function _attachResearchBadges() {
-            _clearResearchBadges();
-            if (!window.kakao?.maps?.CustomOverlay) return;
-            const buildings = window.state?.filteredBuildings || [];
-            buildings.forEach(b => {
-                if (!b.isResearchTarget) return;
-                const lat = b.lat ?? b.coordinates?.lat;
-                const lng = b.lng ?? b.coordinates?.lng;
-                if (!lat || !lng) return;
-                const pos = new kakao.maps.LatLng(lat, lng);
-                const badge = new kakao.maps.CustomOverlay({
-                    position: pos,
-                    content: '<div style="background:#1a73e8;color:#fff;font-size:8px;font-weight:800;' +
-                             'border-radius:3px;padding:1px 4px;margin-top:-34px;margin-left:10px;' +
-                             'pointer-events:none;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.3);' +
-                             'letter-spacing:-0.2px;line-height:1.4;">🔬</div>',
-                    yAnchor: 0,
-                    zIndex: 6,
-                });
-                badge.setMap(window.state.kakaoMap);
-                _researchBadgeOverlays.push(badge);
-            });
-        }
-
-        // updateMapMarkers 래핑 (portal-map.js 로드 후 실행)
-        function _wrapUpdateMapMarkers() {
-            if (!window.updateMapMarkers) return;
-            if (window.updateMapMarkers._researchWrapped) return;
-            const _orig = window.updateMapMarkers;
-            window.updateMapMarkers = function(...args) {
-                // 리서치 필터 적용: state.filteredBuildings를 임시 교체
-                let _tempFiltered = null;
-                if (window._researchFilterActive && window.state) {
-                    _tempFiltered = window.state.filteredBuildings;
-                    window.state.filteredBuildings = _tempFiltered.filter(b => b.isResearchTarget === true);
-                }
-                const result = _orig.apply(this, args);
-                if (_tempFiltered !== null) {
-                    window.state.filteredBuildings = _tempFiltered;
-                }
-                // 배지는 Promise 결과를 기다린 뒤 붙임
-                const attach = () => setTimeout(_attachResearchBadges, 150);
-                if (result && typeof result.then === 'function') result.then(attach);
-                else attach();
-                return result;
-            };
-            window.updateMapMarkers._researchWrapped = true;
-        }
-
-        // 데이터 로드 완료 후 래핑 시도 (최대 5초 대기)
-        let _wrapAttempts = 0;
-        const _wrapInterval = setInterval(() => {
-            if (window.updateMapMarkers && !window.updateMapMarkers._researchWrapped) {
-                _wrapUpdateMapMarkers();
-                clearInterval(_wrapInterval);
-            } else if (++_wrapAttempts > 50) {
-                clearInterval(_wrapInterval);
-            }
-        }, 100);
-
-        // ─── R6: 빌딩 카드에 리서치 배지 인젝션 ─────────────────────
-        // renderBuildingList 호출 후 DOM에 배지를 삽입
-        // portal-ui.js renderBuildingList 완료 이벤트를 감지할 수 없으므로
-        // MutationObserver로 buildingList 변경을 감시
-        function _injectResearchBadges() {
-            const items = document.querySelectorAll('[data-building-id]');
-            items.forEach(el => {
-                if (el.dataset.researchBadged) return;
-                const bId = el.dataset.buildingId;
-                const b   = (window.state?.allBuildings || []).find(x => x.id === bId);
-                if (!b?.isResearchTarget) return;
-                // 빌딩명 요소 찾기 (portal-ui.js가 생성하는 구조)
-                const nameEl = el.querySelector('h3,h4,.building-name,[class*="name"]');
-                if (!nameEl) return;
-                if (nameEl.querySelector('.research-badge-list')) return;
-                const badge = document.createElement('span');
-                badge.className = 'research-badge-list';
-                badge.textContent = '🔬 리서치';
-                badge.style.cssText =
-                    'background:#eff6ff;color:#1a73e8;border:1px solid #bfdbfe;' +
-                    'border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;' +
-                    'vertical-align:middle;margin-left:5px;white-space:nowrap;';
-                nameEl.appendChild(badge);
-                el.dataset.researchBadged = '1';
-            });
-        }
-
-        // MutationObserver로 buildingList 감시
-        const _listObserver = new MutationObserver(() => {
-            clearTimeout(_listObserver._t);
-            _listObserver._t = setTimeout(_injectResearchBadges, 80);
-        });
-        document.addEventListener('DOMContentLoaded', () => {
-            const listEl = document.getElementById('buildingList');
-            if (listEl) _listObserver.observe(listEl, { childList: true, subtree: true });
-            const tableEl = document.getElementById('tableBody') || document.getElementById('buildingTable');
-            if (tableEl) _listObserver.observe(tableEl, { childList: true, subtree: true });
-        });
-
-        // ─── R7: 상세 패널 — 리서치 섹션 + 배지 ─────────────────────
-        // openDetail 완료 후 sectionInfo에 리서치 섹션 추가
-        // detailTitle에 배지 추가
-        function _formatTs(ts) {
-            if (!ts) return '-';
-            try { return new Date(ts).toLocaleDateString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit' }); }
-            catch(e) { return String(ts).slice(0,10); }
-        }
-
-        function _fieldLabel(f) {
-            return { grossFloorPy:'연면적(평)', grade:'등급', region:'권역',
-                     subRegion:'세부권역', typicalFloorPy:'기준층면적',
-                     exclusiveRate:'전용률', completionYear:'준공년도' }[f] || f;
-        }
-
-        function _renderResearchSection(building) {
-            if (!building.isResearchTarget && !building.researchMatchStatus) return;
-            const diff   = building.researchFieldDiff || {};
-            const warns  = Object.entries(diff).filter(([,v]) => v?.status === 'warn');
-            const status = building.researchMatchStatus || 'unknown';
-            const statusMap = { matched:'✅ 매칭됨', mismatch:'⚠️ 불일치',
-                                new:'🆕 신규 등록', unmatched:'❓ 미매칭', unknown:'—' };
-            const statusLabel = statusMap[status] || status;
-
-            const warnTable = warns.length > 0 ? `
-                <div style="font-size:12px;font-weight:600;color:#d97706;margin:10px 0 6px;">
-                    ⚠️ 불일치 필드 ${warns.length}개
-                </div>
-                <table style="width:100%;font-size:11px;border-collapse:collapse;">
-                    <thead>
-                        <tr style="background:#dbeafe;color:#1e40af;">
-                            <th style="padding:4px 8px;text-align:left;">필드</th>
-                            <th style="padding:4px 8px;text-align:right;">엑셀값</th>
-                            <th style="padding:4px 8px;text-align:right;">포털값</th>
-                            <th style="padding:4px 8px;text-align:right;">차이</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${warns.map(([,v]) => `
-                        <tr style="border-bottom:1px solid #e2e8f0;">
-                            <td style="padding:4px 8px;">${_fieldLabel(v.label || '')}</td>
-                            <td style="padding:4px 8px;text-align:right;color:#1a73e8;">${v.excel ?? '-'}</td>
-                            <td style="padding:4px 8px;text-align:right;color:#64748b;">${v.portal ?? '-'}</td>
-                            <td style="padding:4px 8px;text-align:right;color:#d97706;">
-                                ${v.diffPct != null ? v.diffPct + '%' : '불일치'}
-                            </td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-                <div style="margin-top:8px;text-align:right;">
-                    <button onclick="window.open('admin-research.html','_blank')"
-                        style="padding:4px 12px;background:#1a73e8;color:#fff;border:none;
-                               border-radius:5px;cursor:pointer;font-size:11px;">
-                        🔬 리서치 관리 페이지에서 수정
-                    </button>
-                </div>` : `<div style="font-size:12px;color:#16a34a;margin-top:8px;">✅ 엑셀 데이터와 일치</div>`;
-
-            return `
-            <div id="researchInfoSection" style="margin-top:16px;padding:14px;background:#f0f7ff;
-                     border:1px solid #bfdbfe;border-radius:10px;">
-                <div style="font-size:13px;font-weight:700;color:#1e40af;margin-bottom:10px;">
-                    🔬 리서치 대상 빌딩
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:4px;">
-                    <div style="font-size:12px;">
-                        <span style="color:#64748b;">매칭 상태:</span>
-                        <strong style="margin-left:4px;">${statusLabel}</strong>
-                    </div>
-                    <div style="font-size:12px;">
-                        <span style="color:#64748b;">엑셀 ID:</span>
-                        <strong style="margin-left:4px;">${building.rawResearchId ?? '-'}</strong>
-                    </div>
-                    <div style="font-size:12px;">
-                        <span style="color:#64748b;">세부권역:</span>
-                        <strong style="margin-left:4px;">${building.subRegion ?? '-'}</strong>
-                    </div>
-                    <div style="font-size:12px;">
-                        <span style="color:#64748b;">동기화:</span>
-                        <strong style="margin-left:4px;">${_formatTs(building.researchSyncedAt)}</strong>
-                    </div>
-                </div>
-                ${warnTable}
-            </div>`;
-        }
-
-        // openDetail 완료 시 후처리 (detailTitle 배지 + sectionInfo 리서치 섹션)
-        function _onDetailOpen(building) {
-            if (!building) return;
-
-            // detailTitle 배지
-            const titleEl = document.getElementById('detailTitle');
-            if (titleEl) {
-                // 기존 배지 제거
-                const old = titleEl.querySelector('.research-badge-detail');
-                if (old) old.remove();
-                if (building.isResearchTarget) {
-                    const badge = document.createElement('span');
-                    badge.className = 'research-badge-detail';
-                    badge.textContent = '🔬 리서치';
-                    badge.style.cssText =
-                        'background:#1a73e8;color:#fff;font-size:11px;border-radius:5px;' +
-                        'padding:2px 8px;font-weight:700;vertical-align:middle;margin-left:8px;';
-                    titleEl.appendChild(badge);
-                }
-            }
-
-            // sectionInfo 리서치 섹션 삽입
-            const sectionEl = document.getElementById('sectionInfo');
-            if (sectionEl) {
-                // 기존 리서치 섹션 제거
-                const old = sectionEl.querySelector('#researchInfoSection');
-                if (old) old.remove();
-                if (building.isResearchTarget || building.researchMatchStatus) {
-                    const html = _renderResearchSection(building);
-                    if (html) sectionEl.insertAdjacentHTML('beforeend', html);
-                }
-            }
-        }
-
-        // openDetail 래핑 (portal-detail.js의 window.openDetail 감시)
-        let _detailWrapAttempts = 0;
-        const _detailWrapInterval = setInterval(() => {
-            if (window.openDetail && !window.openDetail._researchWrapped) {
-                const _origDetail = window.openDetail;
-                window.openDetail = function(buildingId, ...rest) {
-                    const result = _origDetail.apply(this, [buildingId, ...rest]);
-                    const attach = () => {
-                        const b = (window.state?.allBuildings || []).find(x => x.id === buildingId)
-                               || window.state?.selectedBuilding;
-                        _onDetailOpen(b);
-                    };
-                    if (result && typeof result.then === 'function') result.then(attach);
-                    else setTimeout(attach, 200);
-                    return result;
-                };
-                window.openDetail._researchWrapped = true;
-                clearInterval(_detailWrapInterval);
-            } else if (++_detailWrapAttempts > 100) clearInterval(_detailWrapInterval);
-        }, 100);
-
-        // renderInfoSection 래핑 (탭 전환 후 재렌더 시에도 섹션 유지)
-        let _infoWrapAttempts = 0;
-        const _infoWrapInterval = setInterval(() => {
-            if (window.renderInfoSection && !window.renderInfoSection._researchWrapped) {
-                const _origInfo = window.renderInfoSection;
-                window.renderInfoSection = function(...args) {
-                    const result = _origInfo.apply(this, args);
-                    setTimeout(() => {
-                        const b = window.state?.selectedBuilding;
-                        if (b) _onDetailOpen(b);
-                    }, 50);
-                    return result;
-                };
-                window.renderInfoSection._researchWrapped = true;
-                clearInterval(_infoWrapInterval);
-            } else if (++_infoWrapAttempts > 100) clearInterval(_infoWrapInterval);
-        }, 100);
-
-        // resetAllFilters 래핑 → 리서치 필터도 초기화
-        const _origReset = window.resetAllFilters;
-        window.resetAllFilters = function(...args) {
-            window._researchFilterActive = false;
-            const cb1 = document.getElementById('researchFilterCheck');
-            const cb2 = document.getElementById('listResearchFilter');
-            if (cb1) cb1.checked = false;
-            if (cb2) cb2.checked = false;
-            const label = document.querySelector('label:has(#researchFilterCheck)');
-            if (label) { label.style.background = '#eff6ff'; label.style.color = '#1a73e8'; }
-            if (typeof _origReset === 'function') return _origReset.apply(this, args);
-        };
-
     })();
     </script>
 </body>
