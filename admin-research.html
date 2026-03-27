@@ -1191,8 +1191,10 @@ function detectFieldDiff(excelRow, portalBuilding) {
         let diffPct = null;
 
         if (f.type === 'exact') {
-            if (excelVal && portalVal && excelVal !== portalVal) status = 'warn';
-            else if (excelVal && !portalVal) status = 'warn'; // 포털에 값 없음 → 불일치
+            // 엑셀에 값이 있는데 포털에 없거나 다르면 불일치
+            if (excelVal) {
+                if (!portalVal || excelVal !== portalVal) status = 'warn';
+            }
         } else if (f.type === 'pct') {
             if (excelVal != null && portalVal != null && portalVal !== 0) {
                 diffPct = Math.abs((excelVal - portalVal) / portalVal * 100);
@@ -1201,9 +1203,13 @@ function detectFieldDiff(excelRow, portalBuilding) {
                 status = 'warn'; // 포털에 없음
             }
         } else if (f.type === 'abs') { // 전용률 ±3%p
-            if (excelVal != null && portalVal != null) {
-                const absDiff = Math.abs(excelVal - portalVal);
-                if (absDiff > f.tolerance) { status = 'warn'; diffPct = absDiff; }
+            if (excelVal != null) {
+                if (portalVal == null) {
+                    status = 'warn'; // 포털에 없음
+                } else {
+                    const absDiff = Math.abs(excelVal - portalVal);
+                    if (absDiff > f.tolerance) { status = 'warn'; diffPct = absDiff; }
+                }
             }
         }
 
