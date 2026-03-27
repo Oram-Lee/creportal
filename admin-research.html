@@ -1365,7 +1365,7 @@ window.startAnalysis = async function() {
     document.getElementById('upload-section').style.display = 'none';
     document.getElementById('dashboard-section').style.display = 'none';
     const prog = document.getElementById('progress-section');
-    prog.style.display = '';
+    prog.style.display = 'block';
     setProgress(0);
 
     try {
@@ -1443,7 +1443,7 @@ function parseExcel(file) {
 // ─────────────────────────────────────────────────────────────
 
 function showDashboard(summary) {
-    document.getElementById('dashboard-section').style.display = '';
+            document.getElementById('dashboard-section').style.display = 'block';
     document.getElementById('kpi-matched-n').textContent    = summary.matched;
     document.getElementById('kpi-mismatch-n').textContent   = summary.mismatch;
     document.getElementById('kpi-new-n').textContent        = summary.newCount;
