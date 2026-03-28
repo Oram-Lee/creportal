@@ -7881,13 +7881,9 @@ async function generateNewsCategoryDigest(report, newsItems) {
 
   // 배치 프롬프트 구성 — 카테고리별 제목 묶음
   const catBlocks = activeCats.map(([cat, items]) => {
-    const titles = items.slice(0, 5).map((n, i) => `  ${i+1}. ${n.title}`).join('
-');
-    return `[${catLabel[cat]}]
-${titles}`;
-  }).join('
-
-');
+    const titles = items.slice(0, 5).map((n, i) => `  ${i+1}. ${n.title}`).join('\n');
+    return '[' + catLabel[cat] + ']\n' + titles;
+  }).join('\n\n');
 
   const compCtx = competitors.length ? `경쟁사: ${competitors.slice(0,3).join(', ')}` : '';
   const prompt = [
@@ -7905,8 +7901,7 @@ ${titles}`;
     '  (해당 카테고리 기사가 없으면 해당 키 생략)',
     '',
     catBlocks,
-  ].join('
-');
+  ].join('\n');
 
   try {
     const res = await fetch(`${BACKEND}/api/claude-proxy`, {
@@ -7929,10 +7924,7 @@ ${titles}`;
       const text = digests[cat];
       if (!text) return '';
       const icon = { industryTrend: '📰', competitorNews: '🏢', marketIssues: '📋' }[cat] || '💬';
-      return `<div style="padding:8px 10px;background:var(--bg);border-radius:6px;border-left:3px solid var(--accent)">
-        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px">${icon} ${catLabel[cat]} 총평</div>
-        <div style="font-size:13px;line-height:1.7;color:var(--text)">${text}</div>
-      </div>`;
+      return `<div style="padding:8px 10px;background:var(--bg);border-radius:6px;border-left:3px solid var(--accent)">` + `<div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px">${icon} ${catLabel[cat]} 총평</div>` + `<div style="font-size:13px;line-height:1.7;color:var(--text)">${text}</div>` + `</div>`;
     }).join('');
 
     if (rows) {
@@ -8668,7 +8660,7 @@ function downloadReportPDF(id) {
 window._pdfReady = false;
 document.fonts.ready.then(() => { window._pdfReady = true; });
 setTimeout(() => { window._pdfReady = true; }, 2000); // 최대 2초 대기 후 강제 허용
-</script>
+<\/script>
 <style>
 ${portalCss}
 ${cssVars}
