@@ -268,6 +268,91 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
 .bname-portal { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .bname-score  { font-size: 10px; color: var(--primary); margin-top: 1px; }
 
+/* ─── 일괄 수정 체크박스 & 플로팅 바 ───────────────────── */
+.row-cb { width: 36px; text-align: center; }
+.row-cb input[type=checkbox] {
+    width: 15px; height: 15px; cursor: pointer; accent-color: var(--primary);
+}
+.result-table tr.row-checked td { background: #eff6ff !important; }
+.bulk-mismatch-bar {
+    position: sticky; bottom: 0; z-index: 50;
+    display: none;
+    align-items: center; gap: 10px;
+    padding: 10px 16px;
+    background: var(--primary); color: #fff;
+    border-top: 2px solid #1557b0;
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    font-size: 13px; font-weight: 600;
+}
+.bulk-mismatch-bar.visible { display: flex; }
+.bulk-mismatch-bar .bm-count {
+    background: rgba(255,255,255,0.22); border-radius: 20px;
+    padding: 2px 10px; font-size: 12px; font-weight: 700;
+}
+.bulk-mismatch-bar button {
+    font-family: var(--font); cursor: pointer; font-weight: 600;
+    border: none; border-radius: 7px; padding: 5px 14px; font-size: 12px;
+}
+.bm-btn-clear  { background: rgba(255,255,255,0.18); color: #fff; }
+.bm-btn-clear:hover  { background: rgba(255,255,255,0.32); }
+.bm-btn-action { background: #fff; color: var(--primary); }
+.bm-btn-action:hover { background: #e8f0fe; }
+
+/* 일괄 수정 모달 */
+.bm-modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(3px); z-index: 300;
+    display: none; align-items: center; justify-content: center;
+}
+.bm-modal-backdrop.open { display: flex; }
+.bm-modal-box {
+    background: #fff; border-radius: 14px;
+    width: 680px; max-width: 96vw; max-height: 86vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.22);
+    overflow: hidden;
+}
+.bm-modal-header {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+}
+.bm-modal-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.bm-modal-sub   { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.bm-modal-close {
+    background: none; border: none; font-size: 20px;
+    color: var(--text-muted); cursor: pointer; line-height: 1; padding: 0 4px;
+}
+.bm-modal-body  { flex: 1; overflow-y: auto; padding: 18px 24px; }
+.bm-field-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bm-field-table th {
+    padding: 8px 10px; background: var(--bg-secondary);
+    color: var(--text-muted); font-weight: 700;
+    border-bottom: 2px solid var(--border); text-align: left;
+}
+.bm-field-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.bm-field-table tr:last-child td { border-bottom: none; }
+.bm-field-table tr.bm-field-disabled td { opacity: 0.4; }
+.bm-apply-cnt {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 700;
+    background: var(--warn-bg); color: var(--warn); border: 1px solid #fde68a;
+}
+.bm-apply-cnt.zero { background: var(--bg-secondary); color: var(--text-muted); border-color: var(--border); }
+.bm-modal-footer {
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.bm-result-banner {
+    margin: 0 24px 14px;
+    padding: 9px 14px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; display: none;
+}
+.bm-result-banner.success { background:var(--success-bg); color:var(--success); border:1px solid #bbf7d0; }
+.bm-result-banner.error   { background:var(--danger-bg);  color:var(--danger);  border:1px solid #fecaca; }
+
 /* 빈 상태 */
 .empty-state {
     padding: 48px; text-align: center; color: var(--text-muted);
@@ -739,6 +824,13 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
                 <tbody id="table-body"></tbody>
             </table>
             <div class="table-summary" id="table-summary"></div>
+            <!-- 일괄 수정 플로팅 액션 바 (mismatch 탭 + 체크박스 선택 시 표시) -->
+            <div class="bulk-mismatch-bar" id="bulk-mismatch-bar">
+                <span class="bm-count" id="bm-selected-count">0개 선택</span>
+                <span style="opacity:0.8; font-size:12px; font-weight:400;">불일치 빌딩 선택됨</span>
+                <button class="bm-btn-clear" onclick="clearMismatchSelection()">✕ 선택 해제</button>
+                <button class="bm-btn-action" onclick="openBulkMismatchModal()">✏️ 일괄 수정 →</button>
+            </div>
         </div>
     </div>
 
@@ -983,6 +1075,68 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
     </div>
 </div>
 
+<!-- ═══ 불일치 일괄 수정 모달 ════════════════════════════════ -->
+<div class="bm-modal-backdrop" id="bm-modal">
+    <div class="bm-modal-box">
+
+        <!-- 헤더 -->
+        <div class="bm-modal-header">
+            <div>
+                <div class="bm-modal-title">⚠️ 불일치 필드 일괄 수정</div>
+                <div class="bm-modal-sub" id="bm-modal-sub">선택된 빌딩에 엑셀 값을 일괄 적용합니다.</div>
+            </div>
+            <button class="bm-modal-close" onclick="closeBulkMismatchModal()">×</button>
+        </div>
+
+        <!-- 필드 선택 테이블 -->
+        <div class="bm-modal-body">
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:14px; line-height:1.6;">
+                적용할 필드를 선택하세요. 각 빌딩에서 해당 필드가 <strong>불일치 상태인 경우에만</strong> 업데이트됩니다.<br>
+                임대조건 · 공실 · 렌트롤 · 메모는 절대 변경되지 않습니다.
+            </p>
+            <table class="bm-field-table" id="bm-field-table">
+                <thead>
+                    <tr>
+                        <th style="width:36px;">
+                            <input type="checkbox" id="bm-field-all"
+                                style="width:14px;height:14px;cursor:pointer;accent-color:var(--primary);"
+                                onchange="toggleAllBmFields(this.checked)">
+                        </th>
+                        <th>필드명</th>
+                        <th>적용 대상 빌딩 수</th>
+                        <th>예시 값 (첫 번째 선택 빌딩)</th>
+                    </tr>
+                </thead>
+                <tbody id="bm-field-tbody"></tbody>
+            </table>
+        </div>
+
+        <!-- 결과 배너 -->
+        <div class="bm-result-banner" id="bm-result-banner"></div>
+
+        <!-- 푸터 -->
+        <div class="bm-modal-footer">
+            <div style="font-size:11px; color:var(--text-muted);" id="bm-footer-info">
+                ⚠️ Firebase에 즉시 반영됩니다.
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button onclick="closeBulkMismatchModal()"
+                    style="padding:7px 18px; background:var(--bg-secondary); border:1px solid var(--border);
+                           border-radius:7px; font-size:13px; font-weight:600; color:var(--text-muted); cursor:pointer;">
+                    닫기
+                </button>
+                <button id="bm-apply-btn" onclick="applyBulkMismatch()" disabled
+                    style="padding:7px 20px; background:var(--warn); color:#fff;
+                           border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer;">
+                    <span id="bm-apply-icon">✏️</span>
+                    <span id="bm-apply-text">선택 필드 일괄 적용</span>
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
 <!-- ═══ 수동 지정 모달 ══════════════════════════════════ -->
 <div class="modal-backdrop" id="assign-modal">
     <div class="modal-box">
@@ -992,8 +1146,21 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
                placeholder="빌딩명 또는 주소 입력..."
                oninput="filterAssignList()">
         <div class="modal-list" id="assign-list"></div>
-        <div class="modal-footer">
-            <button class="btn-cancel" onclick="closeAssignModal()">취소</button>
+        <!-- FIX: 선택 확인 영역 + Firebase 저장 버튼 추가 -->
+        <div id="assign-selected-wrap" style="display:none; background:var(--primary-bg); border:1px solid var(--primary-border); border-radius:8px; padding:10px 14px; margin-top:10px; font-size:13px;">
+            <div style="font-weight:600; color:var(--primary); margin-bottom:4px;">✔ 선택된 빌딩</div>
+            <div id="assign-selected-name" style="color:var(--text);"></div>
+            <div id="assign-selected-sub" style="color:var(--text-muted); font-size:11px; margin-top:2px;"></div>
+        </div>
+        <div id="assign-result-banner" style="display:none; margin-top:8px; padding:8px 12px; border-radius:7px; font-size:12px; font-weight:600;"></div>
+        <div class="modal-footer" style="margin-top:12px;">
+            <button class="btn-cancel" onclick="closeAssignModal()">닫기</button>
+            <button id="btn-assign-save" onclick="saveManualAssign()"
+                style="display:none; padding:7px 18px; background:var(--primary); color:#fff;
+                       border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer;">
+                <span id="btn-assign-icon">💾</span>
+                <span id="btn-assign-text">매칭 저장</span>
+            </button>
         </div>
     </div>
 </div>
@@ -1083,7 +1250,8 @@ window.addEventListener('pageshow', e => {
 let _portalBuildings = [];   // Firebase buildings 배열
 let _matchResults    = [];   // 최종 매칭 결과
 let _currentTab      = 'all';
-let _pendingAssignRow = null; // 수동 지정 대기 행
+let _pendingAssignRow = null;    // 수동 지정 대기 행 인덱스
+let _pendingAssignPortalId = null; // FIX 5: 선택된 포털 빌딩 ID (저장 전 임시)
 
 // 초기 화면 상태 보장 (DOM이 올바른 초기 상태인지 확인)
 document.getElementById('upload-section').style.display = '';
@@ -1244,13 +1412,17 @@ function detectFieldDiff(excelRow, portalBuilding) {
 function matchExcelToPortal(excelRows, portalBldgs) {
     // 사전 인덱스 구성
     const byRawId   = new Map();
-    const byAddrKey = new Map();
+    // FIX: byAddrKey를 Map<string, Building[]>로 변경 — 동일 주소 복수 빌딩 충돌 방지
+    // (기존 Map<string, Building>은 첫 번째 빌딩만 등록하고 이후 빌딩을 누락시키는 버그 있었음)
+    const byAddrKey = new Map(); // Map<string, Building[]>
 
     portalBldgs.forEach(b => {
         if (b.rawResearchId != null)
             byRawId.set(String(b.rawResearchId).trim(), b);
         portalAddressKey(b).forEach(k => {
-            if (k && !byAddrKey.has(k)) byAddrKey.set(k, b);
+            if (!k) return;
+            if (!byAddrKey.has(k)) byAddrKey.set(k, []);
+            byAddrKey.get(k).push(b);
         });
     });
 
@@ -1303,11 +1475,30 @@ function matchExcelToPortal(excelRows, portalBldgs) {
             }
         }
 
-        // 3차: 주소 키 매칭
+        // 3차: 주소 키 매칭 (복수 후보 시 이름 유사도로 최적 선택)
         if (!portalB) {
             const addrKey = excelAddressKey(row);
             if (addrKey && byAddrKey.has(addrKey)) {
-                portalB = byAddrKey.get(addrKey); method = '주소 매칭';
+                const candidates = byAddrKey.get(addrKey);
+                if (candidates.length === 1) {
+                    portalB = candidates[0];
+                    method  = '주소 매칭';
+                } else {
+                    // 동일 주소에 복수 빌딩 → 이름 Dice 유사도로 최적 후보 선택
+                    const normExcel = normalizeBuildingName(excelName);
+                    let bestScore = -1, bestCandidate = null;
+                    candidates.forEach(c => {
+                        const s = diceSimilarity(normExcel, normalizeBuildingName(c.name));
+                        if (s > bestScore) { bestScore = s; bestCandidate = c; }
+                        (c.aliases || []).forEach(al => {
+                            const sa = diceSimilarity(normExcel, normalizeBuildingName(al));
+                            if (sa > bestScore) { bestScore = sa; bestCandidate = c; }
+                        });
+                    });
+                    portalB = bestCandidate;
+                    method  = bestScore > 0 ? '주소+이름 매칭' : '주소 매칭';
+                    if (bestScore > 0) score = bestScore;
+                }
             }
         }
 
@@ -1466,6 +1657,8 @@ function showDashboard(summary) {
     document.getElementById('kpi-unmatched-n').textContent  = summary.unmatched;
     document.getElementById('kpi-demolished-n').textContent = summary.demolished;
     setTab('all');
+    // FIX: R4 일괄 업데이트 패널 카운트 초기화 (기존 window.showDashboard 래핑은 로컬 함수 직접 호출에 무효)
+    setTimeout(_updateBulkCounts, 0);
 }
 
 window.setTab = function(tab) {
@@ -1504,9 +1697,23 @@ function renderTable() {
     const sumEl = document.getElementById('table-summary');
     const titleEl = document.getElementById('table-card-title');
 
-    // 탭별 헤더
+    // 탭별 헤더 (mismatch/all 탭에서 첫 컬럼 ☑ → 전체선택 체크박스로 교체)
     const heads = getColumnHeaders(_currentTab);
-    head.innerHTML = `<tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr>`;
+    const isMismatchTab = (_currentTab === 'mismatch' || _currentTab === 'all' || _currentTab === 'matched');
+    head.innerHTML = `<tr>${heads.map((h, i) => {
+        if (i === 0 && isMismatchTab) {
+            return `<th class="row-cb"><input type="checkbox" id="cb-select-all"
+                style="width:14px;height:14px;cursor:pointer;accent-color:#fff;"
+                onchange="toggleAllMismatchRows(this.checked)"
+                title="불일치 행 전체 선택"></th>`;
+        }
+        return `<th>${h}</th>`;
+    }).join('')}</tr>`;
+    // mismatch 탭이 아니면 선택 초기화 & 바 숨김
+    if (!isMismatchTab) {
+        _bmSelected.clear();
+        _updateBulkMismatchBar();
+    }
 
     if (!rows.length) {
         body.innerHTML = `<tr><td colspan="${heads.length}">
@@ -1537,8 +1744,8 @@ function getColumnHeaders(tab) {
         return ['#', 'ID', '빌딩명', '구', '동'];
     if (tab === 'unmatched')
         return ['#', 'ID', '엑셀 빌딩명', '구', '동', '권역', '수동 지정'];
-    // matched / mismatch / all
-    return ['#', 'ID', '엑셀 빌딩명', '포털 빌딩명', '매칭 방법', '불일치 필드', '상태'];
+    // matched / mismatch / all — 첫 컬럼에 체크박스 (mismatch만 활성)
+    return ['☑', '#', 'ID', '엑셀 빌딩명', '포털 빌딩명', '매칭 방법', '불일치 필드', '상태'];
 }
 
 function renderRow(r, i, tab) {
@@ -1626,7 +1833,18 @@ function renderRow(r, i, tab) {
     const pname     = b ? `<div class="bname-portal">포털: ${b.name}</div>` : '';
     const exDisplay = `<div class="bname-excel">${exName}</div>${pname}`;
 
-    return `<tr class="${rowClass}">
+    // 체크박스: mismatch 행만 선택 가능 (matched/all 탭에서도 mismatch인 행만)
+    const canCheck  = r.status === 'mismatch';
+    const isChecked = canCheck && _bmSelected.has(globalIdx);
+    const cbCell    = canCheck
+        ? `<td class="row-cb"><input type="checkbox" data-idx="${globalIdx}"
+               ${isChecked ? 'checked' : ''}
+               style="width:14px;height:14px;cursor:pointer;accent-color:var(--primary);"
+               onchange="toggleMismatchRow(${globalIdx}, this.checked)"></td>`
+        : `<td class="row-cb" style="color:var(--border);">—</td>`;
+
+    return `<tr class="${rowClass}${isChecked ? ' row-checked' : ''}">
+        ${cbCell}
         <td style="color:var(--text-muted);">${i+1}</td>
         <td><span class="badge badge-id">${exId}</span></td>
         <td>${exDisplay}</td>
@@ -1642,6 +1860,261 @@ function fmtNum(v) {
     if (isNaN(n)) return '-';
     return n.toLocaleString();
 }
+
+// ═════════════════════════════════════════════════════════════
+// 불일치 일괄 수정 (Bulk Mismatch Edit)
+// ═════════════════════════════════════════════════════════════
+
+/** 선택된 _matchResults 인덱스 Set */
+const _bmSelected = new Set();
+
+/** 행 체크박스 토글 */
+window.toggleMismatchRow = function(idx, checked) {
+    if (checked) _bmSelected.add(idx);
+    else         _bmSelected.delete(idx);
+    // 해당 tr 하이라이트 동기화
+    const cb = document.querySelector(`input[data-idx="${idx}"]`);
+    if (cb) cb.closest('tr').classList.toggle('row-checked', checked);
+    _updateBulkMismatchBar();
+    _syncSelectAllCb();
+};
+
+/** 전체 선택 / 해제 — 현재 렌더된 mismatch 행만 대상 */
+window.toggleAllMismatchRows = function(checked) {
+    document.querySelectorAll('#table-body input[type=checkbox][data-idx]').forEach(cb => {
+        const idx = parseInt(cb.dataset.idx, 10);
+        if (checked) _bmSelected.add(idx);
+        else         _bmSelected.delete(idx);
+        cb.checked = checked;
+        cb.closest('tr').classList.toggle('row-checked', checked);
+    });
+    _updateBulkMismatchBar();
+};
+
+/** 전체선택 체크박스 indeterminate 동기화 */
+function _syncSelectAllCb() {
+    const allCbs  = [...document.querySelectorAll('#table-body input[type=checkbox][data-idx]')];
+    const checkedN = allCbs.filter(cb => cb.checked).length;
+    const headCb   = document.getElementById('cb-select-all');
+    if (!headCb) return;
+    headCb.checked       = allCbs.length > 0 && checkedN === allCbs.length;
+    headCb.indeterminate = checkedN > 0 && checkedN < allCbs.length;
+}
+
+/** 선택 해제 */
+window.clearMismatchSelection = function() {
+    _bmSelected.clear();
+    renderTable();
+    _updateBulkMismatchBar();
+};
+
+/** 플로팅 바 표시/숨김 */
+function _updateBulkMismatchBar() {
+    const bar = document.getElementById('bulk-mismatch-bar');
+    const cnt = document.getElementById('bm-selected-count');
+    if (!bar) return;
+    const n = _bmSelected.size;
+    if (n > 0 && (_currentTab === 'mismatch' || _currentTab === 'all' || _currentTab === 'matched')) {
+        bar.classList.add('visible');
+        cnt.textContent = `${n}개 선택`;
+    } else {
+        bar.classList.remove('visible');
+    }
+}
+
+/** 일괄 수정 모달 열기 */
+window.openBulkMismatchModal = function() {
+    if (!_bmSelected.size) return;
+    const selected = [..._bmSelected].map(i => _matchResults[i]).filter(r => r?.status === 'mismatch');
+    if (!selected.length) {
+        alert('불일치 빌딩이 선택되지 않았습니다.\n(매칭됨 행은 수정할 필드가 없습니다)');
+        return;
+    }
+
+    document.getElementById('bm-modal-sub').textContent =
+        `${selected.length}개 빌딩 선택됨 — 엑셀 원본 값을 포털 Firebase에 일괄 적용합니다.`;
+
+    // 필드별 적용 대상 수 계산
+    const tbody = document.getElementById('bm-field-tbody');
+    tbody.innerHTML = COMPARE_FIELDS.map(f => {
+        const applicableCnt = selected.filter(r =>
+            r.diff[f.portal]?.status === 'warn' && SAFE_UPDATE_FIELDS.has(f.portal)
+        ).length;
+        // 예시: 첫 번째 선택 빌딩에서 해당 필드의 엑셀 값
+        const firstVal = (() => {
+            for (const r of selected) {
+                const d = r.diff[f.portal];
+                if (d?.excel != null) return fmtFieldVal(f.portal, d.excel);
+            }
+            return '—';
+        })();
+        const disabled  = !SAFE_UPDATE_FIELDS.has(f.portal);
+        const cntBadge  = applicableCnt > 0
+            ? `<span class="bm-apply-cnt">${applicableCnt}개</span>`
+            : `<span class="bm-apply-cnt zero">0개</span>`;
+        return `<tr class="${disabled || applicableCnt === 0 ? 'bm-field-disabled' : ''}">
+            <td style="text-align:center;">
+                <input type="checkbox" class="bm-field-cb" data-portal="${f.portal}"
+                    style="width:14px;height:14px;cursor:pointer;accent-color:var(--primary);"
+                    ${disabled || applicableCnt === 0 ? 'disabled' : ''}
+                    onchange="_updateBmApplyBtn()"
+                    title="${disabled ? '수정 금지 필드' : applicableCnt === 0 ? '불일치 없음' : ''}">
+            </td>
+            <td style="font-weight:600;">${f.label}</td>
+            <td>${cntBadge}</td>
+            <td style="color:var(--text-muted); font-size:12px;">${firstVal}</td>
+        </tr>`;
+    }).join('');
+
+    // 전체선택 체크박스 초기화
+    const fieldAllCb = document.getElementById('bm-field-all');
+    if (fieldAllCb) fieldAllCb.checked = false;
+
+    // 결과 배너 초기화
+    const banner = document.getElementById('bm-result-banner');
+    banner.style.display = 'none'; banner.className = 'bm-result-banner';
+
+    document.getElementById('bm-footer-info').textContent =
+        '⚠️ Firebase에 즉시 반영됩니다. 임대조건·공실·렌트롤은 변경되지 않습니다.';
+    document.getElementById('bm-apply-btn').disabled = true;
+    document.getElementById('bm-apply-icon').textContent = '✏️';
+    document.getElementById('bm-apply-text').textContent = '선택 필드 일괄 적용';
+
+    document.getElementById('bm-modal').classList.add('open');
+    _updateBmApplyBtn();
+};
+
+window.closeBulkMismatchModal = function() {
+    document.getElementById('bm-modal').classList.remove('open');
+};
+
+window.toggleAllBmFields = function(checked) {
+    document.querySelectorAll('.bm-field-cb:not(:disabled)').forEach(cb => cb.checked = checked);
+    _updateBmApplyBtn();
+};
+
+window._updateBmApplyBtn = function() {
+    const checked = [...document.querySelectorAll('.bm-field-cb:not(:disabled):checked')];
+    document.getElementById('bm-apply-btn').disabled = checked.length === 0;
+    // 전체선택 indeterminate 동기화
+    const all = [...document.querySelectorAll('.bm-field-cb:not(:disabled)')];
+    const allCb = document.getElementById('bm-field-all');
+    if (allCb) {
+        allCb.checked       = all.length > 0 && checked.length === all.length;
+        allCb.indeterminate = checked.length > 0 && checked.length < all.length;
+    }
+};
+
+/** 일괄 수정 실행 */
+window.applyBulkMismatch = async function() {
+    const selectedFields = [...document.querySelectorAll('.bm-field-cb:not(:disabled):checked')]
+        .map(cb => cb.dataset.portal);
+    if (!selectedFields.length) return;
+
+    const targets = [..._bmSelected].map(i => _matchResults[i]).filter(r => r?.status === 'mismatch');
+    if (!targets.length) return;
+
+    const fieldLabels = selectedFields.map(k => COMPARE_FIELDS.find(f => f.portal === k)?.label || k);
+    const confirmMsg =
+        `${targets.length}개 빌딩에 다음 필드를 일괄 업데이트합니다.\n\n` +
+        `수정 필드 (${selectedFields.length}개): ${fieldLabels.join(', ')}\n\n` +
+        `각 빌딩에서 해당 필드가 불일치인 경우에만 실제 업데이트됩니다.\n계속하시겠습니까?`;
+    if (!confirm(confirmMsg)) return;
+
+    const applyBtn  = document.getElementById('bm-apply-btn');
+    const applyIcon = document.getElementById('bm-apply-icon');
+    const applyText = document.getElementById('bm-apply-text');
+    applyBtn.disabled = true;
+    applyIcon.innerHTML = '<span class="spin">⚙️</span>';
+    applyText.textContent = '적용 중...';
+
+    let successCount = 0, skipCount = 0, errorCount = 0;
+    const now = new Date().toISOString();
+
+    try {
+        const { db, ref, update } = await import('./js/portal-firebase.js');
+
+        for (const r of targets) {
+            const portalId = r.matched?.id;
+            if (!portalId) { errorCount++; continue; }
+
+            const updates = {};
+            selectedFields.forEach(fieldKey => {
+                const d  = r.diff[fieldKey];
+                if (!d || d.status !== 'warn') return; // 불일치 없는 필드는 스킵
+                const fd = COMPARE_FIELDS.find(f => f.portal === fieldKey);
+                if (!fd) return;
+
+                let rawVal = r.row[fd.excel];
+                if (['grossFloorPy','typicalFloorPy','typicalExclusivePy'].includes(fieldKey))
+                    rawVal = parseFloat(String(rawVal ?? '').replace(/,/g,'')) || rawVal;
+                if (fieldKey === 'exclusiveRate') {
+                    const n = parseFloat(String(rawVal ?? '').replace(/,/g,''));
+                    rawVal  = isNaN(n) ? rawVal : (n > 1 ? +(n/100).toFixed(4) : +n.toFixed(4));
+                }
+                if (fieldKey === 'completionYear')
+                    rawVal = parseInt(rawVal, 10) || rawVal;
+                if (['grade','region','subRegion'].includes(fieldKey))
+                    rawVal = String(rawVal ?? '').trim();
+                updates[fieldKey] = rawVal;
+            });
+
+            if (!Object.keys(updates).length) { skipCount++; continue; }
+
+            updates.researchSyncedAt = now;
+
+            try {
+                await update(ref(db, `buildings/${portalId}`), updates);
+                // 로컬 반영
+                Object.assign(r.matched, updates);
+                const { diff: newDiff, warnCount: newWarn } = detectFieldDiff(r.row, r.matched);
+                r.diff = newDiff; r.warnCount = newWarn;
+                r.status = newWarn > 0 ? 'mismatch' : 'matched';
+                successCount++;
+            } catch (e) {
+                console.error('bulk mismatch error:', r.matched?.name, e);
+                errorCount++;
+            }
+        }
+
+        // 완료 후 선택 해제 & 테이블 갱신
+        _bmSelected.clear();
+        _recalcKPI();
+        _updateBulkCounts();
+        renderTable();
+
+        const banner = document.getElementById('bm-result-banner');
+        const msg = `✅ ${successCount}개 빌딩 업데이트 완료` +
+            (skipCount  > 0 ? ` / ${skipCount}개 스킵(불일치 없음)` : '') +
+            (errorCount > 0 ? ` / ❌ ${errorCount}개 오류` : '');
+        banner.textContent   = msg;
+        banner.className     = `bm-result-banner ${errorCount > 0 ? 'error' : 'success'}`;
+        banner.style.display = '';
+        applyIcon.textContent  = errorCount > 0 ? '⚠️' : '✅';
+        applyText.textContent  = errorCount > 0 ? `완료 (오류 ${errorCount}건)` : '적용 완료';
+        document.getElementById('bm-footer-info').textContent =
+            `완료 시각: ${new Date().toLocaleTimeString('ko-KR')}`;
+
+    } catch (err) {
+        console.error('일괄 수정 치명적 오류:', err);
+        const banner = document.getElementById('bm-result-banner');
+        banner.textContent   = `❌ 오류: ${err.message}`;
+        banner.className     = 'bm-result-banner error';
+        banner.style.display = '';
+        applyBtn.disabled = false;
+        applyIcon.textContent = '✏️';
+        applyText.textContent = '선택 필드 일괄 적용';
+    }
+};
+
+// ESC로 일괄 수정 모달도 닫기 (기존 ESC 핸들러에 추가)
+// → 기존 keydown 핸들러가 diff/reg/assign 순서로 처리하므로 bm-modal을 최우선으로 앞에서 처리
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('bm-modal')?.classList.contains('open')) {
+        closeBulkMismatchModal();
+    }
+}, true); // capture phase — 기존 핸들러보다 먼저 실행
 
 // ═════════════════════════════════════════════════════════════
 // R2: 불일치 상세 모달 + Firebase 적용
@@ -1907,6 +2380,10 @@ document.getElementById('diff-modal').addEventListener('click', e => {
 let _regRowIdx = null;  // 현재 등록 중인 new 행 인덱스
 
 // 등급 자동 계산 (portal-state.js 기준과 동일)
+// ⚠️ SYNC 주의: portal-stats.js srGradeFromPy 와 동일 임계값 유지 필요.
+// 이 파일은 standalone이라 직접 import가 불가하므로 로컬 복사본을 유지합니다.
+// 임계값 변경 시 portal-stats.js srGradeFromPy 도 반드시 같이 수정하세요.
+// E(<1000) | D(1000–3000) | C(3000–5000) | B(5000–10000) | A(10000–20000) | Prime(20000+)
 function gradeFromPy(py) {
     const n = parseFloat(py) || 0;
     if (n === 0)    return '';
@@ -2161,18 +2638,26 @@ document.getElementById('reg-modal').addEventListener('click', e => {
 
 window.openAssignModal = function(resultIdx) {
     _pendingAssignRow = resultIdx;
+    _pendingAssignPortalId = null; // FIX 5: 매번 초기화
     const r = _matchResults[resultIdx];
     if (!r) return;
     document.getElementById('assign-excel-info').textContent =
         `엑셀 빌딩: [${r.row['ID번호']}] ${r.row['빌딩명']}  (${r.row['구'] ?? ''} ${r.row['동'] ?? ''})`;
     document.getElementById('assign-search').value = '';
+    // FIX 5: 선택 확인 영역 & 저장 버튼 & 배너 초기화
+    document.getElementById('assign-selected-wrap').style.display = 'none';
+    const saveBtn = document.getElementById('btn-assign-save');
+    if (saveBtn) { saveBtn.style.display = 'none'; saveBtn.disabled = true; }
+    const banner = document.getElementById('assign-result-banner');
+    if (banner) banner.style.display = 'none';
     filterAssignList();
     document.getElementById('assign-modal').classList.add('open');
 };
 
 window.closeAssignModal = function() {
     document.getElementById('assign-modal').classList.remove('open');
-    _pendingAssignRow = null;
+    _pendingAssignRow      = null;
+    _pendingAssignPortalId = null; // FIX 5: 닫을 때 초기화
 };
 
 window.filterAssignList = function() {
@@ -2195,6 +2680,8 @@ window.filterAssignList = function() {
         </div>`).join('');
 };
 
+// FIX 5: applyManualAssign → 선택 확인 단계로 분리 (즉시 닫기 대신 선택 프리뷰 표시)
+// Firebase 저장은 saveManualAssign() 에서 수행
 window.applyManualAssign = function(portalId) {
     if (_pendingAssignRow == null) return;
     const r = _matchResults[_pendingAssignRow];
@@ -2202,33 +2689,90 @@ window.applyManualAssign = function(portalId) {
     const b = _portalBuildings.find(x => x.id === portalId);
     if (!b) return;
 
-    r.matched = b;
-    r.method  = '수동 지정';
-    r.score   = null;
-    r.status  = 'unmatched'; // 수동 지정됐지만 아직 저장 전 — R4에서 처리
+    // 선택 프리뷰 표시 (아직 저장 안 함)
+    _pendingAssignPortalId = portalId;
+    document.getElementById('assign-selected-name').textContent = b.name;
+    document.getElementById('assign-selected-sub').textContent =
+        `${b.region ?? ''} · ${b.grade ?? ''} · ${b.address ?? ''}`;
+    document.getElementById('assign-selected-wrap').style.display = '';
 
-    const { diff, warnCount } = detectFieldDiff(r.row, b);
-    r.diff      = diff;
-    r.warnCount = warnCount;
-    r.status    = warnCount > 0 ? 'mismatch' : 'matched';
+    // 저장 버튼 활성화
+    const saveBtn = document.getElementById('btn-assign-save');
+    if (saveBtn) { saveBtn.style.display = ''; saveBtn.disabled = false; }
 
-    closeAssignModal();
-    renderTable();
+    // 결과 배너 초기화
+    const banner = document.getElementById('assign-result-banner');
+    if (banner) banner.style.display = 'none';
 
-    // KPI 재집계
-    const sum = { matched:0, mismatch:0, newCount:0, unmatched:0, demolished:0 };
-    _matchResults.forEach(x => {
-        if (x.status === 'matched')    sum.matched++;
-        else if (x.status === 'mismatch') sum.mismatch++;
-        else if (x.status === 'new')   sum.newCount++;
-        else if (x.status === 'unmatched') sum.unmatched++;
-        else if (x.status === 'demolished') sum.demolished++;
+    // 리스트 선택 하이라이트
+    document.querySelectorAll('#assign-list .modal-item').forEach(el => {
+        el.style.background = el.getAttribute('onclick')?.includes(portalId) ? 'var(--primary-bg)' : '';
+        el.style.borderColor = el.getAttribute('onclick')?.includes(portalId) ? 'var(--primary-border)' : '';
     });
-    document.getElementById('kpi-matched-n').textContent    = sum.matched;
-    document.getElementById('kpi-mismatch-n').textContent   = sum.mismatch;
-    document.getElementById('kpi-new-n').textContent        = sum.newCount;
-    document.getElementById('kpi-unmatched-n').textContent  = sum.unmatched;
-    document.getElementById('kpi-demolished-n').textContent = sum.demolished;
+};
+
+// FIX 5: Firebase에 수동 매칭 결과 저장
+window.saveManualAssign = async function() {
+    if (_pendingAssignRow == null || !_pendingAssignPortalId) return;
+    const r = _matchResults[_pendingAssignRow];
+    if (!r) return;
+    const b = _portalBuildings.find(x => x.id === _pendingAssignPortalId);
+    if (!b) return;
+
+    const btn  = document.getElementById('btn-assign-save');
+    const icon = document.getElementById('btn-assign-icon');
+    const text = document.getElementById('btn-assign-text');
+    btn.disabled = true;
+    icon.innerHTML = '<span class="spin">⚙️</span>';
+    text.textContent = '저장 중...';
+
+    try {
+        const { db, ref, update } = await import('./js/portal-firebase.js');
+        const now = new Date().toISOString();
+
+        const updates = {
+            isResearchTarget:    true,
+            rawResearchId:       String(r.row['ID번호'] ?? '').trim(),
+            researchMatchStatus: 'manual',
+            researchSyncedAt:    now,
+        };
+        if (r.row['세부권역_Main기준'])
+            updates.subRegion = String(r.row['세부권역_Main기준']).trim();
+
+        await update(ref(db, `buildings/${b.id}`), updates);
+
+        // 로컬 상태 반영
+        Object.assign(b, updates);
+        r.matched   = b;
+        r.method    = '수동 지정';
+        r.score     = null;
+        const { diff, warnCount } = detectFieldDiff(r.row, b);
+        r.diff      = diff;
+        r.warnCount = warnCount;
+        r.status    = warnCount > 0 ? 'mismatch' : 'matched';
+
+        const banner = document.getElementById('assign-result-banner');
+        banner.textContent = `✅ Firebase 저장 완료 — ${b.name}`;
+        banner.style.cssText = 'display:block; margin-top:8px; padding:8px 12px; border-radius:7px; font-size:12px; font-weight:600; background:var(--success-bg); color:var(--success); border:1px solid #bbf7d0;';
+
+        icon.textContent = '✅';
+        text.textContent = '저장 완료';
+
+        _recalcKPI();
+        _updateBulkCounts();
+        renderTable();
+
+        setTimeout(closeAssignModal, 1200);
+
+    } catch (err) {
+        console.error('수동 지정 저장 오류:', err);
+        const banner = document.getElementById('assign-result-banner');
+        banner.textContent = `❌ 오류: ${err.message}`;
+        banner.style.cssText = 'display:block; margin-top:8px; padding:8px 12px; border-radius:7px; font-size:12px; font-weight:600; background:var(--danger-bg); color:var(--danger); border:1px solid #fecaca;';
+        btn.disabled = false;
+        icon.textContent = '💾';
+        text.textContent = '매칭 저장';
+    }
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -2291,19 +2835,10 @@ window.onBulkScopeChange = function() {
     });
 };
 
-// showDashboard 후 카운트 주입 — 기존 함수 래핑
-const _origShowDashboard = window.showDashboard;
-window.showDashboard = function(summary) {
-    _origShowDashboard?.(summary);
-    setTimeout(_updateBulkCounts, 0);
-};
+// FIX: showDashboard 래핑 제거 — 로컬 함수 직접 호출 방식이라 window.showDashboard 오버라이딩이 무효였음.
+// _updateBulkCounts() 호출은 showDashboard 본체로 이전됨 (위 Fix 3a)
 
-// applyManualAssign 후 카운트 재계산 — 래핑
-const _origApplyManualAssign = window.applyManualAssign;
-window.applyManualAssign = function(portalId) {
-    _origApplyManualAssign?.(portalId);
-    _updateBulkCounts();
-};
+// FIX: applyManualAssign 래핑 제거 — _updateBulkCounts() 호출이 원본 함수 내부로 이전됨 (아래 Fix 5)
 
 // 배치 처리 헬퍼: 배열을 size 단위로 분할
 function _chunks(arr, size) {
@@ -2469,6 +3004,23 @@ window.runBulkUpdate = async function() {
         btnText.textContent  = '일괄 업데이트 실행';
     }
 };
+
+// ─────────────────────────────────────────────────────────────
+// FIX 8: ESC 키로 열린 모달 순서대로 닫기
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    // 우선순위: 불일치 → 신규등록 → 수동지정 순으로 닫기
+    if (document.getElementById('diff-modal')?.classList.contains('open')) {
+        closeDiffModal(); return;
+    }
+    if (document.getElementById('reg-modal')?.classList.contains('open')) {
+        closeRegModal(); return;
+    }
+    if (document.getElementById('assign-modal')?.classList.contains('open')) {
+        closeAssignModal(); return;
+    }
+});
 
 // 전역 노출 (다음 이슈에서 활용)
 window._matchResults    = () => _matchResults;
