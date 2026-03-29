@@ -754,6 +754,12 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
             <span class="step-text">7개 필드 불일치 검출</span>
             <span class="step-count" id="step-diff-count"></span>
         </div>
+        <!-- ISSUE-1: 임대안내문 로딩 스텝 -->
+        <div class="progress-step" id="step-vacancies">
+            <span class="step-icon">📄</span>
+            <span class="step-text">임대안내문(vacancies) 정보 로딩</span>
+            <span class="step-count" id="step-vacancies-count"></span>
+        </div>
     </div>
     <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-bar"></div></div>
 </div>
@@ -1251,6 +1257,8 @@ let _portalBuildings = [];   // Firebase buildings 배열
 let _matchResults    = [];   // 최종 매칭 결과
 let _currentTab      = 'all';
 let _pendingAssignRow = null;    // 수동 지정 대기 행 인덱스
+// ISSUE-1: 임대안내문 vacancies 맵 { buildingId: { publishDates: Set<YYYYMM>, count: number } }
+let _vacanciesMap = {};
 let _pendingAssignPortalId = null; // FIX 5: 선택된 포털 빌딩 ID (저장 전 임시)
 
 // 초기 화면 상태 보장 (DOM이 올바른 초기 상태인지 확인)
@@ -1606,6 +1614,37 @@ window.startAnalysis = async function() {
         await new Promise(r => setTimeout(r, 20));
         const warnTotal = results.filter(r => r.status === 'mismatch').length;
         setStep('step-diff', 'done', `불일치 ${warnTotal}개 검출`);
+        setProgress(85);
+
+        // ── STEP 5 (ISSUE-1): vacancies 임대안내문 로딩 ──
+        setStep('step-vacancies', 'active');
+        await new Promise(r => setTimeout(r, 20));
+        try {
+            const vacSnap = await get(ref(db, 'vacancies'));
+            const vacRaw  = vacSnap.val() || {};
+            _vacanciesMap = {};
+            let vacBldgCnt = 0;
+            Object.entries(vacRaw).forEach(([bldId, vacMap]) => {
+                if (!vacMap || typeof vacMap !== 'object') return;
+                const dates = new Set();
+                let cnt = 0;
+                Object.entries(vacMap).forEach(([vacId, vac]) => {
+                    if (!vac || typeof vac !== 'object') return;
+                    if (vacId.endsWith('_meta')) return;  // noVacancy 메타 제외
+                    cnt++;
+                    const d = _normDate(vac.publishDate);
+                    if (d) dates.add(d);
+                });
+                if (cnt > 0 || dates.size > 0) {
+                    _vacanciesMap[bldId] = { dates, count: cnt };
+                    vacBldgCnt++;
+                }
+            });
+            setStep('step-vacancies', 'done', `${vacBldgCnt}개 빌딩`);
+        } catch (e) {
+            console.warn('vacancies 로딩 실패 (무시):', e);
+            setStep('step-vacancies', 'error', '로딩 실패 (표시 생략)');
+        }
         setProgress(100);
 
         // ── 대시보드 표시 ──
@@ -1617,7 +1656,7 @@ window.startAnalysis = async function() {
     } catch (err) {
         console.error('분석 오류:', err);
         // 실패한 스텝 표시
-        ['step-firebase','step-excel','step-match','step-diff'].forEach(id => {
+        ['step-firebase','step-excel','step-match','step-diff','step-vacancies'].forEach(id => {
             const el = document.getElementById(id);
             if (el && el.classList.contains('active')) setStep(id, 'error', err.message);
         });
@@ -1745,7 +1784,7 @@ function getColumnHeaders(tab) {
     if (tab === 'unmatched')
         return ['#', 'ID', '엑셀 빌딩명', '구', '동', '권역', '수동 지정'];
     // matched / mismatch / all — 첫 컬럼에 체크박스 (mismatch만 활성)
-    return ['☑', '#', 'ID', '엑셀 빌딩명', '포털 빌딩명', '매칭 방법', '불일치 필드', '상태'];
+    return ['☑', '#', 'ID', '엑셀 빌딩명', '포털 빌딩명', '매칭 방법', '불일치 필드', '임대안내문', '누적기간', '상태'];
 }
 
 function renderRow(r, i, tab) {
@@ -1843,6 +1882,26 @@ function renderRow(r, i, tab) {
                onchange="toggleMismatchRow(${globalIdx}, this.checked)"></td>`
         : `<td class="row-cb" style="color:var(--border);">—</td>`;
 
+    // ISSUE-1/2: 임대안내문 유무 + 누적기간
+    const vacInfo  = b ? _getVacInfo(b.id) : { hasData: false, count: 0, dates: [] };
+    const { periodStr, quarterBadge } = _calcAccumulation(vacInfo.dates);
+
+    const vacCell = vacInfo.hasData
+        ? `<span style="display:inline-flex;align-items:center;gap:4px;">
+               <span class="badge" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;font-size:10px;">
+                   📄 있음
+               </span>
+               <span style="font-size:10px;color:var(--text-muted);">${vacInfo.count}건</span>
+           </span>`
+        : `<span class="badge" style="background:var(--bg-secondary);color:var(--text-muted);border:1px solid var(--border);font-size:10px;">없음</span>`;
+
+    const periodCell = vacInfo.hasData
+        ? `<div style="font-size:11px;color:var(--text-muted);white-space:nowrap;">${periodStr}</div>
+           ${quarterBadge
+               ? `<span class="badge" style="margin-top:3px;display:inline-block;background:#eff6ff;color:#1a73e8;border:1px solid #bfdbfe;font-size:10px;">📊 ${quarterBadge} 분기통계가능</span>`
+               : ''}`
+        : '—';
+
     return `<tr class="${rowClass}${isChecked ? ' row-checked' : ''}">
         ${cbCell}
         <td style="color:var(--text-muted);">${i+1}</td>
@@ -1851,6 +1910,8 @@ function renderRow(r, i, tab) {
         <td>${b ? `<div style="font-weight:600;font-size:12px;">${b.name}</div><div style="font-size:11px;color:var(--text-muted);">${b.region||''} · ${b.grade||''}</div>` : '-'}</td>
         <td>${methodBadge}</td>
         <td>${diffHtml}</td>
+        <td>${vacCell}</td>
+        <td>${periodCell}</td>
         <td>${statusBadge}</td>
     </tr>`;
 }
@@ -1859,6 +1920,75 @@ function fmtNum(v) {
     const n = parseFloat(String(v ?? '').replace(/,/g,''));
     if (isNaN(n)) return '-';
     return n.toLocaleString();
+}
+
+// ─────────────────────────────────────────────────────────────
+// ISSUE-1/2 공통 헬퍼
+// ─────────────────────────────────────────────────────────────
+
+/** publishDate 정규화 → "YYYY-MM" (portal-stats.js srNormalizeDate와 동일 로직) */
+function _normDate(dateStr) {
+    if (!dateStr) return '';
+    const s = String(dateStr).trim();
+    if (/^\d{2}\.\d{2}$/.test(s)) return `20${s.slice(0,2)}-${s.slice(3)}`;
+    if (/^\d{4}\.\d{2}$/.test(s)) return s.replace('.', '-');
+    if (/^\d{4}-\d{2}/.test(s))    return s.slice(0, 7);
+    return '';
+}
+
+/**
+ * ISSUE-1: 매칭된 빌딩의 임대안내문(vacancies) 요약 반환
+ * @param {string} portalId  Firebase buildings ID
+ * @returns {{ hasData: boolean, count: number, dates: string[] }}
+ */
+function _getVacInfo(portalId) {
+    const entry = _vacanciesMap[portalId];
+    if (!entry) return { hasData: false, count: 0, dates: [] };
+    return {
+        hasData: true,
+        count:   entry.count,
+        dates:   [...entry.dates].sort(),
+    };
+}
+
+/**
+ * ISSUE-2: 누적기간 문자열 + 분기 통계 가능 여부 계산
+ * @param {string[]} sortedDates  정렬된 "YYYY-MM" 배열
+ * @returns {{ periodStr: string, quarterBadge: string }}
+ */
+function _calcAccumulation(sortedDates) {
+    if (!sortedDates.length) return { periodStr: '—', quarterBadge: '' };
+
+    const first = sortedDates[0];
+    const last  = sortedDates[sortedDates.length - 1];
+
+    // "YYYY-MM" → "YYYY년 MM월" 포맷
+    const fmt = d => {
+        const [y, m] = d.split('-');
+        return `${y}년 ${parseInt(m, 10)}월`;
+    };
+    const periodStr = first === last ? fmt(first) : `${fmt(first)} ~ ${fmt(last)}`;
+
+    // 분기 통계 가능 여부: dateSet에 분기 3개월이 모두 있는 분기 탐색
+    const dateSet = new Set(sortedDates);
+    const quarters = [
+        [1,2,3], [4,5,6], [7,8,9], [10,11,12]
+    ];
+    const years = [...new Set(sortedDates.map(d => d.slice(0,4)))];
+    let quarterBadge = '';
+    outer: for (const y of years) {
+        for (const [m1,m2,m3] of quarters) {
+            const pad = n => String(n).padStart(2,'0');
+            if (dateSet.has(`${y}-${pad(m1)}`) &&
+                dateSet.has(`${y}-${pad(m2)}`) &&
+                dateSet.has(`${y}-${pad(m3)}`)) {
+                const q = Math.ceil(m1 / 3);
+                quarterBadge = `${y}Q${q}`;
+                break outer;
+            }
+        }
+    }
+    return { periodStr, quarterBadge };
 }
 
 // ═════════════════════════════════════════════════════════════
