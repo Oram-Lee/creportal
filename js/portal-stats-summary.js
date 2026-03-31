@@ -25,11 +25,32 @@ let _sumGradeFilter = '';
 let _sumCmpQuarter = '';
 
 /**
- * publishDate 분포에서 "직전 분기" 레이블(YYYYQN) 목록을 구한다.
- * 가장 최신 분기를 기준분기로, 나머지를 비교 후보로 반환.
+ * 오늘 날짜 기준 직전 완료 분기 레이블 반환
+ * 예) 2026-03-31 → 진행 중 2026Q1 → 직전 완료 2025Q4
+ * @returns {string} 'YYYYQN'
+ */
+function _sumPrevCompletedQuarter() {
+    const now   = new Date();
+    const year  = now.getFullYear();
+    const month = now.getMonth() + 1; // 1~12
+    const curQ  = Math.ceil(month / 3);
+    const prevQ    = curQ > 1 ? curQ - 1 : 4;
+    const prevYear = curQ > 1 ? year : year - 1;
+    return `${prevYear}Q${prevQ}`;
+}
+
+/**
+ * publishDate 분포에서 분기 목록을 구하고,
+ * 오늘 기준 "직전 완료 분기"를 current로 설정한다.
+ *
+ * current 선정 규칙:
+ *   1. 데이터에 직전 완료 분기가 있으면 그대로 사용
+ *   2. 없으면 직전 완료 분기 이하의 가장 최신 분기 사용
+ *   3. 그것도 없으면 데이터 최신 분기로 fallback
+ *
  * @returns {{ current: string, quarters: string[] }}
- *   current: 'YYYYQN' 기준분기 레이블
- *   quarters: 기준분기 포함 전체 분기 목록 (내림차순)
+ *   current:  'YYYYQN' 기준분기 레이블
+ *   quarters: current 포함 전체 목록 (current 맨 앞, 나머지 내림차순)
  */
 function _sumDetectQuarters() {
     const lib = window.srLib;
@@ -45,8 +66,22 @@ function _sumDetectQuarters() {
     });
 
     const quarters = [...qSet].sort().reverse(); // 최신 우선
-    const current  = quarters[0] || '';
-    return { current, quarters };
+    if (quarters.length === 0) return { current: '', quarters: [] };
+
+    // 오늘 기준 직전 완료 분기 (e.g. 오늘 2026Q1 진행 중 → '2025Q4')
+    const target = _sumPrevCompletedQuarter();
+
+    let current;
+    if (quarters.includes(target)) {
+        current = target;                                    // 1. 정확히 존재
+    } else {
+        const below = quarters.filter(q => q <= target);
+        current = below.length > 0 ? below[0] : quarters[0]; // 2. 이하 최신 or fallback
+    }
+
+    // current를 맨 앞에, 나머지는 내림차순으로 재정렬
+    const reordered = [current, ...quarters.filter(q => q !== current)];
+    return { current, quarters: reordered };
 }
 
 /**
