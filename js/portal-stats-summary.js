@@ -1,0 +1,583 @@
+/**
+ * CRE Portal — 분기 요약 대시보드
+ * js/portal-stats-summary.js
+ *
+ * Issue 3: 데이터 집계 레이어 (분기 감지 + 권역×등급 집계)
+ * Issue 4: 권역 카드 UI + 등급 필터 렌더
+ * Issue 5: 미니 SVG 트렌드 차트 (분기별 추이 + 증감 배지)
+ * Issue 6: 계산 방법론 설명 섹션
+ *
+ * ▸ 의존: window.srLib (portal-stats.js에서 노출)
+ *   — srGetNormBuildings, srApplyFilter, srFilterVacByDate,
+ *     srFilterPriceByDate, srGetBestRent, srGetQuarter,
+ *     srNormalizeDate, srGetAllPublishDates, srVacancyAreaPy,
+ *     SR_REGIONS, SR_GRADES, SR_REGION_COLOR, SR_GRADE_COLOR
+ */
+
+// ═══════════════════════════════════════════════════════════════
+// ISSUE-3: 데이터 집계 레이어
+// ═══════════════════════════════════════════════════════════════
+
+/** 현재 선택된 등급 필터 ('' = 전체) */
+let _sumGradeFilter = '';
+
+/** 비교 분기 오버라이드 ('YYYY-QN' 형식, '' = 자동) */
+let _sumCmpQuarter = '';
+
+/**
+ * publishDate 분포에서 "직전 분기" 레이블(YYYYQN) 목록을 구한다.
+ * 가장 최신 분기를 기준분기로, 나머지를 비교 후보로 반환.
+ * @returns {{ current: string, quarters: string[] }}
+ *   current: 'YYYYQN' 기준분기 레이블
+ *   quarters: 기준분기 포함 전체 분기 목록 (내림차순)
+ */
+function _sumDetectQuarters() {
+    const lib = window.srLib;
+    if (!lib) return { current: '', quarters: [] };
+
+    const buildings = window.state?.allBuildings || [];
+    const dates = lib.srGetAllPublishDates(buildings); // 'YYYY-MM'[] 오름차순
+
+    const qSet = new Set();
+    dates.forEach(d => {
+        const q = lib.srGetQuarter(d);
+        if (q.label) qSet.add(q.label);
+    });
+
+    const quarters = [...qSet].sort().reverse(); // 최신 우선
+    const current  = quarters[0] || '';
+    return { current, quarters };
+}
+
+/**
+ * 분기 레이블('YYYYQN') → 해당 분기의 'YYYY-MM' 범위
+ * @returns {{ from: string, to: string }}
+ */
+function _sumQuarterRange(qLabel) {
+    // e.g. '2025Q1' → year=2025, q=1 → 01~03
+    const m = qLabel.match(/^(\d{4})Q(\d)$/);
+    if (!m) return { from: '', to: '' };
+    const year = m[1];
+    const q    = parseInt(m[2]);
+    const mStart = String((q - 1) * 3 + 1).padStart(2, '0');
+    const mEnd   = String(q * 3).padStart(2, '0');
+    return { from: `${year}-${mStart}`, to: `${year}-${mEnd}` };
+}
+
+/**
+ * 특정 분기에 속하는 공실 데이터만 반환
+ * (publishDate가 해당 분기 범위 내에 있는 것)
+ */
+function _sumFilterVacByQuarter(vacancies, qLabel) {
+    const lib = window.srLib;
+    const { from, to } = _sumQuarterRange(qLabel);
+    return lib.srFilterVacByDate(vacancies, from, to);
+}
+
+/**
+ * 특정 분기 기준으로 유효한 임대가를 가진 floorPricing 중 최신값 반환
+ * — 해당 분기 이전 effectiveDate 중 가장 최근 것
+ */
+function _sumGetRentForQuarter(building, qLabel) {
+    const lib  = window.srLib;
+    const { to } = _sumQuarterRange(qLabel);
+    const fps  = (building.floorPricing || []).slice()
+        .map(fp => ({ ...fp, _d: lib.srNormalizeDate(fp.effectiveDate || fp.createdAt || '') }))
+        .filter(fp => fp._d && (!to || fp._d <= to))
+        .sort((a, b) => b._d.localeCompare(a._d));
+
+    const pick = fps[0];
+    if (pick) {
+        return {
+            rentPy:    lib.srParsePrice(pick.rentPy),
+            depositPy: lib.srParsePrice(pick.depositPy),
+            source:    'floorPricing',
+        };
+    }
+    // fallback: building root
+    return {
+        rentPy:    lib.srParsePrice(building.rentPy),
+        depositPy: lib.srParsePrice(building.depositPy),
+        source:    'building',
+    };
+}
+
+/**
+ * 권역×분기 집계 결과 타입
+ * @typedef {{ vacRate: number, vacPy: number, gross: number,
+ *             avgRent: number, rentCount: number, bldgCount: number }} SumStat
+ */
+
+/**
+ * 권역별 분기 집계 수행
+ * @param {string} qLabel  'YYYYQN'
+ * @param {string} grade   '' | 'Prime' | 'A' | ...
+ * @returns {Object<string, SumStat>}  { CBD: {...}, GBD: {...}, ... }
+ */
+function _sumCalcRegionStats(qLabel, grade) {
+    const lib = window.srLib;
+    if (!lib || !qLabel) return {};
+
+    const normBuildings = lib.srGetNormBuildings();
+    const filtered = grade
+        ? lib.srApplyFilter(normBuildings, { grade: [grade] })
+        : normBuildings;
+
+    const result = {};
+    lib.SR_REGIONS.forEach(r => {
+        result[r] = { vacRate: 0, vacPy: 0, gross: 0, avgRent: 0, rentCount: 0, bldgCount: 0 };
+    });
+
+    filtered.forEach(b => {
+        const r = b._region;
+        if (!result[r]) return;
+
+        const gross = parseFloat(b.grossFloorPy) || 0;
+        result[r].gross     += gross;
+        result[r].bldgCount += 1;
+
+        // 공실: 해당 분기 publishDate 기준
+        const vacs = _sumFilterVacByQuarter(b._activeVacs, qLabel);
+        const vacPy = vacs.reduce((s, v) => s + lib.srVacancyAreaPy(v), 0);
+        result[r].vacPy += vacPy;
+
+        // 임대가: 해당 분기 이전 최신 floorPricing
+        const rent = _sumGetRentForQuarter(b, qLabel);
+        if (rent.rentPy && rent.rentPy > 0) {
+            result[r].avgRent   += rent.rentPy;
+            result[r].rentCount += 1;
+        }
+    });
+
+    // 최종 비율 계산
+    lib.SR_REGIONS.forEach(r => {
+        const s = result[r];
+        s.vacRate = s.gross > 0 ? s.vacPy / s.gross * 100 : 0;
+        s.avgRent = s.rentCount > 0 ? s.avgRent / s.rentCount : 0;
+    });
+
+    return result;
+}
+
+/**
+ * 여러 분기에 걸친 시계열 집계 (트렌드 차트용)
+ * @param {string[]} quarters  'YYYYQN'[] 내림차순
+ * @param {string}   grade
+ * @returns {Array<{ q: string, regions: Object<string, SumStat> }>}  오름차순
+ */
+function _sumCalcTimeSeries(quarters, grade) {
+    // 최대 8분기
+    const qs = quarters.slice(0, 8).reverse(); // 오름차순
+    return qs.map(q => ({ q, regions: _sumCalcRegionStats(q, grade) }));
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ISSUE-4: 권역 카드 UI + 등급 필터 렌더
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 증감 배지 HTML 생성
+ * @param {number} cur  현재 값
+ * @param {number} prev 이전 값
+ * @param {'rate'|'price'} type  공실률이면 rate, 임대가면 price
+ */
+function _sumDeltaBadge(cur, prev, type) {
+    if (!prev || prev === 0) return '<span style="font-size:10px;color:var(--text-muted);">-</span>';
+    const diff  = cur - prev;
+    const pct   = (diff / prev * 100).toFixed(1);
+    const isVac = type === 'rate';
+
+    // 공실률: 상승=나쁨(빨강), 하락=좋음(초록)
+    // 임대가: 상승=좋음(파랑), 하락=나쁨(주황)
+    let color, arrow;
+    if (diff === 0) {
+        color = '#6b7280'; arrow = '●';
+    } else if (diff > 0) {
+        color = isVac ? '#ef4444' : '#1a73e8';
+        arrow = '▲';
+    } else {
+        color = isVac ? '#16a34a' : '#ea580c';
+        arrow = '▼';
+    }
+
+    const absStr = type === 'rate'
+        ? `${Math.abs(diff).toFixed(1)}%p`
+        : `${Math.abs(Math.round(diff)).toLocaleString()}원`;
+
+    return `<span style="font-size:10px; font-weight:700; color:${color}; white-space:nowrap;">
+        ${arrow} ${absStr}
+    </span>`;
+}
+
+/** 등급 필터 버튼 그룹 렌더 */
+function _sumRenderGradeFilter() {
+    const el = document.getElementById('sr-sum-grade-filter');
+    if (!el) return;
+
+    const lib    = window.srLib;
+    const grades = ['전체', ...lib.SR_GRADES];
+    const colors = { ...lib.SR_GRADE_COLOR, '전체': '#374151' };
+
+    el.innerHTML = grades.map(g => {
+        const key    = g === '전체' ? '' : g;
+        const active = _sumGradeFilter === key;
+        const color  = colors[g] || '#374151';
+        return `<button
+            onclick="window._srSumSetGrade('${key}')"
+            style="padding:4px 10px; border-radius:14px; font-size:11px; font-weight:700;
+                   cursor:pointer; white-space:nowrap; transition:all 0.15s;
+                   border:2px solid ${color};
+                   background:${active ? color : 'transparent'};
+                   color:${active ? '#fff' : color};">
+            ${g}
+        </button>`;
+    }).join('');
+}
+
+/** 분기 선택 콤보박스 렌더 */
+function _sumRenderQuarterSelect(quarters, currentQ) {
+    const el = document.getElementById('sr-sum-cmp-select');
+    if (!el) return;
+
+    // 기준 분기를 제외한 나머지가 비교 대상
+    const opts = quarters.slice(1).map(q => {
+        const sel = (_sumCmpQuarter === q) ? 'selected' : '';
+        return `<option value="${q}" ${sel}>${q} 비교</option>`;
+    }).join('');
+
+    el.innerHTML = `<option value="">직전 분기 비교</option>${opts}`;
+    if (_sumCmpQuarter) el.value = _sumCmpQuarter;
+}
+
+/**
+ * 단일 권역 카드 HTML 생성
+ */
+function _sumCardHtml(region, curStat, prevStat, prevQLabel) {
+    const lib   = window.srLib;
+    const color = lib.SR_REGION_COLOR[region] || '#6b7280';
+
+    const vacRate   = curStat.vacRate;
+    const avgRent   = curStat.avgRent;
+    const bldgCount = curStat.bldgCount;
+    const vacPy     = curStat.vacPy;
+
+    const vacDelta  = prevStat ? _sumDeltaBadge(vacRate,  prevStat.vacRate,  'rate')  : '';
+    const rentDelta = prevStat ? _sumDeltaBadge(avgRent,  prevStat.avgRent,  'price') : '';
+
+    // 임대가: 만원 단위
+    const rentDisplay = avgRent > 0
+        ? `${(avgRent / 10000).toFixed(1)}<span style="font-size:10px;font-weight:400;">만원</span>`
+        : '<span style="font-size:11px;color:var(--text-muted);">-</span>';
+
+    const prevStr = prevStat && prevQLabel
+        ? `<div style="font-size:9px; color:var(--text-muted); margin-top:2px;">vs ${prevQLabel}</div>`
+        : '';
+
+    return `
+    <div style="background:var(--bg-card); border-radius:12px; padding:14px;
+                border:2px solid ${color}20; box-shadow:0 2px 8px rgba(0,0,0,0.07);
+                display:flex; flex-direction:column; gap:6px; min-width:0;">
+
+        <!-- 권역명 + 빌딩수 -->
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:15px; font-weight:800; color:${color};">${region}</span>
+            <span style="font-size:10px; color:var(--text-muted); background:var(--bg-secondary);
+                         border-radius:10px; padding:2px 7px;">${bldgCount}개동</span>
+        </div>
+
+        <!-- 공실률 -->
+        <div style="background:var(--bg-secondary); border-radius:8px; padding:8px 10px;">
+            <div style="font-size:10px; color:var(--text-muted); margin-bottom:3px;">공실률</div>
+            <div style="display:flex; align-items:baseline; gap:6px; flex-wrap:wrap;">
+                <span style="font-size:22px; font-weight:800; color:${color}; line-height:1;">
+                    ${vacRate.toFixed(1)}<span style="font-size:12px; font-weight:400;">%</span>
+                </span>
+                <div>${vacDelta}${prevStr}</div>
+            </div>
+            <!-- 공실면적 -->
+            <div style="font-size:10px; color:var(--text-muted); margin-top:4px;">
+                공실 ${Math.round(vacPy).toLocaleString()}평
+            </div>
+            <!-- 공실률 바 -->
+            <div style="margin-top:6px; height:4px; border-radius:3px;
+                        background:var(--border-color); overflow:hidden;">
+                <div style="height:100%; width:${Math.min(vacRate, 30) / 30 * 100}%;
+                             background:${color}; border-radius:3px; transition:width 0.4s;"></div>
+            </div>
+        </div>
+
+        <!-- 평균임대가 -->
+        <div style="background:var(--bg-secondary); border-radius:8px; padding:8px 10px;">
+            <div style="font-size:10px; color:var(--text-muted); margin-bottom:3px;">평균임대가 (원/평/月)</div>
+            <div style="display:flex; align-items:baseline; gap:6px; flex-wrap:wrap;">
+                <span style="font-size:18px; font-weight:800; color:var(--text-primary); line-height:1;">
+                    ${rentDisplay}
+                </span>
+                <div>${rentDelta}${prevStr}</div>
+            </div>
+        </div>
+    </div>`;
+}
+
+/** 권역 카드 그리드 전체 렌더 */
+function _sumRenderCards(curStats, prevStats, prevQLabel) {
+    const el  = document.getElementById('sr-sum-cards');
+    if (!el) return;
+    const lib = window.srLib;
+
+    el.innerHTML = lib.SR_REGIONS.map(r =>
+        _sumCardHtml(r, curStats[r] || {}, prevStats?.[r] || null, prevQLabel)
+    ).join('');
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ISSUE-5: 미니 SVG 트렌드 차트
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * SVG 폴리라인 경로 계산
+ * @param {number[]} values
+ * @param {number} W  전체 너비
+ * @param {number} H  전체 높이
+ * @param {number} pad 여백
+ */
+function _sumPolyPoints(values, W, H, pad = 10) {
+    const n    = values.length;
+    if (n < 2) return '';
+    const min  = Math.min(...values);
+    const max  = Math.max(...values);
+    const span = max - min || 1;
+    return values.map((v, i) => {
+        const x = pad + (i / (n - 1)) * (W - pad * 2);
+        const y = H - pad - ((v - min) / span) * (H - pad * 2);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+}
+
+/**
+ * 단일 지표에 대한 다권역 SVG 라인 차트 생성
+ * @param {Array<{q:string, regions:Object}>} series  오름차순
+ * @param {'vacRate'|'avgRent'} metric
+ * @returns {string} SVG HTML
+ */
+function _sumMakeLineChart(series, metric) {
+    const lib    = window.srLib;
+    const W      = 860;
+    const H      = 180;
+    const PAD    = 20;
+    const LABELS = series.map(s => s.q);
+
+    // 각 권역의 값 배열
+    const regionData = {};
+    lib.SR_REGIONS.forEach(r => {
+        regionData[r] = series.map(s => s.regions[r]?.[metric] || 0);
+    });
+
+    // Y 전체 min/max (전 권역 통합)
+    const allVals = lib.SR_REGIONS.flatMap(r => regionData[r]);
+    const gMin = Math.min(...allVals);
+    const gMax = Math.max(...allVals);
+    const span = gMax - gMin || 1;
+
+    const toY = v => H - PAD - ((v - gMin) / span) * (H - PAD * 2);
+    const toX = i => PAD + (i / (LABELS.length - 1)) * (W - PAD * 2);
+
+    // 축 눈금 레이블 (Y: 3개)
+    const yTicks = [gMin, (gMin + gMax) / 2, gMax];
+    const yTickHtml = yTicks.map(v => {
+        const y = toY(v);
+        const label = metric === 'vacRate'
+            ? `${v.toFixed(1)}%`
+            : `${(v / 10000).toFixed(1)}만`;
+        return `<text x="${PAD - 4}" y="${y + 4}" text-anchor="end"
+            font-size="9" fill="var(--text-muted)">${label}</text>
+            <line x1="${PAD}" y1="${y}" x2="${W - PAD}" y2="${y}"
+                stroke="var(--border-color)" stroke-width="0.5" stroke-dasharray="3,3"/>`;
+    }).join('');
+
+    // X 레이블
+    const xLabelHtml = LABELS.map((l, i) =>
+        `<text x="${toX(i)}" y="${H - 3}" text-anchor="middle"
+            font-size="9" fill="var(--text-muted)">${l}</text>`
+    ).join('');
+
+    // 라인
+    const linesHtml = lib.SR_REGIONS.map(r => {
+        const color  = lib.SR_REGION_COLOR[r];
+        const vals   = regionData[r];
+        const points = vals.map((v, i) =>
+            `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`
+        ).join(' ');
+        const dots = vals.map((v, i) => {
+            const label = metric === 'vacRate'
+                ? `${v.toFixed(1)}%`
+                : `${(v / 10000).toFixed(1)}만`;
+            return `<circle cx="${toX(i).toFixed(1)}" cy="${toY(v).toFixed(1)}"
+                r="3.5" fill="${color}" stroke="#fff" stroke-width="1.5">
+                <title>${r} ${LABELS[i]}: ${label}</title>
+            </circle>`;
+        }).join('');
+
+        return `<polyline points="${points}" fill="none"
+            stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+            ${dots}`;
+    }).join('');
+
+    // 범례
+    const legendHtml = lib.SR_REGIONS.map(r =>
+        `<g>
+            <rect width="12" height="4" rx="2" fill="${lib.SR_REGION_COLOR[r]}" y="4"/>
+            <text x="16" y="11" font-size="10" fill="var(--text-primary)" font-weight="600">${r}</text>
+        </g>`
+    ).reduce((acc, cur, i) => acc + `<g transform="translate(${i * 70}, 0)">${cur}</g>`, '');
+
+    return `
+    <svg viewBox="0 0 ${W} ${H + 24}" xmlns="http://www.w3.org/2000/svg"
+        style="width:100%; max-width:${W}px; height:auto; display:block;">
+        <!-- 격자 + 축 -->
+        ${yTickHtml}
+        ${xLabelHtml}
+        <!-- 라인 -->
+        ${linesHtml}
+        <!-- 범례 -->
+        <g transform="translate(${PAD}, ${H + 6})">${legendHtml}</g>
+    </svg>`;
+}
+
+/** 공실률 + 임대가 트렌드 차트 렌더 */
+function _sumRenderTrendCharts(series) {
+    const vacEl  = document.getElementById('sr-sum-vac-chart');
+    const rentEl = document.getElementById('sr-sum-rent-chart');
+
+    if (series.length < 2) {
+        const msg = `<div style="color:var(--text-muted);font-size:12px;padding:20px;">
+            분기 데이터가 2개 이상이어야 추이 차트가 표시됩니다.</div>`;
+        if (vacEl)  vacEl.innerHTML  = msg;
+        if (rentEl) rentEl.innerHTML = msg;
+        return;
+    }
+
+    if (vacEl)  vacEl.innerHTML  = _sumMakeLineChart(series, 'vacRate');
+    if (rentEl) rentEl.innerHTML = _sumMakeLineChart(series, 'avgRent');
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ISSUE-6: 계산 방법론 설명 섹션
+// ═══════════════════════════════════════════════════════════════
+
+function _sumRenderMethodology(currentQ, prevQLabel, gradeFilter) {
+    const el = document.getElementById('sr-sum-methodology');
+    if (!el) return;
+
+    const gradeStr = gradeFilter ? `<strong>${gradeFilter}등급</strong> 빌딩만 집계` : '전체 등급 통합 집계';
+
+    el.innerHTML = `
+    <div style="font-weight:700; font-size:12px; color:var(--text-primary); margin-bottom:8px;">
+        📐 계산 방법론
+    </div>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div>
+            <div style="font-weight:600; margin-bottom:4px; color:var(--text-primary);">🏢 공실률</div>
+            <div style="line-height:1.6;">
+                <code style="background:var(--bg-card); padding:2px 6px; border-radius:4px; font-size:11px;">
+                    공실률 = 공실 전용면적 합계 ÷ 빌딩 연면적(평) × 100
+                </code><br>
+                • 공실 전용면적: <code>exclusiveArea</code> 우선, 없으면 <code>rentArea</code><br>
+                • 기준월: <strong>${currentQ} 발행 공실 데이터</strong> 기준<br>
+                • 제외: 삭제·숨김 처리 공실, _meta 레코드<br>
+                • 비교: ${prevQLabel ? `<strong>${prevQLabel}</strong> 동일 기준` : '비교 분기 없음'}
+            </div>
+        </div>
+        <div>
+            <div style="font-weight:600; margin-bottom:4px; color:var(--text-primary);">💰 평균임대가</div>
+            <div style="line-height:1.6;">
+                <code style="background:var(--bg-card); padding:2px 6px; border-radius:4px; font-size:11px;">
+                    평균임대가 = 빌딩별 대표임대가 단순 평균 (원/평/月)
+                </code><br>
+                • 대표임대가: <code>floorPricing</code> 중 해당 분기 이전 최신값<br>
+                • floorPricing 없으면 빌딩 루트(<code>rentPy</code>) 사용<br>
+                • 임대가 0 빌딩 제외 후 평균 산출<br>
+                • 표시 단위: 만원/평/月 (1만원 = 10,000원)
+            </div>
+        </div>
+    </div>
+    <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border-color);
+                font-size:10px; color:var(--text-muted);">
+        ⚙️ 등급 필터: ${gradeStr} &nbsp;|&nbsp;
+        등급 기준: Prime ≥ 20,000평 / A 10,000~20,000 / B 5,000~10,000 / C 3,000~5,000 / D 1,000~3,000 / E &lt; 1,000평 (연면적 기준)
+    </div>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// 메인 렌더 진입점
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 분기 요약 대시보드 전체 렌더
+ * window._srRenderSummary() 로 노출 — switchSRTab('summary') 시 호출됨
+ */
+window._srRenderSummary = function() {
+    const lib = window.srLib;
+    if (!lib) {
+        console.warn('[portal-stats-summary] srLib not ready');
+        return;
+    }
+
+    // 1. 분기 목록 감지
+    const { current, quarters } = _sumDetectQuarters();
+    if (!current) {
+        const el = document.getElementById('sr-sum-cards');
+        if (el) el.innerHTML = `<div style="grid-column:1/-1;text-align:center;
+            color:var(--text-muted);padding:40px;font-size:13px;">
+            데이터가 없습니다. 빌딩 데이터를 먼저 로드해 주세요.</div>`;
+        return;
+    }
+
+    // 2. 비교 분기 결정
+    const cmpSelect = document.getElementById('sr-sum-cmp-select');
+    if (cmpSelect && cmpSelect.value) {
+        _sumCmpQuarter = cmpSelect.value;
+    }
+    const prevQ = _sumCmpQuarter || quarters[1] || '';
+
+    // 3. 분기 선택 UI 렌더
+    const labelEl = document.getElementById('sr-sum-quarter-label');
+    if (labelEl) {
+        labelEl.innerHTML = `
+            <span style="background:linear-gradient(135deg,#0f4c81,#1a73e8);
+                         color:#fff; border-radius:8px; padding:4px 12px; font-size:14px;">
+                ${current}
+            </span>
+            <span style="font-size:12px; color:var(--text-muted); font-weight:400; margin-left:4px;">
+                기준 요약
+            </span>`;
+    }
+    _sumRenderQuarterSelect(quarters, current);
+    _sumRenderGradeFilter();
+
+    // 4. 집계
+    const curStats  = _sumCalcRegionStats(current, _sumGradeFilter);
+    const prevStats = prevQ ? _sumCalcRegionStats(prevQ, _sumGradeFilter) : null;
+
+    // 5. 카드 렌더
+    _sumRenderCards(curStats, prevStats, prevQ);
+
+    // 6. 트렌드 차트 (시계열)
+    const series = _sumCalcTimeSeries(quarters, _sumGradeFilter);
+    _sumRenderTrendCharts(series);
+
+    // 7. 방법론 설명
+    _sumRenderMethodology(current, prevQ, _sumGradeFilter);
+};
+
+/** 등급 필터 변경 핸들러 */
+window._srSumSetGrade = function(grade) {
+    _sumGradeFilter = grade;
+    window._srRenderSummary();
+};
+
+console.log('[portal-stats-summary] 분기 요약 대시보드 모듈 로드 완료');

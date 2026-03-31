@@ -577,7 +577,7 @@ export const srFilterState = {
 
 /** 탭 전환 */
 window.switchSRTab = function(tab) {
-    const tabs = ['summary', 'vacancy', 'rent', 'building', 'table', 'anomaly'];
+    const tabs = ['vacancy', 'rent', 'building', 'table', 'anomaly'];
     tabs.forEach(t => {
         const btn   = document.getElementById(`srtab-${t}`);
         const panel = document.getElementById(`srpanel-${t}`);
@@ -587,7 +587,6 @@ window.switchSRTab = function(tab) {
         btn.style.borderBottom = active ? '2px solid #1a73e8' : '2px solid transparent';
         panel.style.display    = active ? 'block' : 'none';
     });
-    if (tab === 'summary'  && typeof window._srRenderSummary  === 'function') window._srRenderSummary();
     if (tab === 'vacancy'  && typeof window._srRenderVacancy  === 'function') window._srRenderVacancy();
     if (tab === 'rent'     && typeof window._srRenderRent     === 'function') window._srRenderRent();
     if (tab === 'building' && typeof window._srRenderBuilding === 'function') window._srRenderBuilding();
@@ -600,7 +599,7 @@ window.openStatResearchModal = function() {
     const modal = document.getElementById('statResearchModal');
     if (!modal) { console.warn('[portal-stats] statResearchModal not found'); return; }
     modal.style.display = 'flex';
-    window.switchSRTab('summary');
+    window.switchSRTab('vacancy');
 };
 
 /** 모달 닫기 */

@@ -1173,11 +1173,6 @@
         sStats.type = 'module';
         sStats.src = `js/portal-stats.js?v=${_v}`;
         document.currentScript.after(sStats);
-        // ★ 요약 대시보드 모듈 (portal-stats-summary.js)
-        const sSum = document.createElement('script');
-        sSum.type = 'module';
-        sSum.src = `js/portal-stats-summary.js?v=${_v}`;
-        document.currentScript.after(sSum);
     </script>
 
     
@@ -1776,8 +1771,7 @@
 
         <!-- 탭 버튼 -->
         <div style="display:flex; background:var(--bg-secondary); border-bottom:2px solid var(--border-color); flex-shrink:0; overflow-x:auto;">
-            <button class="sr-tab active" id="srtab-summary"  onclick="switchSRTab('summary')"  style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:#1a73e8; border-bottom:2px solid #1a73e8; margin-bottom:-2px;">📋 분기 요약</button>
-            <button class="sr-tab"        id="srtab-vacancy"  onclick="switchSRTab('vacancy')"  style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">📊 권역별 공실현황</button>
+            <button class="sr-tab active" id="srtab-vacancy"  onclick="switchSRTab('vacancy')"  style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:#1a73e8; border-bottom:2px solid #1a73e8; margin-bottom:-2px;">📊 권역별 공실현황</button>
             <button class="sr-tab"        id="srtab-rent"     onclick="switchSRTab('rent')"     style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">💰 임대가 분석</button>
             <button class="sr-tab"        id="srtab-building" onclick="switchSRTab('building')" style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">🏢 빌딩 현황</button>
             <button class="sr-tab"        id="srtab-table"    onclick="switchSRTab('table')"    style="padding:10px 22px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px;">🔍 빌딩 검색 테이블</button>
@@ -1787,53 +1781,8 @@
         <!-- 탭 패널 공통 래퍼 -->
         <div style="overflow-y:auto; flex:1; min-height:0;">
 
-            <!-- ── TAB 0: 분기 요약 대시보드 ── -->
-            <div id="srpanel-summary" style="padding:16px 24px 24px; display:block;">
-
-                <!-- 헤더 행: 분기 선택 + 등급 필터 -->
-                <div id="sr-sum-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
-                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                        <!-- 분기 레이블 (JS가 동적으로 채움) -->
-                        <div id="sr-sum-quarter-label" style="font-size:15px; font-weight:700; color:var(--text-primary);"></div>
-                        <!-- 비교 분기 선택 -->
-                        <select id="sr-sum-cmp-select"
-                            style="padding:5px 10px; border:1px solid var(--border-color); border-radius:7px;
-                                   background:var(--bg-primary); color:var(--text-primary); font-size:12px; cursor:pointer;"
-                            onchange="window._srRenderSummary && window._srRenderSummary()">
-                        </select>
-                    </div>
-                    <!-- 등급 필터 버튼 그룹 -->
-                    <div id="sr-sum-grade-filter" style="display:flex; gap:5px; flex-wrap:wrap;"></div>
-                </div>
-
-                <!-- 권역 카드 그리드 (CBD/GBD/YBD/BBD/ETC) -->
-                <div id="sr-sum-cards"
-                    style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px;">
-                </div>
-
-                <!-- 권역별 미니 트렌드 차트 (공실률) -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary);
-                            margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">
-                    📈 권역별 공실률 분기 추이
-                </div>
-                <div id="sr-sum-vac-chart" style="margin-bottom:20px; overflow-x:auto;"></div>
-
-                <!-- 권역별 미니 트렌드 차트 (임대가) -->
-                <div style="font-size:13px; font-weight:700; color:var(--text-primary);
-                            margin-bottom:8px; padding-bottom:5px; border-bottom:2px solid var(--border-color);">
-                    💰 권역별 평균임대가 분기 추이 (만원/평/月)
-                </div>
-                <div id="sr-sum-rent-chart" style="margin-bottom:20px; overflow-x:auto;"></div>
-
-                <!-- 계산 방법론 설명 -->
-                <div id="sr-sum-methodology"
-                    style="background:var(--bg-secondary); border-radius:10px; padding:14px 18px;
-                           border:1px solid var(--border-color); font-size:12px; color:var(--text-muted);">
-                </div>
-            </div>
-
             <!-- ── TAB 1: 권역별 공실현황 ── -->
-            <div id="srpanel-vacancy" style="padding:16px 24px 20px; display:none;">
+            <div id="srpanel-vacancy" style="padding:16px 24px 20px; display:block;">
                 <!-- 공통 필터 바 -->
                 <div id="sr-filter-bar"></div>
                 <!-- KPI 카드 행 -->
