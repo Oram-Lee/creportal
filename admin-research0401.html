@@ -696,83 +696,6 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
 ::-webkit-scrollbar-track { background: var(--bg-secondary); }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-
-/* ─── 롤백 모달 ─────────────────────────────────────────────── */
-.rollback-modal-box {
-    background: #fff; border-radius: 14px;
-    padding: 0; width: 680px; max-width: 96vw;
-    box-shadow: 0 12px 48px rgba(0,0,0,0.22);
-    max-height: 88vh; overflow: hidden;
-    display: flex; flex-direction: column;
-}
-.rollback-modal-header {
-    padding: 20px 24px 14px;
-    border-bottom: 1px solid var(--border); flex-shrink: 0;
-    background: linear-gradient(135deg, #fef3c7 0%, #fde68a30 100%);
-}
-.rollback-modal-title {
-    font-size: 15px; font-weight: 700; color: #92400e;
-    display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
-}
-.rollback-modal-sub { font-size: 12px; color: var(--text-muted); }
-.rollback-modal-body { flex: 1; overflow-y: auto; padding: 18px 24px; }
-.rollback-list { display: flex; flex-direction: column; gap: 10px; }
-.rollback-item {
-    padding: 14px 16px; border-radius: 10px;
-    border: 1.5px solid var(--border);
-    background: var(--bg-secondary);
-    transition: all 0.15s; cursor: default;
-}
-.rollback-item:hover { border-color: #fbbf24; background: #fffbeb; }
-.rollback-item-top {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    margin-bottom: 6px;
-}
-.rollback-item-date { font-size: 13px; font-weight: 700; color: var(--text); }
-.rollback-item-meta {
-    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-}
-.rollback-badge-count {
-    display: inline-block; padding: 2px 9px; border-radius: 10px;
-    font-size: 11px; font-weight: 700;
-    background: #fffbeb; color: var(--warn); border: 1px solid #fde68a;
-}
-.rollback-badge-scope {
-    display: inline-block; padding: 2px 9px; border-radius: 10px;
-    font-size: 11px; font-weight: 600;
-    background: var(--primary-bg); color: var(--primary); border: 1px solid var(--primary-border);
-}
-.rollback-item-fields {
-    font-size: 11px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.7;
-}
-.btn-rollback-apply {
-    padding: 6px 16px; font-size: 12px; font-weight: 700;
-    background: #dc2626; color: #fff; border: none; border-radius: 6px;
-    cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
-    transition: all 0.15s; box-shadow: 0 1px 4px rgba(220,38,38,0.3);
-}
-.btn-rollback-apply:hover { background: #b91c1c; }
-.btn-rollback-apply:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
-.rollback-modal-footer {
-    padding: 14px 24px; border-top: 1px solid var(--border);
-    flex-shrink: 0; background: var(--bg-secondary);
-    display: flex; align-items: center; justify-content: flex-end; gap: 8px;
-    border-bottom-left-radius: 14px; border-bottom-right-radius: 14px;
-}
-.rollback-empty {
-    text-align: center; padding: 40px 20px; color: var(--text-muted);
-}
-.rollback-empty-icon { font-size: 36px; margin-bottom: 10px; }
-.rollback-empty-text { font-size: 13px; font-weight: 500; }
-.btn-rollback-open {
-    padding: 10px 20px;
-    background: #374151; color: #e5e7eb;
-    border: 1.5px solid #4b5563; border-radius: 8px;
-    font-size: 13px; font-weight: 700;
-    display: inline-flex; align-items: center; gap: 8px;
-    cursor: pointer; transition: all 0.15s;
-}
-.btn-rollback-open:hover { background: #1f2937; border-color: #9ca3af; }
 </style>
 </head>
 <body>
@@ -890,28 +813,6 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
             </div>
         </div>
 
-        <!-- 순차 검토 바 (불일치 탭에서만 표시) -->
-        <div id="seq-review-bar" style="display:none; margin-bottom:12px; padding:10px 16px;
-             background:#fffbeb; border:1px solid #fde68a; border-radius:9px;
-             align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span style="font-size:22px;">⚡</span>
-                <div>
-                    <div style="font-size:12px; font-weight:700; color:var(--warn);">순차 검토 모드</div>
-                    <div style="font-size:11px; color:var(--text-muted);">불일치 빌딩을 팝업 하나에서 순서대로 빠르게 처리합니다</div>
-                </div>
-            </div>
-            <button onclick="openDiffModalWithQueue()"
-                style="padding:8px 18px; background:var(--warn); color:#fff;
-                       border:none; border-radius:7px; font-size:12px; font-weight:700;
-                       cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:6px;
-                       box-shadow:0 2px 8px rgba(217,119,6,0.3); transition:all 0.15s;"
-                onmouseover="this.style.background='#b45309'"
-                onmouseout="this.style.background='var(--warn)'">
-                ⚡ 순차 검토 시작 →
-            </button>
-        </div>
-
         <!-- 필터 탭 -->
         <div class="filter-tabs" id="filter-tabs">
             <div class="filter-tab active" data-tab="all"       onclick="setTab('all')">전체</div>
@@ -1015,54 +916,15 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
                 ⚠️ 업데이트 후 포털 새로고침 필요 &nbsp;|&nbsp;
                 배치 크기 10개씩, 200ms 간격 처리
             </div>
-            <div style="display:flex; gap:10px; align-items:center;">
-                <button class="btn-rollback-open" id="btn-rollback-open" onclick="openRollbackModal()" title="이전 일괄 업데이트 롤백">
-                    <span>⏪</span>
-                    <span>롤백</span>
-                </button>
-                <button class="btn-bulk" id="btn-bulk-run" onclick="runBulkUpdate()" disabled>
-                    <span id="bulk-btn-icon">🚀</span>
-                    <span id="bulk-btn-text">일괄 업데이트 실행</span>
-                </button>
-            </div>
+            <button class="btn-bulk" id="btn-bulk-run" onclick="runBulkUpdate()" disabled>
+                <span id="bulk-btn-icon">🚀</span>
+                <span id="bulk-btn-text">일괄 업데이트 실행</span>
+            </button>
         </div>
     </div>
 </div>
 
 </main>
-
-<!-- ═══ 롤백 모달 ══════════════════════════════════════════ -->
-<div class="modal-backdrop" id="rollback-modal">
-    <div class="rollback-modal-box">
-
-        <div class="rollback-modal-header">
-            <div class="rollback-modal-title">⏪ 일괄 업데이트 롤백</div>
-            <div class="rollback-modal-sub">
-                이전에 실행한 일괄 업데이트 이력을 선택하여 해당 시점 직전의 값으로 복원합니다.
-            </div>
-        </div>
-
-        <div class="rollback-modal-body">
-            <div id="rollback-loading" style="text-align:center; padding:30px; color:var(--text-muted); font-size:13px;">
-                <span class="spin" style="font-size:20px; display:inline-block; margin-bottom:10px;">⚙️</span><br>
-                이력 로딩 중...
-            </div>
-            <div id="rollback-list-wrap" style="display:none;">
-                <div id="rollback-list" class="rollback-list"></div>
-            </div>
-        </div>
-
-        <div class="rollback-modal-footer">
-            <div id="rollback-result-msg" style="flex:1; font-size:12px; font-weight:600; display:none;"></div>
-            <button onclick="closeRollbackModal()"
-                style="padding:8px 20px; background:var(--bg-secondary); border:1px solid var(--border);
-                       border-radius:7px; font-size:13px; font-weight:500; color:var(--text-muted); cursor:pointer;">
-                닫기
-            </button>
-        </div>
-
-    </div>
-</div>
 
 <!-- ═══ 신규 등록 모달 (R3) ════════════════════════════════ -->
 <div class="modal-backdrop" id="reg-modal">
@@ -1315,26 +1177,9 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
 
         <!-- 헤더: 빌딩 정보 -->
         <div class="diff-modal-header">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:12px;">
-                <div class="diff-modal-title" style="margin-bottom:0;">
-                    <span>⚠️</span>
-                    <span id="diff-modal-title-text">불일치 필드 상세</span>
-                </div>
-                <!-- 순차 검토 네비게이션 -->
-                <div id="diff-queue-nav" style="display:none; align-items:center; gap:6px; flex-shrink:0;">
-                    <button onclick="diffGoPrev()" id="btn-diff-prev"
-                        style="padding:4px 10px; background:var(--bg-secondary); border:1px solid var(--border);
-                               border-radius:5px; font-size:11px; font-weight:600; cursor:pointer; color:var(--text-muted);
-                               transition:all 0.15s;" title="이전 빌딩">← 이전</button>
-                    <span id="diff-queue-pos"
-                        style="font-size:12px; font-weight:700; color:var(--primary);
-                               background:var(--primary-bg); padding:3px 10px; border-radius:10px;
-                               border:1px solid var(--primary-border); white-space:nowrap;"></span>
-                    <button onclick="diffGoNext()" id="btn-diff-next-nav"
-                        style="padding:4px 10px; background:var(--bg-secondary); border:1px solid var(--border);
-                               border-radius:5px; font-size:11px; font-weight:600; cursor:pointer; color:var(--text-muted);
-                               transition:all 0.15s;" title="다음 빌딩">다음 →</button>
-                </div>
+            <div class="diff-modal-title">
+                <span>⚠️</span>
+                <span id="diff-modal-title-text">불일치 필드 상세</span>
             </div>
             <div class="diff-modal-meta">
                 <div class="diff-meta-item excel-side">
@@ -1376,34 +1221,6 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
 
             <!-- 적용 결과 배너 -->
             <div class="apply-result-banner" id="apply-result-banner"></div>
-
-            <!-- 순차 검토: 다음 빌딩 안내 프롬프트 -->
-            <div id="diff-next-prompt" style="display:none; margin-top:14px; padding:14px 18px;
-                 background:#eff6ff; border:1px solid var(--primary-border); border-radius:10px;">
-                <div id="diff-next-msg"
-                    style="font-size:13px; font-weight:700; color:var(--primary); margin-bottom:12px; line-height:1.5;">
-                    ✅ 적용됐습니다. 다음 빌딩 상세페이지로 넘어갈까요?
-                </div>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <button id="btn-diff-next-confirm" onclick="diffGoNext()"
-                        style="padding:8px 20px; background:var(--primary); color:#fff;
-                               border:none; border-radius:7px; font-size:13px; font-weight:700;
-                               cursor:pointer; display:flex; align-items:center; gap:6px;
-                               box-shadow:0 2px 8px rgba(26,115,232,0.25); transition:all 0.15s;"
-                        onmouseover="this.style.background='#1558b0'"
-                        onmouseout="this.style.background='var(--primary)'">
-                        확인 (다음 빌딩 →)
-                    </button>
-                    <button onclick="closeDiffModal()"
-                        style="padding:8px 16px; background:var(--bg-secondary); border:1px solid var(--border);
-                               color:var(--text-muted); border-radius:7px; font-size:13px; cursor:pointer;
-                               transition:all 0.15s;"
-                        onmouseover="this.style.background='var(--border)'"
-                        onmouseout="this.style.background='var(--bg-secondary)'">
-                        닫기
-                    </button>
-                </div>
-            </div>
 
         </div>
 
@@ -1887,9 +1704,6 @@ window.setTab = function(tab) {
     _currentTab = tab;
     document.querySelectorAll('.filter-tab').forEach(el =>
         el.classList.toggle('active', el.dataset.tab === tab));
-    // 순차 검토 바: 불일치 탭에서만 표시
-    const _seqBar = document.getElementById('seq-review-bar');
-    if (_seqBar) _seqBar.style.display = (tab === 'mismatch') ? 'flex' : 'none';
     renderTable();
 };
 
@@ -2445,8 +2259,6 @@ const SAFE_UPDATE_FIELDS = new Set([
 ]);
 
 let _diffResultIdx = null;
-let _diffQueue    = [];   // 순차 검토 큐 (resultIdx 배열)
-let _diffQueueIdx = -1;   // 현재 큐 위치 (-1: 비활성)
 
 // 불일치 상세 모달 열기
 window.openDiffModal = function(resultIdx) {
@@ -2473,76 +2285,12 @@ window.openDiffModal = function(resultIdx) {
     banner.style.display = 'none'; banner.className = 'apply-result-banner';
     document.getElementById('diff-footer-info').textContent =
         '⚠️ 포털에 적용하면 Firebase가 업데이트됩니다. 임대조건·공실·렌트롤 등은 변경되지 않습니다.';
-
-    // ── 순차 검토 네비게이션 UI 업데이트 ──
-    const _seqNav = document.getElementById('diff-queue-nav');
-    const _nextPrompt = document.getElementById('diff-next-prompt');
-    if (_nextPrompt) _nextPrompt.style.display = 'none';  // 새 빌딩 열 때마다 초기화
-    if (_diffQueue.length > 0 && _seqNav) {
-        const _posEl = document.getElementById('diff-queue-pos');
-        if (_posEl) _posEl.textContent = `${_diffQueueIdx + 1} / ${_diffQueue.length}`;
-        const _pBtn = document.getElementById('btn-diff-prev');
-        const _nBtn = document.getElementById('btn-diff-next-nav');
-        if (_pBtn) _pBtn.disabled = (_diffQueueIdx === 0);
-        if (_nBtn) _nBtn.disabled = (_diffQueueIdx >= _diffQueue.length - 1);
-        _seqNav.style.display = 'flex';
-    } else if (_seqNav) {
-        _seqNav.style.display = 'none';
-    }
-
     document.getElementById('diff-modal').classList.add('open');
 };
 
 window.closeDiffModal = function() {
     document.getElementById('diff-modal').classList.remove('open');
     _diffResultIdx = null;
-    _diffQueue = [];
-    _diffQueueIdx = -1;
-};
-
-// ── 순차 검토: 다음 빌딩으로 이동 ──
-window.diffGoNext = function() {
-    _diffQueueIdx++;
-    if (_diffQueueIdx >= _diffQueue.length) {
-        const total = _diffQueue.length;
-        _diffQueue = [];
-        _diffQueueIdx = -1;
-        document.getElementById('diff-modal').classList.remove('open');
-        _diffResultIdx = null;
-        setTimeout(() => alert(`✅ 불일치 빌딩 ${total}개 순차 검토가 모두 완료됐습니다!`), 50);
-        return;
-    }
-    openDiffModal(_diffQueue[_diffQueueIdx]);
-};
-
-// ── 순차 검토: 이전 빌딩으로 이동 ──
-window.diffGoPrev = function() {
-    if (_diffQueueIdx <= 0) return;
-    _diffQueueIdx--;
-    openDiffModal(_diffQueue[_diffQueueIdx]);
-};
-
-// ── 순차 검토 시작: 현재 뷰의 mismatch 빌딩 전체를 큐에 적재 ──
-window.openDiffModalWithQueue = function() {
-    const q = (document.getElementById('table-search')?.value || '').trim().toLowerCase();
-    _diffQueue = _matchResults
-        .map((r, i) => ({ r, i }))
-        .filter(({ r }) => {
-            if (r.status !== 'mismatch') return false;
-            if (q) {
-                const name  = String(r.row['빌딩명'] || '').toLowerCase();
-                const pname = r.matched ? String(r.matched.name || '').toLowerCase() : '';
-                if (!name.includes(q) && !pname.includes(q)) return false;
-            }
-            return true;
-        })
-        .map(({ i }) => i);
-    if (!_diffQueue.length) {
-        alert('검토할 불일치 빌딩이 없습니다.');
-        return;
-    }
-    _diffQueueIdx = 0;
-    openDiffModal(_diffQueue[0]);
 };
 
 function renderDiffTable(r) {
@@ -2721,22 +2469,6 @@ window.applyFieldsToPortal = async function() {
 
         document.getElementById('diff-footer-info').textContent =
             `✅ Firebase 업데이트 완료 (${new Date().toLocaleTimeString('ko-KR')})`;
-
-        // 순차 검토 모드이면 다음 빌딩 안내 프롬프트 표시
-        if (_diffQueue.length > 0) {
-            const _np = document.getElementById('diff-next-prompt');
-            if (_np) {
-                // 마지막 빌딩인지 여부에 따라 문구 조정
-                const isLast = (_diffQueueIdx >= _diffQueue.length - 1);
-                const msgEl = _np.querySelector('#diff-next-msg');
-                const confirmBtn = _np.querySelector('#btn-diff-next-confirm');
-                if (msgEl) msgEl.textContent = isLast
-                    ? `✅ 마지막 빌딩입니다! 순차 검토가 완료됐습니다.`
-                    : `✅ 적용됐습니다. 다음 빌딩 상세페이지로 넘어갈까요?`;
-                if (confirmBtn) confirmBtn.style.display = isLast ? 'none' : '';
-                _np.style.display = '';
-            }
-        }
 
     } catch (err) {
         console.error('Firebase 적용 오류:', err);
@@ -3295,34 +3027,6 @@ window.runBulkUpdate = async function() {
 
     if (!confirm(confirmMsg)) return;
 
-    // ── 롤백 스냅샷: 업데이트 직전 값 수집 ──────────────────
-    const SNAPSHOT_FIELDS = [
-        'isResearchTarget', 'rawResearchId', 'researchMatchStatus',
-        'researchSyncedAt', 'subRegion', 'researchFieldDiff',
-    ];
-    const snapshotTs  = new Date().toISOString();
-    const snapshotKey = 'snap_' + snapshotTs.replace(/[:.]/g, '-');
-    const snapshotData = {
-        ts:     snapshotTs,
-        scope,
-        count:  targets.filter(r => r.matched?.id).length,
-        fields: ['isResearchTarget','rawResearchId','researchMatchStatus','researchSyncedAt']
-            .concat(includeSubRegion ? ['subRegion'] : [])
-            .concat(includeFieldDiff ? ['researchFieldDiff'] : []),
-        buildings: {},
-    };
-    targets.forEach(r => {
-        if (!r.matched?.id) return;
-        const before = {};
-        SNAPSHOT_FIELDS.forEach(f => {
-            before[f] = r.matched[f] ?? null;
-        });
-        snapshotData.buildings[r.matched.id] = {
-            name:   r.matched.name || r.matched.id,
-            before,
-        };
-    });
-
     // UI: 버튼 비활성화 + 진행 영역 표시
     const btn     = document.getElementById('btn-bulk-run');
     const btnIcon = document.getElementById('bulk-btn-icon');
@@ -3419,21 +3123,6 @@ window.runBulkUpdate = async function() {
             ? `완료 (오류 ${errorCount}건)`
             : `완료 (${successCount}개 업데이트)`;
 
-        // ── 롤백 스냅샷 Firebase 저장 (성공건이 1개 이상인 경우만) ──
-        if (successCount > 0) {
-            try {
-                const { db, ref: fbRef2, update: fbUpdate2 } = await import('./js/portal-firebase.js');
-                snapshotData.count = successCount; // 실제 성공 수로 보정
-                // update()로 단일 키 저장 (set 미사용)
-                await fbUpdate2(fbRef2(db, 'bulkSnapshots'), { [snapshotKey]: snapshotData });
-                _bulkLog(`\n💾 롤백 스냅샷 저장 완료 (${snapshotKey})`, 'log-info');
-                banner.textContent += '  · 롤백 가능';
-            } catch (snapErr) {
-                console.warn('롤백 스냅샷 저장 실패:', snapErr);
-                _bulkLog(`\n⚠️ 롤백 스냅샷 저장 실패: ${snapErr.message}`, 'log-err');
-            }
-        }
-
     } catch (err) {
         console.error('일괄 업데이트 오류:', err);
         _bulkLog(`\n❌ 치명적 오류: ${err.message}`, 'log-err');
@@ -3446,166 +3135,12 @@ window.runBulkUpdate = async function() {
     }
 };
 
-// ═════════════════════════════════════════════════════════════
-// 롤백 기능
-// ═════════════════════════════════════════════════════════════
-
-const SCOPE_LABEL = { all: '매칭됨 전체', matched: '일치 항목만', mismatch: '불일치 항목만' };
-
-window.openRollbackModal = async function() {
-    document.getElementById('rollback-modal').classList.add('open');
-    document.getElementById('rollback-loading').style.display = '';
-    document.getElementById('rollback-list-wrap').style.display = 'none';
-    const msgEl = document.getElementById('rollback-result-msg');
-    if (msgEl) { msgEl.style.display = 'none'; msgEl.textContent = ''; }
-
-    try {
-        const { db, ref, get } = await import('./js/portal-firebase.js');
-        const snap = await get(ref(db, 'bulkSnapshots'));
-        document.getElementById('rollback-loading').style.display = 'none';
-        document.getElementById('rollback-list-wrap').style.display = '';
-
-        const listEl = document.getElementById('rollback-list');
-        if (!snap.exists()) {
-            listEl.innerHTML = `<div class="rollback-empty">
-                <div class="rollback-empty-icon">📭</div>
-                <div class="rollback-empty-text">저장된 롤백 이력이 없습니다.<br>일괄 업데이트를 실행하면 자동으로 스냅샷이 저장됩니다.</div>
-            </div>`;
-            return;
-        }
-
-        const entries = [];
-        snap.forEach(child => {
-            entries.push({ key: child.key, ...child.val() });
-        });
-        // 최신 순 정렬
-        entries.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
-
-        // 최대 20개 표시
-        const display = entries.slice(0, 20);
-        listEl.innerHTML = display.map(e => {
-            const dt = e.ts ? new Date(e.ts) : null;
-            const dateStr = dt
-                ? `${dt.getFullYear()}년 ${dt.getMonth()+1}월 ${dt.getDate()}일 ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`
-                : e.key;
-            const scopeLabel = SCOPE_LABEL[e.scope] || e.scope || '전체';
-            const fieldsLabel = (e.fields || []).join(', ');
-            return `<div class="rollback-item">
-                <div class="rollback-item-top">
-                    <div class="rollback-item-date">🕒 ${dateStr}</div>
-                    <div class="rollback-item-meta">
-                        <span class="rollback-badge-count">🏢 ${e.count || 0}개 빌딩</span>
-                        <span class="rollback-badge-scope">${scopeLabel}</span>
-                    </div>
-                </div>
-                <div class="rollback-item-fields">복원 필드: ${fieldsLabel || '—'}</div>
-                <button class="btn-rollback-apply" id="rbtn-${e.key}" onclick="applyRollback('${e.key}', ${JSON.stringify(dateStr)})">
-                    ⏪ 이 시점으로 롤백
-                </button>
-            </div>`;
-        }).join('');
-
-        if (entries.length > 20) {
-            listEl.innerHTML += `<div style="text-align:center;font-size:12px;color:var(--text-muted);padding:12px 0;">
-                최근 20건만 표시됩니다. (전체 ${entries.length}건)
-            </div>`;
-        }
-
-    } catch (err) {
-        console.error('롤백 이력 로딩 오류:', err);
-        document.getElementById('rollback-loading').style.display = 'none';
-        document.getElementById('rollback-list-wrap').style.display = '';
-        document.getElementById('rollback-list').innerHTML =
-            `<div class="rollback-empty"><div class="rollback-empty-icon">❌</div>
-             <div class="rollback-empty-text">이력 로딩 중 오류 발생: ${err.message}</div></div>`;
-    }
-};
-
-window.closeRollbackModal = function() {
-    document.getElementById('rollback-modal').classList.remove('open');
-};
-
-window.applyRollback = async function(snapshotKey, dateLabel) {
-    const confirmMsg =
-        `⚠️ 롤백을 실행합니다.\n\n` +
-        `선택한 스냅샷: ${dateLabel}\n` +
-        `해당 일괄 업데이트 직전 값으로 Firebase를 복원합니다.\n\n` +
-        `isResearchTarget, rawResearchId, researchMatchStatus,\n` +
-        `researchSyncedAt, subRegion, researchFieldDiff\n\n` +
-        `⚠️ 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?`;
-    if (!confirm(confirmMsg)) return;
-
-    const btn = document.getElementById(`rbtn-${snapshotKey}`);
-    if (btn) { btn.disabled = true; btn.textContent = '⚙️ 복원 중...'; }
-
-    const msgEl = document.getElementById('rollback-result-msg');
-
-    try {
-        const { db, ref, get, update } = await import('./js/portal-firebase.js');
-
-        // 스냅샷 데이터 로드
-        const snap = await get(ref(db, `bulkSnapshots/${snapshotKey}`));
-        if (!snap.exists()) throw new Error('스냅샷 데이터를 찾을 수 없습니다.');
-        const data = snap.val();
-        const buildings = data.buildings || {};
-        const keys = Object.keys(buildings);
-
-        if (!keys.length) throw new Error('복원할 빌딩 데이터가 없습니다.');
-
-        let doneCount = 0, errCount = 0;
-        const batches = _chunks(keys, 10);
-
-        for (let bi = 0; bi < batches.length; bi++) {
-            await Promise.all(batches[bi].map(async portalId => {
-                const entry = buildings[portalId];
-                if (!entry?.before) return;
-                // null 값도 명시적으로 삭제하지 않고 null로 덮어쓰기
-                const restorePayload = {};
-                Object.entries(entry.before).forEach(([k, v]) => {
-                    restorePayload[k] = v;  // null이면 Firebase에서 해당 키 null로 설정
-                });
-                try {
-                    await update(ref(db, `buildings/${portalId}`), restorePayload);
-                    doneCount++;
-                } catch (e) {
-                    console.error(`롤백 오류 ${portalId}:`, e);
-                    errCount++;
-                }
-            }));
-            if (bi < batches.length - 1) await new Promise(r => setTimeout(r, 200));
-        }
-
-        const result = `✅ 롤백 완료: ${doneCount}개 복원` +
-            (errCount > 0 ? ` / ❌ ${errCount}개 실패` : '');
-        if (msgEl) {
-            msgEl.textContent = result;
-            msgEl.style.cssText = `display:block; color:${errCount > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:700;`;
-        }
-        if (btn) { btn.textContent = errCount > 0 ? '⚠️ 일부 실패' : '✅ 롤백 완료'; }
-
-    } catch (err) {
-        console.error('롤백 오류:', err);
-        if (msgEl) {
-            msgEl.textContent = `❌ 롤백 실패: ${err.message}`;
-            msgEl.style.cssText = 'display:block; color:var(--danger); font-weight:700;';
-        }
-        if (btn) { btn.disabled = false; btn.textContent = '⏪ 이 시점으로 롤백'; }
-    }
-};
-
-document.getElementById('rollback-modal').addEventListener('click', e => {
-    if (e.target === e.currentTarget) closeRollbackModal();
-});
-
 // ─────────────────────────────────────────────────────────────
 // FIX 8: ESC 키로 열린 모달 순서대로 닫기
 // ─────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    // 우선순위: 롤백 → 불일치 → 신규등록 → 수동지정 순으로 닫기
-    if (document.getElementById('rollback-modal')?.classList.contains('open')) {
-        closeRollbackModal(); return;
-    }
+    // 우선순위: 불일치 → 신규등록 → 수동지정 순으로 닫기
     if (document.getElementById('diff-modal')?.classList.contains('open')) {
         closeDiffModal(); return;
     }
