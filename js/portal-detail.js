@@ -1945,6 +1945,28 @@ export function renderIncentiveSection() {
 
 // ===== 임대안내문(문서) 섹션 =====
 
+// ★ Fix: openTransferVacancyModal — 공실없음(_meta) 안내문 이관 모달 열기
+// _noVacTransfer에서 호출되며, metaVac을 공실 1건처럼 래핑하여 openTransferModal()에 위임
+window.openTransferVacancyModal = function(buildingId, metaKey, metaVac) {
+    // 대상 빌딩을 selectedBuilding으로 임시 설정 (searchTransferBuilding에서 제외 기준으로 사용)
+    const bld = window.state?.allBuildings?.find(b => b.id === buildingId);
+    if (bld) window.state.selectedBuilding = bld;
+
+    // _meta 레코드를 공실처럼 래핑
+    const vacancyItem = {
+        _vacancyId: metaKey,
+        _key: metaKey,
+        floor: metaVac?.floor || '공실없음',
+        rentArea: metaVac?.rentArea || null,
+        buildingId,
+        _isMeta: true,
+        ...metaVac,
+    };
+
+    state.transferVacancyIndices = [metaKey]; // 인덱스 대신 key 사용 (executeVacancyTransfer에서 fallback 처리)
+    openTransferModal([vacancyItem]);
+};
+
 // ★ Fix: 공실없음 이관 헬퍼 (onclick에서 객체 직접 전달 불가 문제 우회)
 window._noVacTransfer = function(buildingId, metaKey) {
     const cachedMeta = (window._noVacMetaCache || {})[buildingId + '_' + metaKey];
@@ -5503,8 +5525,15 @@ function openTransferModal(vacanciesToTransfer) {
  * 이관 대상 빌딩 검색
  */
 export function searchTransferBuilding() {
-    const query = (document.getElementById('transferBuildingSearch')?.value || '').trim().toLowerCase();
-    const resultsDiv = document.getElementById('transferBuildingResults');
+    // ★ Fix: 동적 모달(#transferModal) 내 요소를 우선 참조 — portal.html 정적 모달과 ID 충돌 방지
+    const activeModal = document.getElementById('transferModal') || document.getElementById('vacancyTransferModal');
+    const query = (
+        activeModal?.querySelector('#transferBuildingSearch')?.value ||
+        document.getElementById('transferBuildingSearch')?.value || ''
+    ).trim().toLowerCase();
+    const resultsDiv =
+        activeModal?.querySelector('#transferBuildingResults') ||
+        document.getElementById('transferBuildingResults');
     
     if (query.length < 2) {
         resultsDiv.innerHTML = `<div style="padding: 20px; text-align: center; color: #666; font-size: 13px;">2글자 이상 입력하세요</div>`;
