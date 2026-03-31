@@ -201,8 +201,9 @@ function _sumCalcRegionStats(qLabel, grade) {
  * @returns {Array<{ q: string, regions: Object<string, SumStat> }>}  오름차순
  */
 function _sumCalcTimeSeries(quarters, grade) {
-    // 최대 8분기
-    const qs = quarters.slice(0, 8).reverse(); // 오름차순
+    // quarters는 current 우선 비정렬 배열이므로, 문자열 오름차순 정렬 후 최근 8분기 추출
+    // 'YYYYQN' 포맷은 문자열 정렬 = 시간 정렬이 동일하게 동작함
+    const qs = [...quarters].sort().slice(-8); // 오름차순 (왼쪽=과거, 오른쪽=최신)
     return qs.map(q => ({ q, regions: _sumCalcRegionStats(q, grade) }));
 }
 
