@@ -18,8 +18,8 @@
 // ISSUE-3: 데이터 집계 레이어
 // ═══════════════════════════════════════════════════════════════
 
-/** 현재 선택된 등급 필터 ('' = 전체) */
-let _sumGradeFilter = '';
+/** 현재 선택된 등급 필터 ([] = 전체, 복수 선택 가능) */
+let _sumGradeFilter = [];  // string[]
 
 /** 비교 분기 오버라이드 ('YYYY-QN' 형식, '' = 자동) */
 let _sumCmpQuarter = '';
@@ -154,8 +154,10 @@ function _sumCalcRegionStats(qLabel, grade) {
     if (!lib || !qLabel) return {};
 
     const normBuildings = lib.srGetNormBuildings();
-    const filtered = grade
-        ? lib.srApplyFilter(normBuildings, { grade: [grade] })
+    // grade: string | string[] | [] 모두 수용
+    const gradeArr = Array.isArray(grade) ? grade : (grade ? [grade] : []);
+    const filtered = gradeArr.length > 0
+        ? lib.srApplyFilter(normBuildings, { grade: gradeArr })
         : normBuildings;
 
     const result = {};
@@ -201,9 +203,12 @@ function _sumCalcRegionStats(qLabel, grade) {
  * @returns {Array<{ q: string, regions: Object<string, SumStat> }>}  오름차순
  */
 function _sumCalcTimeSeries(quarters, grade) {
-    // quarters는 current 우선 비정렬 배열이므로, 문자열 오름차순 정렬 후 최근 8분기 추출
-    // 'YYYYQN' 포맷은 문자열 정렬 = 시간 정렬이 동일하게 동작함
-    const qs = [...quarters].sort().slice(-8); // 오름차순 (왼쪽=과거, 오른쪽=최신)
+    // 현재 진행 중인 분기는 미완성 데이터 → 차트에서 제외
+    const completed = _sumPrevCompletedQuarter(); // e.g. '2025Q4'
+    const qs = [...quarters]
+        .filter(q => q <= completed)   // 완료 분기만
+        .sort()                        // 오름차순 (왼쪽=과거, 오른쪽=최신)
+        .slice(-8);                    // 최근 8분기
     return qs.map(q => ({ q, regions: _sumCalcRegionStats(q, grade) }));
 }
 
@@ -246,27 +251,30 @@ function _sumDeltaBadge(cur, prev, type) {
     </span>`;
 }
 
-/** 등급 필터 버튼 그룹 렌더 */
+/** 등급 필터 버튼 그룹 렌더 (복수 선택) */
 function _sumRenderGradeFilter() {
     const el = document.getElementById('sr-sum-grade-filter');
     if (!el) return;
 
     const lib    = window.srLib;
-    const grades = ['전체', ...lib.SR_GRADES];
+    const grades = ['전체', ...lib.SR_GRADES.filter(g => g !== 'E')]; // E등급 제외 (데이터 희소)
     const colors = { ...lib.SR_GRADE_COLOR, '전체': '#374151' };
 
     el.innerHTML = grades.map(g => {
-        const key    = g === '전체' ? '' : g;
-        const active = _sumGradeFilter === key;
-        const color  = colors[g] || '#374151';
+        const key = g === '전체' ? '__all__' : g;
+        // 전체: _sumGradeFilter가 빈 배열이면 active
+        const active = g === '전체'
+            ? _sumGradeFilter.length === 0
+            : _sumGradeFilter.includes(g);
+        const color = colors[g] || '#374151';
         return `<button
-            onclick="window._srSumSetGrade('${key}')"
+            onclick="window._srSumToggleGrade('${key}')"
             style="padding:4px 10px; border-radius:14px; font-size:11px; font-weight:700;
                    cursor:pointer; white-space:nowrap; transition:all 0.15s;
                    border:2px solid ${color};
                    background:${active ? color : 'transparent'};
                    color:${active ? '#fff' : color};">
-            ${g}
+            ${g}${active && g !== '전체' ? ' ✓' : ''}
         </button>`;
     }).join('');
 }
@@ -446,19 +454,31 @@ function _sumMakeLineChart(series, metric) {
         const points = vals.map((v, i) =>
             `${toX(i).toFixed(1)},${toY(v).toFixed(1)}`
         ).join(' ');
-        const dots = vals.map((v, i) => {
+
+        const dotsAndLabels = vals.map((v, i) => {
+            const cx = parseFloat(toX(i).toFixed(1));
+            const cy = parseFloat(toY(v).toFixed(1));
             const label = metric === 'vacRate'
                 ? `${v.toFixed(1)}%`
                 : `${(v / 10000).toFixed(1)}만`;
-            return `<circle cx="${toX(i).toFixed(1)}" cy="${toY(v).toFixed(1)}"
-                r="3.5" fill="${color}" stroke="#fff" stroke-width="1.5">
+
+            // 레이블 위치: 위쪽으로 12px, 차트 상단 넘치면 아래로
+            const labelY = cy > PAD + 14 ? cy - 8 : cy + 16;
+
+            return `<circle cx="${cx}" cy="${cy}"
+                r="4" fill="${color}" stroke="#fff" stroke-width="1.5">
                 <title>${r} ${LABELS[i]}: ${label}</title>
-            </circle>`;
+            </circle>
+            <text x="${cx}" y="${labelY}" text-anchor="middle"
+                font-size="9" font-weight="700"
+                fill="${color}"
+                paint-order="stroke" stroke="#fff" stroke-width="2.5"
+                stroke-linejoin="round">${label}</text>`;
         }).join('');
 
         return `<polyline points="${points}" fill="none"
             stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-            ${dots}`;
+            ${dotsAndLabels}`;
     }).join('');
 
     // 범례
@@ -501,6 +521,209 @@ function _sumRenderTrendCharts(series) {
 
 
 // ═══════════════════════════════════════════════════════════════
+// ISSUE-7: 권역 × 등급 요약 교차 테이블
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 권역×등급별 상세 집계 (카드와 차트 사이에 표시되는 상세 테이블용)
+ * @param {string}   qLabel    기준 분기
+ * @param {string}   prevQ     비교 분기
+ * @param {string[]} gradeArr  선택 등급 배열 ([] = 전체)
+ * @returns {Object} { [region]: { [grade]: { bldgCount, vacRate, avgRent, prevVacRate, prevAvgRent } } }
+ */
+function _sumCalcCrossStats(qLabel, prevQ, gradeArr) {
+    const lib = window.srLib;
+    if (!lib || !qLabel) return {};
+
+    const GRADES_SHOW = lib.SR_GRADES.filter(g => g !== 'E'); // E등급 제외
+    const targetGrades = gradeArr.length > 0 ? gradeArr : GRADES_SHOW;
+
+    const normBuildings = lib.srGetNormBuildings();
+
+    // 초기화
+    const result = {};
+    lib.SR_REGIONS.forEach(r => {
+        result[r] = {};
+        GRADES_SHOW.forEach(g => {
+            result[r][g] = { bldgCount: 0, gross: 0, vacPy: 0, rentSum: 0, rentCnt: 0,
+                             prevGross: 0, prevVacPy: 0, prevRentSum: 0, prevRentCnt: 0 };
+        });
+    });
+
+    normBuildings.forEach(b => {
+        const r = b._region;
+        const g = b._gradeAuto;
+        if (!result[r] || !result[r][g]) return;
+
+        const gross = parseFloat(b.grossFloorPy) || 0;
+        result[r][g].bldgCount += 1;
+        result[r][g].gross     += gross;
+
+        // 기준 분기 공실
+        const vacs  = _sumFilterVacByQuarter(b._activeVacs, qLabel);
+        result[r][g].vacPy += vacs.reduce((s, v) => s + lib.srVacancyAreaPy(v), 0);
+
+        // 기준 분기 임대가
+        const rent = _sumGetRentForQuarter(b, qLabel);
+        if (rent.rentPy > 0) { result[r][g].rentSum += rent.rentPy; result[r][g].rentCnt += 1; }
+
+        // 비교 분기
+        if (prevQ) {
+            const pvacs = _sumFilterVacByQuarter(b._activeVacs, prevQ);
+            result[r][g].prevGross  += gross;
+            result[r][g].prevVacPy  += pvacs.reduce((s, v) => s + lib.srVacancyAreaPy(v), 0);
+            const prent = _sumGetRentForQuarter(b, prevQ);
+            if (prent.rentPy > 0) { result[r][g].prevRentSum += prent.rentPy; result[r][g].prevRentCnt += 1; }
+        }
+    });
+
+    // 비율 계산 → 최종 구조
+    const final = {};
+    lib.SR_REGIONS.forEach(r => {
+        final[r] = {};
+        GRADES_SHOW.forEach(g => {
+            const d = result[r][g];
+            final[r][g] = {
+                bldgCount:   d.bldgCount,
+                vacRate:     d.gross > 0 ? d.vacPy / d.gross * 100 : null,
+                avgRent:     d.rentCnt > 0 ? d.rentSum / d.rentCnt : null,
+                prevVacRate: d.prevGross > 0 ? d.prevVacPy / d.prevGross * 100 : null,
+                prevAvgRent: d.prevRentCnt > 0 ? d.prevRentSum / d.prevRentCnt : null,
+            };
+        });
+    });
+
+    return { data: final, grades: GRADES_SHOW, targetGrades };
+}
+
+/**
+ * 권역×등급 교차 테이블 HTML 렌더
+ */
+function _sumRenderCrossTable(currentQ, prevQ, gradeArr) {
+    const el = document.getElementById('sr-sum-cross-table');
+    if (!el) return;
+
+    const lib = window.srLib;
+    const { data, grades, targetGrades } = _sumCalcCrossStats(currentQ, prevQ, gradeArr);
+
+    // 필터 적용된 등급만 표시 (전체면 전부)
+    const showGrades = targetGrades;
+
+    // 셀 배경색 (공실률 히트맵용)
+    const allVacRates = lib.SR_REGIONS.flatMap(r =>
+        showGrades.map(g => data[r]?.[g]?.vacRate).filter(v => v !== null && v > 0)
+    );
+    const maxVac = Math.max(...allVacRates, 1);
+
+    const vacHeat = (v) => {
+        if (v === null || v === 0) return 'transparent';
+        const t = Math.min(v / maxVac, 1);
+        return `rgba(239,68,68,${(t * 0.18).toFixed(2)})`;
+    };
+
+    // 증감 표시 헬퍼
+    const deltaVac = (cur, prev) => {
+        if (cur === null || prev === null) return '';
+        const d = cur - prev;
+        if (Math.abs(d) < 0.01) return '<span style="color:#6b7280;font-size:9px;">●</span>';
+        const color = d > 0 ? '#ef4444' : '#16a34a';
+        const arrow = d > 0 ? '▲' : '▼';
+        return `<span style="color:${color};font-size:9px;font-weight:700;">${arrow}${Math.abs(d).toFixed(1)}%p</span>`;
+    };
+    const deltaRent = (cur, prev) => {
+        if (cur === null || prev === null) return '';
+        const d = cur - prev;
+        if (Math.abs(d) < 1) return '<span style="color:#6b7280;font-size:9px;">●</span>';
+        const color = d > 0 ? '#1a73e8' : '#ea580c';
+        const arrow = d > 0 ? '▲' : '▼';
+        const abs = Math.abs(Math.round(d));
+        return `<span style="color:${color};font-size:9px;font-weight:700;">${arrow}${abs >= 10000 ? (abs/10000).toFixed(1)+'만' : abs.toLocaleString()+'원'}</span>`;
+    };
+
+    const gradeCols = showGrades.map(g => {
+        const gColor = lib.SR_GRADE_COLOR[g] || '#6b7280';
+        return `<th colspan="1" style="padding:6px 8px; text-align:center; font-size:11px;
+                    font-weight:800; color:${gColor}; white-space:nowrap;
+                    border-bottom:2px solid ${gColor}30; min-width:72px;">
+                ${g}등급
+            </th>`;
+    }).join('');
+
+    const rows = lib.SR_REGIONS.map(r => {
+        const rColor = lib.SR_REGION_COLOR[r] || '#6b7280';
+
+        const cells = showGrades.map(g => {
+            const d = data[r]?.[g];
+            if (!d || d.bldgCount === 0) {
+                return `<td style="padding:6px 8px; text-align:center; color:var(--text-muted);
+                            font-size:11px; border-bottom:1px solid var(--border-color);">-</td>`;
+            }
+            const vacStr  = d.vacRate  !== null ? `${d.vacRate.toFixed(1)}%`  : '-';
+            const rentStr = d.avgRent  !== null ? `${(d.avgRent/10000).toFixed(1)}만` : '-';
+            const bg = vacHeat(d.vacRate);
+            return `<td style="padding:6px 8px; background:${bg};
+                        border-bottom:1px solid var(--border-color); min-width:72px;">
+                <div style="font-size:10px; color:var(--text-muted); margin-bottom:1px;">
+                    ${d.bldgCount}개동
+                </div>
+                <div style="display:flex; align-items:center; gap:3px; flex-wrap:wrap;">
+                    <span style="font-size:12px; font-weight:700; color:${rColor};">${vacStr}</span>
+                    ${deltaVac(d.vacRate, d.prevVacRate)}
+                </div>
+                <div style="display:flex; align-items:center; gap:3px; flex-wrap:wrap; margin-top:1px;">
+                    <span style="font-size:11px; color:var(--text-primary);">${rentStr}</span>
+                    ${deltaRent(d.avgRent, d.prevAvgRent)}
+                </div>
+            </td>`;
+        }).join('');
+
+        // 행 합계 (선택 등급 전체 합산)
+        const rowBldg = showGrades.reduce((s, g) => s + (data[r]?.[g]?.bldgCount || 0), 0);
+        const rowVacs = showGrades.reduce((s, g) => {
+            const d = data[r]?.[g];
+            if (!d || d.bldgCount === 0) return s;
+            // gross × vacRate 역산으로 vacPy 복원 불가 → 카운트 기반 평균
+            return s;
+        }, 0);
+
+        return `<tr>
+            <td style="padding:6px 10px; font-weight:800; font-size:12px; color:${rColor};
+                        white-space:nowrap; border-bottom:1px solid var(--border-color);
+                        position:sticky; left:0; background:var(--bg-card); z-index:1;">
+                <span style="display:inline-block; width:8px; height:8px; border-radius:50%;
+                              background:${rColor}; margin-right:4px;"></span>${r}
+                <span style="font-size:10px; font-weight:400; color:var(--text-muted); margin-left:4px;">${rowBldg}개동</span>
+            </td>
+            ${cells}
+        </tr>`;
+    }).join('');
+
+    const prevLabel = prevQ ? `vs ${prevQ}` : '';
+
+    el.innerHTML = `
+    <div style="overflow-x:auto;">
+        <div style="font-size:10px; color:var(--text-muted); margin-bottom:6px; text-align:right;">
+            셀 구성: <b>빌딩수</b> / <b>공실률 ${prevLabel ? '· '+prevLabel+' 증감' : ''}</b> / <b>평균임대가 ${prevLabel ? '· '+prevLabel+' 증감' : ''}</b>
+            &nbsp;|&nbsp; 배경색 농도 = 공실률 수준
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:11px;">
+            <thead>
+                <tr style="background:var(--bg-secondary);">
+                    <th style="padding:8px 10px; text-align:left; font-size:11px; font-weight:700;
+                               color:var(--text-primary); border-bottom:2px solid var(--border-color);
+                               position:sticky; left:0; background:var(--bg-secondary); z-index:2;
+                               min-width:80px;">
+                        권역 / 등급
+                    </th>
+                    ${gradeCols}
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
 // ISSUE-6: 계산 방법론 설명 섹션
 // ═══════════════════════════════════════════════════════════════
 
@@ -508,7 +731,10 @@ function _sumRenderMethodology(currentQ, prevQLabel, gradeFilter) {
     const el = document.getElementById('sr-sum-methodology');
     if (!el) return;
 
-    const gradeStr = gradeFilter ? `<strong>${gradeFilter}등급</strong> 빌딩만 집계` : '전체 등급 통합 집계';
+    const gradeArr = Array.isArray(gradeFilter) ? gradeFilter : (gradeFilter ? [gradeFilter] : []);
+    const gradeStr = gradeArr.length > 0
+        ? `<strong>${gradeArr.join(' · ')}등급</strong> 빌딩만 집계`
+        : '전체 등급 통합 집계';
 
     el.innerHTML = `
     <div style="font-weight:700; font-size:12px; color:var(--text-primary); margin-bottom:8px;">
@@ -602,6 +828,9 @@ window._srRenderSummary = function() {
     // 5. 카드 렌더
     _sumRenderCards(curStats, prevStats, prevQ);
 
+    // 5-1. 권역×등급 교차 테이블
+    _sumRenderCrossTable(current, prevQ, _sumGradeFilter);
+
     // 6. 트렌드 차트 (시계열)
     const series = _sumCalcTimeSeries(quarters, _sumGradeFilter);
     _sumRenderTrendCharts(series);
@@ -610,9 +839,25 @@ window._srRenderSummary = function() {
     _sumRenderMethodology(current, prevQ, _sumGradeFilter);
 };
 
-/** 등급 필터 변경 핸들러 */
+/** 등급 필터 토글 핸들러 (복수 선택) */
 window._srSumSetGrade = function(grade) {
-    _sumGradeFilter = grade;
+    // 하위 호환 유지 (단일 grade 호출 시 해당 등급만 선택)
+    _sumGradeFilter = grade ? [grade] : [];
+    window._srRenderSummary();
+};
+
+window._srSumToggleGrade = function(key) {
+    if (key === '__all__') {
+        // 전체 버튼: 모든 선택 해제
+        _sumGradeFilter = [];
+    } else {
+        const idx = _sumGradeFilter.indexOf(key);
+        if (idx === -1) {
+            _sumGradeFilter = [..._sumGradeFilter, key]; // 추가
+        } else {
+            _sumGradeFilter = _sumGradeFilter.filter(g => g !== key); // 제거
+        }
+    }
     window._srRenderSummary();
 };
 
