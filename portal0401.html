@@ -1163,7 +1163,7 @@
 
     <script>
         // 캐시 버스팅: 배포마다 자동으로 새 버전 로딩
-        const _v = new Date().toISOString().slice(0,16).replace(/[-T:]/g,''); // 분단위 갱신
+        const _v = new Date().toISOString().slice(0,13).replace(/[-T]/g,''); // 시간단위 갱신
         const s1 = document.createElement('script');
         s1.type = 'module';
         s1.src = `js/portal-main.js?v=${_v}`;
