@@ -13,8 +13,8 @@ import { state, API_BASE_URL } from './portal-state.js';
 import { db, ref, get, set, push, update, remove } from './portal-firebase.js';
 import { showToast, formatNumber, formatPyPrice, debounce, detectRegion, autoSetRegion, formatFloors, formatStation, isRecentlyUpdated } from './portal-utils.js';
 import { handleLogin, handleLogout, showApp, checkAuth, hasPermission } from './portal-auth.js';
-// ★ portal.html과 동일한 시간단위 캐시버스팅 (버전 파일 변경 시 자동 반영)
-const _vMod = new Date().toISOString().slice(0,13).replace(/[-T]/g,'');
+// ★ portal.html과 동일한 분단위 캐시버스팅 (버전 파일 변경 시 자동 반영)
+const _vMod = new Date().toISOString().slice(0,16).replace(/[-T:]/g,'');
 
 // 버전 고정 모듈: dynamic import로 캐시버스팅
 const [_data, _detail, _crud, _misc] = await Promise.all([
