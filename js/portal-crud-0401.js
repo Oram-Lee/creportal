@@ -8,15 +8,15 @@ import { db, ref, get, set, push, update, remove, storage, storageRef, getDownlo
 import { showToast } from './portal-utils.js';
 import { processBuildings, loadData } from './portal-data.js';
 import { renderBuildingList, renderTableView } from './portal-ui.js';
-// ★ Fix: portal-detail.js static import 제거 → window 전역 참조로 교체
-// (static import는 ?v= 캐시버스팅 불가 → 구버전 캐시 충돌 방지)
-const renderRentrollSection = (...a) => window.renderRentrollSection?.(...a);
-const renderMemoSection     = (...a) => window.renderMemoSection?.(...a);
-const renderPricingSection  = (...a) => window.renderPricingSection?.(...a);
-const renderContactSection  = (...a) => window.renderContactSection?.(...a);
-const renderInfoSection     = (...a) => window.renderInfoSection?.(...a);
-const closeDetail           = (...a) => window.closeDetail?.(...a);
-const openDetail            = (...a) => window.openDetail?.(...a);
+import { 
+    renderRentrollSection, 
+    renderMemoSection, 
+    renderPricingSection, 
+    renderContactSection,
+    renderInfoSection,
+    closeDetail,
+    openDetail
+} from './portal-detail.js';
 
 // ============================================================
 // ★ v4.0: CRUD 후 UI 갱신 헬퍼

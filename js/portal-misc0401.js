@@ -6,8 +6,7 @@
 import { state, API_BASE_URL } from './portal-state.js';
 import { db, ref, update } from './portal-firebase.js';
 import { showToast } from './portal-utils.js';
-// ★ Fix: portal-detail.js static import 제거 → window 전역 참조
-const renderInfoSection = (...a) => window.renderInfoSection?.(...a);
+import { renderInfoSection } from './portal-detail.js';
 
 // ===== 임대안내문 생성 =====
 

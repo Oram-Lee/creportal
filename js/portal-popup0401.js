@@ -5,8 +5,7 @@
 
 import { state } from './portal-state.js';
 import { formatNumber, showToast } from './portal-utils.js';
-// ★ Fix: portal-detail.js static import 제거 → window 전역 참조
-const openDetail = (...a) => window.openDetail?.(...a);
+import { openDetail } from './portal-detail.js';
 
 // 렌트롤 데이터 임시 저장
 let _rentrollData = {};
