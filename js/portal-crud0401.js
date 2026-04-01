@@ -514,27 +514,52 @@ export function openTransferVacancyModal(buildingId, vacancyKey, vacancyData) {
     document.getElementById('modalOverlay').classList.add('show');
 }
 
-// ⚠️ [2026-04-01 버그 수정] searchTransferBuilding 함수는 이 파일에서 제거됨.
-//
-// [버그 원인 기록 — 재발 방지용]
-// initApp()의 전역 함수 등록 순서:
-//   1. registerDetailGlobals()  → window.searchTransferBuilding = 패치버전 (activeModal 사용)
-//   2. registerPopupGlobals()
-//   3. registerCrudGlobals()    → window.searchTransferBuilding = 구버전 (getElementById 직접 접근)
-//                                  ↑ 이 줄이 패치버전을 덮어써서 이관 모달 검색이 동작 안 했음.
-//
-// [구버전 문제점]
-//   document.getElementById('transferBuildingSearch') 는 DOM에서 첫 번째 일치 요소를 반환.
-//   동적으로 생성된 모달 내부 요소를 제대로 참조하지 못해 검색 결과 0건 발생.
-//
-// [현재 구조]
-//   searchTransferBuilding 의 유일한 정의 위치 = portal-detail.js (export function)
-//   → activeModal(#transferModal 또는 #vacancyTransferModal)을 먼저 특정한 뒤
-//     그 안에서 querySelector로 input/results 참조 → 이 파일의 #vacancyTransferModal에도 호환됨.
-//   → registerDetailGlobals()에서 window.searchTransferBuilding 에 등록.
-//   → registerCrudGlobals()에서는 더 이상 등록하지 않음 (아래 window 등록 라인도 제거됨).
-//
-// ❌ 절대 이 파일에 searchTransferBuilding 함수를 다시 추가하지 말 것.
+// ★ 이슈3: 빌딩 검색 (이관 대상)
+export function searchTransferBuilding() {
+    const query = document.getElementById('transferBuildingSearch').value.trim().toLowerCase();
+    
+    if (query.length < 2) {
+        document.getElementById('transferBuildingResults').innerHTML = `
+            <div style="padding: 20px; text-align: center; color: #666;">
+                2글자 이상 입력하세요
+            </div>
+        `;
+        return;
+    }
+    
+    // 현재 빌딩 제외하고 검색
+    const currentBuildingId = state.transferVacancy?.buildingId;
+    const results = state.allBuildings.filter(b => 
+        b.id !== currentBuildingId && 
+        (b.name?.toLowerCase().includes(query) || b.address?.toLowerCase().includes(query))
+    ).slice(0, 10);
+    
+    if (results.length === 0) {
+        document.getElementById('transferBuildingResults').innerHTML = `
+            <div style="padding: 20px; text-align: center; color: #666;">
+                검색 결과가 없습니다
+            </div>
+        `;
+        return;
+    }
+    
+    document.getElementById('transferBuildingResults').innerHTML = results.map(b => `
+        <div class="transfer-building-item" 
+             onclick="selectTransferBuilding('${b.id}')"
+             data-building-id="${b.id}"
+             style="padding: 12px; border-bottom: 1px solid #e2e8f0; cursor: pointer; transition: background 0.2s;">
+            <div style="font-weight: 500; color: var(--text-primary);">${b.name}</div>
+            <div style="font-size: 12px; color: #666; margin-top: 4px;">${b.address || '-'}</div>
+            <div style="font-size: 11px; color: #999; margin-top: 2px;">현재 공실 ${b.vacancyCount || 0}건</div>
+        </div>
+    `).join('');
+    
+    // 호버 효과
+    document.querySelectorAll('.transfer-building-item').forEach(el => {
+        el.onmouseenter = () => el.style.background = '#f1f5f9';
+        el.onmouseleave = () => el.style.background = state.transferTargetBuilding?.id === el.dataset.buildingId ? '#dbeafe' : '';
+    });
+}
 
 // ★ 이슈3: 이관 대상 빌딩 선택
 window.selectTransferBuilding = function(buildingId) {
@@ -2243,8 +2268,7 @@ export function registerCrudGlobals() {
     
     // ★ 이슈3: 공실 이관
     window.openTransferVacancyModal = openTransferVacancyModal;
-    // ⚠️ window.searchTransferBuilding 은 portal-detail.js의 registerDetailGlobals()에서 등록.
-    //    이 파일에서 중복 등록 시 구버전으로 덮어써지므로 절대 추가하지 말 것. (2026-04-01 버그 원인)
+    window.searchTransferBuilding = searchTransferBuilding;
     window.executeTransferVacancy = executeTransferVacancy;
     window.closeTransferVacancyModal = closeTransferVacancyModal;
     
