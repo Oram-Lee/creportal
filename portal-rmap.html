@@ -7583,9 +7583,7 @@ function _startDistrictEdit(btn, reportId, wrapper) {
 현재 이슈: ${cells[0]||''}
 향후 전망: ${cells[1]||''}
 대응 권고: ${cells[2]||''}`;
-      }).join('
-
-')
+      }).join('\n\n')
     : wrapper.innerText;
 
   const ta = document.createElement('textarea');
