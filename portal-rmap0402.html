@@ -1326,34 +1326,8 @@ body {
   margin-right: 5px;
 }
 @media print {
-  .internal-memo  { display: none !important; }
-  .print-hidden   { display: none !important; }  /* 숨김 토글 섹션 */
-  .no-print       { display: none !important; }  /* 편집버튼, 숨김버튼, 배지컨트롤 등 */
-  .deleted-row    { display: none !important; }  /* 삭제된 빌딩 행 */
+  .internal-memo { display: none !important; }
 }
-
-/* ISSUE-07: 섹션 숨김 토글 버튼 */
-.section-hide-btn {
-  margin-left: auto;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 3px 9px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all .15s;
-  line-height: 1.4;
-}
-.section-hide-btn:hover { background: var(--accent-lt); color: var(--accent); border-color: var(--accent); }
-.section-hide-btn.is-hidden { background: #fef2f2; color: #dc2626; border-color: #fca5a5; }
-.section-hide-btn.is-hidden .hide-label::before { content: '표시'; }
-.section-hide-btn:not(.is-hidden) .hide-label::before { content: '숨김'; }
 
 /* Q4 — 구조화 AI 분석 섹션 */
 .ai-section {
@@ -1381,85 +1355,6 @@ body {
   overflow-wrap: break-word;
   padding-left: 2px;
 }
-/* ISSUE-01-B: 출처 배지 */
-.source-badges {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(100,140,200,0.15);
-}
-.source-label {
-  font-size: 11px;
-  color: var(--muted);
-  font-weight: 600;
-  margin-right: 2px;
-}
-.source-badge {
-  font-size: 11px;
-  background: #dbeafe;
-  color: #1d4ed8;
-  padding: 2px 9px;
-  border-radius: 10px;
-  font-weight: 600;
-  letter-spacing: -0.2px;
-}
-/* ISSUE-01-C: ai-section 인라인 편집 */
-.ai-section { position: relative; }
-.ai-edit-btn {
-  position: absolute;
-  top: 10px;
-  right: 0;
-  background: none;
-  border: 1px solid #c7d2e8;
-  border-radius: 5px;
-  padding: 2px 7px;
-  font-size: 11px;
-  color: #64748b;
-  cursor: pointer;
-  line-height: 1.6;
-  transition: background .15s;
-}
-.ai-edit-btn:hover { background: #f0f4ff; color: #1a4d8f; }
-.ai-edit-textarea {
-  width: 100%;
-  min-height: 100px;
-  font-size: 14px;
-  line-height: 2.0;
-  color: #1e2d3d;
-  border: 1.5px solid #93c5fd;
-  border-radius: 6px;
-  padding: 8px 10px;
-  resize: vertical;
-  box-sizing: border-box;
-  font-family: inherit;
-}
-.ai-edit-save-btn {
-  margin-top: 6px;
-  background: #1a4d8f;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  padding: 4px 14px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.ai-edit-save-btn:hover { background: #163d72; }
-/* ISSUE-02-A: 삭제 체크박스 */
-.del-check-col { width: 28px; text-align: center; }
-.bld-del-btn {
-  background: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
-  border-radius: 5px;
-  padding: 3px 10px;
-  font-size: 11px;
-  cursor: pointer;
-  display: none;
-}
-.bld-del-btn.active { display: inline-block; }
 /* 체크포인트 포인트 바디 강화 */
 .aic-point-title {
   font-size: 14px;
@@ -6157,7 +6052,7 @@ async function generateReport() {
     } catch (e) {
       clearTimeout(tid);
       // AbortError는 타임아웃으로 변환
-      if (e.name === 'AbortError') throw new Error(`응답 시간 초과 (${selectedMode === 'TR' ? 110 : 90}초) — 서버가 준비 중입니다`);
+      if (e.name === 'AbortError') throw new Error('응답 시간 초과 (90초) — 서버가 준비 중입니다');
       throw e;
     }
   };
@@ -6387,212 +6282,6 @@ function showGenerating(show) {
   if (show) {
     for (let i = 1; i <= 5; i++) setGenStep(i, '');
   }
-}
-
-// ===== ISSUE-07: 섹션 숨김 토글 유틸 =====
-window._reportEdits = window._reportEdits || {};
-
-function _getEdits(reportId) {
-  if (!window._reportEdits[reportId]) window._reportEdits[reportId] = {};
-  return window._reportEdits[reportId];
-}
-
-function _toggleSectionHidden(btn, reportId, sectionKey) {
-  const edits = _getEdits(reportId);
-  if (!edits.hiddenSections) edits.hiddenSections = [];
-  const section = btn.closest('.report-section') || btn.closest('[data-section]');
-  if (!section) return;
-  const isNowHidden = section.classList.toggle('print-hidden');
-  btn.classList.toggle('is-hidden', isNowHidden);
-  const eye = btn.querySelector('.hide-eye');
-  if (eye) eye.textContent = isNowHidden ? '🙈' : '👁️';
-  if (isNowHidden) {
-    if (!edits.hiddenSections.includes(sectionKey)) edits.hiddenSections.push(sectionKey);
-  } else {
-    edits.hiddenSections = edits.hiddenSections.filter(k => k !== sectionKey);
-  }
-}
-
-// 숨김 토글 버튼 HTML 헬퍼
-function _hideBtnHtml(reportId, sectionKey) {
-  return `<button class="section-hide-btn no-print" title="이 섹션을 인쇄/PDF에서 숨깁니다" onclick="_toggleSectionHidden(this,'${reportId}','${sectionKey}')"><span class="hide-eye">👁️</span><span class="hide-label"></span></button>`;
-}
-
-// ===== ISSUE-02-A: 빌딩 체크박스 삭제 유틸 =====
-function _toggleAllCheck(masterChk, tbodyId) {
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody) return;
-  tbody.querySelectorAll('.chk-bld').forEach(c => { c.checked = masterChk.checked; });
-  const sec = tbody.closest('.report-section');
-  const delBtn = sec ? sec.querySelector('.bld-del-btn') : null;
-  if (delBtn) delBtn.classList.toggle('active', masterChk.checked);
-}
-
-function _onBldCheckChange(chk, delBtnId) {
-  const delBtn = document.getElementById(delBtnId);
-  if (!delBtn) return;
-  const tbody = chk.closest('tbody');
-  const anyChecked = tbody ? [...tbody.querySelectorAll('.chk-bld')].some(c => c.checked) : false;
-  delBtn.classList.toggle('active', anyChecked);
-}
-
-function _deleteCheckedRows(tbodyId, reportId, sectionKey) {
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody) return;
-  const edits = _getEdits(reportId);
-  if (!edits.deletedBuildingIds) edits.deletedBuildingIds = [];
-  tbody.querySelectorAll('tr').forEach(tr => {
-    const chk = tr.querySelector('.chk-bld');
-    if (chk && chk.checked) {
-      const bldId = tr.dataset.bldId;
-      if (bldId && !edits.deletedBuildingIds.includes(bldId))
-        edits.deletedBuildingIds.push(bldId);
-      tr.classList.add('deleted-row');
-      tr.style.display = 'none';
-    }
-  });
-  const sec = tbody.closest('.report-section');
-  const delBtn = sec ? sec.querySelector('.bld-del-btn') : null;
-  if (delBtn) delBtn.classList.remove('active');
-  // 전체선택 체크박스 해제
-  const allChk = sec ? sec.querySelector('.chk-all') : null;
-  if (allChk) allChk.checked = false;
-}
-
-// ===== ISSUE-01-C: ai-section 인라인 편집 버튼 주입 =====
-const _AI_SECTION_KEYS = ['diagnosis', 'market', 'incentive', 'strategy'];
-
-function _injectAiEditButtons(reportId, container) {
-  const sections = container.querySelectorAll('.ai-section');
-  sections.forEach((sec, idx) => {
-    if (sec.querySelector('.ai-edit-btn')) return; // 중복 방지
-    const key = _AI_SECTION_KEYS[idx] || ('sec' + idx);
-    const btn = document.createElement('button');
-    btn.className = 'ai-edit-btn no-print';
-    btn.textContent = '✏️ 편집';
-    btn.title = '이 섹션 문구를 수정합니다';
-    btn.onclick = () => _startAiEdit(btn, reportId, key, sec);
-    sec.appendChild(btn);
-  });
-}
-
-function _startAiEdit(btn, reportId, key, sec) {
-  const body = sec.querySelector('.ai-body');
-  if (!body || sec.dataset.editing === '1') return;
-  sec.dataset.editing = '1';
-  const original = body.innerHTML;
-  const ta = document.createElement('textarea');
-  ta.className = 'ai-edit-textarea';
-  ta.value = body.innerText.trim();
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'ai-edit-save-btn no-print';
-  saveBtn.textContent = '저장';
-  saveBtn.onclick = () => {
-    const edits = _getEdits(reportId);
-    edits[key] = ta.value;
-    body.innerHTML = ta.value.replace(/\n/g, '<br>');
-    ta.remove();
-    saveBtn.remove();
-    btn.textContent = '✏️ 편집';
-    btn.onclick = () => _startAiEdit(btn, reportId, key, sec);
-    sec.dataset.editing = '0';
-  };
-  body.innerHTML = '';
-  body.appendChild(ta);
-  body.appendChild(saveBtn);
-  btn.textContent = '↩ 취소';
-  btn.onclick = () => {
-    body.innerHTML = original;
-    btn.textContent = '✏️ 편집';
-    btn.onclick = () => _startAiEdit(btn, reportId, key, sec);
-    sec.dataset.editing = '0';
-  };
-}
-
-// ===== ISSUE-02-B: 층별 기준가 행 확장 =====
-async function loadFloorPricingForList(buildings, tbodyId, reportId) {
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody || !buildings || !buildings.length) return;
-  const _n = v => { const n = parseFloat(String(v||'').replace(/[,원]/g,'')); return isNaN(n)||n===0?null:n; };
-
-  buildings.forEach(b => {
-    let fpArr = [];
-    if (Array.isArray(b.floorPricing)) fpArr = b.floorPricing.filter(Boolean);
-    else if (b.floorPricing && typeof b.floorPricing === 'object')
-      fpArr = Object.values(b.floorPricing).filter(Boolean);
-
-    // OCR 우선, effectiveDate 역순 정렬
-    fpArr.sort((a, c) => {
-      const ao = (a.sourceType||'').startsWith('ocr') ? 1 : 0;
-      const co = (c.sourceType||'').startsWith('ocr') ? 1 : 0;
-      if (co !== ao) return co - ao;
-      return (c.effectiveDate||'').localeCompare(a.effectiveDate||'');
-    });
-    const valid = fpArr.filter(fp => _n(fp.rentPy));
-    if (valid.length <= 1) return; // 단일이면 기존 행 유지
-
-    const bldId = b.id || b.buildingName || b.name;
-    let baseRow = null;
-    tbody.querySelectorAll('tr[data-bld-id]').forEach(tr => {
-      if (tr.dataset.bldId === String(bldId) && !baseRow) baseRow = tr;
-    });
-    if (!baseRow) return;
-
-    // 기존 행의 기준층 셀 업데이트
-    const firstFloor = valid[0].floorInfo || valid[0].areaName || valid[0].floorType || '표준층';
-    const floorTd = baseRow.querySelector('.fp-floor-cell');
-    if (floorTd) floorTd.textContent = firstFloor;
-
-    // 빌딩명 셀 rowspan 설정
-    const nameTd = baseRow.querySelector('[data-name-cell]');
-    if (nameTd) nameTd.rowSpan = valid.length;
-
-    // 2번째 fp부터 추가 행 삽입 — baseRow 셀 구조를 동적으로 참조하여 컬럼 정렬
-    const baseCells    = [...baseRow.cells];
-    const totalCols    = baseCells.length;
-    const nameCellIdx  = baseCells.findIndex(td => td.hasAttribute('data-name-cell'));
-    const floorCellIdx = baseCells.findIndex(td => td.classList.contains('fp-floor-cell'));
-    const hlIdx        = baseCells.findIndex(td => td.classList.contains('highlight'));
-    // 관리비·보증금은 highlight 바로 다음 두 컬럼 (테이블 공통)
-    const maintIdx     = hlIdx >= 0 ? hlIdx + 1 : -1;
-    const depIdx       = hlIdx >= 0 ? hlIdx + 2 : -1;
-
-    let insertAfter = baseRow;
-    valid.slice(1).forEach(fp => {
-      const floorLabel = fp.floorInfo || fp.areaName || fp.floorType || '-';
-      const rentPy     = _n(fp.rentPy);
-      const maintPy    = _n(fp.maintenancePy);
-      const depositPy  = _n(fp.depositPy);
-      const depMult    = (depositPy && rentPy) ? (depositPy/rentPy).toFixed(0)+'개월' : '-';
-      const newRow     = document.createElement('tr');
-      newRow.dataset.bldId = String(bldId);
-      newRow.className = 'fp-extra-row';
-
-      // baseRow 컬럼 수 기준으로 td 동적 생성 (nameCellIdx는 rowspan으로 스킵)
-      for (let ci = 0; ci < totalCols; ci++) {
-        if (ci === nameCellIdx) continue; // 빌딩명 rowspan 자리 → 추가 행에 없음
-        const td = document.createElement('td');
-        if (ci === 0) {
-          td.className = 'del-check-col no-print'; // 체크박스 빈 자리
-        } else if (ci === floorCellIdx) {
-          td.className = 'fp-floor-cell';
-          td.style.cssText = 'color:#7c3aed;font-size:11px';
-          td.textContent = floorLabel;
-        } else if (ci === hlIdx) {
-          td.className = 'highlight';
-          td.textContent = rentPy ? rentPy.toLocaleString()+'원' : '-';
-        } else if (ci === maintIdx) {
-          td.textContent = maintPy ? maintPy.toLocaleString()+'원' : '-';
-        } else if (ci === depIdx) {
-          td.textContent = depMult;
-        }
-        // 나머지 컬럼(등급·거리·연면적·공실 등)은 빈 td
-        newRow.appendChild(td);
-      }
-      insertAfter.insertAdjacentElement('afterend', newRow);
-      insertAfter = newRow;
-    });
-  });
 }
 
 // ===== 리포트 목록 렌더링 =====
@@ -6982,7 +6671,6 @@ function renderReportHTML(report) {
       <div class="section-title">
         <div class="section-icon">🏛️</div>
         최근 부동산 정책 및 규제 동향
-        ${_hideBtnHtml(report.id, 'policyNews')}
       </div>
       <div class="section-summary">
         <span class="section-summary-label">한줄 요약</span>
@@ -7002,7 +6690,6 @@ function renderReportHTML(report) {
       <div class="section-title">
         <div class="section-icon">${isLR ? '🎯' : '🔍'}</div>
         ${isLR ? '업종 트렌드 및 오피스 시장 동향' : '관련 업종 및 시장 동향'}
-        ${_hideBtnHtml(report.id, 'industryNews')}
       </div>
       <div class="section-summary">
         <span class="section-summary-label">한줄 요약</span>
@@ -7032,7 +6719,6 @@ function renderReportHTML(report) {
         <div class="section-icon">🧠</div>
         ${isLR ? '임대 전략 인사이트' : '컨설팅 분석 — 현황 진단 · 시장 분석 · 전략 제언'}
         ${researchBadge}
-        ${_hideBtnHtml(report.id, 'aiAnalysis')}
       </div>
       <div class="section-summary">
         <span class="section-summary-label">한줄 요약</span>
@@ -7050,12 +6736,6 @@ function renderReportHTML(report) {
       </div>
       <div class="ai-analysis-box">
         <div class="ai-analysis-text" id="aiAnalysisBox_${report.id}"></div>
-        ${researchMeta.used && researchMeta.sources && researchMeta.sources.length
-          ? `<div class="source-badges no-print">
-               <span class="source-label">참고 리서치</span>
-               ${researchMeta.sources.map(s => `<span class="source-badge">${s}</span>`).join('')}
-             </div>`
-          : ''}
       </div>
     </div>` : ''}
 
@@ -7068,7 +6748,6 @@ function renderReportHTML(report) {
       <div class="section-title">
         <div class="section-icon">🏢</div>
         인근 빌딩 시세 현황 (반경 ${(report.params.radius/1000).toFixed(1)}km · ${(report.nearbyBuildings||[]).length}개 빌딩 · 공실 ${(report.vacancyData||[]).length}건)
-        ${_hideBtnHtml(report.id, 'nearbyBuildings')}
       </div>
       <div class="src-badge-row" style="margin-bottom:8px"><span class="src-badge">📋 출처: CRE Portal DB · S&amp;I CRE팀 직접 수집</span></div>
 
@@ -7078,23 +6757,12 @@ function renderReportHTML(report) {
       </div>
 
       <!-- 통합 빌딩 비교 테이블 -->
-      <div class="no-print" style="margin-bottom:6px">
-        <button class="bld-del-btn" id="rentDelBtn_${report.id}"
-          onclick="_deleteCheckedRows('rentTableBody_${report.id}','${report.id}','nearbyBuildings')">
-          선택 삭제
-        </button>
-      </div>
       <div style="overflow-x:auto;margin-top:12px">
       <table class="rent-summary-table" id="rentSummaryTable_${report.id}">
         <thead>
           <tr>
-            <th class="del-check-col no-print">
-              <input type="checkbox" class="chk-all" title="전체선택"
-                onchange="_toggleAllCheck(this,'rentTableBody_${report.id}')">
-            </th>
             <th style="text-align:left;min-width:120px">빌딩명</th>
             <th>등급</th>
-            <th>기준층</th>
             <th>거리</th>
             <th>연면적</th>
             <th>공실 현황</th>
@@ -7141,7 +6809,6 @@ function renderReportHTML(report) {
       <div class="section-title">
         <div class="section-icon">🏗️</div>
         희망 면적 조건 충족 매물 현황 (전용 ${report.params.desiredAreaMin}~${report.params.desiredAreaMax}평 · ${dedup7.length}건)
-        ${_hideBtnHtml(report.id, 'altBuildings')}
       </div>
       <div class="rent-ai-summary" id="vacAiSummary_${report.id}">
         <span style="color:var(--muted);font-size:11px">🏗️ 조건 충족 물건을 확인하고 있습니다.</span>
@@ -7185,7 +6852,6 @@ function renderReportHTML(report) {
       <div class="section-title">
         <div class="section-icon">🎯</div>
         오피스 이전 시 유용한 체크포인트
-        ${_hideBtnHtml(report.id, 'checkpoints')}
       </div>
       <div class="section-summary">
         <span class="section-summary-label">한줄 요약</span>
@@ -7208,14 +6874,6 @@ function renderReportHTML(report) {
         <div style="margin-top:10px;font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px">
           📌 출처: S&amp;I CRE Portal 자체 수집 데이터 · ${report.params?.researchContext ? '전문 리서치 자료(1순위) · 한국부동산원 R-ONE(참고)' : '한국부동산원 R-ONE'} · Claude AI 분석 (${new Date(report.createdAt).toLocaleDateString('ko-KR')} 생성)
         </div>
-        ${researchMeta.used && researchMeta.sources && researchMeta.sources.length
-          ? `<div class="source-badges no-print" style="margin-top:8px">
-               <span class="source-label">참고 리서치</span>
-               ${researchMeta.sources.map(s => `<span class="source-badge">${s}</span>`).join('')}
-             </div>`
-          : ''}
-        <!-- ISSUE-05-B: 체크포인트 인라인 편집 버튼 (generateInsightPoints 완료 후 주입) -->
-        <div id="checkpointEditArea_${report.id}" style="margin-top:6px"></div>
       </div>
     </div>
 
@@ -7251,8 +6909,6 @@ function renderReportHTML(report) {
   buildSourceSlide(report);
   // 차트 렌더링 (비동기)
   setTimeout(() => renderRentCharts(report), 100);
-  // ISSUE-02-B: 인근 빌딩 층별 기준가 행 확장 (차트 렌더 후)
-  setTimeout(() => loadFloorPricingForList(report.nearbyBuildings || [], 'rentTableBody_' + report.id, report.id), 150);
   // R-ONE 스파크라인
   setTimeout(() => renderSparklines(report), 250);
   // 임대료 비교 AI 요약 (비동기)
@@ -7272,7 +6928,6 @@ function renderReportHTML(report) {
     if (aiAnalysis && aiAnalysis.includes('<div class="ai-section">')) {
       // 구조화 HTML 응답 — innerHTML로 직접 삽입
       aiBox.innerHTML = aiAnalysis;
-      _injectAiEditButtons(report.id, aiBox);
     } else if (aiAnalysis && aiAnalysis.trim().length >= 80) {
       // 기존 plain text 응답 — pre-line 렌더
       aiBox.style.whiteSpace = 'pre-line';
@@ -7340,32 +6995,26 @@ function buildRentTableRows(report) {
     const grade   = b.grade || '-';
     const isAvgRent = !(_n(b.rentPy) || _n(b.pricing?.rentPy)) && rentPy;
 
-    // 공실 현황 — 건수만 표기 (ISSUE-02-B)
-    const vacSummary = bVacs.length
-      ? '<span style="color:#b91c1c;font-weight:600">' + vacCount + '건</span>'
-      : '-';
+    // 공실 층 요약 (최대 3개)
+    let vacSummary = '-';
+    if (bVacs.length) {
+      const floors = [...new Set(bVacs.map(v => v.floor).filter(Boolean))].slice(0,3);
+      const totalArea = bVacs.reduce((s,v)=>s+(_n(v.exclusiveArea)||_n(v.rentArea)||0),0);
+      vacSummary = '<span style="color:#b91c1c;font-weight:600">'
+        + vacCount + '건</span>'
+        + (floors.length ? ' <span style="color:#64748b;font-size:10px">(' + floors.join('/') + '층' + (bVacs.length>3?'…':'') + ')</span>' : '')
+        + (totalArea > 0 ? '<br><span style="color:#64748b;font-size:10px">합계 ' + totalArea.toFixed(0) + '평</span>' : '');
+    }
 
     // 입주가능 (가장 빠른 날짜)
     const moveDates = bVacs.map(v=>v.moveInDate).filter(Boolean);
     const moveIn = moveDates.length ? (moveDates.includes('즉시') ? '즉시' : moveDates.sort()[0]) : '-';
 
-    // 기준층 — floorPricing 최신 항목의 floorInfo (ISSUE-02-B)
-    const fpLatest = getLatestOcrPricing(b.floorPricing || []);
-    const floorLabel = fpLatest?.floorInfo || fpLatest?.areaName || fpLatest?.floorType || '-';
-
-    // 빌딩 ID (체크박스 삭제용)
-    const bldIdKey = b.id || b.buildingName || b.name || ('row' + i);
-
-    return '<tr data-bld-id="' + bldIdKey + '" style="' + (isBase ? 'background:#f0f7ff;font-weight:700' : '') + '">'
-      + '<td class="del-check-col no-print">'
-      +   '<input type="checkbox" class="chk-bld"'
-      +   ' onchange="_onBldCheckChange(this,\'rentDelBtn_' + report.id + '\')">'
-      + '</td>'
-      + '<td data-name-cell style="text-align:left;font-weight:' + (isBase?700:500) + ';' + (isBase?'color:var(--accent)':'') + '">'
+    return '<tr style="' + (isBase ? 'background:#f0f7ff;font-weight:700' : '') + '">'
+      + '<td style="text-align:left;font-weight:' + (isBase?700:500) + ';' + (isBase?'color:var(--accent)':'') + '">'
       +   (isBase ? '🏠 ' : '') + (b.buildingName || b.name || '-')
       + '</td>'
       + '<td><span class="pill ' + (gradeClass[grade]||'pill-gray') + '">' + grade + '</span></td>'
-      + '<td class="fp-floor-cell" style="font-size:11px;color:#475569">' + floorLabel + '</td>'
       + '<td>' + (b.distanceM != null ? b.distanceM + 'm' : '-') + '</td>'
       + '<td>' + (grossPy ? grossPy.toLocaleString() + '평' : '-') + '</td>'
       + '<td>' + vacSummary + '</td>'
@@ -7448,7 +7097,6 @@ function buildIncentiveSection(report) {
     <div class="section-title">
       <div class="section-icon">💰</div>
       인센티브 협상 포인트 (${entries.length}건)
-      ${_hideBtnHtml(report.id, 'incentives')}
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
       인근 빌딩에서 제공 중인 렌트프리(RF) · Fit-Out(FO) · TI 조건 현황입니다.
@@ -7506,26 +7154,11 @@ function buildDistrictDirectionSection(analysis, report) {
     .map(([dist, data]) => renderBlock(data, dist))
     .join('');
 
-  // ISSUE-06-A: researchMeta 출처 배지
-  const resMeta = report.result?.sections?.researchMeta || {};
-  const srcBadgesHtml = (resMeta.used && resMeta.sources && resMeta.sources.length)
-    ? `<div class="source-badges no-print" style="margin-top:10px">
-         <span class="source-label">참고 리서치</span>
-         ${resMeta.sources.map(s => `<span class="source-badge">${s}</span>`).join('')}
-       </div>`
-    : '';
-
-  // ISSUE-06-B: 편집 버튼 — DOM 생성 후 100ms 뒤 주입
-  const editAreaId      = `districtEditArea_${report.id}`;
-  const contentWrapId   = `districtContentWrap_${report.id}`;
-  setTimeout(() => _injectDistrictEditBtn(report.id, editAreaId, contentWrapId), 100);
-
   return `
   <div class="report-section">
     <div class="section-title">
       <div class="section-icon">🧭</div>
       권역 방향성 분석
-      ${_hideBtnHtml(report.id, 'districtDirection')}
     </div>
     <div class="section-summary">
       <span class="section-summary-label">한줄 요약</span>
@@ -7536,86 +7169,15 @@ function buildDistrictDirectionSection(analysis, report) {
       출처: R-ONE 공실률·임대료 + 리서치 문서 + 뉴스 데이터를 입력으로 /api/report/district-analysis 엔드포인트 호출.
       권역별 Claude claude-sonnet-4-20250514 병렬 분석. 기준 권역 + 선택된 비교 권역 각각 생성.
     </div>
-    <!-- ISSUE-06-B: 편집 버튼 영역 -->
-    <div id="${editAreaId}" class="no-print" style="margin-bottom:6px"></div>
-    <!-- 권역 분석 블록 래퍼 (편집 대상) -->
-    <div id="${contentWrapId}">
-      <!-- 기준 권역 -->
-      ${renderBlock({ current: analysis.current, future: analysis.future, recommendation: analysis.recommendation }, baseDistrict)}
-      <!-- 비교 권역 -->
-      ${altHtml}
-    </div>
+    <!-- 기준 권역 -->
+    ${renderBlock({ current: analysis.current, future: analysis.future, recommendation: analysis.recommendation }, baseDistrict)}
+    <!-- 비교 권역 -->
+    ${altHtml}
     <div style="margin-top:12px;font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px">
       📌 출처: 한국부동산원 R-ONE · S&amp;I CRE Portal · Claude AI 권역 분석
       &nbsp;|&nbsp; 분석 기준: ${new Date(report.createdAt).toLocaleDateString('ko-KR')}
     </div>
-    ${srcBadgesHtml}
   </div>`;
-}
-
-// ===== ISSUE-06-B: 권역 방향성 인라인 편집 버튼 주입 =====
-function _injectDistrictEditBtn(reportId, editAreaId, contentWrapId) {
-  const area    = document.getElementById(editAreaId);
-  const wrapper = document.getElementById(contentWrapId);
-  if (!area || !wrapper || area.dataset.injected === '1') return;
-  area.dataset.injected = '1';
-
-  const btn = document.createElement('button');
-  btn.className = 'ai-edit-btn no-print';
-  btn.textContent = '✏️ 편집';
-  btn.title = '권역 방향성 분석 내용을 수정합니다';
-  btn.onclick = () => _startDistrictEdit(btn, reportId, wrapper);
-  area.appendChild(btn);
-}
-
-function _startDistrictEdit(btn, reportId, wrapper) {
-  if (wrapper.dataset.editing === '1') return;
-  wrapper.dataset.editing = '1';
-  const originalHtml = wrapper.innerHTML;
-
-  // 텍스트 추출: 권역별 현재이슈·향후전망·대응권고
-  const blocks = [...wrapper.querySelectorAll('[style*="margin-bottom:16px"]')];
-  const plainText = blocks.length
-    ? blocks.map(block => {
-        const title = (block.querySelector('[style*="font-weight:700"]')?.innerText || '').replace('📍 ', '');
-        const cells = [...block.querySelectorAll('[style*="line-height:1.6"]')].map(c => c.innerText);
-        return `[${title}]
-현재 이슈: ${cells[0]||''}
-향후 전망: ${cells[1]||''}
-대응 권고: ${cells[2]||''}`;
-      }).join('
-
-')
-    : wrapper.innerText;
-
-  const ta = document.createElement('textarea');
-  ta.className = 'ai-edit-textarea';
-  ta.value = plainText;
-  ta.style.height = '280px';
-
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'ai-edit-save-btn no-print';
-  saveBtn.textContent = '저장';
-  saveBtn.onclick = () => {
-    const edits = _getEdits(reportId);
-    edits.districtDirection = ta.value;
-    wrapper.innerHTML = `<div style="white-space:pre-line;font-size:12px;color:var(--text);line-height:1.7;padding:12px">${ta.value.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
-    ta.remove(); saveBtn.remove();
-    btn.textContent = '✏️ 편집';
-    btn.onclick = () => _startDistrictEdit(btn, reportId, wrapper);
-    wrapper.dataset.editing = '0';
-  };
-
-  wrapper.innerHTML = '';
-  wrapper.appendChild(ta);
-  wrapper.appendChild(saveBtn);
-  btn.textContent = '↩ 취소';
-  btn.onclick = () => {
-    wrapper.innerHTML = originalHtml;
-    btn.textContent = '✏️ 편집';
-    btn.onclick = () => _startDistrictEdit(btn, reportId, wrapper);
-    wrapper.dataset.editing = '0';
-  };
 }
 
 // ===== Section: 동일 권역 대안 빌딩 동적 빌드 =====
@@ -7644,9 +7206,6 @@ function buildSameDistrictAltSection(report) {
 
   const gradeClass = { Prime:'pill-gold', A:'pill-blue', B:'pill-blue', C:'pill-gray', D:'pill-gray', E:'pill-gray' };
 
-  // ISSUE-03-B: vacancyData 참조 (공실 건수)
-  const vacancies = report.vacancyData || [];
-
   const rows = candidates.slice(0, 8).map(b => {
     const rentPy    = _n(b.rentPy) || _n(b.pricing?.rentPy);
     const maintPy   = _n(b.maintenancePy) || _n(b.pricing?.maintenancePy);
@@ -7660,9 +7219,6 @@ function buildSameDistrictAltSection(report) {
     const ocrBadge = fp?.rentPy
       ? `<br><span style="font-size:10px;color:#7c3aed">조사본 ${(_n(fp.rentPy)||0).toLocaleString()}원</span>`
       : '';
-
-    // 기준층
-    const floorLabel = fp?.floorInfo || fp?.areaName || fp?.floorType || '-';
 
     // 인센티브 뱃지
     const inc = (b.incentives||[]).filter(i=>i.rf||i.fo||i.ti);
@@ -7680,25 +7236,11 @@ function buildSameDistrictAltSection(report) {
         : `<span style="font-size:10px;color:#16a34a">▼${Math.abs(pct)}%</span>`;
     }
 
-    // ISSUE-03-B: 공실 현황 건수
-    const bVacs    = vacancies.filter(v => v.buildingId === b.id || v.buildingName === (b.name||b.buildingName));
-    const vacCell  = bVacs.length
-      ? `<span style="color:#b91c1c;font-weight:600">${bVacs.length}건</span>`
-      : '-';
-
-    const bldIdKey = b.id || b.name || b.buildingName || 'same_' + Math.random();
-
-    return `<tr data-bld-id="${bldIdKey}">
-      <td class="del-check-col no-print">
-        <input type="checkbox" class="chk-bld"
-          onchange="_onBldCheckChange(this,'sameDelBtn_${report.id}')">
-      </td>
-      <td data-name-cell style="text-align:left;font-weight:600">${b.name||b.buildingName||'-'}${incBadge}</td>
+    return `<tr>
+      <td style="text-align:left;font-weight:600">${b.name||b.buildingName||'-'}${incBadge}</td>
       <td><span class="pill ${gradeClass[grade]||'pill-gray'}">${grade}</span></td>
-      <td class="fp-floor-cell" style="font-size:11px;color:#475569">${floorLabel}</td>
       <td>${b.distanceM!=null?b.distanceM+'m':'-'}</td>
       <td>${grossPy?grossPy.toLocaleString()+'평':'-'}</td>
-      <td>${vacCell}</td>
       <td class="highlight">${rentPy?rentPy.toLocaleString()+'원':'-'} ${diffBadge}${ocrBadge}</td>
       <td>${maintPy?maintPy.toLocaleString()+'원':'-'}</td>
       <td>${depMult}</td>
@@ -7715,36 +7257,22 @@ function buildSameDistrictAltSection(report) {
     <div class="section-title">
       <div class="section-icon">🔄</div>
       동일 권역 대안 빌딩 비교 — ${report.district} (${candidates.length}개)
-      ${_hideBtnHtml(report.id, 'sameDistrictAlt')}
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${curLabel}</div>
-    <div class="no-print" style="margin-bottom:6px">
-      <button class="bld-del-btn" id="sameDelBtn_${report.id}"
-        onclick="_deleteCheckedRows('sameAltBody_${report.id}','${report.id}','sameDistrictAlt')">
-        선택 삭제
-      </button>
-    </div>
     <div style="overflow-x:auto">
     <table class="rent-summary-table">
       <thead>
         <tr>
-          <th class="del-check-col no-print">
-            <input type="checkbox" class="chk-all" title="전체선택"
-              onchange="_toggleAllCheck(this,'sameAltBody_${report.id}')">
-          </th>
           <th style="text-align:left;min-width:130px">빌딩명</th>
-          <th>등급</th><th>기준층</th><th>거리</th><th>연면적</th>
-          <th>공실</th><th>임대료/평</th><th>관리비/평</th><th>보증금배수</th><th>입지</th>
+          <th>등급</th><th>거리</th><th>연면적</th>
+          <th>임대료/평</th><th>관리비/평</th><th>보증금배수</th><th>역세권</th>
         </tr>
       </thead>
-      <tbody id="sameAltBody_${report.id}">${rows}</tbody>
+      <tbody>${rows}</tbody>
     </table>
     </div>
     <div style="font-size:10px;color:var(--muted);margin-top:6px">※ 보라색 수치 = 안내문 조사 기준가 &nbsp;|&nbsp; +인센티브 표시 빌딩은 RF·FO·TI 조건 검토 가능</div>
   </div>`;
-
-  // ISSUE-02-B: 층별 기준가 행 확장
-  setTimeout(() => loadFloorPricingForList(candidates.slice(0,8), 'sameAltBody_' + report.id, report.id), 80);
 }
 
 // ===== Section: 타 권역 대안 빌딩 동적 빌드 =====
@@ -7764,29 +7292,22 @@ function buildAltDistrictSection(report) {
   const curRentPy = report.params?.curRentPy || 0;
 
   let allHtml = '';
-  const allBuildingsForFp = []; // ISSUE-02-B: 층별 기준가 확장용
-
   for (const [dist, buildings] of Object.entries(altData)) {
     if (!buildings || !buildings.length) continue;
-
-    const tbodyId = `altBody_${report.id}_${dist}`;
-    const delBtnId = `altDelBtn_${report.id}_${dist}`;
 
     const rows = buildings.map((b, idx) => {
       const rentPy    = _n(b.rentPy);
       const maintPy   = _n(b.maintenancePy);
       const depositPy = _n(b.depositPy);
+      const grossPy   = _n(b.grossFloorPy);
       const grade     = b.grade || '-';
       const depMult   = (depositPy && rentPy) ? (depositPy/rentPy).toFixed(0)+'개월' : '-';
 
       // OCR 최신가
-      const fp = b.latestFloorPricing || getLatestOcrPricing(b.floorPricing || []);
+      const fp = b.latestFloorPricing;
       const ocrBadge = fp?.rentPy
         ? `<br><span style="font-size:10px;color:#7c3aed">조사본 ${(_n(fp.rentPy)||0).toLocaleString()}원</span>`
         : '';
-
-      // 기준층 (ISSUE-04-C)
-      const floorLabel = fp?.floorInfo || fp?.areaName || fp?.floorType || '-';
 
       // 인센티브 여부
       const hasInc = (b.incentives||[]).some(i=>i.rf||i.fo||i.ti);
@@ -7802,56 +7323,44 @@ function buildAltDistrictSection(report) {
           : `<span style="font-size:10px;color:#16a34a;margin-left:3px">▼${Math.abs(pct)}%</span>`;
       }
 
-      // 🏆 뱃지 (상위 3개) — 종합점수 컬럼 삭제, 뱃지만 유지 (ISSUE-04-B)
+      // 종합점수 + 🏆 뱃지 (상위 3개)
+      const score     = b.totalScore != null ? b.totalScore : '-';
       const trophyBadge = idx < 3
         ? `<span style="font-size:13px;margin-right:3px">${['🥇','🥈','🥉'][idx]}</span>`
         : '';
+      const scoreColor = typeof score === 'number'
+        ? (score >= 75 ? '#16a34a' : score >= 50 ? '#d97706' : '#6b7280')
+        : '#6b7280';
 
-      const bldIdKey = b.id || b.name || ('alt_' + dist + '_' + idx);
-
-      return `<tr data-bld-id="${bldIdKey}">
-        <td class="del-check-col no-print">
-          <input type="checkbox" class="chk-bld"
-            onchange="_onBldCheckChange(this,'${delBtnId}')">
-        </td>
-        <td data-name-cell style="text-align:left;font-weight:600">${trophyBadge}${b.name||'-'} ${incBadge}</td>
+      return `<tr>
+        <td style="text-align:left;font-weight:600">${trophyBadge}${b.name||'-'} ${incBadge}</td>
         <td><span class="pill ${gradeClass[grade]||'pill-gray'}">${grade}</span></td>
-        <td class="fp-floor-cell" style="font-size:11px;color:#475569">${floorLabel}</td>
         <td style="font-size:11px;color:var(--muted)">${(b.address||'').replace('서울특별시','').trim().slice(0,20)}</td>
+        <td>${grossPy?grossPy.toLocaleString()+'평':'-'}</td>
         <td class="highlight">${rentPy?rentPy.toLocaleString()+'원':'-'}${diffBadge}${ocrBadge}</td>
         <td>${maintPy?maintPy.toLocaleString()+'원':'-'}</td>
         <td>${depMult}</td>
         <td style="color:var(--muted);font-size:11px">${b.nearbyStation||'-'}${b.stationDistance?' '+b.stationDistance+'m':''}</td>
+        <td style="text-align:center;font-weight:700;color:${scoreColor}">${score !== '-' ? score+'점' : '-'}</td>
       </tr>`;
     }).join('');
-
-    allBuildingsForFp.push({ tbodyId, buildings });
 
     allHtml += `
     <div style="margin-bottom:20px">
       <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:8px;padding-bottom:5px;border-bottom:2px solid var(--accent)">
         📍 ${districtLabel[dist]||dist} — ${buildings.length}개 빌딩
       </div>
-      <div class="no-print" style="margin-bottom:6px">
-        <button class="bld-del-btn" id="${delBtnId}"
-          onclick="_deleteCheckedRows('${tbodyId}','${report.id}','altDistrict')">
-          선택 삭제
-        </button>
-      </div>
       <div style="overflow-x:auto">
       <table class="rent-summary-table">
         <thead>
           <tr>
-            <th class="del-check-col no-print">
-              <input type="checkbox" class="chk-all" title="전체선택"
-                onchange="_toggleAllCheck(this,'${tbodyId}')">
-            </th>
             <th style="text-align:left;min-width:130px">빌딩명</th>
-            <th>등급</th><th>기준층</th><th style="text-align:left">주소</th>
-            <th>임대료/평</th><th>관리비/평</th><th>보증금배수</th><th>입지</th>
+            <th>등급</th><th style="text-align:left">주소</th><th>연면적</th>
+            <th>임대료/평</th><th>관리비/평</th><th>보증금배수</th><th>역세권</th>
+            <th>종합점수</th>
           </tr>
         </thead>
-        <tbody id="${tbodyId}">${rows}</tbody>
+        <tbody>${rows}</tbody>
       </table>
       </div>
     </div>`;
@@ -7865,22 +7374,20 @@ function buildAltDistrictSection(report) {
     <div class="section-title">
       <div class="section-icon">🗺️</div>
       타 권역 대안 빌딩 — ${distNames} (${totalCount}개)
-      ${_hideBtnHtml(report.id, 'altDistrict')}
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
       ${curRentPy ? `현재 임대료 ${curRentPy.toLocaleString()}원/평 ±25% 범위 내 빌딩` : '선택된 권역 빌딩 목록'}
       — 권역 이전 검토 시 비교 참고용
     </div>
+    <!-- ISSUE-10: 종합점수 설명 box -->
+    <div style="font-size:11px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:7px 12px;margin-bottom:12px;color:#475569;line-height:1.7">
+      <b>📊 종합점수란?</b> 임차인 관점에서 각 빌딩의 이전 적합성을 100점 만점으로 산정한 참고 지표입니다.<br>
+      <span style="color:#64748b">계산 기준 — 임대료 경쟁력 30% + 희망면적 충족도 25% + 인센티브 조건 20% + 빌딩 등급 15% + 역세권 접근성 10%</span><br>
+      <span style="color:#94a3b8;font-size:10px">※ 점수는 수집 시점 기준 추정치이며 실제 계약 조건과 다를 수 있습니다. 🥇 상위 3개 빌딩 표시.</span>
+    </div>
     ${allHtml}
-    <div style="font-size:10px;color:var(--muted);margin-top:4px">※ 보라색 수치 = 안내문 조사 기준가 &nbsp;|&nbsp; ▲▼ = 현재 임대료 대비 차이율 &nbsp;|&nbsp; 🥇🥈🥉 상위 3개 빌딩</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">※ 보라색 수치 = 안내문 조사 기준가 &nbsp;|&nbsp; ▲▼ = 현재 임대료 대비 차이율 &nbsp;|&nbsp; 종합점수 색상: <span style="color:#16a34a">●</span> 75점 이상(우수) &nbsp;<span style="color:#d97706">●</span> 50~74점(보통) &nbsp;<span style="color:#6b7280">●</span> 50점 미만(참고)</div>
   </div>`;
-
-  // ISSUE-02-B: 권역별 층별 기준가 행 확장
-  setTimeout(() => {
-    allBuildingsForFp.forEach(({ tbodyId, buildings }) => {
-      loadFloorPricingForList(buildings, tbodyId, report.id);
-    });
-  }, 80);
 }
 
 // ===== Section 1: 시장 현황 동적 빌드 =====
@@ -8694,7 +8201,6 @@ ${issueNuance}
           <div class="aic-point-body">${p.body||''}</div>
         </div>
       </div>`).join('');
-    _injectCheckpointEditBtn(report.id, el);  // ISSUE-05-B
   } catch (e) {
     // 폴백: 이슈별 기본 시사점 (두괄식 중문)
     const issue = report.params?.clientIssue || '';
@@ -8735,75 +8241,11 @@ ${issueNuance}
           <div class="aic-point-body">${p.body}</div>
         </div>
       </div>`).join('');
-    _injectCheckpointEditBtn(report.id, el);  // ISSUE-05-B
   }
-}
-
-// ===== ISSUE-05-B: 체크포인트 인라인 편집 버튼 주입 =====
-function _injectCheckpointEditBtn(reportId, aicPointsEl) {
-  const area = document.getElementById(`checkpointEditArea_${reportId}`);
-  if (!area || area.dataset.injected === '1') return;
-  area.dataset.injected = '1';
-
-  const btn = document.createElement('button');
-  btn.className = 'ai-edit-btn no-print';
-  btn.textContent = '✏️ 편집';
-  btn.title = '체크포인트 내용을 수정합니다';
-  btn.onclick = () => _startCheckpointEdit(btn, reportId, aicPointsEl);
-  area.appendChild(btn);
-}
-
-function _startCheckpointEdit(btn, reportId, aicPointsEl) {
-  if (aicPointsEl.dataset.editing === '1') return;
-  aicPointsEl.dataset.editing = '1';
-  const originalHtml = aicPointsEl.innerHTML;
-  // 텍스트 추출: 타이틀·바디 순으로 읽어 줄 구분
-  const plainText = [...aicPointsEl.querySelectorAll('.aic-point')].map(pt => {
-    const title = pt.querySelector('.aic-point-title')?.innerText || '';
-    const body  = pt.querySelector('.aic-point-body')?.innerText  || '';
-    return `${title}\n${body}`;
-  }).join('\n\n');
-
-  const ta = document.createElement('textarea');
-  ta.className = 'ai-edit-textarea';
-  ta.value = plainText;
-  ta.style.height = '240px';
-
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'ai-edit-save-btn no-print';
-  saveBtn.textContent = '저장';
-  saveBtn.onclick = () => {
-    const edits = _getEdits(reportId);
-    edits.checkpoints = ta.value;
-    // 저장된 텍스트를 단락별 aic-point로 재렌더
-    const paras = ta.value.split(/\n\n+/).filter(Boolean);
-    aicPointsEl.innerHTML = paras.map(p => {
-      const lines = p.split('\n');
-      const title = lines[0] || '';
-      const body  = lines.slice(1).join('\n');
-      return `<div class="aic-point"><span class="dot">📌</span><div class="aic-point-content"><div class="aic-point-title">${title}</div><div class="aic-point-body">${body}</div></div></div>`;
-    }).join('');
-    ta.remove(); saveBtn.remove();
-    btn.textContent = '✏️ 편집';
-    btn.onclick = () => _startCheckpointEdit(btn, reportId, aicPointsEl);
-    aicPointsEl.dataset.editing = '0';
-  };
-
-  aicPointsEl.innerHTML = '';
-  aicPointsEl.appendChild(ta);
-  aicPointsEl.appendChild(saveBtn);
-  btn.textContent = '↩ 취소';
-  btn.onclick = () => {
-    aicPointsEl.innerHTML = originalHtml;
-    btn.textContent = '✏️ 편집';
-    btn.onclick = () => _startCheckpointEdit(btn, reportId, aicPointsEl);
-    aicPointsEl.dataset.editing = '0';
-  };
 }
 
 // ===== PDF 저장 =====
 async function fillAiAnalysisIfEmpty(report, el) {
-  const reportId = report.id;
   const _mdf = report.result?.sections?.marketStats?.data || {};
   const lVf  = _mdf.vacancyLatest   || {};
   const lRf  = _mdf.rentLatest      || {};
@@ -8812,7 +8254,7 @@ async function fillAiAnalysisIfEmpty(report, el) {
   const existing = (report.result?.sections?.aiAnalysis || '').trim();
 
   // 이미 구조화 HTML이면 삽입 후 종료
-  if (existing.includes('<div class="ai-section">')) { el.innerHTML = existing; _injectAiEditButtons(reportId, el); return; }
+  if (existing.includes('<div class="ai-section">')) { el.innerHTML = existing; return; }
   if (existing.length > 200) { el.style.whiteSpace='pre-line'; el.textContent = existing; return; }
 
   el.innerHTML = '<span style="color:var(--muted);font-size:12px">🧠 시장 인사이트 생성 중...</span>';
@@ -8881,7 +8323,6 @@ ${vacRows ? '[주요 인근 공실]\n' + vacRows : ''}
     text = text.replace(/^```html?\s*|\s*```$/gm, '').trim();
     if (text.includes('<div class="ai-section">')) {
       el.innerHTML = text;
-      _injectAiEditButtons(reportId, el);
     } else if (text.length > 50) {
       el.style.whiteSpace = 'pre-line';
       el.textContent = text;
