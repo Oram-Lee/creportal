@@ -4355,7 +4355,11 @@ function _renderCorpResults(q, data, dropdown) {
       var sources = c._sources || [c._source || 'unknown'];
 
       var metaParts = [];
-      if (c.industry_name) metaParts.push(c.industry_name);
+      if (c.industry_name) {
+        var indStr = c.industry_name;
+        if (c._alt_industry) indStr += ' <span style="color:#6b7280;font-size:10px">/ ' + c._alt_industry + '</span>';
+        metaParts.push(indStr);
+      }
       if (c.ceo_name)      metaParts.push('대표 ' + c.ceo_name);
       metaParts.push(c.employee_cnt ? c.employee_cnt.toLocaleString() + '명' : '<span style="color:#f59e0b">직원수 미확인</span>');
 
@@ -5823,19 +5827,191 @@ function renderTags(type) {
 }
 
 // ===== 인근 빌딩 조회 =====
-async function fetchNearbyBuildings(lat, lng, radius) {
+async function fetchNearbyBuildings(lat, lng, radius, opts = {}) {
+  /**
+   * 인근 빌딩 조회 + 다중 지표 스코어링
+   * opts: {
+   *   analysisMode:  'A' | 'B' | 'C'  (기본 'A')
+   *   district:      'GBD' | 'CBD' | ...  (모드 B/C에서 사용)
+   *   grades:        ['Prime','A',...]    (모드 C 등급 필터)
+   *   curRentPy:     number               (현재 임대료/평 — 임대료 비교 기준)
+   *   desiredAreaMin:number               (희망 최소 면적)
+   *   limit:         number               (반환 상한, 기본 20)
+   * }
+   *
+   * 스코어링 가중치 (모드 A):
+   *   거리 15% | 등급 15% | 임대료경쟁력 25% | 가용면적 20% | 인센티브 15% | 역세권 10%
+   * 스코어링 가중치 (모드 B/C — 거리 무관):
+   *   등급 20% | 임대료경쟁력 30% | 가용면적 25% | 인센티브 15% | 역세권 10%
+   */
   try {
-    const snap     = await db.ref('buildings').once('value');
-    const buildings = snap.val() || {};
-    const nearby   = [];
+    const mode         = opts.analysisMode  || 'A';
+    const filterDist   = opts.district      || '';
+    const filterGrades = opts.grades        || [];
+    const curRentPy    = opts.curRentPy     || 0;
+    const needArea     = opts.desiredAreaMin || 0;
+    const limit        = opts.limit != null ? opts.limit : 20;
 
-    for (const [id, data] of Object.entries(buildings)) {
-      if (!data?.coordinates?.lat || !data?.coordinates?.lng) continue;
-      const dist = getDistance(lat, lng, data.coordinates.lat, data.coordinates.lng);
-      if (dist <= radius) nearby.push({ id, ...data, distanceM: Math.round(dist) });
+    // ── 1. Firebase 빌딩 + 공실 병렬 조회 ──
+    const [bldSnap, vacSnap] = await Promise.all([
+      db.ref('buildings').once('value'),
+      db.ref('vacancies').once('value'),
+    ]);
+    const allBuildings = bldSnap.val() || {};
+    const allVacancies = vacSnap.val() || {};
+
+    // ── 2. 1차 필터 (모드별 분기) ──
+    const candidates = [];
+    const gradeScoreMap = { Prime: 100, A: 80, B: 60, C: 40, D: 20, E: 10 };
+
+    for (const [id, data] of Object.entries(allBuildings)) {
+      if (!data || data.status === 'deleted' || data.status === 'hidden') continue;
+
+      let distanceM = null;
+
+      if (mode === 'A') {
+        // 모드 A: 반경 필터
+        if (!data.coordinates?.lat || !data.coordinates?.lng) continue;
+        distanceM = getDistance(lat, lng, data.coordinates.lat, data.coordinates.lng);
+        if (distanceM > radius) continue;
+        distanceM = Math.round(distanceM);
+      } else {
+        // 모드 B/C: 권역 필터
+        const region = data.region || guessDistrict(data.address);
+        if (filterDist && region !== filterDist) continue;
+        // 모드 C 추가: 등급 필터
+        if (mode === 'C' && filterGrades.length > 0) {
+          if (!filterGrades.includes(data.grade)) continue;
+        }
+        // 좌표 있으면 거리 계산 (참고용, 스코어링에서 가중치 낮음)
+        if (data.coordinates?.lat && data.coordinates?.lng && lat && lng) {
+          distanceM = Math.round(getDistance(lat, lng, data.coordinates.lat, data.coordinates.lng));
+        }
+      }
+
+      // ── OCR 최신 임대료 ──
+      const latestFP  = getLatestOcrPricing(data.floorPricing || []);
+      const ocrRentPy = latestFP?.rentPy || 0;
+      const bRentPy   = ocrRentPy || data.pricing?.rentPy || data.rentPy || 0;
+
+      // ── 공실 데이터 집계 ──
+      const bVacancies = Object.values(allVacancies[id] || {})
+        .filter(v => v && !v.noVacancy && typeof v === 'object' && v.floor);
+      const totalVacantArea = bVacancies.reduce((sum, v) => {
+        const a = parseFloat(String(v.rentArea || '').replace(/[,평]/g, '')) || 0;
+        return sum + a;
+      }, 0);
+      const vacancyCount = bVacancies.length;
+
+      // ── 인센티브 합산 ──
+      const incentives   = data.incentives || [];
+      const rfMonths     = incentives.filter(i => i.type === 'RF').reduce((s, i) => s + (i.months || 0), 0);
+      const foVal        = incentives.filter(i => i.type === 'FO').reduce((s, i) => s + (i.amount || 0), 0);
+      const tiVal        = incentives.filter(i => i.type === 'TI').reduce((s, i) => s + (i.amount || 0), 0);
+      const incentiveScore = Math.min((rfMonths * 2) + (foVal > 0 ? 20 : 0) + (tiVal > 0 ? 15 : 0), 100);
+
+      // ── 등급 점수 ──
+      const gradeScore = gradeScoreMap[data.grade] || 30;
+
+      // ── 역세권 점수 ──
+      const staDist = parseFloat(data.stationDistance) || 999;
+      const stationScore = staDist <= 3 ? 100
+                         : staDist <= 5 ?  80
+                         : staDist <= 10 ? 60
+                         : staDist <= 15 ? 40 : 20;
+
+      candidates.push({
+        id, ...data,
+        distanceM,
+        rentPy:          bRentPy,
+        latestFloorPricing: latestFP,
+        totalVacantArea,
+        vacancyCount,
+        _scores: { gradeScore, stationScore, incentiveScore },
+      });
     }
-    return nearby.sort((a, b) => a.distanceM - b.distanceM).slice(0, 20);
-  } catch { return []; }
+
+    if (!candidates.length) return [];
+
+    // ── 3. 임대료 상대 점수 (권역 내 정규화) ──
+    const rentVals = candidates.map(b => b.rentPy).filter(v => v > 0);
+    const minRent  = rentVals.length ? Math.min(...rentVals) : 1;
+    const maxRent  = rentVals.length ? Math.max(...rentVals) : 1;
+    const rentRange = maxRent - minRent || 1;
+
+    // 거리 정규화 (모드 A 전용)
+    let maxDist = 1;
+    if (mode === 'A') {
+      const dists = candidates.map(b => b.distanceM).filter(v => v != null);
+      maxDist = dists.length ? Math.max(...dists) : 1;
+    }
+
+    // ── 4. 종합 스코어 계산 ──
+    for (const b of candidates) {
+      const { gradeScore, stationScore, incentiveScore } = b._scores;
+
+      // 임대료 경쟁력 (curRentPy 있으면 편차 기준, 없으면 상대 순위)
+      let rentScore;
+      if (curRentPy > 0 && b.rentPy > 0) {
+        // 현재 임대료 대비 저렴할수록 높은 점수, ±50% 범위를 0~100으로
+        const ratio = b.rentPy / curRentPy;
+        rentScore = Math.max(0, Math.min(100, Math.round((1.5 - ratio) * 100)));
+      } else if (b.rentPy > 0) {
+        rentScore = Math.round(100 - ((b.rentPy - minRent) / rentRange) * 100);
+      } else {
+        rentScore = 50;
+      }
+
+      // 가용면적 충족도
+      const areaScore = needArea > 0
+        ? (b.totalVacantArea >= needArea ? 100
+          : b.totalVacantArea > 0 ? Math.round((b.totalVacantArea / needArea) * 100)
+          : 0)
+        : (b.vacancyCount > 0 ? 70 : 10);  // 면적 미지정 시: 공실 있으면 70, 없으면 10
+
+      if (mode === 'A') {
+        // 거리 점수 (가까울수록 높음)
+        const distScore = b.distanceM != null
+          ? Math.round(100 - (b.distanceM / (maxDist || 1)) * 100)
+          : 50;
+
+        b.totalScore = Math.round(
+          distScore      * 0.15 +
+          gradeScore     * 0.15 +
+          rentScore      * 0.25 +
+          areaScore      * 0.20 +
+          incentiveScore * 0.15 +
+          stationScore   * 0.10
+        );
+        b._scoreDetail = { distScore, gradeScore, rentScore, areaScore, incentiveScore, stationScore };
+      } else {
+        // 모드 B/C — 거리 가중치 없음
+        b.totalScore = Math.round(
+          gradeScore     * 0.20 +
+          rentScore      * 0.30 +
+          areaScore      * 0.25 +
+          incentiveScore * 0.15 +
+          stationScore   * 0.10
+        );
+        b._scoreDetail = { gradeScore, rentScore, areaScore, incentiveScore, stationScore };
+      }
+      delete b._scores;
+    }
+
+    // ── 5. 정렬 + 상한 적용 ──
+    candidates.sort((a, b) => b.totalScore - a.totalScore);
+    const result = limit > 0 ? candidates.slice(0, limit) : candidates;
+
+    console.log(`[nearbyBuildings] 모드 ${mode} | 후보 ${candidates.length}개 → 반환 ${result.length}개`
+      + (result.length ? ` | 1위: ${result[0].name || result[0].id} (${result[0].totalScore}점)` : '')
+      + (curRentPy ? ` | 기준임대료: ${curRentPy.toLocaleString()}원/평` : '')
+      + (needArea ? ` | 희망면적: ${needArea}평` : ''));
+
+    return result;
+  } catch (e) {
+    console.warn('[nearbyBuildings] 조회 실패:', e);
+    return [];
+  }
 }
 
 async function fetchNearbyVacancies(buildingIds) {
@@ -6163,10 +6339,17 @@ async function generateReport() {
   };
 
   try {
-    // 인근 빌딩 조회 (Firebase)
-    if (_statusEl) _statusEl.textContent = '인근 빌딩 · 공실 데이터 조회 중…';
+    // 인근 빌딩 조회 (Firebase) — 다중 지표 스코어링 적용
+    if (_statusEl) _statusEl.textContent = '인근 빌딩 · 공실 데이터 스코어링 중…';
     setGenStep(1, 'active');
-    const nearbyBuildings = await fetchNearbyBuildings(reportParams.lat, reportParams.lng, selectedRadius);
+    const nearbyBuildings = await fetchNearbyBuildings(reportParams.lat, reportParams.lng, selectedRadius, {
+      analysisMode:   selectedAnalysisMode,
+      district:       analysisDistrict,
+      grades:         analysisGrades,
+      curRentPy:      body.curRentPy      || 0,
+      desiredAreaMin: body.desiredAreaMin  || 0,
+      limit:          selectedBuildingCount > 0 ? selectedBuildingCount : 0,
+    });
     const vacancyData     = await fetchNearbyVacancies(nearbyBuildings.map(b => b.id));
 
     // ── incentiveData: 별도 Firebase 쿼리 없이 nearbyBuildings에서 직접 추출 ──
@@ -7296,7 +7479,7 @@ function buildRentTableRows(report) {
   const vacancies = report.vacancyData    || [];
 
   if (!buildings.length && !vacancies.length) {
-    return '<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:16px">데이터 없음</td></tr>';
+    return '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:16px">데이터 없음</td></tr>';
   }
 
   const _n = v => { const n=parseFloat(String(v||'').replace(/[,원]/g,'')); return isNaN(n)||n===0?null:n; };
@@ -7309,12 +7492,37 @@ function buildRentTableRows(report) {
     vacancies.forEach(v => { if (!seen.has(v.buildingId||v.buildingName)) { seen.add(v.buildingId||v.buildingName); bldList.push({ id: v.buildingId, buildingName: v.buildingName }); } });
   }
 
-  return bldList.map((b, i) => {
-    const isBase = i === 0;
+  // ── 공실 유무 기준 그룹 분리 (스코어순 유지) ──
+  const withVacancy = [];
+  const noVacancy   = [];
+  bldList.forEach((b, i) => {
+    const bVacs = vacancies.filter(v => v.buildingId === b.id || v.buildingName === b.buildingName);
+    if (bVacs.length > 0 || i === 0) { // 기준 빌딩(i=0)은 항상 상단
+      withVacancy.push(b);
+    } else {
+      noVacancy.push(b);
+    }
+  });
+  const sortedList = [...withVacancy, ...noVacancy];
+
+  let rows = '';
+  let dividerInserted = false;
+
+  sortedList.forEach((b, idx) => {
+    const isBase = (b.id === bldList[0]?.id) && idx === 0;
 
     // 기준가 (빌딩 자체 → vacancyData 평균 순서로 fallback)
     const bVacs = vacancies.filter(v => v.buildingId === b.id || v.buildingName === b.buildingName);
     const vacCount = bVacs.length;
+    const isNoVacancy = vacCount === 0 && !isBase;
+
+    // ── 만실 빌딩 구분선 삽입 ──
+    if (isNoVacancy && !dividerInserted && withVacancy.length > 0) {
+      dividerInserted = true;
+      rows += '<tr class="no-print"><td colspan="11" style="padding:4px 10px;background:#fefce8;border-left:3px solid #f59e0b;font-size:11px;color:#92400e;font-weight:600">'
+        + '📋 아래는 현재 공실이 없는 참고 빌딩입니다 (' + noVacancy.length + '개)'
+        + '</td></tr>';
+    }
 
     // 빌딩 자체 기준가
     let rentPy    = _n(b.rentPy)   || _n(b.pricing?.rentPy);
@@ -7343,7 +7551,7 @@ function buildRentTableRows(report) {
     // 공실 현황 — 건수만 표기 (ISSUE-02-B)
     const vacSummary = bVacs.length
       ? '<span style="color:#b91c1c;font-weight:600">' + vacCount + '건</span>'
-      : '-';
+      : '<span style="color:#94a3b8;font-size:11px">만실</span>';
 
     // 입주가능 (가장 빠른 날짜)
     const moveDates = bVacs.map(v=>v.moveInDate).filter(Boolean);
@@ -7353,16 +7561,27 @@ function buildRentTableRows(report) {
     const fpLatest = getLatestOcrPricing(b.floorPricing || []);
     const floorLabel = fpLatest?.floorInfo || fpLatest?.areaName || fpLatest?.floorType || '-';
 
-    // 빌딩 ID (체크박스 삭제용)
-    const bldIdKey = b.id || b.buildingName || b.name || ('row' + i);
+    // ── 순위 뱃지 (스코어는 내부 정렬용, 출력에는 순위만 표시) ──
+    // idx+1 기준 순위, 기준빌딩은 '기준' 표시, 인쇄 시 숨김(no-print)
+    const rankLabel = isBase ? ''
+      : ('<span class="no-print" style="display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:600;margin-left:4px;'
+        + 'background:#f1f5f9;color:#475569">'
+        + (idx + 1) + '순위</span>');
 
-    return '<tr data-bld-id="' + bldIdKey + '" style="' + (isBase ? 'background:#f0f7ff;font-weight:700' : '') + '">'
+    // 빌딩 ID (체크박스 삭제용)
+    const bldIdKey = b.id || b.buildingName || b.name || ('row' + idx);
+
+    // 만실 빌딩 스타일 (반투명)
+    const rowStyle = isBase ? 'background:#f0f7ff;font-weight:700'
+                   : isNoVacancy ? 'opacity:0.55' : '';
+
+    rows += '<tr data-bld-id="' + bldIdKey + '" style="' + rowStyle + '">'
       + '<td class="del-check-col no-print">'
       +   '<input type="checkbox" class="chk-bld"'
       +   ' onchange="_onBldCheckChange(this,\'rentDelBtn_' + report.id + '\')">'
       + '</td>'
       + '<td data-name-cell style="text-align:left;font-weight:' + (isBase?700:500) + ';' + (isBase?'color:var(--accent)':'') + '">'
-      +   (isBase ? '🏠 ' : '') + (b.buildingName || b.name || '-')
+      +   (isBase ? '🏠 ' : '') + (b.buildingName || b.name || '-') + rankLabel
       + '</td>'
       + '<td><span class="pill ' + (gradeClass[grade]||'pill-gray') + '">' + grade + '</span></td>'
       + '<td class="fp-floor-cell" style="font-size:11px;color:#475569">' + floorLabel + '</td>'
@@ -7376,7 +7595,9 @@ function buildRentTableRows(report) {
       + '<td>' + depMult + '</td>'
       + '<td>' + (vacCount > 0 ? '<span class="pill pill-green" style="font-size:10px">' + moveIn + '</span>' : '-') + '</td>'
       + '</tr>';
-  }).join('');
+  });
+
+  return rows;
 }
 
 // ===== Section: 인센티브 협상 포인트 동적 빌드 =====
