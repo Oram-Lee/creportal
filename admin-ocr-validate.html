@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCR 안내문 검증 | CRE Portal Admin</title>
+<style>
+:root {
+  --primary: #1a3c5e; --accent: #2e7dca; --accent-lt: #e8f2fb;
+  --success: #16a34a; --warning: #d97706; --danger: #dc2626;
+  --bg: #f4f6f9; --surface: #fff; --border: #dde3ea;
+  --text: #1e293b; --muted: #64748b; --radius: 8px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--bg); color: var(--text); }
+
+.header { background: var(--primary); color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+.header h1 { font-size: 18px; font-weight: 700; }
+.header .badge { background: rgba(255,255,255,.15); padding: 3px 10px; border-radius: 12px; font-size: 11px; }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+/* 통계 카드 */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card { background: var(--surface); border-radius: var(--radius); padding: 16px; text-align: center;
+  border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+.stat-val { font-size: 28px; font-weight: 800; }
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.stat-high .stat-val { color: var(--danger); }
+.stat-med .stat-val { color: var(--warning); }
+.stat-low .stat-val { color: var(--success); }
+
+/* 탭 */
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--border); }
+.tab { padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: none;
+  color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .15s; }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* 필터 */
+.filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.filter-btn { padding: 5px 14px; border: 1.5px solid var(--border); border-radius: 16px; font-size: 12px;
+  cursor: pointer; background: var(--surface); transition: all .15s; font-weight: 600; }
+.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.filter-btn .cnt { font-weight: 400; opacity: .7; }
+
+/* 테이블 */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: var(--primary); color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 600;
+  position: sticky; top: 0; white-space: nowrap; }
+td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:hover td { background: var(--accent-lt); }
+.sev { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+.sev-HIGH { background: #fee2e2; color: #b91c1c; }
+.sev-MEDIUM { background: #fef3c7; color: #92400e; }
+.sev-LOW { background: #dcfce7; color: #166534; }
+
+/* 상태 */
+.status-box { text-align: center; padding: 60px 20px; color: var(--muted); }
+.status-box .spin { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn-run { padding: 10px 28px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
+  font-size: 14px; font-weight: 700; cursor: pointer; transition: background .15s; }
+.btn-run:hover { background: #1d6ab5; }
+.btn-run:disabled { opacity: .5; cursor: not-allowed; }
+.desc-cell { max-width: 400px; word-break: keep-all; line-height: 1.5; }
+.bld-cell { max-width: 200px; word-break: keep-all; font-size: 12px; color: var(--muted); }
+.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔍 OCR 임대안내문 매칭 검증</h1>
+  <span class="badge">CRE Portal Admin</span>
+</div>
+
+<div class="container">
+  <!-- 실행 전 -->
+  <div id="beforeRun" style="text-align:center;padding:60px 20px">
+    <p style="font-size:15px;margin-bottom:16px;color:var(--text)">Firebase의 OCR 임대안내문 데이터가 올바른 빌딩에 매핑되었는지 검증합니다.</p>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:24px">
+      검증 항목: 중복 가격 · 등급-가격 이상 · OCR 빌딩명 불일치 · 임대안내문 교차검증 · 가격 누락
+    </p>
+    <button class="btn-run" onclick="runValidation()">🧪 검증 시작</button>
+  </div>
+
+  <!-- 로딩 -->
+  <div id="loading" class="status-box" style="display:none">
+    <div class="spin"></div>
+    <p style="margin-top:12px">Firebase 데이터 읽는 중... (약 5~10초)</p>
+  </div>
+
+  <!-- 결과 -->
+  <div id="result" style="display:none">
+    <!-- 통계 카드 -->
+    <div class="stats">
+      <div class="stat-card"><div class="stat-val" id="stBuildings">-</div><div class="stat-label">전체 빌딩</div></div>
+      <div class="stat-card"><div class="stat-val" id="stOcrBld">-</div><div class="stat-label">OCR 보유 빌딩</div></div>
+      <div class="stat-card"><div class="stat-val" id="stOcrCnt">-</div><div class="stat-label">OCR 항목</div></div>
+      <div class="stat-card stat-high"><div class="stat-val" id="stHigh">-</div><div class="stat-label">🔴 HIGH</div></div>
+      <div class="stat-card stat-med"><div class="stat-val" id="stMed">-</div><div class="stat-label">🟡 MEDIUM</div></div>
+      <div class="stat-card stat-low"><div class="stat-val" id="stLow">-</div><div class="stat-label">🟢 LOW</div></div>
+    </div>
+
+    <!-- 탭 -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('issues')">⚠️ 이슈 목록 <span id="tabIssueCnt"></span></button>
+      <button class="tab" onclick="switchTab('ocr')">📋 전체 OCR 데이터 <span id="tabOcrCnt"></span></button>
+    </div>
+
+    <!-- 이슈 탭 -->
+    <div class="tab-panel active" id="panel-issues">
+      <div class="filters" id="issueFilters"></div>
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th style="width:70px">심각도</th><th style="width:130px">유형</th><th>설명</th><th style="width:180px">관련 빌딩</th><th style="width:120px">빌딩 ID</th></tr>
+          </thead>
+          <tbody id="issueBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- OCR 데이터 탭 -->
+    <div class="tab-panel" id="panel-ocr">
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr><th>빌딩명</th><th>등급</th><th>권역</th><th>sourceType</th><th>임대료/평</th><th>관리비/평</th><th>보증금/평</th><th>기준일</th><th>층정보</th><th>OCR원본명</th></tr>
+          </thead>
+          <tbody id="ocrBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 하단 -->
+    <div style="margin-top:20px;text-align:center">
+      <button class="btn-run" onclick="runValidation()" style="font-size:12px;padding:8px 20px">🔄 재검증</button>
+      <span id="checkedAt" style="margin-left:12px;font-size:11px;color:var(--muted)"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const BACKEND = 'https://portal-dsyl.onrender.com';
+
+let allIssues = [];
+let allOcr = [];
+let activeFilter = 'ALL';
+
+async function runValidation() {
+  document.getElementById('beforeRun').style.display = 'none';
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('loading').style.display = '';
+
+  try {
+    const resp = await fetch(`${BACKEND}/api/admin/ocr-validate`, { cache: 'no-store' });
+    if (!resp.ok) throw new Error('서버 오류 ' + resp.status);
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error || '검증 실패');
+
+    allIssues = data.issues || [];
+    allOcr = data.ocrEntries || [];
+    const s = data.stats || {};
+
+    // 통계
+    document.getElementById('stBuildings').textContent = s.totalBuildings || 0;
+    document.getElementById('stOcrBld').textContent = s.ocrBuildings || 0;
+    document.getElementById('stOcrCnt').textContent = s.ocrEntries || 0;
+    document.getElementById('stHigh').textContent = s.high || 0;
+    document.getElementById('stMed').textContent = s.medium || 0;
+    document.getElementById('stLow').textContent = s.low || 0;
+    document.getElementById('tabIssueCnt').textContent = `(${allIssues.length})`;
+    document.getElementById('tabOcrCnt').textContent = `(${allOcr.length})`;
+    document.getElementById('checkedAt').textContent = '검증 시각: ' + (s.checkedAt || '').replace('T', ' ').slice(0, 19);
+
+    // 필터 버튼
+    buildFilters();
+    renderIssues();
+    renderOcr();
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('result').style.display = '';
+
+  } catch (e) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('beforeRun').style.display = '';
+    alert('검증 실패: ' + e.message);
+  }
+}
+
+function buildFilters() {
+  const types = {};
+  allIssues.forEach(i => { types[i.type] = (types[i.type] || 0) + 1; });
+  let html = `<button class="filter-btn active" onclick="setFilter('ALL',this)">전체 <span class="cnt">(${allIssues.length})</span></button>`;
+  html += `<button class="filter-btn" onclick="setFilter('HIGH',this)">🔴 HIGH <span class="cnt">(${allIssues.filter(i=>i.severity==='HIGH').length})</span></button>`;
+  html += `<button class="filter-btn" onclick="setFilter('MEDIUM',this)">🟡 MEDIUM <span class="cnt">(${allIssues.filter(i=>i.severity==='MEDIUM').length})</span></button>`;
+  html += `<button class="filter-btn" onclick="setFilter('LOW',this)">🟢 LOW <span class="cnt">(${allIssues.filter(i=>i.severity==='LOW').length})</span></button>`;
+  for (const [type, cnt] of Object.entries(types)) {
+    html += `<button class="filter-btn" onclick="setFilter('${type}',this)">${type} <span class="cnt">(${cnt})</span></button>`;
+  }
+  document.getElementById('issueFilters').innerHTML = html;
+}
+
+function setFilter(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderIssues();
+}
+
+function renderIssues() {
+  const filtered = allIssues.filter(i => {
+    if (activeFilter === 'ALL') return true;
+    if (activeFilter === 'HIGH' || activeFilter === 'MEDIUM' || activeFilter === 'LOW') return i.severity === activeFilter;
+    return i.type === activeFilter;
+  });
+  if (!filtered.length) {
+    document.getElementById('issueBody').innerHTML = '<tr><td colspan="5" class="empty">이슈 없음 👍</td></tr>';
+    return;
+  }
+  document.getElementById('issueBody').innerHTML = filtered.map(i => `
+    <tr>
+      <td><span class="sev sev-${i.severity}">${i.severity}</span></td>
+      <td style="font-weight:600;font-size:12px">${i.type}</td>
+      <td class="desc-cell">${i.desc}</td>
+      <td class="bld-cell">${(i.buildings||[]).join(', ')}</td>
+      <td style="font-size:11px;color:var(--muted)">${(i.buildingIds||[]).join(', ').slice(0,40)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderOcr() {
+  if (!allOcr.length) {
+    document.getElementById('ocrBody').innerHTML = '<tr><td colspan="10" class="empty">OCR 데이터 없음</td></tr>';
+    return;
+  }
+  const fmt = n => n > 0 ? Number(n).toLocaleString() : '-';
+  document.getElementById('ocrBody').innerHTML = allOcr.map(e => `
+    <tr>
+      <td style="font-weight:600">${e.buildingName}</td>
+      <td>${e.buildingGrade || '-'}</td>
+      <td>${e.buildingRegion || '-'}</td>
+      <td><span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#ede9fe;color:#7c3aed">${e.sourceType}</span></td>
+      <td style="font-weight:600;color:var(--accent)">${fmt(e.rentPy)}</td>
+      <td>${fmt(e.maintenancePy)}</td>
+      <td>${fmt(e.depositPy)}</td>
+      <td style="font-size:11px">${e.effectiveDate || '-'}</td>
+      <td style="font-size:11px">${e.floorInfo || '-'}</td>
+      <td style="font-size:11px;${e.ocrBuildingName ? 'color:var(--danger);font-weight:600' : 'color:var(--muted)'}">${e.ocrBuildingName || '-'}</td>
+    </tr>
+  `).join('');
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+}
+</script>
+</body>
+</html>
