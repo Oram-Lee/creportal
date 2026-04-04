@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OCR 안내문 검증 | CRE Portal Admin</title>
+<title>OCR 오매칭 검증 | CRE Portal Admin</title>
 <style>
 :root {
   --primary: #1a3c5e; --accent: #2e7dca; --accent-lt: #e8f2fb;
@@ -12,132 +12,96 @@
   --text: #1e293b; --muted: #64748b; --radius: 8px;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--bg); color: var(--text); }
-
-.header { background: var(--primary); color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+.header { background: var(--primary); color: #fff; padding: 16px 24px; }
 .header h1 { font-size: 18px; font-weight: 700; }
-.header .badge { background: rgba(255,255,255,.15); padding: 3px 10px; border-radius: 12px; font-size: 11px; }
-
-.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-
-/* 통계 카드 */
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.stat-card { background: var(--surface); border-radius: var(--radius); padding: 16px; text-align: center;
-  border: 1px solid var(--border); box-shadow: 0 1px 4px rgba(0,0,0,.05); }
-.stat-val { font-size: 28px; font-weight: 800; }
-.stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.header .sub { font-size: 12px; opacity: .7; margin-top: 2px; }
+.container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+.guide-box { background: #fffbeb; border: 1.5px solid #fbbf24; border-radius: var(--radius); padding: 14px 18px;
+  margin-bottom: 20px; font-size: 13px; line-height: 1.7; }
+.guide-box b { color: #92400e; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.stat-card { background: var(--surface); border-radius: var(--radius); padding: 14px; text-align: center; border: 1px solid var(--border); }
+.stat-val { font-size: 26px; font-weight: 800; }
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .stat-high .stat-val { color: var(--danger); }
 .stat-med .stat-val { color: var(--warning); }
-.stat-low .stat-val { color: var(--success); }
-
-/* 탭 */
-.tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--border); }
-.tab { padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: none;
-  color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .15s; }
-.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
-
-/* 필터 */
-.filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.filter-btn { padding: 5px 14px; border: 1.5px solid var(--border); border-radius: 16px; font-size: 12px;
-  cursor: pointer; background: var(--surface); transition: all .15s; font-weight: 600; }
-.filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.filter-btn .cnt { font-weight: 400; opacity: .7; }
-
-/* 테이블 */
-.tbl-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { background: var(--primary); color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 600;
-  position: sticky; top: 0; white-space: nowrap; }
-td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-tr:hover td { background: var(--accent-lt); }
-.sev { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; }
+.filters { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.fbtn { padding: 5px 14px; border: 1.5px solid var(--border); border-radius: 16px; font-size: 12px;
+  cursor: pointer; background: var(--surface); font-weight: 600; transition: all .15s; }
+.fbtn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.fbtn .cnt { font-weight: 400; opacity: .7; margin-left: 2px; }
+.issue-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 10px; }
+.issue-card:hover { border-color: var(--accent); }
+.issue-top { display: flex; align-items: flex-start; gap: 10px; }
+.sev { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
 .sev-HIGH { background: #fee2e2; color: #b91c1c; }
 .sev-MEDIUM { background: #fef3c7; color: #92400e; }
-.sev-LOW { background: #dcfce7; color: #166534; }
-
-/* 상태 */
-.status-box { text-align: center; padding: 60px 20px; color: var(--muted); }
-.status-box .spin { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border);
+.issue-method { font-size: 11px; color: var(--accent); font-weight: 700; margin-bottom: 2px; }
+.issue-desc { font-size: 13px; font-weight: 600; margin-bottom: 4px; word-break: keep-all; }
+.issue-suggest { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.issue-detail { font-size: 11px; color: var(--muted); margin-top: 6px; background: #f8fafc; padding: 6px 10px;
+  border-radius: 4px; display: flex; flex-wrap: wrap; gap: 8px; }
+.issue-actions { display: flex; gap: 6px; margin-top: 8px; }
+.btn-del { padding: 4px 12px; background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5;
+  border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.btn-del:hover { background: #fca5a5; }
+.btn-move { padding: 4px 12px; background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd;
+  border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer; }
+.btn-done { padding: 4px 12px; background: #dcfce7; color: #166534; border: 1px solid #86efac;
+  border-radius: 4px; font-size: 11px; font-weight: 600; }
+.center-box { text-align: center; padding: 60px 20px; }
+.spin { display: inline-block; width: 28px; height: 28px; border: 3px solid var(--border);
   border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .btn-run { padding: 10px 28px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius);
-  font-size: 14px; font-weight: 700; cursor: pointer; transition: background .15s; }
+  font-size: 14px; font-weight: 700; cursor: pointer; }
 .btn-run:hover { background: #1d6ab5; }
-.btn-run:disabled { opacity: .5; cursor: not-allowed; }
-.desc-cell { max-width: 400px; word-break: keep-all; line-height: 1.5; }
-.bld-cell { max-width: 200px; word-break: keep-all; font-size: 12px; color: var(--muted); }
-.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.empty { text-align: center; padding: 40px; color: var(--success); font-size: 14px; font-weight: 600; }
+.bld-group { margin-bottom: 6px; }
+.bld-group-title { font-size: 13px; font-weight: 700; color: var(--primary); margin: 18px 0 8px;
+  padding-bottom: 4px; border-bottom: 2px solid var(--accent-lt); display: flex; align-items: center; gap: 6px; }
+.bld-cnt { font-size: 10px; padding: 2px 7px; border-radius: 10px; background: #fee2e2; color: #b91c1c; font-weight: 700; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>🔍 OCR 임대안내문 매칭 검증</h1>
-  <span class="badge">CRE Portal Admin</span>
+  <h1>🔍 OCR 오매칭 검증 · 수정</h1>
+  <div class="sub">다른 빌딩의 임대안내문 데이터가 잘못 매핑된 건을 찾아 수정합니다 — 공실률·평균임대료 정확도 확보</div>
 </div>
 
 <div class="container">
-  <!-- 실행 전 -->
-  <div id="beforeRun" style="text-align:center;padding:60px 20px">
-    <p style="font-size:15px;margin-bottom:16px;color:var(--text)">Firebase의 OCR 임대안내문 데이터가 올바른 빌딩에 매핑되었는지 검증합니다.</p>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:24px">
-      검증 항목: 중복 가격 · 등급-가격 이상 · OCR 빌딩명 불일치 · 임대안내문 교차검증 · 가격 누락
-    </p>
-    <button class="btn-run" onclick="runValidation()">🧪 검증 시작</button>
+  <div class="guide-box">
+    <b>이 도구가 찾는 것:</b> A빌딩의 공실/가격 데이터에 <b>B빌딩의 안내문 정보</b>가 섞여 들어간 오매칭<br>
+    <b>왜 중요한가:</b> 오매칭 → 공실률과 평균임대료 계산 오염 → 리서치 데이터 신뢰도 하락<br><br>
+    <b>탐지 방법 4가지:</b><br>
+    ① <b>빌딩명 불일치</b> — vacancy 안의 빌딩명 ≠ 실제 매핑 빌딩명 → <b style="color:#b91c1c">오매칭 확정</b><br>
+    ② <b>교차 빌딩 중복</b> — 동일 [층+면적+가격]이 2개+ 빌딩에 존재 → 한쪽은 오매칭<br>
+    ③ <b>가격 이탈</b> — 같은 빌딩 내 다른 공실 대비 가격이 극단적으로 다름 → 다른 빌딩 혼입 의심<br>
+    ④ <b>기준가 빌딩명 불일치</b> — floorPricing OCR 원본 빌딩명 ≠ 매핑 빌딩명
   </div>
 
-  <!-- 로딩 -->
-  <div id="loading" class="status-box" style="display:none">
+  <div id="beforeRun" class="center-box">
+    <p style="margin-bottom:16px;font-size:14px">Firebase의 vacancies + buildings 전체 데이터를 분석합니다.</p>
+    <button class="btn-run" onclick="runValidation()">🧪 오매칭 탐지 시작</button>
+  </div>
+
+  <div id="loading" class="center-box" style="display:none">
     <div class="spin"></div>
-    <p style="margin-top:12px">Firebase 데이터 읽는 중... (약 5~10초)</p>
+    <p style="margin-top:12px;color:var(--muted)">Firebase 전체 데이터 분석 중... (약 10~20초)</p>
   </div>
 
-  <!-- 결과 -->
   <div id="result" style="display:none">
-    <!-- 통계 카드 -->
     <div class="stats">
-      <div class="stat-card"><div class="stat-val" id="stBuildings">-</div><div class="stat-label">전체 빌딩</div></div>
-      <div class="stat-card"><div class="stat-val" id="stOcrBld">-</div><div class="stat-label">OCR 보유 빌딩</div></div>
-      <div class="stat-card"><div class="stat-val" id="stOcrCnt">-</div><div class="stat-label">OCR 항목</div></div>
+      <div class="stat-card"><div class="stat-val" id="stTotal">-</div><div class="stat-label">전체 vacancy</div></div>
+      <div class="stat-card"><div class="stat-val" id="stAffected">-</div><div class="stat-label">문제 빌딩</div></div>
       <div class="stat-card stat-high"><div class="stat-val" id="stHigh">-</div><div class="stat-label">🔴 HIGH</div></div>
       <div class="stat-card stat-med"><div class="stat-val" id="stMed">-</div><div class="stat-label">🟡 MEDIUM</div></div>
-      <div class="stat-card stat-low"><div class="stat-val" id="stLow">-</div><div class="stat-label">🟢 LOW</div></div>
     </div>
-
-    <!-- 탭 -->
-    <div class="tabs">
-      <button class="tab active" onclick="switchTab('issues')">⚠️ 이슈 목록 <span id="tabIssueCnt"></span></button>
-      <button class="tab" onclick="switchTab('ocr')">📋 전체 OCR 데이터 <span id="tabOcrCnt"></span></button>
-    </div>
-
-    <!-- 이슈 탭 -->
-    <div class="tab-panel active" id="panel-issues">
-      <div class="filters" id="issueFilters"></div>
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr><th style="width:70px">심각도</th><th style="width:130px">유형</th><th>설명</th><th style="width:180px">관련 빌딩</th><th style="width:120px">빌딩 ID</th></tr>
-          </thead>
-          <tbody id="issueBody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- OCR 데이터 탭 -->
-    <div class="tab-panel" id="panel-ocr">
-      <div class="tbl-wrap">
-        <table>
-          <thead>
-            <tr><th>빌딩명</th><th>등급</th><th>권역</th><th>sourceType</th><th>임대료/평</th><th>관리비/평</th><th>보증금/평</th><th>기준일</th><th>층정보</th><th>OCR원본명</th></tr>
-          </thead>
-          <tbody id="ocrBody"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 하단 -->
+    <div class="filters" id="filterBar"></div>
+    <div id="issueList"></div>
     <div style="margin-top:20px;text-align:center">
       <button class="btn-run" onclick="runValidation()" style="font-size:12px;padding:8px 20px">🔄 재검증</button>
       <span id="checkedAt" style="margin-left:12px;font-size:11px;color:var(--muted)"></span>
@@ -147,68 +111,48 @@ tr:hover td { background: var(--accent-lt); }
 
 <script>
 const BACKEND = 'https://portal-dsyl.onrender.com';
-
-let allIssues = [];
-let allOcr = [];
-let activeFilter = 'ALL';
+let allIssues = [], activeFilter = 'ALL';
 
 async function runValidation() {
   document.getElementById('beforeRun').style.display = 'none';
   document.getElementById('result').style.display = 'none';
   document.getElementById('loading').style.display = '';
-
   try {
-    const resp = await fetch(`${BACKEND}/api/admin/ocr-validate`, { cache: 'no-store' });
-    if (!resp.ok) throw new Error('서버 오류 ' + resp.status);
-    const data = await resp.json();
-    if (!data.success) throw new Error(data.error || '검증 실패');
-
-    allIssues = data.issues || [];
-    allOcr = data.ocrEntries || [];
-    const s = data.stats || {};
-
-    // 통계
-    document.getElementById('stBuildings').textContent = s.totalBuildings || 0;
-    document.getElementById('stOcrBld').textContent = s.ocrBuildings || 0;
-    document.getElementById('stOcrCnt').textContent = s.ocrEntries || 0;
+    const r = await fetch(BACKEND + '/api/admin/ocr-validate', { cache: 'no-store' });
+    if (!r.ok) throw new Error('서버 오류 ' + r.status);
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || '실패');
+    allIssues = d.issues || [];
+    const s = d.stats || {};
+    document.getElementById('stTotal').textContent = (s.totalVacEntries||0).toLocaleString();
+    document.getElementById('stAffected').textContent = s.affectedBuildings || 0;
     document.getElementById('stHigh').textContent = s.high || 0;
     document.getElementById('stMed').textContent = s.medium || 0;
-    document.getElementById('stLow').textContent = s.low || 0;
-    document.getElementById('tabIssueCnt').textContent = `(${allIssues.length})`;
-    document.getElementById('tabOcrCnt').textContent = `(${allOcr.length})`;
-    document.getElementById('checkedAt').textContent = '검증 시각: ' + (s.checkedAt || '').replace('T', ' ').slice(0, 19);
-
-    // 필터 버튼
-    buildFilters();
+    document.getElementById('checkedAt').textContent = '검증: ' + (s.checkedAt||'').replace('T',' ').slice(0,19);
+    buildFilters(s);
     renderIssues();
-    renderOcr();
-
     document.getElementById('loading').style.display = 'none';
     document.getElementById('result').style.display = '';
-
-  } catch (e) {
+  } catch(e) {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('beforeRun').style.display = '';
-    alert('검증 실패: ' + e.message);
+    alert('오류: ' + e.message);
   }
 }
 
-function buildFilters() {
-  const types = {};
-  allIssues.forEach(i => { types[i.type] = (types[i.type] || 0) + 1; });
-  let html = `<button class="filter-btn active" onclick="setFilter('ALL',this)">전체 <span class="cnt">(${allIssues.length})</span></button>`;
-  html += `<button class="filter-btn" onclick="setFilter('HIGH',this)">🔴 HIGH <span class="cnt">(${allIssues.filter(i=>i.severity==='HIGH').length})</span></button>`;
-  html += `<button class="filter-btn" onclick="setFilter('MEDIUM',this)">🟡 MEDIUM <span class="cnt">(${allIssues.filter(i=>i.severity==='MEDIUM').length})</span></button>`;
-  html += `<button class="filter-btn" onclick="setFilter('LOW',this)">🟢 LOW <span class="cnt">(${allIssues.filter(i=>i.severity==='LOW').length})</span></button>`;
-  for (const [type, cnt] of Object.entries(types)) {
-    html += `<button class="filter-btn" onclick="setFilter('${type}',this)">${type} <span class="cnt">(${cnt})</span></button>`;
-  }
-  document.getElementById('issueFilters').innerHTML = html;
+function buildFilters(s) {
+  const bm = s.byMethod || {};
+  let h = `<button class="fbtn active" onclick="setF('ALL',this)">전체 <span class="cnt">(${allIssues.length})</span></button>`;
+  h += `<button class="fbtn" onclick="setF('HIGH',this)">🔴 HIGH <span class="cnt">(${s.high||0})</span></button>`;
+  if (s.medium) h += `<button class="fbtn" onclick="setF('MEDIUM',this)">🟡 MEDIUM <span class="cnt">(${s.medium||0})</span></button>`;
+  for (const [m, c] of Object.entries(bm))
+    h += `<button class="fbtn" onclick="setF('m:${m}',this)">${m} <span class="cnt">(${c})</span></button>`;
+  document.getElementById('filterBar').innerHTML = h;
 }
 
-function setFilter(f, btn) {
+function setF(f, btn) {
   activeFilter = f;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderIssues();
 }
@@ -216,51 +160,98 @@ function setFilter(f, btn) {
 function renderIssues() {
   const filtered = allIssues.filter(i => {
     if (activeFilter === 'ALL') return true;
-    if (activeFilter === 'HIGH' || activeFilter === 'MEDIUM' || activeFilter === 'LOW') return i.severity === activeFilter;
-    return i.type === activeFilter;
+    if (activeFilter === 'HIGH' || activeFilter === 'MEDIUM') return i.severity === activeFilter;
+    if (activeFilter.startsWith('m:')) return i.method === activeFilter.slice(2);
+    return true;
   });
   if (!filtered.length) {
-    document.getElementById('issueBody').innerHTML = '<tr><td colspan="5" class="empty">이슈 없음 👍</td></tr>';
+    document.getElementById('issueList').innerHTML = '<div class="empty">✅ 이슈 없음 — 오매칭이 발견되지 않았습니다</div>';
     return;
   }
-  document.getElementById('issueBody').innerHTML = filtered.map(i => `
-    <tr>
-      <td><span class="sev sev-${i.severity}">${i.severity}</span></td>
-      <td style="font-weight:600;font-size:12px">${i.type}</td>
-      <td class="desc-cell">${i.desc}</td>
-      <td class="bld-cell">${(i.buildings||[]).join(', ')}</td>
-      <td style="font-size:11px;color:var(--muted)">${(i.buildingIds||[]).join(', ').slice(0,40)}</td>
-    </tr>
-  `).join('');
-}
-
-function renderOcr() {
-  if (!allOcr.length) {
-    document.getElementById('ocrBody').innerHTML = '<tr><td colspan="10" class="empty">OCR 데이터 없음</td></tr>';
-    return;
+  const groups = {};
+  filtered.forEach(i => {
+    const bid = i.buildingId;
+    if (!groups[bid]) groups[bid] = { name: i.buildingName, issues: [] };
+    groups[bid].issues.push(i);
+  });
+  let html = '';
+  for (const [bid, g] of Object.entries(groups)) {
+    const hc = g.issues.filter(i => i.severity === 'HIGH').length;
+    html += `<div class="bld-group-title">🏢 ${g.name} <span class="bld-cnt">${g.issues.length}건${hc ? ' · HIGH ' + hc : ''}</span></div>`;
+    g.issues.forEach((i, idx) => {
+      const uid = bid.replace(/[^a-zA-Z0-9]/g,'') + '_' + idx;
+      const d = i.detail || {};
+      let detailHtml = '';
+      if (d.floor) {
+        detailHtml = `<div class="issue-detail">
+          <span>📍 ${d.floor}</span><span>📐 ${d.rentArea||'-'}평</span>
+          <span>💰 임대 ${fmt(d.rentPy)}</span><span>🔧 관리 ${fmt(d.maintenancePy)}</span>
+          <span>🏦 보증 ${fmt(d.depositPy)}</span>${d.source ? '<span>📄 '+d.source+'</span>' : ''}
+        </div>`;
+      } else if (d.ocrBuildingName) {
+        detailHtml = `<div class="issue-detail">
+          <span>📄 OCR원본: ${d.ocrBuildingName}</span><span>💰 임대 ${fmt(d.rentPy)}</span>
+          <span>📅 ${d.effectiveDate||'-'}</span>
+        </div>`;
+      }
+      const canDelete = i.path && (i.path.startsWith('vacancies/') || i.path.startsWith('buildings/'));
+      const canMove = i.path && i.path.startsWith('vacancies/');
+      html += `<div class="issue-card" id="c_${uid}">
+        <div class="issue-top">
+          <span class="sev sev-${i.severity}">${i.severity}</span>
+          <div style="flex:1">
+            <div class="issue-method">${i.method}</div>
+            <div class="issue-desc">${i.desc}</div>
+            <div class="issue-suggest">💡 ${i.suggestion || ''}</div>
+            ${detailHtml}
+            <div class="issue-actions">
+              ${canDelete ? `<button class="btn-del" onclick="doDelete('${i.path}','c_${uid}')">🗑 삭제</button>` : ''}
+              ${canMove ? `<button class="btn-move" onclick="promptMove('${i.path}','c_${uid}')">📦 다른 빌딩으로 이동</button>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    });
   }
-  const fmt = n => n > 0 ? Number(n).toLocaleString() : '-';
-  document.getElementById('ocrBody').innerHTML = allOcr.map(e => `
-    <tr>
-      <td style="font-weight:600">${e.buildingName}</td>
-      <td>${e.buildingGrade || '-'}</td>
-      <td>${e.buildingRegion || '-'}</td>
-      <td><span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#ede9fe;color:#7c3aed">${e.sourceType}</span></td>
-      <td style="font-weight:600;color:var(--accent)">${fmt(e.rentPy)}</td>
-      <td>${fmt(e.maintenancePy)}</td>
-      <td>${fmt(e.depositPy)}</td>
-      <td style="font-size:11px">${e.effectiveDate || '-'}</td>
-      <td style="font-size:11px">${e.floorInfo || '-'}</td>
-      <td style="font-size:11px;${e.ocrBuildingName ? 'color:var(--danger);font-weight:600' : 'color:var(--muted)'}">${e.ocrBuildingName || '-'}</td>
-    </tr>
-  `).join('');
+  document.getElementById('issueList').innerHTML = html;
 }
 
-function switchTab(name) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById('panel-' + name).classList.add('active');
+function fmt(n) { return (!n || n <= 0) ? '-' : Number(n).toLocaleString() + '원'; }
+
+async function doDelete(path, cid) {
+  if (!confirm('정말 삭제하시겠습니까?\n경로: ' + path)) return;
+  try {
+    const r = await fetch(BACKEND + '/api/admin/ocr-fix', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'delete', path }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      const c = document.getElementById(cid);
+      if (c) { c.style.opacity = '0.3'; c.querySelector('.issue-actions').innerHTML = '<span class="btn-done">✅ 삭제 완료</span>'; }
+    } else alert('실패: ' + (d.error||''));
+  } catch(e) { alert('오류: ' + e.message); }
+}
+
+function promptMove(path, cid) {
+  const t = prompt('이동할 빌딩의 Firebase ID를 입력하세요:');
+  if (!t || !t.trim()) return;
+  doMove(path, t.trim(), cid);
+}
+
+async function doMove(path, tid, cid) {
+  if (!confirm(tid + ' 빌딩으로 이동하시겠습니까?')) return;
+  try {
+    const r = await fetch(BACKEND + '/api/admin/ocr-fix', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'move', path, targetBuildingId: tid }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      const c = document.getElementById(cid);
+      if (c) { c.style.opacity = '0.3'; c.querySelector('.issue-actions').innerHTML = '<span class="btn-done">✅ ' + tid + '로 이동 완료</span>'; }
+    } else alert('실패: ' + (d.error||''));
+  } catch(e) { alert('오류: ' + e.message); }
 }
 </script>
 </body>
