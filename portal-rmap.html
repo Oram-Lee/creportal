@@ -1732,6 +1732,34 @@ canvas.mini-chart { width: 100% !important; }
 .bld-card-tbl tr:last-child td { border-bottom: none; }
 .bld-card-tbl .highlight { font-weight: 700; color: var(--accent); }
 .bld-card-tbl .fl-name { text-align: left; color: #475569; font-size: 11px; }
+/* 기준가 인라인 블록 */
+.bld-card-pricing {
+  padding: 8px 14px; font-size: 12px; line-height: 1.6;
+  border-top: 1px solid var(--border);
+}
+.bld-card-pricing .pricing-label {
+  font-size: 10px; font-weight: 600; color: var(--muted);
+  margin-bottom: 2px;
+}
+.bld-card-pricing .pricing-row {
+  display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline;
+}
+.bld-card-pricing .pricing-row .fl-tag {
+  font-size: 11px; font-weight: 600; color: #334155;
+  min-width: 48px;
+}
+.bld-card-pricing .pr-item {
+  font-size: 12px; color: #334155;
+}
+.bld-card-pricing .pr-item .pr-label {
+  font-size: 10px; color: var(--muted); margin-right: 2px;
+}
+.bld-card-pricing .pr-item .pr-val {
+  font-weight: 700; color: var(--accent);
+}
+.bld-card-pricing .pr-item .pr-sub {
+  font-weight: 400; color: #475569;
+}
 .bld-novac-divider {
   padding: 6px 14px; background: #fefce8;
   border-left: 3px solid #f59e0b; font-size: 11px;
@@ -7784,12 +7812,18 @@ function parseNum(v) {
   return isNaN(n) || n === 0 ? null : n;
 }
 
-// ── 빌딩별 층별 가격 행 추출 헬퍼 ──
+// ── 빌딩별 기준층 가격 요약 헬퍼 (동일 기준층 → 가격 범위로 압축) ──
 function _getBldPricingRows(b, vacancies) {
   const _n = v => { const n=parseFloat(String(v||'').replace(/[,원]/g,'')); return isNaN(n)||n===0?null:n; };
-  const rows = [];
 
-  // 1) floorPricing 기반 행 (OCR 우선)
+  // 기준층명 정제 — 내부 태그 제거
+  const _cleanFloor = (fp) => {
+    let f = fp.floorInfo || fp.areaName || fp.floorType || '표준층';
+    f = f.replace(/\s*(OCR|ocr|수동|manual)\s*/gi, '').trim();
+    return f || '표준층';
+  };
+
+  // 1) floorPricing 기반 (OCR 우선 정렬)
   let fpArr = [];
   if (Array.isArray(b.floorPricing)) fpArr = b.floorPricing.filter(Boolean);
   else if (b.floorPricing && typeof b.floorPricing === 'object')
@@ -7804,15 +7838,31 @@ function _getBldPricingRows(b, vacancies) {
 
   const validFp = fpArr.filter(fp => _n(fp.rentPy));
   if (validFp.length) {
+    // ── 기준층별 그룹핑 → 가격 범위 요약 ──
+    const groups = {};
     validFp.forEach(fp => {
-      const rentPy = _n(fp.rentPy);
-      const maintPy = _n(fp.maintenancePy);
-      const depositPy = _n(fp.depositPy);
-      const depMult = (depositPy && rentPy) ? (depositPy/rentPy).toFixed(0)+'개월' : '-';
+      const floor = _cleanFloor(fp);
+      if (!groups[floor]) groups[floor] = { rents: [], maints: [], deposits: [] };
+      const r = _n(fp.rentPy); if (r) groups[floor].rents.push(r);
+      const m = _n(fp.maintenancePy); if (m) groups[floor].maints.push(m);
+      const d = _n(fp.depositPy); if (d) groups[floor].deposits.push(d);
+    });
+
+    const rows = [];
+    Object.entries(groups).forEach(([floor, g]) => {
+      const rMin = Math.min(...g.rents), rMax = Math.max(...g.rents);
+      const mMin = g.maints.length ? Math.min(...g.maints) : null;
+      const mMax = g.maints.length ? Math.max(...g.maints) : null;
+      const dAvg = g.deposits.length ? Math.round(g.deposits.reduce((a,c)=>a+c,0)/g.deposits.length) : null;
+      const depMult = (dAvg && rMin) ? (dAvg / rMin).toFixed(0)+'개월' : '-';
       rows.push({
-        floor: fp.floorInfo || fp.areaName || fp.floorType || '표준층',
-        rentPy, maintPy, depMult,
-        isOcr: (fp.sourceType||'').startsWith('ocr')
+        floor,
+        rentPy: rMin,
+        rentMax: rMin !== rMax ? rMax : null,
+        maintPy: mMin,
+        maintMax: (mMin && mMax && mMin !== mMax) ? mMax : null,
+        depMult,
+        count: g.rents.length
       });
     });
     return rows;
@@ -7894,8 +7944,15 @@ function buildRentCards(report) {
 
     // 층별 가격 행
     const pricingRows = _getBldPricingRows(b, vacancies);
-    const floorLabels = pricingRows.map(r => r.floor).filter(f => f && f !== '-');
-    const floorDisplay = floorLabels.length ? floorLabels.join(', ') : '-';
+    const uniqueFloors = [...new Set(pricingRows.map(r => r.floor).filter(f => f && f !== '-'))];
+    const showFloorCol = pricingRows.length > 1 || (uniqueFloors.length === 1 && uniqueFloors[0] !== '표준층');
+
+    // 가격 범위 포맷 헬퍼
+    const _priceRange = (min, max) => {
+      if (!min) return '-';
+      if (!max || min === max) return min.toLocaleString() + '원';
+      return min.toLocaleString() + '~' + max.toLocaleString() + '원';
+    };
 
     // 카드 클래스
     const cardCls = 'bld-card' + (isBase ? ' is-base' : '') + (isNoVacancy ? ' is-novac' : '');
@@ -7919,30 +7976,37 @@ function buildRentCards(report) {
     else if (!isBase) html += '<span class="sep">·</span><span style="color:#94a3b8">만실</span>';
     if (vacCount > 0) html += '<span class="sep">·</span><span class="pill pill-green" style="font-size:10px">' + moveIn + '</span>';
     html += '</div>';
-    // 기준층 (복수 표기)
-    if (floorLabels.length > 0) {
-      html += '<div class="bld-card-floors"><span class="fl-label">기준층:</span> ' + floorDisplay + '</div>';
-    }
     html += '</div></div>'; // end info, end header
 
-    // ── 가격 테이블 ──
+    // ── 기준가 정보 (카드 내 인라인) ──
     if (pricingRows.length > 0) {
-      html += '<table class="bld-card-tbl"><thead><tr>';
-      if (pricingRows.length > 1 || (pricingRows[0] && pricingRows[0].floor !== '-'))
-        html += '<th style="text-align:left">기준층</th>';
-      html += '<th>임대료/평</th><th>관리비/평</th><th>보증금배수</th>';
-      html += '</tr></thead><tbody>';
-      pricingRows.forEach(r => {
-        html += '<tr>';
-        if (pricingRows.length > 1 || (pricingRows[0] && pricingRows[0].floor !== '-'))
-          html += '<td class="fl-name">' + r.floor + (r.isOcr ? ' <span style="color:#7c3aed;font-size:9px">OCR</span>' : '') + '</td>';
-        html += '<td class="highlight">' + (r.rentPy ? r.rentPy.toLocaleString() + '원' : '-')
-          + (r.isAvg ? ' <span style="font-size:9px;color:#94a3b8">평균</span>' : '') + '</td>';
-        html += '<td>' + (r.maintPy ? r.maintPy.toLocaleString() + '원' : '-') + '</td>';
-        html += '<td>' + r.depMult + '</td>';
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
+      const floorLabel = uniqueFloors.length ? uniqueFloors.join(', ') : '';
+      html += '<div class="bld-card-pricing">';
+      if (pricingRows.length === 1 && !showFloorCol) {
+        // 단일 기준층 → 한 줄로 표시
+        const r = pricingRows[0];
+        html += '<div class="pricing-label">기준가' + (floorLabel ? ' (' + floorLabel + ')' : '') + '</div>';
+        html += '<div class="pricing-row">';
+        html += '<span class="pr-item"><span class="pr-label">임대료</span> <span class="pr-val">' + _priceRange(r.rentPy, r.rentMax) + '</span>'
+          + (r.isAvg ? ' <span style="font-size:9px;color:#94a3b8">평균</span>' : '') + '</span>';
+        html += '<span class="pr-item"><span class="pr-label">관리비</span> <span class="pr-sub">' + _priceRange(r.maintPy, r.maintMax) + '</span></span>';
+        html += '<span class="pr-item"><span class="pr-label">보증금</span> <span class="pr-sub">' + r.depMult + '</span></span>';
+        if (r.count > 1) html += '<span class="pr-item" style="font-size:10px;color:#94a3b8">' + r.count + '건 기준</span>';
+        html += '</div>';
+      } else {
+        // 복수 기준층 → 행별 표시
+        html += '<div class="pricing-label">기준가</div>';
+        pricingRows.forEach(r => {
+          html += '<div class="pricing-row">';
+          html += '<span class="fl-tag">' + r.floor + '</span>';
+          html += '<span class="pr-item"><span class="pr-label">임대</span> <span class="pr-val">' + _priceRange(r.rentPy, r.rentMax) + '</span></span>';
+          html += '<span class="pr-item"><span class="pr-label">관리</span> <span class="pr-sub">' + _priceRange(r.maintPy, r.maintMax) + '</span></span>';
+          html += '<span class="pr-item"><span class="pr-label">보증금</span> <span class="pr-sub">' + r.depMult + '</span></span>';
+          if (r.count > 1) html += '<span style="font-size:10px;color:#94a3b8">' + r.count + '건</span>';
+          html += '</div>';
+        });
+      }
+      html += '</div>';
     }
 
     html += '</div>'; // end card
@@ -8233,7 +8297,13 @@ function buildSameDistrictAltSection(report) {
 
     // 층별 가격 행
     const pricingRows = _getBldPricingRows(b, vacancies);
-    const floorLabels = pricingRows.map(r => r.floor).filter(f => f && f !== '-');
+    const uniqueFloors = [...new Set(pricingRows.map(r => r.floor).filter(f => f && f !== '-'))];
+    const showFloorCol = pricingRows.length > 1 || (uniqueFloors.length === 1 && uniqueFloors[0] !== '표준층');
+    const _pr = (min, max) => {
+      if (!min) return '-';
+      if (!max || min === max) return min.toLocaleString() + '원';
+      return min.toLocaleString() + '~' + max.toLocaleString() + '원';
+    };
 
     let h = '<div class="bld-card" data-bld-id="' + bldIdKey + '">';
     h += '<div class="bld-card-hd">';
@@ -8247,23 +8317,34 @@ function buildSameDistrictAltSection(report) {
     if (bVacs.length) h += '<span class="sep">·</span><span class="vac-cnt">공실 ' + bVacs.length + '건</span>';
     if (b.nearbyStation) h += '<span class="sep">·</span><span>🚇 ' + b.nearbyStation + '</span>';
     h += '</div>';
-    if (floorLabels.length) h += '<div class="bld-card-floors"><span class="fl-label">기준층:</span> ' + floorLabels.join(', ') + '</div>';
-    h += '</div></div>';
+    h += '</div></div>'; // end info, end header
 
+    // ── 기준가 정보 ──
     if (pricingRows.length) {
-      h += '<table class="bld-card-tbl"><thead><tr>';
-      if (pricingRows.length > 1 || (pricingRows[0] && pricingRows[0].floor !== '-'))
-        h += '<th style="text-align:left">기준층</th>';
-      h += '<th>임대료/평</th><th>관리비/평</th><th>보증금배수</th></tr></thead><tbody>';
-      pricingRows.forEach(r => {
-        h += '<tr>';
-        if (pricingRows.length > 1 || (pricingRows[0] && pricingRows[0].floor !== '-'))
-          h += '<td class="fl-name">' + r.floor + (r.isOcr ? ' <span style="color:#7c3aed;font-size:9px">OCR</span>' : '') + '</td>';
-        h += '<td class="highlight">' + (r.rentPy ? r.rentPy.toLocaleString() + '원' : '-') + '</td>';
-        h += '<td>' + (r.maintPy ? r.maintPy.toLocaleString() + '원' : '-') + '</td>';
-        h += '<td>' + r.depMult + '</td></tr>';
-      });
-      h += '</tbody></table>';
+      const floorLabel = uniqueFloors.length ? uniqueFloors.join(', ') : '';
+      h += '<div class="bld-card-pricing">';
+      if (pricingRows.length === 1 && !showFloorCol) {
+        const r = pricingRows[0];
+        h += '<div class="pricing-label">기준가' + (floorLabel ? ' (' + floorLabel + ')' : '') + '</div>';
+        h += '<div class="pricing-row">';
+        h += '<span class="pr-item"><span class="pr-label">임대료</span> <span class="pr-val">' + _pr(r.rentPy, r.rentMax) + '</span></span>';
+        h += '<span class="pr-item"><span class="pr-label">관리비</span> <span class="pr-sub">' + _pr(r.maintPy, r.maintMax) + '</span></span>';
+        h += '<span class="pr-item"><span class="pr-label">보증금</span> <span class="pr-sub">' + r.depMult + '</span></span>';
+        if (r.count > 1) h += '<span style="font-size:10px;color:#94a3b8">' + r.count + '건</span>';
+        h += '</div>';
+      } else {
+        h += '<div class="pricing-label">기준가</div>';
+        pricingRows.forEach(r => {
+          h += '<div class="pricing-row">';
+          h += '<span class="fl-tag">' + r.floor + '</span>';
+          h += '<span class="pr-item"><span class="pr-label">임대</span> <span class="pr-val">' + _pr(r.rentPy, r.rentMax) + '</span></span>';
+          h += '<span class="pr-item"><span class="pr-label">관리</span> <span class="pr-sub">' + _pr(r.maintPy, r.maintMax) + '</span></span>';
+          h += '<span class="pr-item"><span class="pr-label">보증금</span> <span class="pr-sub">' + r.depMult + '</span></span>';
+          if (r.count > 1) h += '<span style="font-size:10px;color:#94a3b8">' + r.count + '건</span>';
+          h += '</div>';
+        });
+      }
+      h += '</div>';
     }
     h += '</div>';
     return h;
@@ -9708,6 +9789,10 @@ function downloadReportPDF(id) {
     .print-page .bld-card-tbl    { font-size: 9px !important; }
     .print-page .bld-card-tbl th { padding: 3px 5px !important; font-size: 8px !important; }
     .print-page .bld-card-tbl td { padding: 3px 5px !important; }
+    .print-page .bld-card-pricing { padding: 4px 8px !important; font-size: 10px !important; }
+    .print-page .bld-card-pricing .pricing-label { font-size: 8px !important; }
+    .print-page .bld-card-pricing .pr-item { font-size: 10px !important; }
+    .print-page .bld-card-pricing .fl-tag { font-size: 9px !important; }
     .print-page .rent-ai-summary { padding: 5px 8px !important; font-size: 10px !important; }
 
     /* ISSUE-11: 빌딩 비교 차트 — is-section이 hidden이므로 차트 컨테이너 크기 명시 고정 */
