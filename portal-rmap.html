@@ -1683,6 +1683,61 @@ canvas.mini-chart { width: 100% !important; }
 .rent-summary-table tr:hover td { background: var(--accent-lt); }
 .rent-summary-table .highlight { font-weight: 700; color: var(--accent); }
 
+/* ── 빌딩 카드 레이아웃 ── */
+.bld-cards-wrap { display: flex; flex-direction: column; gap: 14px; }
+.bld-card {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+.bld-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+.bld-card.is-base { border-color: var(--accent); border-width: 2px; }
+.bld-card.is-novac { opacity: 0.55; }
+.bld-card-hd {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px; background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+}
+.bld-card.is-base .bld-card-hd { background: #f0f7ff; }
+.bld-card-info { flex: 1; min-width: 0; }
+.bld-card-name {
+  font-size: 13px; font-weight: 700; line-height: 1.4;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.bld-card-name .rank-badge {
+  display: inline-block; padding: 1px 6px; border-radius: 8px;
+  font-size: 9px; font-weight: 600; background: #f1f5f9; color: #475569;
+}
+.bld-card-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 4px; font-size: 11px; color: var(--muted);
+}
+.bld-card-meta .sep { color: #cbd5e1; }
+.bld-card-meta .vac-cnt { color: #b91c1c; font-weight: 600; }
+.bld-card-floors {
+  margin-top: 3px; font-size: 11px; color: #475569;
+}
+.bld-card-floors .fl-label { color: var(--muted); margin-right: 2px; }
+.bld-card-tbl {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.bld-card-tbl th {
+  padding: 6px 10px; background: var(--primary); color: #fff;
+  font-weight: 600; text-align: center; white-space: nowrap; font-size: 11px;
+}
+.bld-card-tbl td {
+  padding: 7px 10px; text-align: center; border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle; line-height: 1.4;
+}
+.bld-card-tbl tr:last-child td { border-bottom: none; }
+.bld-card-tbl .highlight { font-weight: 700; color: var(--accent); }
+.bld-card-tbl .fl-name { text-align: left; color: #475569; font-size: 11px; }
+.bld-novac-divider {
+  padding: 6px 14px; background: #fefce8;
+  border-left: 3px solid #f59e0b; font-size: 11px;
+  color: #92400e; font-weight: 600; margin-top: 8px; border-radius: 4px;
+}
+
 /* AI 시사점 카드 */
 .ai-insight-card {
   margin-top: 16px; padding: 16px 20px;
@@ -6837,11 +6892,11 @@ function _hideBtnHtml(reportId, sectionKey) {
 }
 
 // ===== ISSUE-02-A: 빌딩 체크박스 삭제 유틸 =====
-function _toggleAllCheck(masterChk, tbodyId) {
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody) return;
-  tbody.querySelectorAll('.chk-bld').forEach(c => { c.checked = masterChk.checked; });
-  const sec = tbody.closest('.report-section');
+function _toggleAllCheck(masterChk, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.querySelectorAll('.chk-bld').forEach(c => { c.checked = masterChk.checked; });
+  const sec = container.closest('.report-section');
   const delBtn = sec ? sec.querySelector('.bld-del-btn') : null;
   if (delBtn) delBtn.classList.toggle('active', masterChk.checked);
 }
@@ -6849,17 +6904,25 @@ function _toggleAllCheck(masterChk, tbodyId) {
 function _onBldCheckChange(chk, delBtnId) {
   const delBtn = document.getElementById(delBtnId);
   if (!delBtn) return;
-  const tbody = chk.closest('tbody');
-  const anyChecked = tbody ? [...tbody.querySelectorAll('.chk-bld')].some(c => c.checked) : false;
+  const container = chk.closest('[data-cards-wrap]') || chk.closest('tbody');
+  const anyChecked = container ? [...container.querySelectorAll('.chk-bld')].some(c => c.checked) : false;
+  delBtn.classList.toggle('active', anyChecked);
+}
+// Card-specific check handler
+function _onBldCardCheck(chk, delBtnId) {
+  const delBtn = document.getElementById(delBtnId);
+  if (!delBtn) return;
+  const wrap = chk.closest('[data-cards-wrap]');
+  const anyChecked = wrap ? [...wrap.querySelectorAll('.chk-bld')].some(c => c.checked) : false;
   delBtn.classList.toggle('active', anyChecked);
 }
 
 function _deleteCheckedRows(tbodyId, reportId, sectionKey) {
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody) return;
+  const container = document.getElementById(tbodyId);
+  if (!container) return;
   const edits = _getEdits(reportId);
   if (!edits.deletedBuildingIds) edits.deletedBuildingIds = [];
-  tbody.querySelectorAll('tr').forEach(tr => {
+  container.querySelectorAll('tr').forEach(tr => {
     const chk = tr.querySelector('.chk-bld');
     if (chk && chk.checked) {
       const bldId = tr.dataset.bldId;
@@ -6869,10 +6932,30 @@ function _deleteCheckedRows(tbodyId, reportId, sectionKey) {
       tr.style.display = 'none';
     }
   });
-  const sec = tbody.closest('.report-section');
+  const sec = container.closest('.report-section');
   const delBtn = sec ? sec.querySelector('.bld-del-btn') : null;
   if (delBtn) delBtn.classList.remove('active');
-  // 전체선택 체크박스 해제
+  const allChk = sec ? sec.querySelector('.chk-all') : null;
+  if (allChk) allChk.checked = false;
+}
+
+function _deleteCheckedCards(wrapId, reportId, sectionKey) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  const edits = _getEdits(reportId);
+  if (!edits.deletedBuildingIds) edits.deletedBuildingIds = [];
+  wrap.querySelectorAll('.bld-card').forEach(card => {
+    const chk = card.querySelector('.chk-bld');
+    if (chk && chk.checked) {
+      const bldId = card.dataset.bldId;
+      if (bldId && !edits.deletedBuildingIds.includes(bldId))
+        edits.deletedBuildingIds.push(bldId);
+      card.style.display = 'none';
+    }
+  });
+  const sec = wrap.closest('.report-section');
+  const delBtn = sec ? sec.querySelector('.bld-del-btn') : null;
+  if (delBtn) delBtn.classList.remove('active');
   const allChk = sec ? sec.querySelector('.chk-all') : null;
   if (allChk) allChk.checked = false;
 }
@@ -7495,37 +7578,18 @@ function renderReportHTML(report) {
         <span style="color:var(--muted);font-size:11px">📊 임대 조건 분석을 준비하고 있습니다.</span>
       </div>
 
-      <!-- 통합 빌딩 비교 테이블 -->
-      <div class="no-print" style="margin-bottom:6px">
+      <!-- 빌딩 카드 비교 -->
+      <div class="no-print" style="margin-bottom:6px;display:flex;align-items:center;gap:10px">
+        <input type="checkbox" class="chk-all" title="전체선택"
+          onchange="_toggleAllCheck(this,'rentCardsWrap_${report.id}')">
+        <span style="font-size:11px;color:var(--muted)">전체선택</span>
         <button class="bld-del-btn" id="rentDelBtn_${report.id}"
-          onclick="_deleteCheckedRows('rentTableBody_${report.id}','${report.id}','nearbyBuildings')">
+          onclick="_deleteCheckedCards('rentCardsWrap_${report.id}','${report.id}','nearbyBuildings')">
           선택 삭제
         </button>
       </div>
-      <div style="overflow-x:auto;margin-top:12px">
-      <table class="rent-summary-table" id="rentSummaryTable_${report.id}">
-        <thead>
-          <tr>
-            <th class="del-check-col no-print">
-              <input type="checkbox" class="chk-all" title="전체선택"
-                onchange="_toggleAllCheck(this,'rentTableBody_${report.id}')">
-            </th>
-            <th style="text-align:left;min-width:120px">빌딩명</th>
-            <th>등급</th>
-            <th>기준층</th>
-            <th>거리</th>
-            <th>연면적</th>
-            <th>공실 현황</th>
-            <th>평균임대료/평</th>
-            <th>관리비/평</th>
-            <th>보증금배수</th>
-            <th>입주가능</th>
-          </tr>
-        </thead>
-        <tbody id="rentTableBody_${report.id}">
-          ${buildRentTableRows(report)}
-        </tbody>
-      </table>
+      <div class="bld-cards-wrap" id="rentCardsWrap_${report.id}" data-cards-wrap>
+        ${buildRentCards(report)}
       </div>
 
       <!-- 막대 차트 -->
@@ -7670,7 +7734,7 @@ function renderReportHTML(report) {
   // 차트 렌더링 (비동기)
   setTimeout(() => renderRentCharts(report), 100);
   // ISSUE-02-B: 인근 빌딩 층별 기준가 행 확장 (차트 렌더 후)
-  setTimeout(() => loadFloorPricingForList(report.nearbyBuildings || [], 'rentTableBody_' + report.id, report.id), 150);
+  // Floor pricing now rendered inline in buildRentCards()
   // R-ONE 스파크라인
   setTimeout(() => renderSparklines(report), 250);
   // 임대료 비교 AI 요약 (비동기)
@@ -7709,130 +7773,171 @@ function parseNum(v) {
   return isNaN(n) || n === 0 ? null : n;
 }
 
-function buildRentTableRows(report) {
+// ── 빌딩별 층별 가격 행 추출 헬퍼 ──
+function _getBldPricingRows(b, vacancies) {
+  const _n = v => { const n=parseFloat(String(v||'').replace(/[,원]/g,'')); return isNaN(n)||n===0?null:n; };
+  const rows = [];
+
+  // 1) floorPricing 기반 행 (OCR 우선)
+  let fpArr = [];
+  if (Array.isArray(b.floorPricing)) fpArr = b.floorPricing.filter(Boolean);
+  else if (b.floorPricing && typeof b.floorPricing === 'object')
+    fpArr = Object.values(b.floorPricing).filter(Boolean);
+
+  fpArr.sort((a, c) => {
+    const ao = (a.sourceType||'').startsWith('ocr') ? 1 : 0;
+    const co = (c.sourceType||'').startsWith('ocr') ? 1 : 0;
+    if (co !== ao) return co - ao;
+    return (c.effectiveDate||'').localeCompare(a.effectiveDate||'');
+  });
+
+  const validFp = fpArr.filter(fp => _n(fp.rentPy));
+  if (validFp.length) {
+    validFp.forEach(fp => {
+      const rentPy = _n(fp.rentPy);
+      const maintPy = _n(fp.maintenancePy);
+      const depositPy = _n(fp.depositPy);
+      const depMult = (depositPy && rentPy) ? (depositPy/rentPy).toFixed(0)+'개월' : '-';
+      rows.push({
+        floor: fp.floorInfo || fp.areaName || fp.floorType || '표준층',
+        rentPy, maintPy, depMult,
+        isOcr: (fp.sourceType||'').startsWith('ocr')
+      });
+    });
+    return rows;
+  }
+
+  // 2) 빌딩 자체 기준가
+  let rentPy    = _n(b.rentPy) || _n(b.pricing?.rentPy);
+  let maintPy   = _n(b.maintenancePy) || _n(b.pricing?.maintenancePy);
+  let depositPy = _n(b.depositPy) || _n(b.pricing?.depositPy);
+
+  // 3) vacancyData 평균 fallback
+  const bVacs = (vacancies||[]).filter(v => v.buildingId === b.id || v.buildingName === b.buildingName);
+  if (!rentPy && bVacs.length) {
+    const rvals = bVacs.map(v=>_n(v.rentPy)).filter(Boolean);
+    if (rvals.length) rentPy = Math.round(rvals.reduce((a,c)=>a+c,0)/rvals.length);
+  }
+  if (!maintPy && bVacs.length) {
+    const mvals = bVacs.map(v=>_n(v.maintenancePy)).filter(Boolean);
+    if (mvals.length) maintPy = Math.round(mvals.reduce((a,c)=>a+c,0)/mvals.length);
+  }
+  if (!depositPy && bVacs.length) {
+    const dvals = bVacs.map(v=>_n(v.depositPy)).filter(Boolean);
+    if (dvals.length) depositPy = Math.round(dvals.reduce((a,c)=>a+c,0)/dvals.length);
+  }
+
+  if (rentPy) {
+    const depMult = (depositPy && rentPy) ? (depositPy/rentPy).toFixed(0)+'개월' : '-';
+    const isAvg = !(_n(b.rentPy) || _n(b.pricing?.rentPy));
+    rows.push({ floor: '-', rentPy, maintPy, depMult, isAvg });
+  }
+  return rows;
+}
+
+function buildRentCards(report) {
   const buildings = report.nearbyBuildings || [];
   const vacancies = report.vacancyData    || [];
 
   if (!buildings.length && !vacancies.length) {
-    return '<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:16px">데이터 없음</td></tr>';
+    return '<div style="text-align:center;color:var(--muted);padding:16px">데이터 없음</div>';
   }
 
   const _n = v => { const n=parseFloat(String(v||'').replace(/[,원]/g,'')); return isNaN(n)||n===0?null:n; };
   const gradeClass = { Prime:'pill-gold', A:'pill-blue', B:'pill-blue', C:'pill-gray', D:'pill-gray', E:'pill-gray' };
 
-  // 빌딩 목록 (nearbyBuildings 기반, 없으면 vacancyData에서 유니크 추출)
   let bldList = buildings.slice(0, 20);
   if (!bldList.length) {
     const seen = new Set();
     vacancies.forEach(v => { if (!seen.has(v.buildingId||v.buildingName)) { seen.add(v.buildingId||v.buildingName); bldList.push({ id: v.buildingId, buildingName: v.buildingName }); } });
   }
 
-  // ── 공실 유무 기준 그룹 분리 (스코어순 유지) ──
   const withVacancy = [];
   const noVacancy   = [];
   bldList.forEach((b, i) => {
     const bVacs = vacancies.filter(v => v.buildingId === b.id || v.buildingName === b.buildingName);
-    if (bVacs.length > 0 || i === 0) { // 기준 빌딩(i=0)은 항상 상단
-      withVacancy.push(b);
-    } else {
-      noVacancy.push(b);
-    }
+    if (bVacs.length > 0 || i === 0) withVacancy.push(b);
+    else noVacancy.push(b);
   });
   const sortedList = [...withVacancy, ...noVacancy];
 
-  let rows = '';
+  let html = '';
   let dividerInserted = false;
 
   sortedList.forEach((b, idx) => {
     const isBase = (b.id === bldList[0]?.id) && idx === 0;
-
-    // 기준가 (빌딩 자체 → vacancyData 평균 순서로 fallback)
     const bVacs = vacancies.filter(v => v.buildingId === b.id || v.buildingName === b.buildingName);
     const vacCount = bVacs.length;
     const isNoVacancy = vacCount === 0 && !isBase;
 
-    // ── 만실 빌딩 구분선 삽입 ──
     if (isNoVacancy && !dividerInserted && withVacancy.length > 0) {
       dividerInserted = true;
-      rows += '<tr class="no-print"><td colspan="11" style="padding:4px 10px;background:#fefce8;border-left:3px solid #f59e0b;font-size:11px;color:#92400e;font-weight:600">'
-        + '📋 아래는 현재 공실이 없는 참고 빌딩입니다 (' + noVacancy.length + '개)'
-        + '</td></tr>';
-    }
-
-    // 빌딩 자체 기준가
-    let rentPy    = _n(b.rentPy)   || _n(b.pricing?.rentPy);
-    let maintPy   = _n(b.maintenancePy) || _n(b.pricing?.maintenancePy);
-    let depositPy = _n(b.depositPy) || _n(b.pricing?.depositPy);
-
-    // 기준가 없으면 vacancyData 평균으로 계산
-    if (!rentPy && bVacs.length) {
-      const rvals = bVacs.map(v=>_n(v.rentPy)).filter(Boolean);
-      if (rvals.length) rentPy = Math.round(rvals.reduce((a,c)=>a+c,0)/rvals.length);
-    }
-    if (!maintPy && bVacs.length) {
-      const mvals = bVacs.map(v=>_n(v.maintenancePy)).filter(Boolean);
-      if (mvals.length) maintPy = Math.round(mvals.reduce((a,c)=>a+c,0)/mvals.length);
-    }
-    if (!depositPy && bVacs.length) {
-      const dvals = bVacs.map(v=>_n(v.depositPy)).filter(Boolean);
-      if (dvals.length) depositPy = Math.round(dvals.reduce((a,c)=>a+c,0)/dvals.length);
+      html += '<div class="bld-novac-divider no-print">📋 아래는 현재 공실이 없는 참고 빌딩입니다 (' + noVacancy.length + '개)</div>';
     }
 
     const grossPy = _n(b.grossFloorPy);
-    const depMult = (depositPy && rentPy) ? (depositPy / rentPy).toFixed(0) + '개월' : '-';
     const grade   = b.grade || '-';
-    const isAvgRent = !(_n(b.rentPy) || _n(b.pricing?.rentPy)) && rentPy;
-
-    // 공실 현황 — 건수만 표기 (ISSUE-02-B)
-    const vacSummary = bVacs.length
-      ? '<span style="color:#b91c1c;font-weight:600">' + vacCount + '건</span>'
-      : '<span style="color:#94a3b8;font-size:11px">만실</span>';
-
-    // 입주가능 (가장 빠른 날짜)
     const moveDates = bVacs.map(v=>v.moveInDate).filter(Boolean);
     const moveIn = moveDates.length ? (moveDates.includes('즉시') ? '즉시' : moveDates.sort()[0]) : '-';
-
-    // 기준층 — floorPricing 최신 항목의 floorInfo (ISSUE-02-B)
-    const fpLatest = getLatestOcrPricing(b.floorPricing || []);
-    const floorLabel = fpLatest?.floorInfo || fpLatest?.areaName || fpLatest?.floorType || '-';
-
-    // ── 순위 뱃지 (스코어는 내부 정렬용, 출력에는 순위만 표시) ──
-    // idx+1 기준 순위, 기준빌딩은 '기준' 표시, 인쇄 시 숨김(no-print)
-    const rankLabel = isBase ? ''
-      : ('<span class="no-print" style="display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:600;margin-left:4px;'
-        + 'background:#f1f5f9;color:#475569">'
-        + (idx + 1) + '순위</span>');
-
-    // 빌딩 ID (체크박스 삭제용)
     const bldIdKey = b.id || b.buildingName || b.name || ('row' + idx);
 
-    // 만실 빌딩 스타일 (반투명)
-    const rowStyle = isBase ? 'background:#f0f7ff;font-weight:700'
-                   : isNoVacancy ? 'opacity:0.55' : '';
+    // 층별 가격 행
+    const pricingRows = _getBldPricingRows(b, vacancies);
+    const floorLabels = pricingRows.map(r => r.floor).filter(f => f && f !== '-');
+    const floorDisplay = floorLabels.length ? floorLabels.join(', ') : '-';
 
-    rows += '<tr data-bld-id="' + bldIdKey + '" style="' + rowStyle + '">'
-      + '<td class="del-check-col no-print">'
-      +   '<input type="checkbox" class="chk-bld"'
-      +   ' onchange="_onBldCheckChange(this,\'rentDelBtn_' + report.id + '\')">'
-      + '</td>'
-      + '<td data-name-cell style="text-align:left;font-weight:' + (isBase?700:500) + ';' + (isBase?'color:var(--accent)':'') + '">'
-      +   (isBase ? '🏠 ' : '') + (b.buildingName || b.name || '-') + rankLabel
-      + '</td>'
-      + '<td><span class="pill ' + (gradeClass[grade]||'pill-gray') + '">' + grade + '</span></td>'
-      + '<td class="fp-floor-cell" style="font-size:11px;color:#475569">' + floorLabel + '</td>'
-      + '<td>' + (b.distanceM != null ? b.distanceM + 'm' : '-') + '</td>'
-      + '<td>' + (grossPy ? grossPy.toLocaleString() + '평' : '-') + '</td>'
-      + '<td>' + vacSummary + '</td>'
-      + '<td class="highlight">'
-      +   (rentPy ? rentPy.toLocaleString() + '원' + (isAvgRent ? '<br><span style="font-size:9px;color:#94a3b8">평균값</span>' : '') : '-')
-      + '</td>'
-      + '<td>' + (maintPy ? maintPy.toLocaleString() + '원' : '-') + '</td>'
-      + '<td>' + depMult + '</td>'
-      + '<td>' + (vacCount > 0 ? '<span class="pill pill-green" style="font-size:10px">' + moveIn + '</span>' : '-') + '</td>'
-      + '</tr>';
+    // 카드 클래스
+    const cardCls = 'bld-card' + (isBase ? ' is-base' : '') + (isNoVacancy ? ' is-novac' : '');
+
+    html += '<div class="' + cardCls + '" data-bld-id="' + bldIdKey + '">';
+    // ── 헤더 ──
+    html += '<div class="bld-card-hd">';
+    html += '<input type="checkbox" class="chk-bld no-print" onchange=\"_onBldCardCheck(this,\'rentDelBtn_' + report.id + '\')\">';
+    html += '<div class="bld-card-info">';
+    // 빌딩명 + 순위
+    html += '<div class="bld-card-name">';
+    html += (isBase ? '🏠 ' : '') + (b.buildingName || b.name || '-');
+    if (!isBase) html += ' <span class="rank-badge no-print">' + (idx+1) + '순위</span>';
+    html += '</div>';
+    // 메타 정보
+    html += '<div class="bld-card-meta">';
+    html += '<span class="pill ' + (gradeClass[grade]||'pill-gray') + '" style="font-size:10px">' + grade + '</span>';
+    if (b.distanceM != null) html += '<span class="sep">·</span><span>' + b.distanceM + 'm</span>';
+    if (grossPy) html += '<span class="sep">·</span><span>' + grossPy.toLocaleString() + '평</span>';
+    if (vacCount > 0) html += '<span class="sep">·</span><span class="vac-cnt">공실 ' + vacCount + '건</span>';
+    else if (!isBase) html += '<span class="sep">·</span><span style="color:#94a3b8">만실</span>';
+    if (vacCount > 0) html += '<span class="sep">·</span><span class="pill pill-green" style="font-size:10px">' + moveIn + '</span>';
+    html += '</div>';
+    // 기준층 (복수 표기)
+    if (floorLabels.length > 0) {
+      html += '<div class="bld-card-floors"><span class="fl-label">기준층:</span> ' + floorDisplay + '</div>';
+    }
+    html += '</div></div>'; // end info, end header
+
+    // ── 가격 테이블 ──
+    if (pricingRows.length > 0) {
+      html += '<table class="bld-card-tbl"><thead><tr>';
+      if (pricingRows.length > 1 || (pricingRows[0] && pricingRows[0].floor !== '-'))
+        html += '<th style="text-align:left">기준층</th>';
+      html += '<th>임대료/평</th><th>관리비/평</th><th>보증금배수</th>';
+      html += '</tr></thead><tbody>';
+      pricingRows.forEach(r => {
+        html += '<tr>';
+        if (pricingRows.length > 1 || (pricingRows[0] && pricingRows[0].floor !== '-'))
+          html += '<td class="fl-name">' + r.floor + (r.isOcr ? ' <span style="color:#7c3aed;font-size:9px">OCR</span>' : '') + '</td>';
+        html += '<td class="highlight">' + (r.rentPy ? r.rentPy.toLocaleString() + '원' : '-')
+          + (r.isAvg ? ' <span style="font-size:9px;color:#94a3b8">평균</span>' : '') + '</td>';
+        html += '<td>' + (r.maintPy ? r.maintPy.toLocaleString() + '원' : '-') + '</td>';
+        html += '<td>' + r.depMult + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+
+    html += '</div>'; // end card
   });
 
-  return rows;
+  return html;
 }
 
 // ===== Section: 인센티브 협상 포인트 동적 빌드 =====
@@ -8072,15 +8177,13 @@ function _startDistrictEdit(btn, reportId, wrapper) {
   };
 }
 
-// ===== Section: 동일 권역 대안 빌딩 동적 빌드 =====
+// ===== Section: 동일 권역 대안 빌딩 동적 빌드 (카드 레이아웃) =====
 function buildSameDistrictAltSection(report) {
   const el = document.getElementById('sameDistrictAltSection_' + report.id);
   if (!el) return;
 
   const curRentPy  = report.params?.curRentPy  || 0;
   const buildings  = report.nearbyBuildings    || [];
-
-  // 기준 빌딩(첫 번째) 제외, curRentPy ±25% 필터 (미입력 시 전체)
   const rentMin = curRentPy > 0 ? curRentPy * 0.75 : 0;
   const rentMax = curRentPy > 0 ? curRentPy * 1.25 : Infinity;
   const _n = v => { const n = parseFloat(String(v||'').replace(/[,원]/g,'')); return isNaN(n)||n===0?null:n; };
@@ -8091,73 +8194,68 @@ function buildSameDistrictAltSection(report) {
     return true;
   });
 
-  if (!candidates.length) {
-    el.style.display = 'none';
-    return;
-  }
+  if (!candidates.length) { el.style.display = 'none'; return; }
 
   const gradeClass = { Prime:'pill-gold', A:'pill-blue', B:'pill-blue', C:'pill-gray', D:'pill-gray', E:'pill-gray' };
-
-  // ISSUE-03-B: vacancyData 참조 (공실 건수)
   const vacancies = report.vacancyData || [];
 
-  const rows = candidates.slice(0, 8).map(b => {
+  const cards = candidates.slice(0, 8).map(b => {
     const rentPy    = _n(b.rentPy) || _n(b.pricing?.rentPy);
-    const maintPy   = _n(b.maintenancePy) || _n(b.pricing?.maintenancePy);
-    const depositPy = _n(b.depositPy)     || _n(b.pricing?.depositPy);
-    const grossPy   = _n(b.grossFloorPy)  || _n(b.area?.grossFloorPy);
+    const grossPy   = _n(b.grossFloorPy) || _n(b.area?.grossFloorPy);
     const grade     = b.grade || '-';
-    const depMult   = (depositPy && rentPy) ? (depositPy/rentPy).toFixed(0)+'개월' : '-';
-
-    // OCR 최신가 있으면 badge 표시
-    const fp = b.latestFloorPricing || getLatestOcrPricing(b.floorPricing || []);
-    const ocrBadge = fp?.rentPy
-      ? `<br><span style="font-size:10px;color:#7c3aed">조사본 ${(_n(fp.rentPy)||0).toLocaleString()}원</span>`
-      : '';
-
-    // 기준층
-    const floorLabel = fp?.floorInfo || fp?.areaName || fp?.floorType || '-';
+    const bVacs     = vacancies.filter(v => v.buildingId === b.id || v.buildingName === (b.name||b.buildingName));
+    const bldIdKey  = b.id || b.name || b.buildingName || 'same_' + Math.random();
 
     // 인센티브 뱃지
-    const inc = (b.incentives||[]).filter(i=>i.rf||i.fo||i.ti);
-    const incBadge = inc.length
-      ? `<span class="pill pill-blue" style="font-size:10px;margin-left:4px">+인센티브</span>`
-      : '';
+    const hasInc = (b.incentives||[]).some(i=>i.rf||i.fo||i.ti);
+    const incBadge = hasInc ? ' <span class="pill pill-blue" style="font-size:10px">+인센티브</span>' : '';
 
-    // 임대료 비교 차이
+    // 임대료 차이
     let diffBadge = '';
     if (curRentPy > 0 && rentPy) {
       const diff = rentPy - curRentPy;
       const pct  = ((diff / curRentPy) * 100).toFixed(0);
       diffBadge  = diff > 0
-        ? `<span style="font-size:10px;color:#b91c1c">▲${Math.abs(pct)}%</span>`
-        : `<span style="font-size:10px;color:#16a34a">▼${Math.abs(pct)}%</span>`;
+        ? '<span style="font-size:10px;color:#b91c1c;margin-left:4px">▲' + Math.abs(pct) + '%</span>'
+        : '<span style="font-size:10px;color:#16a34a;margin-left:4px">▼' + Math.abs(pct) + '%</span>';
     }
 
-    // ISSUE-03-B: 공실 현황 건수
-    const bVacs    = vacancies.filter(v => v.buildingId === b.id || v.buildingName === (b.name||b.buildingName));
-    const vacCell  = bVacs.length
-      ? `<span style="color:#b91c1c;font-weight:600">${bVacs.length}건</span>`
-      : '-';
+    // 층별 가격 행
+    const pricingRows = _getBldPricingRows(b, vacancies);
+    const floorLabels = pricingRows.map(r => r.floor).filter(f => f && f !== '-');
 
-    const bldIdKey = b.id || b.name || b.buildingName || 'same_' + Math.random();
+    let h = '<div class="bld-card" data-bld-id="' + bldIdKey + '">';
+    h += '<div class="bld-card-hd">';
+    h += '<input type="checkbox" class="chk-bld no-print" onchange="_onBldCardCheck(this,\'sameDelBtn_' + report.id + '\')">';
+    h += '<div class="bld-card-info">';
+    h += '<div class="bld-card-name">' + (b.name||b.buildingName||'-') + incBadge + diffBadge + '</div>';
+    h += '<div class="bld-card-meta">';
+    h += '<span class="pill ' + (gradeClass[grade]||'pill-gray') + '" style="font-size:10px">' + grade + '</span>';
+    if (b.distanceM != null) h += '<span class="sep">·</span><span>' + b.distanceM + 'm</span>';
+    if (grossPy) h += '<span class="sep">·</span><span>' + grossPy.toLocaleString() + '평</span>';
+    if (bVacs.length) h += '<span class="sep">·</span><span class="vac-cnt">공실 ' + bVacs.length + '건</span>';
+    if (b.nearbyStation) h += '<span class="sep">·</span><span>🚇 ' + b.nearbyStation + '</span>';
+    h += '</div>';
+    if (floorLabels.length) h += '<div class="bld-card-floors"><span class="fl-label">기준층:</span> ' + floorLabels.join(', ') + '</div>';
+    h += '</div></div>';
 
-    return `<tr data-bld-id="${bldIdKey}">
-      <td class="del-check-col no-print">
-        <input type="checkbox" class="chk-bld"
-          onchange="_onBldCheckChange(this,'sameDelBtn_${report.id}')">
-      </td>
-      <td data-name-cell style="text-align:left;font-weight:600">${b.name||b.buildingName||'-'}${incBadge}</td>
-      <td><span class="pill ${gradeClass[grade]||'pill-gray'}">${grade}</span></td>
-      <td class="fp-floor-cell" style="font-size:11px;color:#475569">${floorLabel}</td>
-      <td>${b.distanceM!=null?b.distanceM+'m':'-'}</td>
-      <td>${grossPy?grossPy.toLocaleString()+'평':'-'}</td>
-      <td>${vacCell}</td>
-      <td class="highlight">${rentPy?rentPy.toLocaleString()+'원':'-'} ${diffBadge}${ocrBadge}</td>
-      <td>${maintPy?maintPy.toLocaleString()+'원':'-'}</td>
-      <td>${depMult}</td>
-      <td style="color:var(--muted);font-size:11px">${b.nearbyStation||'-'}</td>
-    </tr>`;
+    if (pricingRows.length) {
+      h += '<table class="bld-card-tbl"><thead><tr>';
+      if (pricingRows.length > 1 || (pricingRows[0] && pricingRows[0].floor !== '-'))
+        h += '<th style="text-align:left">기준층</th>';
+      h += '<th>임대료/평</th><th>관리비/평</th><th>보증금배수</th></tr></thead><tbody>';
+      pricingRows.forEach(r => {
+        h += '<tr>';
+        if (pricingRows.length > 1 || (pricingRows[0] && pricingRows[0].floor !== '-'))
+          h += '<td class="fl-name">' + r.floor + (r.isOcr ? ' <span style="color:#7c3aed;font-size:9px">OCR</span>' : '') + '</td>';
+        h += '<td class="highlight">' + (r.rentPy ? r.rentPy.toLocaleString() + '원' : '-') + '</td>';
+        h += '<td>' + (r.maintPy ? r.maintPy.toLocaleString() + '원' : '-') + '</td>';
+        h += '<td>' + r.depMult + '</td></tr>';
+      });
+      h += '</tbody></table>';
+    }
+    h += '</div>';
+    return h;
   }).join('');
 
   const curLabel = curRentPy
@@ -8172,33 +8270,18 @@ function buildSameDistrictAltSection(report) {
       ${_hideBtnHtml(report.id, 'sameDistrictAlt')}
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${curLabel}</div>
-    <div class="no-print" style="margin-bottom:6px">
+    <div class="no-print" style="margin-bottom:6px;display:flex;align-items:center;gap:10px">
+      <input type="checkbox" class="chk-all" title="전체선택"
+        onchange="_toggleAllCheck(this,'sameCardsWrap_${report.id}')">
+      <span style="font-size:11px;color:var(--muted)">전체선택</span>
       <button class="bld-del-btn" id="sameDelBtn_${report.id}"
-        onclick="_deleteCheckedRows('sameAltBody_${report.id}','${report.id}','sameDistrictAlt')">
+        onclick="_deleteCheckedCards('sameCardsWrap_${report.id}','${report.id}','sameDistrictAlt')">
         선택 삭제
       </button>
     </div>
-    <div style="overflow-x:auto">
-    <table class="rent-summary-table">
-      <thead>
-        <tr>
-          <th class="del-check-col no-print">
-            <input type="checkbox" class="chk-all" title="전체선택"
-              onchange="_toggleAllCheck(this,'sameAltBody_${report.id}')">
-          </th>
-          <th style="text-align:left;min-width:130px">빌딩명</th>
-          <th>등급</th><th>기준층</th><th>거리</th><th>연면적</th>
-          <th>공실</th><th>임대료/평</th><th>관리비/평</th><th>보증금배수</th><th>입지</th>
-        </tr>
-      </thead>
-      <tbody id="sameAltBody_${report.id}">${rows}</tbody>
-    </table>
-    </div>
-    <div style="font-size:10px;color:var(--muted);margin-top:6px">※ 보라색 수치 = 안내문 조사 기준가 &nbsp;|&nbsp; +인센티브 표시 빌딩은 RF·FO·TI 조건 검토 가능</div>
+    <div class="bld-cards-wrap" id="sameCardsWrap_${report.id}" data-cards-wrap>${cards}</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:6px">※ +인센티브 표시 빌딩은 RF·FO·TI 조건 검토 가능</div>
   </div>`;
-
-  // ISSUE-02-B: 층별 기준가 행 확장
-  setTimeout(() => loadFloorPricingForList(candidates.slice(0,8), 'sameAltBody_' + report.id, report.id), 80);
 }
 
 // ===== Section: 타 권역 대안 빌딩 동적 빌드 =====
@@ -9438,14 +9521,16 @@ function downloadReportPDF(id) {
 
   validSecs.forEach((sec, idx) => {
     const isLast = idx === validSecs.length - 1;
-    // 마지막 섹션이고 R-ONE 참고자료 섹션인지 확인 (제목 텍스트 또는 stat-cards 포함)
     const secText = sec.textContent || '';
     const isRoneRef = isLast && (
       secText.includes('참고 자료') ||
       secText.includes('한국부동산원') ||
       sec.querySelector('.stat-cards') !== null
     );
-    pageSections.push({ html: sec.outerHTML, type: isRoneRef ? 'reference' : 'section' });
+    // 빌딩 카드 섹션은 멀티페이지 허용 (overflow visible)
+    const isCardSection = sec.querySelector('.bld-cards-wrap') !== null;
+    const type = isRoneRef ? 'reference' : (isCardSection ? 'multipage' : 'section');
+    pageSections.push({ html: sec.outerHTML, type });
   });
 
   // ── ④ 새 창 HTML 조립 ──
@@ -9601,6 +9686,17 @@ function downloadReportPDF(id) {
     .print-page table            { font-size: 9px !important; }
     .print-page table th,
     .print-page table td         { padding: 4px 5px !important; }
+
+    /* 빌딩 카드 인쇄 최적화 */
+    .print-page .bld-cards-wrap  { gap: 6px !important; }
+    .print-page .bld-card        { border-width: 1px !important; }
+    .print-page .bld-card-hd     { padding: 5px 8px !important; }
+    .print-page .bld-card-name   { font-size: 10px !important; }
+    .print-page .bld-card-meta   { font-size: 9px !important; gap: 4px !important; }
+    .print-page .bld-card-floors { font-size: 9px !important; }
+    .print-page .bld-card-tbl    { font-size: 9px !important; }
+    .print-page .bld-card-tbl th { padding: 3px 5px !important; font-size: 8px !important; }
+    .print-page .bld-card-tbl td { padding: 3px 5px !important; }
     .print-page .rent-ai-summary { padding: 5px 8px !important; font-size: 10px !important; }
 
     /* ISSUE-11: 빌딩 비교 차트 — is-section이 hidden이므로 차트 컨테이너 크기 명시 고정 */
@@ -9609,6 +9705,24 @@ function downloadReportPDF(id) {
     .print-page [id^="rentBarWrap"] img { width: 100% !important; height: 140px !important;
                                            object-fit: contain !important; display: block !important; }
     .print-page .rent-chart-section { overflow: hidden !important; }
+
+    /* ── 멀티페이지: 빌딩 카드 섹션은 자동 높이 + 페이지 브레이크 허용 ── */
+    .print-page.is-multipage {
+      height: auto !important;
+      min-height: 210mm;
+      overflow: visible !important;
+      page-break-inside: auto !important;
+    }
+    .print-page.is-multipage > .report-section {
+      overflow: visible !important;
+    }
+    .print-page.is-multipage .bld-card {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+    .print-page.is-multipage .rent-chart-section {
+      overflow: visible !important;
+    }
 
     /* 내부 메모, 스피너, 버튼 숨김 */
     .print-page .internal-memo,
@@ -9658,13 +9772,21 @@ function downloadReportPDF(id) {
       .pages-container { margin-top: 0; padding: 0; gap: 0; }
       .print-page {
         box-shadow: none;
-        /* ISSUE-11: 100vh 대신 정확한 A4 landscape 높이 지정 → 미리보기↔실제 PDF 일치 */
         width: 297mm;
         height: 210mm;
         overflow: hidden;
         margin: 0;
         page-break-after: always;
         page-break-inside: avoid;
+      }
+      .print-page.is-multipage {
+        height: auto !important;
+        overflow: visible !important;
+        page-break-inside: auto !important;
+      }
+      .print-page.is-multipage .bld-card {
+        page-break-inside: avoid;
+        break-inside: avoid;
       }
     }
   `;
@@ -9680,6 +9802,7 @@ function downloadReportPDF(id) {
     let cls;
     if      (type === 'cover')     cls = 'print-page is-cover';
     else if (type === 'reference') cls = 'print-page is-reference';
+    else if (type === 'multipage') cls = 'print-page is-multipage';
     else                           cls = 'print-page is-section';
     return `<div class="${cls}">${html}</div>`;
   }).join('\n');
