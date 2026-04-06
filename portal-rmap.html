@@ -3963,6 +3963,15 @@ function _onEnterStep2() {
       const fallbackLabel = fallback.querySelector('div[style*="font-weight:600"]');
       if (fallbackLabel) fallbackLabel.textContent = '🏢 기준 빌딩 주소';
     }
+    // DOM 순서 복원: 매출액 form-group 뒤에 linkGroup → fallback → lr2 순서로
+    const revenueGroup = Array.from(panel.querySelectorAll('.form-group'))
+      .find(g => g.querySelector('#clientRevenue'));
+    if (revenueGroup) {
+      let anchor = revenueGroup;
+      if (linkGroup) { panel.insertBefore(linkGroup, anchor.nextSibling); anchor = linkGroup; }
+      if (fallback)  { panel.insertBefore(fallback, anchor.nextSibling);  anchor = fallback; }
+      if (lr2)       { panel.insertBefore(lr2, anchor.nextSibling); }
+    }
     // 주소 연동: 고객사 미선택이면 fallback 표시
     if (!dartConfirmedCorp) {
       if (linkGroup) linkGroup.style.display = 'none';
