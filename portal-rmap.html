@@ -4501,6 +4501,7 @@ function _renderCorpResults(q, data, dropdown) {
         homepage:      c.homepage      || '',
         phone:         c.phone         || '',
         employee_cnt:  c.employee_cnt  || null,
+        annual_revenue: c.annual_revenue || null,
         branches:      c.branches      || [],
         _source:       (c._sources || [c._source || 'unknown'])[0],
         _sources:      c._sources || [c._source || 'unknown'],
@@ -4653,12 +4654,22 @@ function confirmDartCompany(corpOrEl) {
   document.getElementById('companyConfirmed').classList.add('show');
   document.getElementById('inferCompBtn').disabled = false;
 
-  // ── 주소 선택 모달 (항상 표시 — address_candidates 기반) ──
-  if (corp._source !== 'manual') {
-    _openAddrPick(corp);
-  } else {
+  // ── 주소 연동 ──
+  if (corp._source === 'manual') {
     // 직접 입력 시 기존 주소 연동 흐름
     _triggerCorpAddrLink(corp);
+  } else if ((corp.address_candidates || []).length > 1) {
+    // 주소 후보가 복수 → 선택 모달
+    _openAddrPick(corp);
+  } else {
+    // 주소 후보 0~1건 + road_addr 있으면 모달 건너뛰고 자동 연동
+    const bestAddr = (corp.address_candidates || [])[0]?.address || corp.road_addr || corp.jibun_addr || corp.adres || '';
+    if (bestAddr) {
+      corp.road_addr = bestAddr;
+      _triggerCorpAddrLink(corp);
+    } else {
+      _openAddrPick(corp);
+    }
   }
 
   // ── 국민연금 상세 조회 (임직원 수 → 적정 면적 자동 제안) ──
@@ -11820,7 +11831,7 @@ function _openAddrPick(corp) {
   const candidates = corp.address_candidates || [];
 
   document.getElementById('addrPickCorpName').textContent = corp.corp_name;
-  document.getElementById('addrPickManualInput').value = '';
+  document.getElementById('addrPickManualInput').value = corp.road_addr || corp.jibun_addr || corp.adres || '';
 
   const list = document.getElementById('addrPickList');
   if (!candidates.length) {
