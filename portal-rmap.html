@@ -3903,21 +3903,71 @@ function updateStepUI() {
   if (currentStep === 4)  _onEnterStep4();
   if (currentStep === 6)  { const lr6 = document.getElementById('lr-compbuilding'); if (lr6) lr6.style.display = selectedMode === 'LR' ? '' : 'none'; }
   if (currentStep === 7)  _onEnterStep7();
+  if (currentStep === 8)  _onEnterStep8();
   if (currentStep === 10) _onEnterStep10();
 }
 
 function _onEnterStep2() {
-  // LR 모드면 LR 전용 필드 표시
-  const lr2 = document.getElementById('lr-fields-step2');
-  if (lr2) lr2.style.display = selectedMode === 'LR' ? '' : 'none';
-  const lr6 = document.getElementById('lr-compbuilding');
-  if (lr6) lr6.style.display = selectedMode === 'LR' ? '' : 'none';
-  // 주소 연동 초기 상태: 고객사 미선택이면 fallback 표시
+  const panel    = document.getElementById('step-panel-2');
+  const lr2      = document.getElementById('lr-fields-step2');
+  const lr6      = document.getElementById('lr-compbuilding');
   const linkGroup = document.getElementById('corpAddrLinkGroup');
   const fallback  = document.getElementById('corpAddrFallback');
-  if (!dartConfirmedCorp) {
-    if (linkGroup) linkGroup.style.display = 'none';
-    if (fallback)  fallback.style.display  = '';
+
+  if (lr2) lr2.style.display = selectedMode === 'LR' ? '' : 'none';
+  if (lr6) lr6.style.display = selectedMode === 'LR' ? '' : 'none';
+
+  if (selectedMode === 'LR') {
+    // ── LR 모드: 기준 빌딩 → 담당자 → 업종 → 고객사(선택) 순서로 재배치 ──
+    // 1. 기준 빌딩 주소를 최상위로 이동 (항상 표시)
+    if (fallback) {
+      fallback.style.display = '';
+      panel.insertBefore(fallback, panel.firstChild);
+      // 라벨 텍스트 변경
+      const fallbackLabel = fallback.querySelector('div[style*="font-weight:600"]');
+      if (fallbackLabel) fallbackLabel.innerHTML = '🏢 기준 빌딩 주소 <span style="color:var(--danger)">*</span>';
+    }
+    // corpAddrLinkGroup도 fallback 바로 아래로 (기업 선택 시 주소 연동 표시)
+    if (linkGroup) {
+      linkGroup.style.display = dartConfirmedCorp ? '' : 'none';
+      if (fallback) panel.insertBefore(linkGroup, fallback.nextSibling);
+    }
+    // 2. LR 전용 필드를 주소 바로 아래로 이동
+    if (lr2) {
+      const refNode = linkGroup || fallback;
+      if (refNode) panel.insertBefore(lr2, refNode.nextSibling);
+    }
+    // 3. TR 전용 필드(고객사명, 업종, 매출액)에 선택 표시 추가
+    const companyLabel = panel.querySelector('label[for="clientCompany"], .form-label');
+    if (!panel.querySelector('#lr-optional-divider')) {
+      const divider = document.createElement('div');
+      divider.id = 'lr-optional-divider';
+      divider.style.cssText = 'margin-top:16px;padding-top:12px;border-top:1px dashed var(--border);font-size:11px;color:var(--muted);font-weight:600';
+      divider.textContent = '📋 부가 정보 (선택 — 건물 소유자/법인 정보)';
+      // 첫 번째 form-group (고객사명) 앞에 삽입
+      const firstFormGroup = panel.querySelector('.form-group');
+      if (firstFormGroup && lr2) {
+        // lr2 뒤에 있는 form-group들 (고객사명, 업종, 매출액)
+        const groups = Array.from(panel.querySelectorAll('.form-group'));
+        const companyGroup = groups.find(g => g.querySelector('#clientCompany'));
+        if (companyGroup) panel.insertBefore(divider, companyGroup);
+      }
+    }
+  } else {
+    // ── TR 모드: 기본 순서 복원 ──
+    // LR 구분선 제거
+    const divider = panel.querySelector('#lr-optional-divider');
+    if (divider) divider.remove();
+    // fallback 라벨 복원
+    if (fallback) {
+      const fallbackLabel = fallback.querySelector('div[style*="font-weight:600"]');
+      if (fallbackLabel) fallbackLabel.textContent = '🏢 기준 빌딩 주소';
+    }
+    // 주소 연동: 고객사 미선택이면 fallback 표시
+    if (!dartConfirmedCorp) {
+      if (linkGroup) linkGroup.style.display = 'none';
+      if (fallback)  fallback.style.display  = '';
+    }
   }
 }
 
@@ -3925,6 +3975,46 @@ function _onEnterStep7() {
   // 처음 진입 시 빈 행이면 자동 1행 추가
   const lines = document.getElementById('compLeaseLines');
   if (lines && lines.children.length === 0) addCompLeaseLine();
+}
+
+function _onEnterStep8() {
+  // ── 기준 권역 표시 + 해당 체크박스 비활성화 ──
+  const baseDist = reportParams.district || guessDistrict(reportParams.buildingAddress || '');
+  const distLabels = { CBD: 'CBD 도심', GBD: 'GBD 강남', YBD: 'YBD 여의도', BBD: 'BBD 분당' };
+  const allDists = ['CBD', 'GBD', 'YBD', 'BBD'];
+
+  // 기준 권역 안내 표시
+  let infoEl = document.getElementById('altDistrictBaseInfo');
+  if (!infoEl) {
+    infoEl = document.createElement('div');
+    infoEl.id = 'altDistrictBaseInfo';
+    infoEl.style.cssText = 'padding:8px 12px;background:#e8f2fb;border-radius:6px;margin-bottom:10px;font-size:12px;color:#1a3c5e;font-weight:600';
+    const group = document.getElementById('altDistrictGroup');
+    if (group) group.insertBefore(infoEl, group.querySelector('div[style*="display:flex"]'));
+  }
+  infoEl.innerHTML = `📍 기준 권역: <span style="background:#2e7dca;color:#fff;padding:1px 8px;border-radius:4px;margin-left:4px">${distLabels[baseDist] || baseDist}</span>`
+    + `<span style="margin-left:8px;font-weight:400;color:#64748b">— 비교할 권역을 선택하세요</span>`;
+
+  // 각 체크박스: 기준 권역은 비활성화 + 체크 해제
+  allDists.forEach(d => {
+    const label = document.getElementById('alt' + d);
+    if (!label) return;
+    const cb = label.querySelector('input[type="checkbox"]');
+    if (!cb) return;
+
+    if (d === baseDist) {
+      cb.checked  = false;
+      cb.disabled = true;
+      label.style.opacity = '0.4';
+      label.title = '기준 권역은 비교 대상에서 제외됩니다';
+      // selectedAltDistricts에서도 제거
+      selectedAltDistricts = selectedAltDistricts.filter(x => x !== d);
+    } else {
+      cb.disabled = false;
+      label.style.opacity = '1';
+      label.title = '';
+    }
+  });
 }
 
 // ── Step 4 진입: 빌딩 기준가 로드 ──
@@ -4529,17 +4619,22 @@ function _triggerCorpAddrLink(corp) {
   // 도로명 우선 → 지번 → adres 순으로 사용
   const addr = corp.road_addr || corp.jibun_addr || corp.adres || '';
   // 전체 도로명주소 여부 검증 (숫자 포함 or 로/길+구 조합 — 구 단위 단독은 자동연동 불가)
-  const isFullAddr = addr && addr.length >= 10 && (/\d/.test(addr) || (/[로길]/.test(addr) && /[구시군]/.test(addr)));
+  const isFullAddr = addr && addr.length >= 8 && (/\d/.test(addr) || (/[로길]/.test(addr) && /[구시군]/.test(addr)));
   if (isFullAddr && corp._source !== 'manual') {
-    // 전체 주소 있음 → 자동 연동 카드 표시
+    // ── 전체 주소 있음 → 즉시 자동 적용 (이 주소 사용 버튼 생략) ──
     autoCard.style.display   = '';
     manualCard.style.display = 'none';
-    const addrLabel = corp.road_addr
-      ? corp.road_addr + (corp.jibun_addr ? ' · 지번 ' + corp.jibun_addr : '')
-      : addr;
-    autoText.innerHTML = `<b>${corp.corp_name}</b> · ${addrLabel}`;
-    // 빌딩 주소 임시 세팅 — 도로명 우선
     window._pendingCorpAddr = corp.road_addr || addr;
+
+    // 자동 적용 시작 — UI에 로딩 표시
+    autoCard.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:#065f46;font-weight:600">🔄 사옥 주소 자동 연동 중...</span>
+        <span style="font-size:11px;color:var(--muted)">${addr}</span>
+      </div>`;
+
+    // 즉시 applyCorpAddr 호출 (비동기)
+    applyCorpAddr();
   } else {
     // 주소 없음 / 구 단위 / 직접입력 → 직접 검색 카드
     autoCard.style.display   = 'none';
@@ -4594,12 +4689,29 @@ async function applyCorpAddr() {
 }
 
 function _resetCorpAddrCard() {
-  // "변경" 클릭 → 다시 자동연동 초기 상태로
+  // "변경" 클릭 → 수동 검색 모드로 전환 (자동 재적용 하지 않음)
   window._pendingCorpAddr  = null;
   reportParams.buildingAddress = '';
   reportParams.roadAddress     = '';
   reportParams.lat = null; reportParams.lng = null;
-  if (dartConfirmedCorp) _triggerCorpAddrLink(dartConfirmedCorp);
+  reportParams.buildingId   = '';
+  reportParams.buildingName = '';
+
+  const autoCard   = document.getElementById('corpAddrAutoCard');
+  const manualCard = document.getElementById('corpAddrManualCard');
+  if (autoCard)   autoCard.style.display   = 'none';
+  if (manualCard) manualCard.style.display = '';
+
+  // 기존 주소를 검색 입력란에 미리 채워주기
+  const prevAddr = dartConfirmedCorp?.road_addr || dartConfirmedCorp?.adres || '';
+  const input = document.getElementById('buildingAddress');
+  if (input && prevAddr) input.value = prevAddr;
+
+  // 검색 결과 초기화
+  const resEl = document.getElementById('addrResult');
+  if (resEl) { resEl.innerHTML = ''; resEl.classList.remove('show'); }
+  const bnGroup = document.getElementById('buildingNameGroup');
+  if (bnGroup) bnGroup.style.display = 'none';
 }
 
 async function searchBuildingByAddr(addr) {
@@ -5383,10 +5495,124 @@ async function searchBuilding() {
     resultEl.innerHTML = `
       <strong>${reportParams.buildingName || '빌딩명 미확인'}</strong>${matchHtml}<br>
       <span style="color:var(--muted);font-size:12px">${reportParams.roadAddress}</span>
+      ${!matched ? `<div style="margin-top:8px">
+        <button type="button" onclick="_searchBuildingRegistry('${(reportParams.roadAddress||addr).replace(/'/g,"\\'")}')"
+          style="padding:5px 14px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">
+          🏛 건축물대장에서 검색
+        </button>
+        <div id="registryResults" style="margin-top:8px"></div>
+      </div>` : ''}
     `;
     const bni = document.getElementById('buildingNameInput');
     if (bni) bni.value = reportParams.buildingName;
   });
+}
+
+// ===== 건축물대장 검색 (미등록 빌딩) =====
+async function _searchBuildingRegistry(addr) {
+  const container = document.getElementById('registryResults');
+  if (!container) return;
+  container.innerHTML = '<span style="font-size:12px;color:var(--muted)">🔄 건축물대장 조회 중...</span>';
+
+  try {
+    const resp = await fetch(`${BACKEND}/api/admin/search-building-registry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: addr }),
+    });
+    const data = await resp.json();
+    if (!data.success || !data.buildings?.length) {
+      container.innerHTML = '<span style="font-size:12px;color:var(--danger)">⚠️ 건축물대장에서 해당 주소의 빌딩을 찾을 수 없습니다.</span>';
+      return;
+    }
+
+    const roadAddr  = data.roadAddress  || addr;
+    const jibunAddr = data.jibunAddress || '';
+
+    container.innerHTML = `
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">🏛 건축물대장 검색 결과 (${data.buildings.length}건)</div>
+      ${data.buildings.map((b, i) => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;background:#fff">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">${b.name || '(건물명 없음)'}</div>
+            <div style="font-size:11px;color:var(--muted)">
+              ${b.grade ? '<span style="background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-size:10px;margin-right:4px">' + b.grade + '등급</span>' : ''}
+              연면적 ${b.grossFloorPy ? b.grossFloorPy.toLocaleString() + '평' : '-'}
+              ${b.mainPurps ? ' · ' + b.mainPurps : ''}
+              ${b.grndFlrCnt ? ' · 지상' + b.grndFlrCnt + '층' : ''}
+            </div>
+          </div>
+          <button type="button" onclick='_saveBuildingToPortal(${JSON.stringify({
+            name: b.name || '',
+            address: roadAddr,
+            jibunAddress: jibunAddr,
+            grossFloorPy: b.grossFloorPy || 0,
+            grade: b.grade || '',
+            mainPurps: b.mainPurps || '',
+            useAprDay: b.useAprDay || '',
+            grndFlrCnt: b.grndFlrCnt || '',
+            ugrndFlrCnt: b.ugrndFlrCnt || '',
+          }).replace(/'/g, "\\'")})'
+            style="padding:5px 14px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;margin-left:8px">
+            💾 Portal에 저장
+          </button>
+        </div>
+      `).join('')}
+    `;
+  } catch(e) {
+    container.innerHTML = `<span style="font-size:12px;color:var(--danger)">⚠️ 조회 실패: ${e.message}</span>`;
+  }
+}
+
+async function _saveBuildingToPortal(bldData) {
+  if (!confirm(`"${bldData.name || '(건물명 없음)}"을 CRE Portal에 저장하시겠습니까?`)) return;
+
+  try {
+    const resp = await fetch(`${BACKEND}/api/admin/save-building`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bldData),
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      showToast('저장 실패: ' + (data.error || ''), 'error');
+      return;
+    }
+
+    if (data.action === 'existing') {
+      showToast(`ℹ️ 이미 등록된 빌딩입니다: ${data.message}`, 'warning', 4000);
+    } else {
+      showToast(`✅ Portal에 저장 완료 — ${bldData.name} (${data.region}, ${data.grade})`, 'success', 4000);
+    }
+
+    // 저장된 빌딩을 기준 빌딩으로 자동 설정
+    reportParams.buildingId   = data.buildingId;
+    reportParams.buildingName = bldData.name || '';
+    reportParams.district     = data.region || guessDistrict(bldData.address);
+
+    // 권역 select 동기화
+    const dSel  = document.getElementById('districtSelect');
+    const dSelC = document.getElementById('districtSelectC');
+    if (dSel)  dSel.value  = reportParams.district || 'GBD';
+    if (dSelC) dSelC.value = reportParams.district || 'GBD';
+
+    // addrResult 갱신
+    const resultEl = document.getElementById('addrResult');
+    if (resultEl) {
+      resultEl.innerHTML = `
+        <strong>${bldData.name}</strong><span class="match-badge match-full">✓ Portal 저장됨</span><br>
+        <span style="color:var(--muted);font-size:12px">${bldData.address}</span>
+        <span style="margin-left:6px;background:#dbeafe;color:#1d4ed8;border-radius:4px;padding:1px 6px;font-size:11px">${reportParams.district}</span>
+      `;
+    }
+    const bni = document.getElementById('buildingNameInput');
+    if (bni) bni.value = bldData.name;
+    const bng = document.getElementById('buildingNameGroup');
+    if (bng) bng.style.display = 'none';
+
+  } catch(e) {
+    showToast('저장 오류: ' + e.message, 'error');
+  }
 }
 
 async function matchWithPortalDB(address) {
