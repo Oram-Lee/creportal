@@ -1357,25 +1357,41 @@ body {
 
 /* Q4 — 구조화 AI 분석 섹션 */
 .ai-section {
-  padding: 12px 0;
+  padding: 16px 0;
   border-bottom: 1px solid rgba(100,140,200,0.15);
 }
 .ai-section:first-child { padding-top: 4px; }
 .ai-section:last-child  { border-bottom: none; padding-bottom: 4px; }
 .ai-headline {
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 700;
   color: #1a4d8f;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   letter-spacing: -0.3px;
   line-height: 1.45;
   display: flex;
   align-items: center;
   gap: 5px;
 }
+.ai-summary {
+  margin: 4px 0 10px 0;
+  padding: 8px 14px;
+  background: #f0f6ff;
+  border-radius: 6px;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #1a4d8f;
+  font-weight: 600;
+}
+.ai-summary ul {
+  margin: 0; padding-left: 18px; list-style: disc;
+}
+.ai-summary li {
+  margin-bottom: 2px;
+}
 .ai-body {
-  font-size: 15px;
-  line-height: 2.1;
+  font-size: 15.5px;
+  line-height: 2.0;
   color: #1e2d3d;
   word-break: keep-all;
   overflow-wrap: break-word;
@@ -9748,9 +9764,11 @@ function downloadReportPDF(id) {
 
     /* AI 분석 */
     .print-page .ai-analysis-box { padding: 12px 14px !important; }
-    .print-page .ai-headline      { font-size: 11px !important; margin-bottom: 4px !important; }
+    .print-page .ai-headline      { font-size: 13px !important; margin-bottom: 3px !important; }
+    .print-page .ai-summary       { padding: 5px 10px !important; font-size: 10px !important; margin: 3px 0 6px !important; }
+    .print-page .ai-summary ul    { padding-left: 14px !important; margin: 0 !important; }
     .print-page .ai-body          { font-size: 10.5px !important; line-height: 1.65 !important; }
-    .print-page .ai-section       { padding: 5px 0 !important; }
+    .print-page .ai-section       { padding: 6px 0 !important; }
 
     /* 시사점 카드 */
     .print-page .ai-insight-card   { padding: 10px 14px !important; margin-top: 8px !important; }
@@ -9802,11 +9820,11 @@ function downloadReportPDF(id) {
     .print-page .rent-ai-summary { padding: 5px 8px !important; font-size: 10px !important; }
 
     /* ISSUE-11: 빌딩 비교 차트 — is-section이 hidden이므로 차트 컨테이너 크기 명시 고정 */
-    .print-page [id^="rentBarWrap"] { height: 150px !important; max-height: 150px !important;
-                                       overflow: hidden !important; position: relative !important; }
-    .print-page [id^="rentBarWrap"] img { width: 100% !important; height: 140px !important;
+    .print-page [id^="rentBarWrap"] { height: auto !important; max-height: none !important;
+                                       overflow: visible !important; position: relative !important; }
+    .print-page [id^="rentBarWrap"] img { width: 100% !important; height: auto !important;
                                            object-fit: contain !important; display: block !important; }
-    .print-page .rent-chart-section { overflow: hidden !important; }
+    .print-page .rent-chart-section { overflow: visible !important; }
 
     /* ── 멀티페이지: 빌딩 카드 섹션은 자동 높이 + 페이지 브레이크 허용 ── */
     .print-page.is-multipage {
