@@ -63,6 +63,17 @@ body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--b
 .bld-group-title { font-size: 13px; font-weight: 700; color: var(--primary); margin: 18px 0 8px;
   padding-bottom: 4px; border-bottom: 2px solid var(--accent-lt); display: flex; align-items: center; gap: 6px; }
 .bld-cnt { font-size: 10px; padding: 2px 7px; border-radius: 10px; background: #fee2e2; color: #b91c1c; font-weight: 700; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 999; }
+.modal-box { background: var(--surface); border-radius: var(--radius); width: 420px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.2); }
+.modal-head { padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+.modal-head button { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted); }
+.modal-body { padding: 14px 18px; overflow-y: auto; flex: 1; }
+.modal-search { width: 100%; padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 6px; font-size: 13px; margin-bottom: 10px; }
+.modal-search:focus { outline: none; border-color: var(--accent); }
+.modal-list { max-height: 320px; overflow-y: auto; }
+.modal-item { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.modal-item:hover { background: var(--accent-lt); }
+.modal-item .mid { font-size: 10px; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -109,9 +120,19 @@ body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--b
   </div>
 </div>
 
+<div id="moveModal" class="modal-bg" style="display:none" onclick="if(event.target===this)closeMoveModal()">
+  <div class="modal-box">
+    <div class="modal-head">📦 이동할 빌딩 선택 <button onclick="closeMoveModal()">&times;</button></div>
+    <div class="modal-body">
+      <input class="modal-search" id="modalSearch" placeholder="빌딩명 검색..." oninput="filterModal()">
+      <div class="modal-list" id="modalList"></div>
+    </div>
+  </div>
+</div>
+
 <script>
 const BACKEND = 'https://portal-dsyl.onrender.com';
-let allIssues = [], activeFilter = 'ALL';
+let allIssues = [], activeFilter = 'ALL', bldNameMap = {};
 
 async function runValidation() {
   document.getElementById('beforeRun').style.display = 'none';
@@ -123,6 +144,7 @@ async function runValidation() {
     const d = await r.json();
     if (!d.success) throw new Error(d.error || '실패');
     allIssues = d.issues || [];
+    bldNameMap = d.buildingNames || {};
     const s = d.stats || {};
     document.getElementById('stTotal').textContent = (s.totalVacEntries||0).toLocaleString();
     document.getElementById('stAffected').textContent = s.affectedBuildings || 0;
@@ -233,10 +255,33 @@ async function doDelete(path, cid) {
   } catch(e) { alert('오류: ' + e.message); }
 }
 
+let _movePath = '', _moveCid = '';
+
 function promptMove(path, cid) {
-  const t = prompt('이동할 빌딩의 Firebase ID를 입력하세요:');
-  if (!t || !t.trim()) return;
-  doMove(path, t.trim(), cid);
+  _movePath = path; _moveCid = cid;
+  document.getElementById('modalSearch').value = '';
+  filterModal();
+  document.getElementById('moveModal').style.display = '';
+  document.getElementById('modalSearch').focus();
+}
+
+function closeMoveModal() {
+  document.getElementById('moveModal').style.display = 'none';
+}
+
+function filterModal() {
+  const q = (document.getElementById('modalSearch').value || '').toLowerCase();
+  const entries = Object.entries(bldNameMap);
+  const filtered = q ? entries.filter(([id, name]) => name.toLowerCase().includes(q) || id.toLowerCase().includes(q)) : entries.slice(0, 50);
+  const html = filtered.slice(0, 50).map(([id, name]) =>
+    `<div class="modal-item" onclick="selectMove('${id}')"><span>${name}</span><span class="mid">${id.slice(0,12)}</span></div>`
+  ).join('');
+  document.getElementById('modalList').innerHTML = html || '<div style="padding:12px;color:var(--muted);font-size:13px;text-align:center">검색 결과 없음</div>';
+}
+
+function selectMove(tid) {
+  closeMoveModal();
+  doMove(_movePath, tid, _moveCid);
 }
 
 async function doMove(path, tid, cid) {
