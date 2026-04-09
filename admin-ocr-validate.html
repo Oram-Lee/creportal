@@ -97,7 +97,7 @@ body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--b
 .modal-item .mid { font-size: 10px; color: var(--muted); }
 
 .pdf-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.pdf-modal-box { background: var(--surface); border-radius: var(--radius); width: 90vw; height: 90vh; max-width: 900px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.3); }
+.pdf-modal-box { background: var(--surface); border-radius: var(--radius); width: 95vw; height: 95vh; max-width: 1200px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.3); }
 .pdf-modal-head { padding: 12px 18px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .pdf-modal-head button { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
 .pdf-modal-body { flex: 1; overflow: hidden; }
@@ -324,15 +324,11 @@ function toggleVac(uid) {
   }
 }
 
-const STORAGE_BASE = 'https://firebasestorage.googleapis.com/v0/b/cre-unified.firebasestorage.app/o/';
 let _pdfSource = '', _pdfDate = '', _pdfPage = 1, _pdfMaxFail = false;
 
 function buildPageUrl(source, pubDate, page) {
-  const safeSource  = (source || '').replace(/[\s.]+/g, '_').replace(/__+/g, '_');
-  const safePubDate = (pubDate || '').replace(/[\s.]+/g, '_').replace(/__+/g, '_');
-  const padded = String(page).padStart(3, '0');
-  const path = `leasing-docs/${safeSource}/${safePubDate}/page_${padded}.jpg`;
-  return STORAGE_BASE + encodeURIComponent(path) + '?alt=media';
+  return BACKEND + '/api/admin/leasing-page?source=' + encodeURIComponent(source)
+    + '&date=' + encodeURIComponent(pubDate) + '&page=' + page;
 }
 
 function openOriginal(source, pubDate, title) {
@@ -357,8 +353,6 @@ function loadPage() {
   document.getElementById('pdfPageInfo').textContent = `${_pdfPage} / ?`;
 
   const url = buildPageUrl(_pdfSource, _pdfDate, _pdfPage);
-  // proxy 경유
-  const proxyUrl = BACKEND + '/api/research/proxy-pdf?url=' + encodeURIComponent(url);
 
   img.onload = function() {
     loading.style.display = 'none';
@@ -374,7 +368,7 @@ function loadPage() {
       document.getElementById('pdfPageInfo').textContent = `마지막: ${_pdfPage}`;
     }
   };
-  img.src = proxyUrl;
+  img.src = url;
 }
 
 function pdfPrevPage() {
