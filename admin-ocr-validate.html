@@ -159,8 +159,19 @@ body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--b
 
 <div id="pdfModal" class="pdf-modal-bg" style="display:none" onclick="if(event.target===this)closePdfModal()">
   <div class="pdf-modal-box">
-    <div class="pdf-modal-head"><span id="pdfModalTitle">원본 안내문</span><button onclick="closePdfModal()">&times;</button></div>
-    <div class="pdf-modal-body"><iframe id="pdfFrame" src=""></iframe></div>
+    <div class="pdf-modal-head">
+      <span id="pdfModalTitle">📄 원본 안내문</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="pdfPrevPage()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;font-size:13px;">◀ 이전</button>
+        <span id="pdfPageInfo" style="font-size:12px;color:var(--muted);">1 / ?</span>
+        <button onclick="pdfNextPage()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;font-size:13px;">다음 ▶</button>
+        <button onclick="closePdfModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">&times;</button>
+      </div>
+    </div>
+    <div class="pdf-modal-body" style="display:flex;align-items:center;justify-content:center;background:#e2e8f0;overflow:auto;">
+      <div id="pdfLoading" style="color:var(--muted);font-size:13px;">로딩 중...</div>
+      <img id="pdfPageImg" style="max-width:100%;max-height:100%;display:none;" alt="">
+    </div>
   </div>
 </div>
 
@@ -243,7 +254,7 @@ function renderIssues() {
         const dev = ((st.medianRent - issue.consensusRent) / issue.consensusRent * 100).toFixed(0);
         if (Math.abs(dev) > 30) rentDev = `<span class="dev">(${dev > 0 ? '+' : ''}${dev}%)</span>`;
       }
-      const viewBtn = st.storageUrl ? `<button class="btn-view" onclick="event.stopPropagation();openPdfModal('${encodeURIComponent(st.storageUrl)}','${src} — ${issue.buildingName} ${issue.publishMonth}')">📄 원본</button>` : '';
+      const viewBtn = `<button class="btn-view" onclick="event.stopPropagation();openOriginal('${src.replace(/'/g,"\\'")}','${issue.publishMonth.replace(/'/g,"\\'")}','${src} — ${issue.buildingName} ${issue.publishMonth}')">📄 원본</button>`;
       tbl += `<tr class="${cls}">
         <td class="src-name">${mark}${src}${viewBtn}</td>
         <td>${st.vacCount}</td>
@@ -313,17 +324,65 @@ function toggleVac(uid) {
   }
 }
 
-function openPdfModal(encodedUrl, title) {
-  const url = decodeURIComponent(encodedUrl);
-  const proxyUrl = BACKEND + '/api/research/proxy-pdf?url=' + encodeURIComponent(url);
+const STORAGE_BASE = 'https://firebasestorage.googleapis.com/v0/b/cre-unified.firebasestorage.app/o/';
+let _pdfSource = '', _pdfDate = '', _pdfPage = 1, _pdfMaxFail = false;
+
+function buildPageUrl(source, pubDate, page) {
+  const safeSource  = (source || '').replace(/[\s.]+/g, '_').replace(/__+/g, '_');
+  const safePubDate = (pubDate || '').replace(/[\s.]+/g, '_').replace(/__+/g, '_');
+  const padded = String(page).padStart(3, '0');
+  const path = `leasing-docs/${safeSource}/${safePubDate}/page_${padded}.jpg`;
+  return STORAGE_BASE + encodeURIComponent(path) + '?alt=media';
+}
+
+function openOriginal(source, pubDate, title) {
+  _pdfSource = source; _pdfDate = pubDate; _pdfPage = 1; _pdfMaxFail = false;
   document.getElementById('pdfModalTitle').textContent = '📄 ' + title;
-  document.getElementById('pdfFrame').src = proxyUrl;
   document.getElementById('pdfModal').style.display = '';
+  loadPage();
 }
 
 function closePdfModal() {
   document.getElementById('pdfModal').style.display = 'none';
-  document.getElementById('pdfFrame').src = '';
+  document.getElementById('pdfPageImg').src = '';
+  document.getElementById('pdfPageImg').style.display = 'none';
+}
+
+function loadPage() {
+  const img = document.getElementById('pdfPageImg');
+  const loading = document.getElementById('pdfLoading');
+  img.style.display = 'none';
+  loading.style.display = '';
+  loading.textContent = `페이지 ${_pdfPage} 로딩 중...`;
+  document.getElementById('pdfPageInfo').textContent = `${_pdfPage} / ?`;
+
+  const url = buildPageUrl(_pdfSource, _pdfDate, _pdfPage);
+  // proxy 경유
+  const proxyUrl = BACKEND + '/api/research/proxy-pdf?url=' + encodeURIComponent(url);
+
+  img.onload = function() {
+    loading.style.display = 'none';
+    img.style.display = '';
+    _pdfMaxFail = false;
+  };
+  img.onerror = function() {
+    loading.textContent = `페이지 ${_pdfPage} 이미지가 없습니다`;
+    img.style.display = 'none';
+    if (_pdfPage > 1) {
+      _pdfMaxFail = true;
+      _pdfPage--;
+      document.getElementById('pdfPageInfo').textContent = `마지막: ${_pdfPage}`;
+    }
+  };
+  img.src = proxyUrl;
+}
+
+function pdfPrevPage() {
+  if (_pdfPage > 1) { _pdfPage--; _pdfMaxFail = false; loadPage(); }
+}
+function pdfNextPage() {
+  if (_pdfMaxFail) return;
+  _pdfPage++; loadPage();
 }
 
 async function bulkDelete(uid, paths, src) {
