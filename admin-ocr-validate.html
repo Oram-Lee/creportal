@@ -254,7 +254,8 @@ function renderIssues() {
         const dev = ((st.medianRent - issue.consensusRent) / issue.consensusRent * 100).toFixed(0);
         if (Math.abs(dev) > 30) rentDev = `<span class="dev">(${dev > 0 ? '+' : ''}${dev}%)</span>`;
       }
-      const viewBtn = `<button class="btn-view" onclick="event.stopPropagation();openOriginal('${src.replace(/'/g,"\\'")}','${issue.publishMonth.replace(/'/g,"\\'")}','${src} — ${issue.buildingName} ${issue.publishMonth}')">📄 원본</button>`;
+      const hasImages = st.pageImageUrls && st.pageImageUrls.length > 0;
+      const viewBtn = hasImages ? `<button class="btn-view" onclick="event.stopPropagation();openOriginal('${src.replace(/'/g,"\\'")}','${issue.publishMonth.replace(/'/g,"\\'")}','${src} — ${issue.buildingName} ${issue.publishMonth}')">📄 원본</button>` : '';
       tbl += `<tr class="${cls}">
         <td class="src-name">${mark}${src}${viewBtn}</td>
         <td>${st.vacCount}</td>
@@ -324,15 +325,26 @@ function toggleVac(uid) {
   }
 }
 
-let _pdfSource = '', _pdfDate = '', _pdfPage = 1, _pdfMaxFail = false;
+let _pdfUrls = [], _pdfPage = 0, _pdfTitle = '';
 
-function buildPageUrl(source, pubDate, page) {
-  return BACKEND + '/api/admin/leasing-page?source=' + encodeURIComponent(source)
-    + '&date=' + encodeURIComponent(pubDate) + '&page=' + page;
-}
-
-function openOriginal(source, pubDate, title) {
-  _pdfSource = source; _pdfDate = pubDate; _pdfPage = 1; _pdfMaxFail = false;
+function openOriginal(source, pubMonth, title) {
+  // sourceStats에서 해당 출처의 pageImageUrls 찾기
+  // 현재 렌더링된 이슈에서 검색
+  _pdfUrls = [];
+  for (const issue of allIssues) {
+    const ss = issue.sourceStats || {};
+    const st = ss[source];
+    if (st && st.pageImageUrls && st.pageImageUrls.length > 0 && issue.publishMonth === pubMonth) {
+      _pdfUrls = st.pageImageUrls;
+      break;
+    }
+  }
+  if (!_pdfUrls.length) {
+    alert(source + ' ' + pubMonth + '의 페이지 이미지를 찾을 수 없습니다.\n(해당 빌딩에 _meta 엔트리가 없을 수 있음)');
+    return;
+  }
+  _pdfPage = 0;
+  _pdfTitle = title;
   document.getElementById('pdfModalTitle').textContent = '📄 ' + title;
   document.getElementById('pdfModal').style.display = '';
   loadPage();
@@ -349,34 +361,20 @@ function loadPage() {
   const loading = document.getElementById('pdfLoading');
   img.style.display = 'none';
   loading.style.display = '';
-  loading.textContent = `페이지 ${_pdfPage} 로딩 중...`;
-  document.getElementById('pdfPageInfo').textContent = `${_pdfPage} / ?`;
+  loading.textContent = '로딩 중...';
+  document.getElementById('pdfPageInfo').textContent = (_pdfPage + 1) + ' / ' + _pdfUrls.length;
 
-  const url = buildPageUrl(_pdfSource, _pdfDate, _pdfPage);
-
-  img.onload = function() {
-    loading.style.display = 'none';
-    img.style.display = '';
-    _pdfMaxFail = false;
-  };
-  img.onerror = function() {
-    loading.textContent = `페이지 ${_pdfPage} 이미지가 없습니다`;
-    img.style.display = 'none';
-    if (_pdfPage > 1) {
-      _pdfMaxFail = true;
-      _pdfPage--;
-      document.getElementById('pdfPageInfo').textContent = `마지막: ${_pdfPage}`;
-    }
-  };
+  const url = _pdfUrls[_pdfPage];
+  img.onload = function() { loading.style.display = 'none'; img.style.display = ''; };
+  img.onerror = function() { loading.textContent = '이미지를 불러올 수 없습니다'; img.style.display = 'none'; };
   img.src = url;
 }
 
 function pdfPrevPage() {
-  if (_pdfPage > 1) { _pdfPage--; _pdfMaxFail = false; loadPage(); }
+  if (_pdfPage > 0) { _pdfPage--; loadPage(); }
 }
 function pdfNextPage() {
-  if (_pdfMaxFail) return;
-  _pdfPage++; loadPage();
+  if (_pdfPage < _pdfUrls.length - 1) { _pdfPage++; loadPage(); }
 }
 
 async function bulkDelete(uid, paths, src) {
