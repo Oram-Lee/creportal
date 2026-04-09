@@ -95,6 +95,16 @@ body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--b
 .modal-item { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
 .modal-item:hover { background: var(--accent-lt); }
 .modal-item .mid { font-size: 10px; color: var(--muted); }
+
+.pdf-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.pdf-modal-box { background: var(--surface); border-radius: var(--radius); width: 90vw; height: 90vh; max-width: 900px; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.3); }
+.pdf-modal-head { padding: 12px 18px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.pdf-modal-head button { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--muted); }
+.pdf-modal-body { flex: 1; overflow: hidden; }
+.pdf-modal-body iframe { width: 100%; height: 100%; border: none; }
+.btn-view { padding: 2px 8px; background: #f0fdf4; color: #166534; border: 1px solid #86efac;
+  border-radius: 4px; font-size: 10px; font-weight: 600; cursor: pointer; margin-left: 6px; }
+.btn-view:hover { background: #dcfce7; }
 </style>
 </head>
 <body>
@@ -144,6 +154,13 @@ body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--b
       <input class="modal-search" id="modalSearch" placeholder="빌딩명 검색..." oninput="filterModal()">
       <div class="modal-list" id="modalList"></div>
     </div>
+  </div>
+</div>
+
+<div id="pdfModal" class="pdf-modal-bg" style="display:none" onclick="if(event.target===this)closePdfModal()">
+  <div class="pdf-modal-box">
+    <div class="pdf-modal-head"><span id="pdfModalTitle">원본 안내문</span><button onclick="closePdfModal()">&times;</button></div>
+    <div class="pdf-modal-body"><iframe id="pdfFrame" src=""></iframe></div>
   </div>
 </div>
 
@@ -226,8 +243,9 @@ function renderIssues() {
         const dev = ((st.medianRent - issue.consensusRent) / issue.consensusRent * 100).toFixed(0);
         if (Math.abs(dev) > 30) rentDev = `<span class="dev">(${dev > 0 ? '+' : ''}${dev}%)</span>`;
       }
+      const viewBtn = st.storageUrl ? `<button class="btn-view" onclick="event.stopPropagation();openPdfModal('${encodeURIComponent(st.storageUrl)}','${src} — ${issue.buildingName} ${issue.publishMonth}')">📄 원본</button>` : '';
       tbl += `<tr class="${cls}">
-        <td class="src-name">${mark}${src}</td>
+        <td class="src-name">${mark}${src}${viewBtn}</td>
         <td>${st.vacCount}</td>
         <td style="font-size:11px;text-align:left">${(st.floors||[]).join(', ')}</td>
         <td>${fmt(st.medianRent)}${rentDev}</td>
@@ -293,6 +311,19 @@ function toggleVac(uid) {
     el.style.display = 'block';
     tog.textContent = tog.textContent.replace('▸', '▾');
   }
+}
+
+function openPdfModal(encodedUrl, title) {
+  const url = decodeURIComponent(encodedUrl);
+  const proxyUrl = BACKEND + '/api/research/proxy-pdf?url=' + encodeURIComponent(url);
+  document.getElementById('pdfModalTitle').textContent = '📄 ' + title;
+  document.getElementById('pdfFrame').src = proxyUrl;
+  document.getElementById('pdfModal').style.display = '';
+}
+
+function closePdfModal() {
+  document.getElementById('pdfModal').style.display = 'none';
+  document.getElementById('pdfFrame').src = '';
 }
 
 async function bulkDelete(uid, paths, src) {
