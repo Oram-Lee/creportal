@@ -255,7 +255,7 @@ function renderIssues() {
         if (Math.abs(dev) > 30) rentDev = `<span class="dev">(${dev > 0 ? '+' : ''}${dev}%)</span>`;
       }
       const hasImages = st.pageImageUrls && st.pageImageUrls.length > 0;
-      const viewBtn = hasImages ? `<button class="btn-view" onclick="event.stopPropagation();openOriginal('${src.replace(/'/g,"\\'")}','${issue.publishMonth.replace(/'/g,"\\'")}','${src} — ${issue.buildingName} ${issue.publishMonth}')">📄 원본</button>` : '';
+      const viewBtn = hasImages ? `<button class="btn-view" onclick="event.stopPropagation();openOriginal('${src.replace(/'/g,"\\'")}','${issue.publishMonth.replace(/'/g,"\\'")}','${issue.buildingId}','${src} — ${issue.buildingName} ${issue.publishMonth}')">📄 원본</button>` : '';
       tbl += `<tr class="${cls}">
         <td class="src-name">${mark}${src}${viewBtn}</td>
         <td>${st.vacCount}</td>
@@ -327,14 +327,13 @@ function toggleVac(uid) {
 
 let _pdfUrls = [], _pdfPage = 0, _pdfTitle = '';
 
-function openOriginal(source, pubMonth, title) {
-  // sourceStats에서 해당 출처의 pageImageUrls 찾기
-  // 현재 렌더링된 이슈에서 검색
+function openOriginal(source, pubMonth, buildingId, title) {
   _pdfUrls = [];
   for (const issue of allIssues) {
+    if (issue.buildingId !== buildingId || issue.publishMonth !== pubMonth) continue;
     const ss = issue.sourceStats || {};
     const st = ss[source];
-    if (st && st.pageImageUrls && st.pageImageUrls.length > 0 && issue.publishMonth === pubMonth) {
+    if (st && st.pageImageUrls && st.pageImageUrls.length > 0) {
       _pdfUrls = st.pageImageUrls;
       break;
     }
