@@ -1455,12 +1455,9 @@ document.getElementById('dashboard-section').style.display = 'none';
 
 function normalizeBuildingName(name) {
     if (!name) return '';
-    // FIX: 내부 공백까지 모두 제거 — 엑셀 '투썬월드 빌딩' vs 포털 '투썬월드빌딩' 같은
-    //      공백 유무 차이로 Dice 유사도가 0.73까지 떨어져 임계값 0.8을 못 넘기는 문제 해결.
-    //      (기존엔 여러 공백만 하나로 축소하고 trim만 했음 → bigram에 공백 섞여 점수 저하)
     return name
         .replace(/\s*B\/D\s*$/i, '').replace(/\s*BD\s*$/i, '').replace(/\s*Bldg\.?\s*$/i, '')
-        .replace(/\s+/g, '').trim().toLowerCase();
+        .replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function diceSimilarity(str1, str2) {
@@ -1478,272 +1475,43 @@ function diceSimilarity(str1, str2) {
 }
 
 /**
- * 시/도 이름 정규화 — '서울특별시'·'서울시'→'서울', '경기도'→'경기' 등
- * 포털 주소와 엑셀 '시' 컬럼이 같은 기준을 가지도록 표준화
+ * 엑셀 행에서 주소 키 생성 (구 + 도로명+건물번호 OR 구+동+본번)
  */
-function normalizeSido(raw) {
-    if (!raw) return '';
-    let s = String(raw).trim();
-    // 접미어 제거 (긴 것부터) — 특별자치시/도 → 광역시/특별시/자치시/자치도 → 시/도
-    s = s
-        .replace(/특별자치시$/, '')
-        .replace(/특별자치도$/, '')
-        .replace(/특별시$/,     '')
-        .replace(/광역시$/,     '')
-        .replace(/자치시$/,     '')
-        .replace(/자치도$/,     '')
-        .replace(/도$/,         '')
-        .replace(/시$/,         '');
-    return s.trim();
-}
+function excelAddressKey(row) {
+    const gu    = String(row['구']  || '').trim();
+    const dong  = String(row['동']  || '').trim();
+    const bonbn = String(row['본번'] || '').trim();
+    const road  = String(row['도로명'] || '').trim();
+    const bnum  = String(row['건물번호'] || '').trim();
 
-/**
- * 전국 기초자치시 → 광역행정구역 매핑
- * 엑셀 '시' 컬럼에 광역시/도가 아닌 기초자치시(예: '성남시', '춘천시')가 들어있는
- * 케이스를 포털 주소(예: '경기도 성남시 ...')와 호환시키기 위해 사용.
- * (서울/부산/대구/인천/광주/대전/울산/세종은 광역시 자체이므로 제외)
- */
-const CITY_TO_SIDO = {
-    // 경기도
-    '성남':'경기','수원':'경기','용인':'경기','고양':'경기','화성':'경기',
-    '부천':'경기','안산':'경기','안양':'경기','남양주':'경기','평택':'경기',
-    '시흥':'경기','의정부':'경기','파주':'경기','광명':'경기','김포':'경기',
-    '군포':'경기','하남':'경기','오산':'경기','이천':'경기','안성':'경기',
-    '포천':'경기','양주':'경기','구리':'경기','동두천':'경기','여주':'경기',
-    '의왕':'경기','과천':'경기',
-    // 강원도
-    '춘천':'강원','원주':'강원','강릉':'강원','동해':'강원','삼척':'강원',
-    '속초':'강원','태백':'강원',
-    // 충청북도
-    '청주':'충북','충주':'충북','제천':'충북',
-    // 충청남도
-    '천안':'충남','공주':'충남','보령':'충남','아산':'충남','서산':'충남',
-    '논산':'충남','계룡':'충남','당진':'충남',
-    // 전라북도
-    '전주':'전북','군산':'전북','익산':'전북','정읍':'전북','남원':'전북','김제':'전북',
-    // 전라남도
-    '목포':'전남','여수':'전남','순천':'전남','광양':'전남','나주':'전남',
-    // 경상북도
-    '포항':'경북','경주':'경북','김천':'경북','안동':'경북','구미':'경북',
-    '영주':'경북','영천':'경북','상주':'경북','문경':'경북','경산':'경북',
-    // 경상남도
-    '창원':'경남','진주':'경남','통영':'경남','사천':'경남','김해':'경남',
-    '밀양':'경남','거제':'경남','양산':'경남',
-    // 제주
-    '제주':'제주','서귀포':'제주',
-};
-// '광주'는 광역시이자 경기도 기초자치시이기도 함 → 엑셀 컨텍스트 따라 달라짐
-// (엑셀에서는 '광주시'로만 기재되고 광역시는 '광주광역시'로 기재되므로 접미어로 구분 가능)
-
-/**
- * 엑셀 '시' 컬럼 값에서 상위 광역행정구역(시/도) 추출
- * - '서울특별시' → '서울'
- * - '경기도'    → '경기'
- * - '성남시'    → '경기' (CITY_TO_SIDO 매핑)
- * - '광주광역시'→ '광주' (광역시 접미어 우선)
- * - '광주시'    → '경기' (기초자치시로 해석)
- */
-function resolveSidoFromExcel(rawSi) {
-    if (!rawSi) return '';
-    const s = String(rawSi).trim();
-    if (!s) return '';
-    // 광역시/특별시/자치시/자치도 접미어가 있으면 그대로 광역 처리
-    if (/(특별자치시|특별자치도|특별시|광역시|자치시|자치도|도)$/.test(s)) {
-        return normalizeSido(s);
-    }
-    // '시'로 끝나는 경우 — 광역시인지 기초자치시인지 판별
-    if (/시$/.test(s)) {
-        const bare = s.replace(/시$/, '');
-        // 광역시 후보 (서울/부산/대구/인천/광주/대전/울산/세종)
-        const metros = ['서울','부산','대구','인천','광주','대전','울산','세종'];
-        if (metros.includes(bare)) return bare;
-        // 기초자치시 → 상위 도(道)로 매핑
-        if (CITY_TO_SIDO[bare]) return CITY_TO_SIDO[bare];
-        return bare; // 알 수 없는 경우 그대로
-    }
-    // 접미어 없는 값 (예: '서울', '경기')
-    return normalizeSido(s);
-}
-
-/**
- * 엑셀 행에서 지역 키(시/도 + 구) 생성 — 매칭 전 지역 검증용
- * 예: 서울 강남구, 강원 춘천시, 부산 해운대구
- * FIX: 엑셀 '시' 컬럼에 '성남시' 같은 기초자치시가 들어있을 때
- *      CITY_TO_SIDO 매핑으로 상위 '경기'로 변환 (포털 주소와 호환)
- */
-function excelRegionKey(row) {
-    const si = resolveSidoFromExcel(row['시'] ?? row['시도'] ?? '');
-    const gu = String(row['구'] ?? row['군'] ?? '').trim();
-    if (si && gu) return `${si} ${gu}`;
-    if (si) return si;
-    if (gu) return gu;
+    if (gu && road && bnum) return `${gu} ${road} ${bnum}`;
+    if (gu && dong && bonbn) return `${gu} ${dong} ${bonbn}`;
+    if (gu && dong) return `${gu} ${dong}`;
     return '';
 }
 
 /**
- * 엑셀 행에서 주소 키 생성 (시+구 + 도로명+건물번호 OR 시+구+동+본번)
- * FIX: '시' 컬럼 포함 — 동일 '구' 이름이 여러 시·도에 존재하는 문제 해결
- *      (예: 중구=서울/부산/인천/대구/대전)
- * FIX: 기초자치시(성남시 등)도 상위 도(경기)로 매핑하여 포털 키와 호환
- */
-function excelAddressKey(row) {
-    const si    = resolveSidoFromExcel(row['시'] ?? row['시도'] ?? '');
-    const gu    = String(row['구']  || row['군'] || '').trim();
-    const dong  = String(row['동']  || '').trim();
-    const bonbn = String(row['본번'] ?? '').trim().replace(/^0+$/, '');
-    const road  = String(row['도로명'] || '').trim();
-    const bnum  = String(row['건물번호'] ?? '').trim().replace(/^0+$/, '');
-
-    const prefix = si ? `${si} ${gu}`.trim() : gu;
-    if (!prefix) return '';
-
-    if (road && bnum) return `${prefix} ${road} ${bnum}`;
-    if (dong && bonbn) return `${prefix} ${dong} ${bonbn}`;
-    if (dong) return `${prefix} ${dong}`;
-    return prefix;
-}
-
-/**
- * Firebase 빌딩 주소에서 키 추출
- * FIX: 기존 버전은 '서울특별시/서울시', '경기도'만 정규화 → 강원·부산·인천 등은
- *      '시/도' 토큰이 주소 키에 남아 엑셀 키(시+구)와 절대 매칭되지 않는 버그 존재.
- *      이제 모든 시/도를 `normalizeSido()`로 표준화하고 `시 구` 형태로 일관되게 생성.
- * FIX: '경기도 성남시 분당구 ...'처럼 3단계 행정구역에서
- *      '구' 우선 매칭 (이전엔 '성남시'가 먼저 잡혀 엑셀 키 '경기 분당구'와 불일치했음)
+ * Firebase 빌딩 주소에서 키 추출 (portal-merge.js mergeExtractAddressKey와 동일 로직)
  */
 function portalAddressKey(building) {
     const keys = [];
     [building.address, building.addressJibun].forEach(addr => {
         if (!addr) return;
-        // 괄호/쉼표/공백 정리
         let n = addr.trim()
-            .replace(/\s*\([^)]*\)/g, '')
-            .replace(/[,]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-        // 첫 토큰 = 시/도 후보 (예: "서울특별시", "강원도", "부산광역시", "세종특별자치시")
-        const tokens = n.split(' ');
-        let si = '';
-        if (tokens.length > 0) {
-            const first = tokens[0];
-            // 시/도 접미어가 붙은 경우만 시/도로 인정
-            if (/(특별자치시|특별자치도|특별시|광역시|도|자치시|자치도)$/.test(first)
-                || first === '세종') {
-                si = normalizeSido(first);
-                tokens.shift(); // 나머지에서 시/도 제거
-            }
-        }
-        const rest = tokens.join(' ');
-
-        // 우선순위: 구 > 군 > (기초자치시 '시')
-        // '경기도 성남시 분당구 ...'처럼 '시'와 '구'가 모두 있으면 '구'를 채택해
-        // 엑셀의 {시:성남시, 구:분당구} → '경기 분당구'와 일치시킴
-        let gu = (rest.match(/([가-힣]+구)(?!\w)/) || [])[1]
-              || (rest.match(/([가-힣]+군)(?!\w)/) || [])[1];
-        if (!gu) {
-            // 구/군이 없을 때만 기초자치시 인정
-            const siMatch = (rest.match(/([가-힣]+시)(?!\w)/) || [])[1];
-            if (siMatch) gu = siMatch;
-        }
-        const prefix = si ? `${si} ${gu}`.trim() : gu;
-        if (!prefix) return;
-
+            .replace(/서울특별시|서울시/g, '서울').replace(/경기도\s*/g, '').replace(/\s*\([^)]*\)/g, '')
+            .replace(/[,]/g, ' ').replace(/\s+/g, ' ').trim();
+        const gu = (n.match(/([가-힣]+구)/) || [])[1] || '';
         // 도로명
-        const road = rest.match(/([가-힣]+(?:로|길)\d*)\s+(\d+(?:-\d+)?)/);
-        if (road) { keys.push(`${prefix} ${road[1]} ${road[2]}`.trim()); return; }
+        const road = n.match(/([가-힣]+(?:로|길)\d*)\s+(\d+(?:-\d+)?)/);
+        if (road) { keys.push(`${gu} ${road[1]} ${road[2]}`.trim()); return; }
         // 지번
-        const jibun = rest.match(/([가-힣0-9]+동)\s+(\d+(?:-\d+)?)/);
-        if (jibun) { keys.push(`${prefix} ${jibun[1]} ${jibun[2]}`.trim()); return; }
+        const jibun = n.match(/([가-힣]+동)\s+(\d+(?:-\d+)?)/);
+        if (jibun) { keys.push(`${gu} ${jibun[1]} ${jibun[2]}`.trim()); return; }
         // 동만
-        const dong = (rest.match(/([가-힣0-9]+동)/) || [])[1];
-        if (dong) keys.push(`${prefix} ${dong}`);
+        const dong = (n.match(/([가-힣]+동)/) || [])[1];
+        if (dong && gu) keys.push(`${gu} ${dong}`);
     });
     return keys;
-}
-
-/**
- * Firebase 빌딩에서 지역 키 세트 추출 (시 + 구)
- * 이름 유사도 매칭 전 지역 검증에 사용 — 서울 AA빌딩과 강원 AA빌딩 오매칭 방지
- */
-function portalRegionKeys(building) {
-    const set = new Set();
-    [building.address, building.addressJibun].forEach(addr => {
-        if (!addr) return;
-        let n = addr.trim()
-            .replace(/\s*\([^)]*\)/g, '')
-            .replace(/[,]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-        const tokens = n.split(' ');
-        let si = '';
-        if (tokens.length > 0) {
-            const first = tokens[0];
-            if (/(특별자치시|특별자치도|특별시|광역시|도|자치시|자치도)$/.test(first)
-                || first === '세종') {
-                si = normalizeSido(first);
-                tokens.shift();
-            }
-        }
-        const rest = tokens.join(' ');
-        // 우선순위: 구 > 군 > (기초자치시 '시')
-        let gu = (rest.match(/([가-힣]+구)(?!\w)/) || [])[1]
-              || (rest.match(/([가-힣]+군)(?!\w)/) || [])[1];
-        if (!gu) {
-            const siMatch = (rest.match(/([가-힣]+시)(?!\w)/) || [])[1];
-            if (siMatch) gu = siMatch;
-        }
-        if (si && gu) set.add(`${si} ${gu}`);
-        if (si)        set.add(si);
-        if (gu)        set.add(gu);
-    });
-    return set;
-}
-
-/**
- * 엑셀 행과 포털 빌딩의 지역이 호환되는지 검사
- * 원칙: 엑셀과 포털 양쪽에서 사용 가능한 가장 구체적인 단위로 비교.
- *  - 둘 다 '시+구'가 있으면 '시+구' 일치 요구 (가장 엄격)
- *  - 한쪽이라도 시만/구만 있으면 그 단위로 부분 일치
- *  - 엑셀에 지역 정보가 전혀 없으면 검증 통과 (하위호환)
- */
-function isRegionCompatible(row, building) {
-    const exSi = resolveSidoFromExcel(row['시'] ?? row['시도'] ?? '');
-    const exGu = String(row['구'] ?? row['군'] ?? '').trim();
-    if (!exSi && !exGu) return true; // 엑셀에 지역 없음 → 검증 불가 (통과)
-
-    const portalKeys = portalRegionKeys(building);
-    if (portalKeys.size === 0) return true; // 포털 주소 없음 → 검증 불가 (통과)
-
-    const exSiGu = (exSi && exGu) ? `${exSi} ${exGu}` : '';
-
-    // 포털 키셋에서 '시 구' 조합이 있는지 확인
-    const portalSiGuKeys = Array.from(portalKeys).filter(k => k.includes(' '));
-
-    // Case 1: 엑셀·포털 양쪽 다 '시 구' 조합 보유 → 정확 일치 필요
-    if (exSiGu && portalSiGuKeys.length > 0) {
-        return portalSiGuKeys.includes(exSiGu);
-    }
-
-    // Case 2: 엑셀이 '시 구' 조합, 포털은 시만 또는 구만
-    if (exSiGu) {
-        // 포털 시가 있으면 시 일치 필수
-        // 포털 구가 있으면 구 일치 필수
-        // (둘 중 하나만 확인 가능한 상황 — 있는 것만 비교)
-        if (portalKeys.has(exSi) || portalKeys.has(exGu)) return true;
-        return false;
-    }
-
-    // Case 3: 엑셀이 시만 또는 구만 있음
-    if (exSi && portalKeys.has(exSi)) return true;
-    if (exGu && portalKeys.has(exGu)) return true;
-
-    // 엑셀 시만 있는데 포털엔 '시 구' 조합만 있는 경우 — 시 일부 일치 확인
-    if (exSi && portalSiGuKeys.some(k => k.startsWith(exSi + ' '))) return true;
-    // 엑셀 구만 있는데 포털엔 '시 구' 조합만 있는 경우 — 구 일부 일치 확인
-    if (exGu && portalSiGuKeys.some(k => k.endsWith(' ' + exGu))) return true;
-
-    return false;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1874,24 +1642,17 @@ function matchExcelToPortal(excelRows, portalBldgs) {
         let method  = null;
         let score   = null;
 
-        // 1차: rawResearchId 숫자 매칭 — FIX: 지역 검증 추가 (과거 잘못 매칭된 ID 방어)
+        // 1차: rawResearchId 숫자 매칭
         if (byRawId.has(excelId)) {
-            const candidate = byRawId.get(excelId);
-            if (isRegionCompatible(row, candidate)) {
-                portalB = candidate;
-                method  = 'ID 매칭';
-            }
-            // 지역 불일치면 ID 매칭 폐기 — 2차/3차로 fallthrough
+            portalB = byRawId.get(excelId);
+            method  = 'ID 매칭';
         }
 
-        // 2차: Dice bigram ≥ 0.8 — FIX: 지역 필터 적용으로 동명이물 오매칭 방지
-        //      (예: 강원 AA빌딩 vs 서울 AA빌딩)
+        // 2차: Dice bigram ≥ 0.8
         if (!portalB) {
             const normExcel = normalizeBuildingName(excelName);
             let best = 0, bestBuilding = null;
             portalBldgs.forEach(b => {
-                // 지역이 호환되지 않으면 후보에서 제외
-                if (!isRegionCompatible(row, b)) return;
                 const s = diceSimilarity(normExcel, normalizeBuildingName(b.name));
                 if (s > best) { best = s; bestBuilding = b; }
                 // aliases도 검사
@@ -1906,7 +1667,6 @@ function matchExcelToPortal(excelRows, portalBldgs) {
         }
 
         // 3차: 주소 키 매칭 (복수 후보 시 이름 유사도로 최적 선택)
-        //      — 주소 키 자체에 '시'가 포함되므로 지역 검증이 암묵적으로 적용됨
         if (!portalB) {
             const addrKey = excelAddressKey(row);
             if (addrKey && byAddrKey.has(addrKey)) {
