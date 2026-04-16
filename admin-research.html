@@ -1623,15 +1623,23 @@ function portalAddressKey(building) {
             .trim();
 
         // 첫 토큰 = 시/도 후보 (예: "서울특별시", "강원도", "부산광역시", "세종특별자치시")
+        // FIX: 포털에 이미 축약된 시/도명이 저장된 경우도 인식 ('서울', '경기', '부산' 등)
+        //      → 사용자가 직접 '서울 중구 삼일대로 343'처럼 입력한 경우 시 인식 실패 문제 해결
+        const KNOWN_SIDO_SHORT = ['서울','경기','강원','충북','충남','전북','전남','경북','경남',
+                                   '부산','대구','인천','광주','대전','울산','세종','제주'];
         const tokens = n.split(' ');
         let si = '';
         if (tokens.length > 0) {
             const first = tokens[0];
-            // 시/도 접미어가 붙은 경우만 시/도로 인정
-            if (/(특별자치시|특별자치도|특별시|광역시|도|자치시|자치도)$/.test(first)
-                || first === '세종') {
+            // 시/도 접미어가 붙은 경우
+            if (/(특별자치시|특별자치도|특별시|광역시|도|자치시|자치도)$/.test(first)) {
                 si = normalizeSido(first);
                 tokens.shift(); // 나머지에서 시/도 제거
+            }
+            // 이미 축약된 시/도명 (접미어 없음)
+            else if (KNOWN_SIDO_SHORT.includes(first)) {
+                si = first;
+                tokens.shift();
             }
         }
         const rest = tokens.join(' ');
@@ -1679,10 +1687,17 @@ function portalRegionKeys(building) {
         let si = '';
         if (tokens.length > 0) {
             const first = tokens[0];
-            if (/(특별자치시|특별자치도|특별시|광역시|도|자치시|자치도)$/.test(first)
-                || first === '세종') {
+            if (/(특별자치시|특별자치도|특별시|광역시|도|자치시|자치도)$/.test(first)) {
                 si = normalizeSido(first);
                 tokens.shift();
+            } else {
+                // 이미 축약된 시/도명 인식 (서울, 경기 등)
+                const shorts = ['서울','경기','강원','충북','충남','전북','전남','경북','경남',
+                                '부산','대구','인천','광주','대전','울산','세종','제주'];
+                if (shorts.includes(first)) {
+                    si = first;
+                    tokens.shift();
+                }
             }
         }
         const rest = tokens.join(' ');
@@ -1863,19 +1878,21 @@ function matchExcelToPortal(excelRows, portalBldgs) {
             return;
         }
 
-        // ── New (미등록) ──
-        if (excelId === 'New' || excelId === '') {
-            newCount++;
-            results.push({ row, status: 'new', matched: null, method: null, diff: {}, warnCount: 0 });
-            return;
-        }
+        // ── New (미등록 후보) ──
+        // FIX: 기존엔 'New' 행을 즉시 new로 분류하여 매칭 시도조차 하지 않았음 →
+        //      이미 포털에 있는 빌딩(별칭·유사 이름 포함)이 신규 등록 후보로 잘못 표시되는 문제.
+        //      이제 'New' 행도 이름 유사도 + 주소 매칭을 시도하여 실제 존재 여부를 검증한 뒤,
+        //      매칭 안될 때만 진짜 new로 분류한다.
+        //      (ID 매칭은 'New' 문자열이 숫자 ID가 아니므로 건너뜀)
+        const isNewRow = (excelId === 'New' || excelId === '');
 
         let portalB = null;
         let method  = null;
         let score   = null;
 
         // 1차: rawResearchId 숫자 매칭 — FIX: 지역 검증 추가 (과거 잘못 매칭된 ID 방어)
-        if (byRawId.has(excelId)) {
+        //      New 행('New'/'')은 숫자 ID가 아니므로 이 단계 스킵
+        if (!isNewRow && byRawId.has(excelId)) {
             const candidate = byRawId.get(excelId);
             if (isRegionCompatible(row, candidate)) {
                 portalB = candidate;
@@ -1886,6 +1903,7 @@ function matchExcelToPortal(excelRows, portalBldgs) {
 
         // 2차: Dice bigram ≥ 0.8 — FIX: 지역 필터 적용으로 동명이물 오매칭 방지
         //      (예: 강원 AA빌딩 vs 서울 AA빌딩)
+        //      New 행도 여기서 매칭 시도함 → 포털에 이미 있는 빌딩 오등록 방지
         if (!portalB) {
             const normExcel = normalizeBuildingName(excelName);
             let best = 0, bestBuilding = null;
@@ -1935,15 +1953,31 @@ function matchExcelToPortal(excelRows, portalBldgs) {
 
         if (!portalB) {
             // 매칭 실패
-            unmatched++;
-            results.push({ row, status: 'unmatched', matched: null, method: null, diff: {}, warnCount: 0 });
+            // FIX: New 행이 매칭 실패 → 진짜 신규. 일반 행이 매칭 실패 → unmatched.
+            if (isNewRow) {
+                newCount++;
+                results.push({ row, status: 'new', matched: null, method: null, diff: {}, warnCount: 0 });
+            } else {
+                unmatched++;
+                results.push({ row, status: 'unmatched', matched: null, method: null, diff: {}, warnCount: 0 });
+            }
             return;
         }
 
         // 불일치 검출
         const { diff, warnCount } = detectFieldDiff(row, portalB);
-        const finalStatus = warnCount > 0 ? 'mismatch' : 'matched';
-        if (finalStatus === 'matched') matched++; else mismatch++;
+        // FIX: New 행이 실제로 포털에 있는 빌딩과 매칭된 경우 → 항상 mismatch로 분류.
+        //      이유: 엑셀의 ID번호가 'New'인데 포털에 rawResearchId가 없거나 다른 값이면,
+        //      사용자가 rawResearchId를 연결하도록 불일치로 띄워야 함. 다른 필드가 모두 같아도
+        //      ID 연결 자체가 "반드시 처리해야 할 차이"이므로 일괄 matched로 묻으면 안 됨.
+        let finalStatus;
+        if (isNewRow) {
+            finalStatus = 'mismatch';
+            mismatch++;
+        } else {
+            finalStatus = warnCount > 0 ? 'mismatch' : 'matched';
+            if (finalStatus === 'matched') matched++; else mismatch++;
+        }
 
         results.push({ row, status: finalStatus, matched: portalB, method, score, diff, warnCount });
     });
