@@ -936,6 +936,14 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
                 <button class="bm-btn-clear" onclick="clearMismatchSelection()">✕ 선택 해제</button>
                 <button class="bm-btn-action" onclick="openBulkMismatchModal()">✏️ 일괄 수정 →</button>
             </div>
+            <!-- FIX (이슈 1, 일괄 등록): 신규 등록 플로팅 액션 바 (new 탭 + 체크박스 선택 시 표시) -->
+            <div class="bulk-mismatch-bar" id="bulk-new-bar"
+                 style="background:var(--new-color);">
+                <span class="bm-count" id="bn-selected-count">0개 선택</span>
+                <span style="opacity:0.8; font-size:12px; font-weight:400;">미등록 빌딩 선택됨</span>
+                <button class="bm-btn-clear" onclick="clearNewSelection()">✕ 선택 해제</button>
+                <button class="bm-btn-action" onclick="openBulkNewModal()">🆕 일괄 등록 →</button>
+            </div>
         </div>
     </div>
 
@@ -1216,6 +1224,71 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
             </div>
         </div>
 
+    </div>
+</div>
+
+<!-- ═══ FIX (이슈 1, 일괄 등록): 미등록 빌딩 일괄 등록 모달 ═══════════════ -->
+<div class="bm-modal-backdrop" id="bn-modal">
+    <div class="bm-modal-box">
+        <div class="bm-modal-header">
+            <div>
+                <div class="bm-modal-title" style="color:var(--new-color);">🆕 미등록 빌딩 일괄 등록</div>
+                <div class="bm-modal-sub" id="bn-modal-sub">선택된 빌딩을 Firebase에 일괄 등록합니다.</div>
+            </div>
+            <button class="bm-modal-close" onclick="closeBulkNewModal()">×</button>
+        </div>
+        <div class="bm-modal-body">
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.6;">
+                엑셀의 빌딩명/권역/주소/면적/등급/준공년도를 그대로 사용해 신규 등록합니다.
+                <strong>빌딩명·권역이 비어있는 행은 자동으로 건너뜁니다.</strong><br>
+                임대조건·공실·담당자 정보는 이후 포털에서 직접 입력해주세요.
+            </p>
+            <!-- 대상 미리보기 -->
+            <div id="bn-preview-list"
+                 style="max-height:240px; overflow-y:auto; border:1px solid var(--border);
+                        border-radius:8px; background:var(--bg-secondary); padding:6px;
+                        font-size:12px; line-height:1.7;">
+            </div>
+
+            <!-- 진행률 + 로그 -->
+            <div id="bn-progress-wrap" style="display:none; margin-top:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="font-size:12px; font-weight:600; color:var(--text);" id="bn-progress-label">진행 중...</span>
+                    <span style="font-size:11px; color:var(--text-muted);" id="bn-progress-count">0 / 0</span>
+                </div>
+                <div style="width:100%; height:8px; background:var(--bg-secondary);
+                            border:1px solid var(--border); border-radius:4px; overflow:hidden;">
+                    <div id="bn-progress-bar"
+                         style="height:100%; width:0%; background:var(--new-color); transition:width 0.2s;"></div>
+                </div>
+                <div id="bn-log"
+                     style="margin-top:10px; max-height:160px; overflow-y:auto;
+                            background:#0f172a; color:#cbd5e1; border-radius:6px;
+                            padding:8px 12px; font-family:monospace; font-size:11px; line-height:1.6;">
+                </div>
+            </div>
+        </div>
+        <!-- 결과 배너 -->
+        <div class="bm-result-banner" id="bn-result-banner"></div>
+        <!-- 푸터 -->
+        <div class="bm-modal-footer">
+            <div style="font-size:11px; color:var(--text-muted);" id="bn-footer-info">
+                ⚠️ Firebase에 새 빌딩 문서가 즉시 생성됩니다.
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button onclick="closeBulkNewModal()"
+                    style="padding:7px 18px; background:var(--bg-secondary); border:1px solid var(--border);
+                           border-radius:7px; font-size:13px; font-weight:600; color:var(--text-muted); cursor:pointer;">
+                    닫기
+                </button>
+                <button id="bn-apply-btn" onclick="submitBulkNewBuildings()"
+                    style="padding:7px 20px; background:var(--new-color); color:#fff;
+                           border:none; border-radius:7px; font-size:13px; font-weight:600; cursor:pointer;">
+                    <span id="bn-apply-icon">🆕</span>
+                    <span id="bn-apply-text">선택 빌딩 일괄 등록</span>
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -2250,6 +2323,8 @@ window.setTab = function(tab) {
     const _seqBar = document.getElementById('seq-review-bar');
     if (_seqBar) _seqBar.style.display = (tab === 'mismatch') ? 'flex' : 'none';
     renderTable();
+    // FIX (이슈 1, 일괄 등록): 탭 전환 시 일괄 등록 바 표시 동기화
+    if (typeof _updateBulkNewBar === 'function') _updateBulkNewBar();
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -2284,6 +2359,7 @@ function renderTable() {
     // 탭별 헤더 (mismatch/all 탭에서 첫 컬럼 ☑ → 전체선택 체크박스로 교체)
     const heads = getColumnHeaders(_currentTab);
     const isMismatchTab = (_currentTab === 'mismatch' || _currentTab === 'all' || _currentTab === 'matched');
+    const isNewTab      = (_currentTab === 'new'); // FIX (이슈 1, 일괄 등록)
     head.innerHTML = `<tr>${heads.map((h, i) => {
         if (i === 0 && isMismatchTab) {
             return `<th class="row-cb"><input type="checkbox" id="cb-select-all"
@@ -2291,12 +2367,24 @@ function renderTable() {
                 onchange="toggleAllMismatchRows(this.checked)"
                 title="불일치 행 전체 선택"></th>`;
         }
+        // FIX (이슈 1, 일괄 등록): new 탭 첫 컬럼 = 신규 행 전체선택
+        if (i === 0 && isNewTab) {
+            return `<th class="row-cb"><input type="checkbox" id="cb-select-all-new"
+                style="width:14px;height:14px;cursor:pointer;accent-color:#fff;"
+                onchange="toggleAllNewRows(this.checked)"
+                title="미등록 행 전체 선택"></th>`;
+        }
         return `<th>${h}</th>`;
     }).join('')}</tr>`;
     // mismatch 탭이 아니면 선택 초기화 & 바 숨김
     if (!isMismatchTab) {
         _bmSelected.clear();
         _updateBulkMismatchBar();
+    }
+    // FIX (이슈 1, 일괄 등록): new 탭 아니면 신규 선택 초기화 & 바 숨김
+    if (!isNewTab) {
+        _newSelected.clear();
+        _updateBulkNewBar();
     }
 
     if (!rows.length) {
@@ -2323,11 +2411,13 @@ function renderTable() {
 
 function getColumnHeaders(tab) {
     if (tab === 'new')
-        return ['#', 'ID', '엑셀 빌딩명', '권역', '등급', '연면적(평)', '세부권역', '준공년도', '등록'];
+        // FIX (이슈 1, 일괄 등록): 첫 컬럼에 ☑ 체크박스 추가
+        return ['☑', '#', 'ID', '엑셀 빌딩명', '권역', '등급', '연면적(평)', '세부권역', '준공년도', '등록'];
     if (tab === 'demolished')
         return ['#', 'ID', '빌딩명', '구', '동'];
     if (tab === 'unmatched')
-        return ['#', 'ID', '엑셀 빌딩명', '구', '동', '권역', '수동 지정'];
+        // FIX (이슈 2): '신규 등록' 컬럼 추가 — 수동 지정으로도 못 찾는 빌딩을 신규 등록으로 처리할 수 있도록
+        return ['#', 'ID', '엑셀 빌딩명', '구', '동', '권역', '수동 지정', '신규 등록'];
     // matched / mismatch / all — 첫 컬럼에 체크박스 (mismatch만 활성)
     return ['☑', '#', 'ID', '엑셀 빌딩명', '포털 빌딩명', '매칭 방법', '불일치 필드', '임대안내문', '누적기간', '상태'];
 }
@@ -2351,7 +2441,16 @@ function renderRow(r, i, tab) {
                 onmouseout="this.style.background='var(--new-bg)'">
                 🆕 신규 등록
             </button>`;
-        return `<tr>
+        // FIX (이슈 1, 일괄 등록): 첫 컬럼 체크박스 — 등록 안된 행만 선택 가능
+        const isChecked = !isRegistered && _newSelected.has(globalIdx);
+        const cbCell    = isRegistered
+            ? `<td class="row-cb" style="color:var(--border);">—</td>`
+            : `<td class="row-cb"><input type="checkbox" data-new-idx="${globalIdx}"
+                   ${isChecked ? 'checked' : ''}
+                   style="width:14px;height:14px;cursor:pointer;accent-color:var(--new-color);"
+                   onchange="toggleNewRow(${globalIdx}, this.checked)"></td>`;
+        return `<tr${isChecked ? ' class="row-checked"' : ''}>
+            ${cbCell}
             <td style="color:var(--text-muted);">${i+1}</td>
             <td><span class="badge badge-new">New</span></td>
             <td class="bname-excel">${exName}</td>
@@ -2373,6 +2472,19 @@ function renderRow(r, i, tab) {
         </tr>`;
     }
     if (tab === 'unmatched') {
+        // FIX (이슈 2): 매칭 실패 행에서도 신규 등록 가능하도록 버튼 추가
+        const globalIdx = _matchResults.indexOf(r);
+        const isRegistered = r.matched != null && r.method === '신규 등록';
+        const regBtn = isRegistered
+            ? `<span class="badge" style="background:var(--success-bg);color:var(--success);border:1px solid #bbf7d0;font-size:10px;">✅ 등록됨</span>`
+            : `<button onclick="openRegModal(${globalIdx})"
+                style="padding:3px 12px; background:var(--new-bg); border:1px solid #ddd6fe;
+                       color:var(--new-color); border-radius:5px; font-size:11px; font-weight:700;
+                       cursor:pointer; white-space:nowrap; transition:all 0.15s;"
+                onmouseover="this.style.background='#ddd6fe'"
+                onmouseout="this.style.background='var(--new-bg)'">
+                🆕 신규 등록
+            </button>`;
         return `<tr>
             <td style="color:var(--text-muted);">${i+1}</td>
             <td><span class="badge badge-id">${exId}</span></td>
@@ -2381,17 +2493,33 @@ function renderRow(r, i, tab) {
             <td>${row['동'] ?? '-'}</td>
             <td>${row['권역'] ?? '-'}</td>
             <td>
-                <button class="btn-assign" onclick="openAssignModal(${_matchResults.indexOf(r)})">
+                <button class="btn-assign" onclick="openAssignModal(${globalIdx})">
                     🔍 수동 지정
                 </button>
             </td>
+            <td>${regBtn}</td>
         </tr>`;
     }
 
     // matched / mismatch / all — 모든 탭 포함
     const globalIdx   = _matchResults.indexOf(r);
     const statusBadge = `<span class="badge badge-${r.status}">${STATUS_LABEL[r.status] || r.status}</span>`;
+    // 매칭 방법 배지 + 매칭 변경 버튼
+    // FIX (이슈 3): mismatch 행에서 잘못 매칭된 경우 다른 포털 빌딩으로 매칭 변경 가능하도록 버튼 추가
     const methodBadge = r.method ? `<span class="badge badge-method" style="font-size:10px;">${r.method}${r.score ? ` ${(r.score*100).toFixed(0)}%` : ''}</span>` : '';
+    const reassignBtn = (r.status === 'mismatch' && b)
+        ? `<button onclick="openAssignModal(${globalIdx})"
+            style="display:block; margin-top:4px; padding:2px 8px;
+                   background:var(--bg-secondary); border:1px solid var(--border);
+                   color:var(--primary); border-radius:4px; font-size:10px; font-weight:600;
+                   cursor:pointer; white-space:nowrap; transition:all 0.15s;"
+            onmouseover="this.style.background='var(--primary-bg)'; this.style.borderColor='var(--primary-border)';"
+            onmouseout="this.style.background='var(--bg-secondary)'; this.style.borderColor='var(--border)';"
+            title="매칭된 포털 빌딩을 다른 빌딩으로 변경">
+            🔄 매칭 변경
+        </button>`
+        : '';
+    const methodCell = methodBadge + reassignBtn;
     const rowClass    = r.status === 'mismatch' ? 'row-mismatch' : '';
 
     // 불일치 필드 + 상세 버튼
@@ -3178,13 +3306,105 @@ function buildAddressFromRow(row) {
     return { roadAddr, jibunAddr };
 }
 
+/**
+ * FIX (이슈 1, 일괄 등록): 엑셀 행 → Firebase 빌딩 데이터 변환 헬퍼
+ * 단일 등록(submitNewBuilding) + 일괄 등록(submitBulkNewBuildings) 양쪽에서 공유.
+ *
+ * @param {object} row    - 엑셀 한 행
+ * @param {string} nowISO - createdAt/updatedAt/researchSyncedAt 통일용 timestamp
+ * @returns {object|null} - 필수값 결격 시 null
+ */
+function _buildBuildingDataFromRow(row, nowISO) {
+    const name = String(row['빌딩명'] ?? '').trim();
+    if (!name) return null; // 빌딩명 없으면 등록 불가
+
+    const region = String(row['권역'] ?? '').trim();
+    if (!region) return null; // 권역 없으면 등록 불가
+
+    const { roadAddr, jibunAddr } = buildAddressFromRow(row);
+
+    const grossPyRaw = parseFloat(row['연면적(평)']) || null;
+    const typicalPy  = parseFloat(row['기준층 임대면적']) || null;
+    const typicalExPy= parseFloat(row['기준층 전용면적']) || null;
+    const excRateRaw = parseFloat(row['전용률']);
+    // 전용률 정규화 (0~1 범위로)
+    const excRate = !isNaN(excRateRaw)
+        ? +(excRateRaw > 1 ? (excRateRaw / 100).toFixed(4) : excRateRaw.toFixed(4))
+        : null;
+    const compYear   = parseInt(row['준공년도'], 10) || null;
+    const grade      = String(row['등급(신규)'] ?? '').trim();
+    const subRegion  = String(row['세부권역_Main기준'] ?? '').trim();
+
+    const buildingData = {
+        name,
+        address:      roadAddr  || null,
+        addressJibun: jibunAddr || null,
+        region,
+        subRegion:    subRegion || null,
+        grade:        grade     || null,
+        // 면적
+        grossFloorPy:       grossPyRaw,
+        grossFloorSqm:      grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
+        typicalFloorPy:     typicalPy,
+        typicalExclusivePy: typicalExPy,
+        exclusiveRate:      excRate,
+        // 건물 정보
+        completionYear:     compYear ? String(compYear) : null,
+        // area 호환 객체 (portal-detail.js 와 정합)
+        area: {
+            grossFloorPy:    grossPyRaw,
+            typicalFloorPy:  typicalPy,
+            exclusiveRate:   excRate,
+        },
+        // 리서치 태그
+        isResearchTarget:     true,
+        rawResearchId:        'New',
+        researchMatchStatus:  'new',
+        researchSyncedAt:     nowISO,
+        // 메타
+        createdAt: nowISO,
+        updatedAt: nowISO,
+        source:    'admin-research',
+    };
+
+    // null 정리
+    Object.keys(buildingData).forEach(k => {
+        if (buildingData[k] === null) delete buildingData[k];
+    });
+    if (buildingData.area) {
+        Object.keys(buildingData.area).forEach(k => {
+            if (buildingData.area[k] == null) delete buildingData.area[k];
+        });
+        if (Object.keys(buildingData.area).length === 0) delete buildingData.area;
+    }
+
+    return buildingData;
+}
+
 // 신규 등록 모달 열기
+// FIX (이슈 1): 'new' + 'unmatched' 둘 다 허용 (이슈 2 대응 — 매칭실패 행에서도 신규 등록 가능)
+// FIX (이슈 1): 매번 등록 버튼 상태(disabled/icon/text) 초기화 — 이전 등록 후 잠금 상태가 남아있던 버그 해결
 window.openRegModal = function(resultIdx) {
     const r = _matchResults[resultIdx];
-    if (!r || r.status !== 'new') return;
+    if (!r) return;
+    // 'new' 또는 'unmatched' 행만 신규 등록 대상
+    if (r.status !== 'new' && r.status !== 'unmatched') return;
+    // 이미 등록 완료된 행은 재등록 차단
+    if (r.matched && r.method === '신규 등록') {
+        alert('이미 신규 등록된 빌딩입니다.');
+        return;
+    }
 
     _regRowIdx = resultIdx;
     const row = r.row;
+
+    // ── 등록 버튼 상태 초기화 (이전 모달에서 disabled로 끝났던 잔존 상태 복구) ──
+    const _btn     = document.getElementById('btn-register');
+    const _btnIcon = document.getElementById('btn-reg-icon');
+    const _btnText = document.getElementById('btn-reg-text');
+    if (_btn)     _btn.disabled = false;
+    if (_btnIcon) _btnIcon.textContent = '🆕';
+    if (_btnText) _btnText.textContent = 'Firebase에 등록';
 
     // 엑셀 미리보기
     const preview = [
@@ -3394,6 +3614,255 @@ window.submitNewBuilding = async function() {
 // 백드롭 클릭으로 닫기
 document.getElementById('reg-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeRegModal();
+});
+
+// ═════════════════════════════════════════════════════════════
+// FIX (이슈 1, 일괄 등록): 미등록 빌딩 일괄 등록
+// ═════════════════════════════════════════════════════════════
+
+/** 신규 등록 대상 선택 Set (mismatch의 _bmSelected와 분리 운용) */
+const _newSelected = new Set();
+
+/** new 행 체크박스 토글 */
+window.toggleNewRow = function(idx, checked) {
+    if (checked) _newSelected.add(idx);
+    else         _newSelected.delete(idx);
+    const cb = document.querySelector(`input[data-new-idx="${idx}"]`);
+    if (cb) cb.closest('tr').classList.toggle('row-checked', checked);
+    _updateBulkNewBar();
+    _syncSelectAllNewCb();
+};
+
+/** new 탭 전체 선택/해제 — 등록 안된 행만 대상 */
+window.toggleAllNewRows = function(checked) {
+    document.querySelectorAll('#table-body input[type=checkbox][data-new-idx]').forEach(cb => {
+        const idx = parseInt(cb.dataset.newIdx, 10);
+        if (checked) _newSelected.add(idx);
+        else         _newSelected.delete(idx);
+        cb.checked = checked;
+        cb.closest('tr').classList.toggle('row-checked', checked);
+    });
+    _updateBulkNewBar();
+};
+
+/** new 전체선택 체크박스 indeterminate 동기화 */
+function _syncSelectAllNewCb() {
+    const allCbs   = [...document.querySelectorAll('#table-body input[type=checkbox][data-new-idx]')];
+    const checkedN = allCbs.filter(cb => cb.checked).length;
+    const headCb   = document.getElementById('cb-select-all-new');
+    if (!headCb) return;
+    headCb.checked       = allCbs.length > 0 && checkedN === allCbs.length;
+    headCb.indeterminate = checkedN > 0 && checkedN < allCbs.length;
+}
+
+/** 신규 선택 해제 */
+window.clearNewSelection = function() {
+    _newSelected.clear();
+    renderTable();
+    _updateBulkNewBar();
+};
+
+/** 신규 등록 플로팅 바 표시/숨김 */
+function _updateBulkNewBar() {
+    const bar = document.getElementById('bulk-new-bar');
+    const cnt = document.getElementById('bn-selected-count');
+    if (!bar) return;
+    const n = _newSelected.size;
+    if (n > 0 && _currentTab === 'new') {
+        bar.classList.add('visible');
+        if (cnt) cnt.textContent = `${n}개 선택`;
+    } else {
+        bar.classList.remove('visible');
+    }
+}
+
+/** 일괄 등록 모달 열기 */
+window.openBulkNewModal = function() {
+    if (!_newSelected.size) return;
+    const targets = [..._newSelected]
+        .map(i => ({ idx: i, r: _matchResults[i] }))
+        .filter(x => x.r && (x.r.status === 'new' || x.r.status === 'unmatched') && !x.r.matched);
+
+    if (!targets.length) {
+        alert('등록 가능한 신규 빌딩이 선택되지 않았습니다.');
+        return;
+    }
+
+    // 미리보기 렌더링 (각 행이 등록 가능한지 사전 검증)
+    const nowISO = new Date().toISOString();
+    const previewHtml = targets.map((x, i) => {
+        const data = _buildBuildingDataFromRow(x.r.row, nowISO);
+        const ok   = data != null;
+        const reason = !ok
+            ? (!String(x.r.row['빌딩명'] ?? '').trim() ? '빌딩명 누락' : '권역 누락')
+            : '';
+        const exId = String(x.r.row['ID번호'] ?? '');
+        return `<div style="padding:6px 10px; border-bottom:1px solid var(--border);
+                            display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <div style="flex:1; min-width:0;">
+                <span style="color:var(--text-muted); font-size:11px;">#${i+1}</span>
+                <span class="badge badge-id" style="margin-left:4px;">${exId}</span>
+                <strong style="margin-left:6px;">${x.r.row['빌딩명'] ?? '-'}</strong>
+                <span style="font-size:11px; color:var(--text-muted); margin-left:6px;">
+                    ${x.r.row['권역'] ?? '-'} · ${x.r.row['구'] ?? ''} ${x.r.row['동'] ?? ''}
+                </span>
+            </div>
+            ${ok
+                ? `<span class="badge" style="background:var(--success-bg);color:var(--success);border:1px solid #bbf7d0;font-size:10px;">등록 가능</span>`
+                : `<span class="badge" style="background:var(--danger-bg);color:var(--danger);border:1px solid #fecaca;font-size:10px;" title="${reason}">건너뜀: ${reason}</span>`}
+        </div>`;
+    }).join('');
+
+    document.getElementById('bn-preview-list').innerHTML = previewHtml;
+    document.getElementById('bn-modal-sub').textContent =
+        `선택 ${targets.length}개 빌딩을 Firebase에 일괄 등록합니다.`;
+
+    // 진행 영역 / 결과 배너 초기화
+    document.getElementById('bn-progress-wrap').style.display = 'none';
+    document.getElementById('bn-progress-bar').style.width = '0%';
+    document.getElementById('bn-progress-count').textContent = `0 / ${targets.length}`;
+    document.getElementById('bn-log').innerHTML = '';
+    const banner = document.getElementById('bn-result-banner');
+    banner.style.display = 'none';
+    banner.className = 'bm-result-banner';
+
+    // 적용 버튼 초기화
+    const btn  = document.getElementById('bn-apply-btn');
+    const icon = document.getElementById('bn-apply-icon');
+    const text = document.getElementById('bn-apply-text');
+    btn.disabled = false;
+    icon.textContent = '🆕';
+    text.textContent = `선택 ${targets.length}개 일괄 등록`;
+
+    document.getElementById('bn-modal').classList.add('open');
+};
+
+window.closeBulkNewModal = function() {
+    document.getElementById('bn-modal').classList.remove('open');
+};
+
+/** 일괄 등록 실행 — Firebase에 순차로 push */
+window.submitBulkNewBuildings = async function() {
+    const targets = [..._newSelected]
+        .map(i => ({ idx: i, r: _matchResults[i] }))
+        .filter(x => x.r && (x.r.status === 'new' || x.r.status === 'unmatched') && !x.r.matched);
+
+    if (!targets.length) {
+        alert('등록 가능한 신규 빌딩이 선택되지 않았습니다.');
+        return;
+    }
+
+    if (!confirm(`선택된 ${targets.length}개 빌딩을 Firebase에 신규 등록합니다.\n\n계속하시겠습니까?`)) return;
+
+    const btn  = document.getElementById('bn-apply-btn');
+    const icon = document.getElementById('bn-apply-icon');
+    const text = document.getElementById('bn-apply-text');
+    btn.disabled = true;
+    icon.innerHTML = '<span class="spin">⚙️</span>';
+    text.textContent = '등록 중...';
+
+    document.getElementById('bn-progress-wrap').style.display = '';
+    const progressBar   = document.getElementById('bn-progress-bar');
+    const progressCount = document.getElementById('bn-progress-count');
+    const progressLabel = document.getElementById('bn-progress-label');
+    const logBox        = document.getElementById('bn-log');
+    const banner        = document.getElementById('bn-result-banner');
+
+    let okCnt = 0, skipCnt = 0, errCnt = 0;
+    const total = targets.length;
+    progressCount.textContent = `0 / ${total}`;
+    progressLabel.textContent = '등록 중...';
+
+    const _appendLog = (msg, cls) => {
+        const div = document.createElement('div');
+        if (cls) div.className = cls;
+        div.style.color = cls === 'log-ok' ? '#4ade80'
+                       : cls === 'log-err' ? '#f87171'
+                       : cls === 'log-skip' ? '#fbbf24'
+                       : '#cbd5e1';
+        div.textContent = msg;
+        logBox.appendChild(div);
+        logBox.scrollTop = logBox.scrollHeight;
+    };
+
+    try {
+        const { db, ref, push } = await import('./js/portal-firebase.js');
+
+        for (let i = 0; i < total; i++) {
+            const { idx, r } = targets[i];
+            const exId  = String(r.row['ID번호'] ?? '');
+            const name  = String(r.row['빌딩명'] ?? '').trim() || '(빌딩명 없음)';
+            const nowISO = new Date().toISOString();
+            const data  = _buildBuildingDataFromRow(r.row, nowISO);
+
+            if (!data) {
+                skipCnt++;
+                _appendLog(`⊘ [${exId}] ${name} — 필수값 누락(빌딩명/권역) 건너뜀`, 'log-skip');
+            } else {
+                try {
+                    const newRef = await push(ref(db, 'buildings'), data);
+                    const newId  = newRef.key;
+                    // 로컬 상태 갱신 (단일 등록과 동일 패턴)
+                    const newBuilding = { id: newId, ...data };
+                    _portalBuildings.push(newBuilding);
+                    r.matched   = newBuilding;
+                    r.method    = '신규 등록';
+                    r.status    = 'matched';
+                    r.diff      = {};
+                    r.warnCount = 0;
+                    okCnt++;
+                    _appendLog(`✓ [${exId}] ${name} → ${newId}`, 'log-ok');
+                } catch (e) {
+                    errCnt++;
+                    _appendLog(`✗ [${exId}] ${name} — ${e.message}`, 'log-err');
+                    console.error('일괄 등록 오류:', name, e);
+                }
+            }
+
+            // 진행률 갱신
+            const done = i + 1;
+            progressBar.style.width   = `${(done / total * 100).toFixed(1)}%`;
+            progressCount.textContent = `${done} / ${total}`;
+            // UI 깨짐 방지를 위해 약간의 양보
+            if (i % 5 === 4) await new Promise(res => setTimeout(res, 30));
+        }
+
+        // 완료
+        progressLabel.textContent = '완료';
+        const allOk = errCnt === 0 && skipCnt === 0;
+        banner.innerHTML = `${allOk ? '✅' : '⚠️'} 일괄 등록 완료 — ` +
+            `성공 <strong>${okCnt}</strong>건` +
+            (skipCnt > 0 ? `, 건너뜀 <strong>${skipCnt}</strong>건` : '') +
+            (errCnt  > 0 ? `, 실패 <strong>${errCnt}</strong>건` : '') +
+            ` <span style="color:var(--text-muted); font-weight:400;">(${new Date().toLocaleTimeString('ko-KR')})</span>`;
+        banner.className = `bm-result-banner ${allOk ? 'success' : (errCnt > 0 ? 'error' : 'success')}`;
+        banner.style.display = '';
+
+        // 적용 버튼 잠금 (중복 등록 방지)
+        btn.disabled = true;
+        icon.textContent = '✅';
+        text.textContent = `완료 (${okCnt}/${total})`;
+
+        // 선택 초기화 + KPI/테이블 재계산
+        _newSelected.clear();
+        _recalcKPI();
+        renderTable();
+        _updateBulkNewBar();
+
+    } catch (err) {
+        console.error('일괄 등록 치명적 오류:', err);
+        banner.textContent = `❌ 치명적 오류: ${err.message}`;
+        banner.className   = 'bm-result-banner error';
+        banner.style.display = '';
+        btn.disabled = false;
+        icon.textContent = '🆕';
+        text.textContent = '재시도';
+    }
+};
+
+// 백드롭 클릭으로 닫기
+document.getElementById('bn-modal').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeBulkNewModal();
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -3976,7 +4445,7 @@ document.getElementById('rollback-modal').addEventListener('click', e => {
 // ─────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    // 우선순위: 롤백 → 불일치 → 신규등록 → 수동지정 순으로 닫기
+    // 우선순위: 롤백 → 불일치 → 신규등록 → 일괄등록 → 수동지정 순으로 닫기
     if (document.getElementById('rollback-modal')?.classList.contains('open')) {
         closeRollbackModal(); return;
     }
@@ -3985,6 +4454,10 @@ document.addEventListener('keydown', e => {
     }
     if (document.getElementById('reg-modal')?.classList.contains('open')) {
         closeRegModal(); return;
+    }
+    // FIX (이슈 1, 일괄 등록): 일괄 등록 모달 ESC 닫기
+    if (document.getElementById('bn-modal')?.classList.contains('open')) {
+        closeBulkNewModal(); return;
     }
     if (document.getElementById('assign-modal')?.classList.contains('open')) {
         closeAssignModal(); return;
