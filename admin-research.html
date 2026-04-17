@@ -877,11 +877,34 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
     <div class="card" style="padding-bottom:0;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
             <div class="card-title" style="margin-bottom:0;" id="table-card-title">📋 매칭 결과</div>
-            <div style="display:flex; gap:8px; align-items:center;">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <input type="text" id="table-search" placeholder="빌딩명 검색..."
                     style="padding:6px 12px; border:1px solid var(--border); border-radius:7px;
                            font-size:13px; font-family:var(--font); outline:none; width:200px;"
                     oninput="renderTable()">
+                <!-- FIX (통계 모집단 필터): 임대안내문 있는 빌딩만 토글 — 중복 등록 시 통계 모집단 즉시 확인 -->
+                <label id="filter-vac-only-wrap"
+                    style="display:inline-flex; align-items:center; gap:6px; padding:5px 12px;
+                           background:#eff6ff; border:1px solid #bfdbfe; border-radius:7px;
+                           font-size:12px; font-weight:600; color:#1d4ed8; cursor:pointer;
+                           user-select:none; transition:all 0.15s;"
+                    title="vacancies(임대안내문) 데이터가 있는 빌딩만 표시합니다.&#10;중복 등록된 빌딩 중 vacancy 없는 행은 숨겨져 통계 모집단을 즉시 파악할 수 있습니다.">
+                    <input type="checkbox" id="filter-vac-only" onchange="onVacOnlyToggle()"
+                        style="width:14px;height:14px;cursor:pointer;accent-color:#1d4ed8;">
+                    <span>📄 임대안내문 있는 빌딩만</span>
+                    <span id="vac-only-count" style="margin-left:2px; font-weight:700;"></span>
+                </label>
+                <!-- FIX: RAW 엑셀 데이터 보장 — 매칭 안된 모든 행 (new + unmatched 중 미저장) 한 번에 신규 등록 -->
+                <button id="btn-save-all-unsaved" onclick="openBulkSaveAllUnsaved()"
+                    style="padding:6px 14px; background:var(--new-color); color:#fff;
+                           border:none; border-radius:7px; font-size:12px; font-weight:700;
+                           cursor:pointer; transition:all 0.15s;
+                           box-shadow:0 2px 8px rgba(124,58,237,0.25);"
+                    onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 12px rgba(124,58,237,0.35)';"
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(124,58,237,0.25)';"
+                    title="RAW 엑셀의 매칭 안된 모든 빌딩(미등록+매칭실패)을 한 번에 신규 등록합니다.&#10;중복 등록 가능. 빌딩명/권역 누락 행은 자동으로 건너뜁니다.">
+                    🚀 매칭 안된 행 전체 저장 <span id="save-all-count" style="opacity:0.85; margin-left:4px;"></span>
+                </button>
                 <button onclick="exportMatchResult()"
                     style="padding:6px 14px; background:var(--bg-secondary); border:1px solid var(--border);
                            border-radius:7px; font-size:12px; font-weight:600; color:var(--text-muted);">
@@ -2313,6 +2336,10 @@ function showDashboard(summary) {
     setTab('all');
     // FIX: R4 일괄 업데이트 패널 카운트 초기화 (기존 window.showDashboard 래핑은 로컬 함수 직접 호출에 무효)
     setTimeout(_updateBulkCounts, 0);
+    // FIX (RAW 엑셀 보장): 상단 빠른 버튼의 미저장 카운트 초기화
+    setTimeout(() => { if (typeof _updateSaveAllCount === 'function') _updateSaveAllCount(); }, 0);
+    // FIX (통계 모집단 필터): 임대안내문 카운트 초기화
+    setTimeout(() => { if (typeof _updateVacOnlyCount === 'function') _updateVacOnlyCount(); }, 0);
 }
 
 window.setTab = function(tab) {
@@ -2341,12 +2368,20 @@ const STATUS_LABEL = {
 
 function renderTable() {
     const q = (document.getElementById('table-search')?.value || '').trim().toLowerCase();
+    // FIX (통계 모집단 필터): 임대안내문 있는 빌딩만 보기 토글
+    const vacOnly = !!document.getElementById('filter-vac-only')?.checked;
     const rows = _matchResults.filter(r => {
         if (_currentTab !== 'all' && r.status !== _currentTab) return false;
         if (q) {
             const name = String(r.row['빌딩명'] || '').toLowerCase();
             const pname = r.matched ? String(r.matched.name || '').toLowerCase() : '';
             if (!name.includes(q) && !pname.includes(q)) return false;
+        }
+        // FIX (통계 모집단 필터): 매칭된 빌딩(r.matched)이고 _vacanciesMap에 등록된 경우만 통과
+        if (vacOnly) {
+            if (!r.matched) return false;
+            const v = _vacanciesMap[r.matched.id];
+            if (!v || v.count === 0) return false;
         }
         return true;
     });
@@ -3259,6 +3294,10 @@ function _recalcKPI() {
     document.getElementById('kpi-new-n').textContent        = s.newCount;
     document.getElementById('kpi-unmatched-n').textContent  = s.unmatched;
     document.getElementById('kpi-demolished-n').textContent = s.demolished;
+    // FIX (RAW 엑셀 보장): 상단 빠른 버튼의 미저장 카운트도 동기화
+    if (typeof _updateSaveAllCount === 'function') _updateSaveAllCount();
+    // FIX (통계 모집단 필터): 임대안내문 있는 빌딩 카운트도 동기화
+    if (typeof _updateVacOnlyCount === 'function') _updateVacOnlyCount();
 }
 
 document.getElementById('diff-modal').addEventListener('click', e => {
@@ -3342,19 +3381,27 @@ function _buildBuildingDataFromRow(row, nowISO) {
         region,
         subRegion:    subRegion || null,
         grade:        grade     || null,
-        // 면적
-        grossFloorPy:       grossPyRaw,
-        grossFloorSqm:      grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
-        typicalFloorPy:     typicalPy,
-        typicalExclusivePy: typicalExPy,
-        exclusiveRate:      excRate,
+        // ── 면적·전용률 (portal-detail.js 정책 정합) ──
+        // FIX (필드 누락 버그): _assignPortalFieldUpdate 정책과 동일하게
+        //   1) typicalFloorPy 는 typicalFloorLeasePy 별칭과 동기화 (portal-detail.js 7151)
+        //   2) area 객체에 모든 면적/전용률 필드를 미러링하여 fallback 체인 (b.area?.X || b.X) 일치
+        //   3) typicalExclusivePy 도 area 에 미러링 (포털 상세화면에서 area 우선 읽는 케이스 대비)
+        grossFloorPy:        grossPyRaw,
+        grossFloorSqm:       grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
+        typicalFloorPy:      typicalPy,
+        typicalFloorLeasePy: typicalPy,   // 별칭 동기화 (portal-detail.js 541, 7151)
+        typicalExclusivePy:  typicalExPy,
+        exclusiveRate:       excRate,
         // 건물 정보
         completionYear:     compYear ? String(compYear) : null,
-        // area 호환 객체 (portal-detail.js 와 정합)
+        // area 호환 객체 (portal-detail.js 와 정합) — 모든 면적/전용률 필드 미러링
         area: {
-            grossFloorPy:    grossPyRaw,
-            typicalFloorPy:  typicalPy,
-            exclusiveRate:   excRate,
+            grossFloorPy:        grossPyRaw,
+            grossFloorSqm:       grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
+            typicalFloorPy:      typicalPy,
+            typicalFloorLeasePy: typicalPy,   // 별칭 area 에도 미러링
+            typicalExclusivePy:  typicalExPy, // area 미러링 (fallback 보강)
+            exclusiveRate:       excRate,
         },
         // 리서치 태그
         isResearchTarget:     true,
@@ -3532,19 +3579,26 @@ window.submitNewBuilding = async function() {
             region,
             subRegion:  subRegion  || null,
             grade:      grade      || null,
-            // 면적
-            grossFloorPy:       grossPyRaw,
-            grossFloorSqm:      grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
-            typicalFloorPy:     typicalPy,
-            typicalExclusivePy: typicalExPy,
-            exclusiveRate:      excRate,
+            // ── 면적·전용률 (portal-detail.js 정책 정합) ──
+            // FIX (필드 누락 버그): _assignPortalFieldUpdate 와 동일 정책 적용
+            //   - typicalFloorPy ↔ typicalFloorLeasePy 별칭 동기화 (portal-detail.js 541, 7151)
+            //   - area 객체에 모든 면적/전용률 필드 미러링
+            grossFloorPy:        grossPyRaw,
+            grossFloorSqm:       grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
+            typicalFloorPy:      typicalPy,
+            typicalFloorLeasePy: typicalPy,   // 별칭 동기화
+            typicalExclusivePy:  typicalExPy,
+            exclusiveRate:       excRate,
             // 건물 정보
             completionYear:     compYear ? String(compYear) : null,
-            // area 호환 객체
+            // area 호환 객체 — 모든 면적/전용률 필드 미러링
             area: {
-                grossFloorPy:    grossPyRaw,
-                typicalFloorPy:  typicalPy,
-                exclusiveRate:   excRate,
+                grossFloorPy:        grossPyRaw,
+                grossFloorSqm:       grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
+                typicalFloorPy:      typicalPy,
+                typicalFloorLeasePy: typicalPy,   // 별칭 area 미러링
+                typicalExclusivePy:  typicalExPy, // area 미러링 (fallback 보강)
+                exclusiveRate:       excRate,
             },
             // 리서치 태그
             isResearchTarget:     true,
@@ -3677,6 +3731,104 @@ function _updateBulkNewBar() {
 }
 
 /** 일괄 등록 모달 열기 */
+/**
+ * FIX (통계 모집단 필터): 임대안내문 있는 빌딩만 보기 토글 핸들러
+ * 체크 시 _vacanciesMap 에 등록되고 count > 0 인 빌딩만 표시.
+ * 중복 등록된 빌딩 중 vacancy 없는 행은 자동으로 시야에서 제외.
+ */
+window.onVacOnlyToggle = function() {
+    const cb   = document.getElementById('filter-vac-only');
+    const wrap = document.getElementById('filter-vac-only-wrap');
+    if (!cb || !wrap) return;
+    // 시각적 활성/비활성 상태
+    if (cb.checked) {
+        wrap.style.background  = '#1d4ed8';
+        wrap.style.color       = '#fff';
+        wrap.style.borderColor = '#1d4ed8';
+    } else {
+        wrap.style.background  = '#eff6ff';
+        wrap.style.color       = '#1d4ed8';
+        wrap.style.borderColor = '#bfdbfe';
+    }
+    renderTable();
+    _updateVacOnlyCount();
+};
+
+/**
+ * FIX (통계 모집단 필터): 토글 라벨에 표시할 카운트 갱신
+ * 현재 탭 + 검색어 조건은 무시하고, 전체 _matchResults 중
+ * 매칭됐고 vacancy 가 있는 빌딩 수를 보여줌 (= 통계 가능 모집단의 최대치)
+ */
+function _updateVacOnlyCount() {
+    const el = document.getElementById('vac-only-count');
+    if (!el) return;
+    if (!_matchResults.length) { el.textContent = ''; return; }
+    const cnt = _matchResults.filter(r => {
+        if (!r.matched) return false;
+        const v = _vacanciesMap[r.matched.id];
+        return v && v.count > 0;
+    }).length;
+    el.textContent = cnt > 0 ? `(${cnt}건)` : '(0건)';
+}
+
+/**
+ * FIX (RAW 엑셀 보장): 매칭 안된 모든 행(new + unmatched 중 미등록)을
+ * 한 번에 일괄 신규 등록하기 위한 진입점.
+ *
+ * 핵심 의도: 사용자는 RAW 엑셀의 모든 빌딩이 buildings 컬렉션에 어떤 형태로든
+ * 들어있기만 하면 OCR 공실 데이터와 매칭되어 통계 산출이 가능하다는 입장.
+ * 매칭 정확도/중복 회피보다 데이터 존재가 우선.
+ *
+ * 동작:
+ *   1. matched / mismatch 빌딩은 이미 buildings 에 있으므로 건너뜀
+ *   2. new / unmatched 중 r.matched 가 없는 행 전체를 _newSelected 에 채움
+ *   3. 기존 일괄 등록 모달(openBulkNewModal) 그대로 재사용
+ */
+window.openBulkSaveAllUnsaved = function() {
+    if (!_matchResults.length) {
+        alert('먼저 RAW 엑셀을 업로드하고 매칭을 실행해주세요.');
+        return;
+    }
+
+    _newSelected.clear();
+    let candidateCnt = 0;
+    _matchResults.forEach((r, idx) => {
+        if ((r.status === 'new' || r.status === 'unmatched') && !r.matched) {
+            _newSelected.add(idx);
+            candidateCnt++;
+        }
+    });
+
+    if (!candidateCnt) {
+        alert('매칭 안된 미등록 빌딩이 없습니다.\n(이미 모든 RAW 엑셀 빌딩이 buildings 에 저장되어 있거나 매칭 실패 행이 없습니다)');
+        return;
+    }
+
+    // 기존 일괄 등록 모달 재활용 (new + unmatched 둘 다 처리하는 필터를 이미 가지고 있음)
+    openBulkNewModal();
+};
+
+/**
+ * FIX (RAW 엑셀 보장): 상단 빠른 버튼의 카운트(예: "(214건)") 갱신
+ * KPI 재계산 시점마다 호출되어 미저장 행 수를 사용자에게 보여줌.
+ */
+function _updateSaveAllCount() {
+    const el = document.getElementById('save-all-count');
+    if (!el) return;
+    if (!_matchResults.length) { el.textContent = ''; return; }
+    const cnt = _matchResults.filter(r =>
+        (r.status === 'new' || r.status === 'unmatched') && !r.matched
+    ).length;
+    el.textContent = cnt > 0 ? `(${cnt}건)` : '';
+    // 0건이면 버튼 회색 처리 + 비활성
+    const btn = document.getElementById('btn-save-all-unsaved');
+    if (btn) {
+        btn.disabled = (cnt === 0);
+        btn.style.opacity = cnt === 0 ? '0.45' : '1';
+        btn.style.cursor = cnt === 0 ? 'not-allowed' : 'pointer';
+    }
+}
+
 window.openBulkNewModal = function() {
     if (!_newSelected.size) return;
     const targets = [..._newSelected]
