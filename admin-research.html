@@ -1775,6 +1775,67 @@ const COMPARE_FIELDS = [
     { excel: '준공년도',           portal: 'completionYear',  label: '준공년도',       tolerance: 0,     type: 'exact' },
 ];
 
+/**
+ * 포털 빌딩에서 필드 값 읽기 — portal-detail.js와 동일한 fallback 체인 사용
+ * FIX: 기존엔 `portalBuilding[f.portal]`만 읽어서 `area.grossFloorPy`에만 저장된
+ *      레거시 빌딩이 "포털 없음"으로 잘못 판정되는 버그 존재.
+ *      portal-detail.js line 523, 541, 542와 동일하게 중첩 구조를 우선 확인한다.
+ *   - grossFloorPy / typicalFloorPy / exclusiveRate → b.area.X → b.X
+ *   - typicalFloorPy 별칭 → typicalFloorLeasePy 도 확인 (portal-detail.js 541번 라인)
+ *   - 나머지 필드 → 루트 레벨 그대로
+ */
+function _getPortalFieldValue(portalBuilding, fieldKey) {
+    const area = portalBuilding.area || {};
+    // area 중첩 구조 우선 fallback을 쓰는 필드
+    if (fieldKey === 'grossFloorPy')   return area.grossFloorPy   ?? portalBuilding.grossFloorPy;
+    if (fieldKey === 'typicalFloorPy') return area.typicalFloorPy ?? portalBuilding.typicalFloorPy ?? portalBuilding.typicalFloorLeasePy;
+    if (fieldKey === 'exclusiveRate')  return area.exclusiveRate  ?? portalBuilding.exclusiveRate;
+    // 그 외는 루트 레벨
+    return portalBuilding[fieldKey];
+}
+
+/**
+ * 포털 Firebase 업데이트용 필드 쓰기 — portal-detail.js 7106~7160 라인과 동일한 정책.
+ * 루트 + `area/X` path 양쪽에 동시에 저장하여, 포털 상세화면의 fallback 체인
+ * (`b.area?.X || b.X`)과 완전히 정합되도록 한다.
+ *
+ * FIX: 기존 admin-research는 루트에만 업데이트해서, area에 값이 있던 레거시 빌딩이
+ *      업데이트 후에도 포털 상세화면에 반영 안 보이는 읽기-쓰기 비대칭 버그가 있었음.
+ *
+ * 사용법: updates 객체에 필드를 추가할 때 이 함수로 대체
+ *   기존: updates[fieldKey] = val;
+ *   신규: _assignPortalFieldUpdate(updates, fieldKey, val);
+ */
+function _assignPortalFieldUpdate(updates, fieldKey, value) {
+    // 면적·전용률 계열 → 루트 + area path 동시 업데이트
+    if (fieldKey === 'grossFloorPy') {
+        updates.grossFloorPy = value;
+        updates['area/grossFloorPy'] = value;
+        // ㎡도 역산 저장 (portal-detail.js 7113번과 동일)
+        if (typeof value === 'number' && !isNaN(value)) {
+            const sqm = parseFloat((value * 3.30579).toFixed(2));
+            updates.grossFloorSqm = sqm;
+            updates['area/grossFloorSqm'] = sqm;
+        }
+        return;
+    }
+    if (fieldKey === 'typicalFloorPy') {
+        updates.typicalFloorPy = value;
+        updates['area/typicalFloorPy'] = value;
+        // 별칭도 동기화 (portal-detail.js 7151번)
+        updates.typicalFloorLeasePy = value;
+        updates['area/typicalFloorLeasePy'] = value;
+        return;
+    }
+    if (fieldKey === 'exclusiveRate') {
+        updates.exclusiveRate = value;
+        updates['area/exclusiveRate'] = value;
+        return;
+    }
+    // 그 외 필드 (grade, region, subRegion, completionYear) → 루트만
+    updates[fieldKey] = value;
+}
+
 function detectFieldDiff(excelRow, portalBuilding) {
     const diff = {};
     let warnCount = 0;
@@ -1787,7 +1848,8 @@ function detectFieldDiff(excelRow, portalBuilding) {
 
     COMPARE_FIELDS.forEach(f => {
         const excelRaw  = excelRow[f.excel];
-        const portalRaw = portalBuilding[f.portal];
+        // FIX: area 중첩 구조도 확인 (portal-detail.js의 fallback 체인과 동일)
+        const portalRaw = _getPortalFieldValue(portalBuilding, f.portal);
 
         // 둘 다 없으면 스킵
         if ((excelRaw == null || excelRaw === '') && (portalRaw == null || portalRaw === '')) return;
@@ -2646,7 +2708,8 @@ window.applyBulkMismatch = async function() {
                     rawVal = parseInt(rawVal, 10) || rawVal;
                 if (['grade','region','subRegion'].includes(fieldKey))
                     rawVal = String(rawVal ?? '').trim();
-                updates[fieldKey] = rawVal;
+                // FIX: 루트 + area/X path 동시 업데이트 (portal-detail.js와 정합)
+                _assignPortalFieldUpdate(updates, fieldKey, rawVal);
             });
 
             if (!Object.keys(updates).length) { skipCount++; continue; }
@@ -2967,7 +3030,8 @@ window.applyFieldsToPortal = async function() {
             if (['grade','region','subRegion'].includes(fieldKey))
                 rawVal = String(rawVal ?? '').trim();
 
-            updates[fieldKey] = rawVal;
+            // FIX: 루트 + area/X path 동시 업데이트 (portal-detail.js 7110~7160과 정합)
+            _assignPortalFieldUpdate(updates, fieldKey, rawVal);
         });
 
         updates.researchSyncedAt = new Date().toISOString();
