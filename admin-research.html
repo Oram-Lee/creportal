@@ -2510,7 +2510,8 @@ function renderTable() {
     // 탭별 헤더 (mismatch/all 탭에서 첫 컬럼 ☑ → 전체선택 체크박스로 교체)
     const heads = getColumnHeaders(_currentTab);
     const isMismatchTab = (_currentTab === 'mismatch' || _currentTab === 'all' || _currentTab === 'matched');
-    const isNewTab      = (_currentTab === 'new'); // FIX (이슈 1, 일괄 등록)
+    // FIX (이슈 1, 일괄 등록) + (라운드 7 후속): unmatched 탭도 신규 일괄 등록 대상에 포함
+    const isNewTab      = (_currentTab === 'new' || _currentTab === 'unmatched');
     head.innerHTML = `<tr>${heads.map((h, i) => {
         if (i === 0 && isMismatchTab) {
             return `<th class="row-cb"><input type="checkbox" id="cb-select-all"
@@ -2518,7 +2519,7 @@ function renderTable() {
                 onchange="toggleAllMismatchRows(this.checked)"
                 title="불일치 행 전체 선택"></th>`;
         }
-        // FIX (이슈 1, 일괄 등록): new 탭 첫 컬럼 = 신규 행 전체선택
+        // FIX (이슈 1, 일괄 등록): new/unmatched 탭 첫 컬럼 = 신규 행 전체선택
         if (i === 0 && isNewTab) {
             return `<th class="row-cb"><input type="checkbox" id="cb-select-all-new"
                 style="width:14px;height:14px;cursor:pointer;accent-color:#fff;"
@@ -2532,7 +2533,7 @@ function renderTable() {
         _bmSelected.clear();
         _updateBulkMismatchBar();
     }
-    // FIX (이슈 1, 일괄 등록): new 탭 아니면 신규 선택 초기화 & 바 숨김
+    // FIX (이슈 1, 일괄 등록) + (라운드 7 후속): new/unmatched 탭 아니면 신규 선택 초기화 & 바 숨김
     if (!isNewTab) {
         _newSelected.clear();
         _updateBulkNewBar();
@@ -2568,7 +2569,8 @@ function getColumnHeaders(tab) {
         return ['#', 'ID', '빌딩명', '구', '동'];
     if (tab === 'unmatched')
         // FIX (이슈 2): '신규 등록' 컬럼 추가 — 수동 지정으로도 못 찾는 빌딩을 신규 등록으로 처리할 수 있도록
-        return ['#', 'ID', '엑셀 빌딩명', '구', '동', '권역', '수동 지정', '신규 등록'];
+        // FIX (라운드 7 후속): ☑ 체크박스 컬럼 추가 — new 탭과 동일하게 일괄 선택/등록 가능
+        return ['☑', '#', 'ID', '엑셀 빌딩명', '구', '동', '권역', '수동 지정', '신규 등록'];
     // matched / mismatch / all — 첫 컬럼에 체크박스 (mismatch만 활성)
     return ['☑', '#', 'ID', '엑셀 빌딩명', '포털 빌딩명', '매칭 방법', '불일치 필드', '임대안내문', '누적기간', '상태'];
 }
@@ -2624,6 +2626,7 @@ function renderRow(r, i, tab) {
     }
     if (tab === 'unmatched') {
         // FIX (이슈 2): 매칭 실패 행에서도 신규 등록 가능하도록 버튼 추가
+        // FIX (라운드 7 후속): 체크박스 추가 — new 탭과 동일하게 일괄 선택 → 일괄 신규 등록
         const globalIdx = _matchResults.indexOf(r);
         const isRegistered = r.matched != null && r.method === '신규 등록';
         const regBtn = isRegistered
@@ -2636,7 +2639,16 @@ function renderRow(r, i, tab) {
                 onmouseout="this.style.background='var(--new-bg)'">
                 🆕 신규 등록
             </button>`;
-        return `<tr>
+        // 체크박스 셀 — 등록 안된 행만 선택 가능
+        const isChecked = !isRegistered && _newSelected.has(globalIdx);
+        const cbCell    = isRegistered
+            ? `<td class="row-cb" style="color:var(--border);">—</td>`
+            : `<td class="row-cb"><input type="checkbox" data-new-idx="${globalIdx}"
+                   ${isChecked ? 'checked' : ''}
+                   style="width:14px;height:14px;cursor:pointer;accent-color:var(--new-color);"
+                   onchange="toggleNewRow(${globalIdx}, this.checked)"></td>`;
+        return `<tr${isChecked ? ' class="row-checked"' : ''}>
+            ${cbCell}
             <td style="color:var(--text-muted);">${i+1}</td>
             <td><span class="badge badge-id">${exId}</span></td>
             <td class="bname-excel">${exName}</td>
@@ -3848,7 +3860,8 @@ function _updateBulkNewBar() {
     const cnt = document.getElementById('bn-selected-count');
     if (!bar) return;
     const n = _newSelected.size;
-    if (n > 0 && _currentTab === 'new') {
+    // FIX (라운드 7 후속): 매칭실패(unmatched) 탭에서도 체크박스 일괄 등록 지원
+    if (n > 0 && (_currentTab === 'new' || _currentTab === 'unmatched')) {
         bar.classList.add('visible');
         if (cnt) cnt.textContent = `${n}개 선택`;
     } else {
