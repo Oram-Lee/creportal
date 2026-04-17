@@ -4680,11 +4680,27 @@ window.applyRollback = async function(snapshotKey, dateLabel) {
             await Promise.all(batches[bi].map(async portalId => {
                 const entry = buildings[portalId];
                 if (!entry?.before) return;
-                // null 값도 명시적으로 삭제하지 않고 null로 덮어쓰기
+
                 const restorePayload = {};
-                Object.entries(entry.before).forEach(([k, v]) => {
-                    restorePayload[k] = v;  // null이면 Firebase에서 해당 키 null로 설정
-                });
+
+                // FIX (라운드 7 hotfix): 마이그레이션 스냅샷(root/area 중첩) vs 기존 스냅샷(평면) 구분
+                //   - data.migrationType 이 있으면 마이그레이션 스냅샷
+                //   - before.root / before.area 를 풀어서 path 스타일로 변환
+                if (data.migrationType && entry.before.root && entry.before.area) {
+                    // 마이그레이션 스냅샷: 중첩 → path 변환
+                    Object.entries(entry.before.root).forEach(([k, v]) => {
+                        restorePayload[k] = v;
+                    });
+                    Object.entries(entry.before.area).forEach(([k, v]) => {
+                        restorePayload[`area/${k}`] = v;
+                    });
+                } else {
+                    // 기존 스냅샷: 평면 구조 그대로
+                    Object.entries(entry.before).forEach(([k, v]) => {
+                        restorePayload[k] = v;  // null이면 Firebase에서 해당 키 null로 설정
+                    });
+                }
+
                 try {
                     await update(ref(db, `buildings/${portalId}`), restorePayload);
                     doneCount++;
@@ -4971,13 +4987,20 @@ window.executeMigration = async function() {
             }
             snapData.buildings[it.id] = {
                 name: b.name || '',
+                // FIX (라운드 7 hotfix): Firebase RTDB 는 객체 키에 '/' 금지.
+                //   기존: { 'area/typicalExclusivePy': ... } → 저장 실패
+                //   수정: { root: {...}, area: {...} } 중첩 구조로 변경
                 before: {
-                    typicalExclusivePy:         b.typicalExclusivePy ?? null,
-                    'area/typicalExclusivePy':  b.area && b.area.typicalExclusivePy != null ? b.area.typicalExclusivePy : null,
-                    exclusiveFloorPy:           b.exclusiveFloorPy ?? null,
-                    'area/exclusiveFloorPy':    b.area && b.area.exclusiveFloorPy != null ? b.area.exclusiveFloorPy : null,
-                    exclusiveRate:              b.exclusiveRate ?? null,
-                    'area/exclusiveRate':       b.area && b.area.exclusiveRate != null ? b.area.exclusiveRate : null,
+                    root: {
+                        typicalExclusivePy: b.typicalExclusivePy ?? null,
+                        exclusiveFloorPy:   b.exclusiveFloorPy ?? null,
+                        exclusiveRate:      b.exclusiveRate ?? null,
+                    },
+                    area: {
+                        typicalExclusivePy: (b.area && b.area.typicalExclusivePy != null) ? b.area.typicalExclusivePy : null,
+                        exclusiveFloorPy:   (b.area && b.area.exclusiveFloorPy != null)   ? b.area.exclusiveFloorPy   : null,
+                        exclusiveRate:      (b.area && b.area.exclusiveRate != null)      ? b.area.exclusiveRate      : null,
+                    },
                 },
             };
         }
