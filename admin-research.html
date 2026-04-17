@@ -1047,6 +1047,12 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
                 배치 크기 10개씩, 200ms 간격 처리
             </div>
             <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn-rollback-open" id="btn-migration-open" onclick="openMigrationModal()"
+                        title="exclusiveFloorPy / exclusiveRate 포맷 마이그레이션 (라운드 7)"
+                        style="background:#7c3aed; color:#fff; border-color:#6d28d9;">
+                    <span>🔧</span>
+                    <span>필드 마이그레이션</span>
+                </button>
                 <button class="btn-rollback-open" id="btn-rollback-open" onclick="openRollbackModal()" title="이전 일괄 업데이트 롤백">
                     <span>⏪</span>
                     <span>롤백</span>
@@ -1095,7 +1101,102 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
     </div>
 </div>
 
-<!-- ═══ 신규 등록 모달 (R3) ════════════════════════════════ -->
+<!-- ═══ 필드 마이그레이션 모달 (라운드 7 신규) ═══════════════ -->
+<div class="modal-backdrop" id="migration-modal">
+    <div class="rollback-modal-box" style="max-width: 980px;">
+
+        <div class="rollback-modal-header" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color:#fff;">
+            <div class="rollback-modal-title" style="color:#fff;">🔧 필드 마이그레이션 (라운드 7)</div>
+            <div class="rollback-modal-sub" style="color:#ede9fe;">
+                <strong>목적:</strong> admin-research.html 구(舊) 스키마로 저장된 빌딩을 portal-detail.js 정합 스키마로 이행.<br>
+                ① <code>typicalExclusivePy</code> → <code>exclusiveFloorPy</code> (필드명 통일)　②
+                <code>exclusiveRate</code> 0~1 포맷 → 0~100 포맷 (스케일 보정)
+            </div>
+        </div>
+
+        <div class="rollback-modal-body">
+
+            <!-- 탭 네비게이션 -->
+            <div style="display:flex; gap:8px; margin-bottom:14px; border-bottom:2px solid #e5e7eb;">
+                <button id="mg-tab-field" onclick="switchMigrationTab('field')"
+                        style="padding:10px 18px; background:none; border:none; font-size:13px; font-weight:700;
+                               color:#7c3aed; border-bottom:3px solid #7c3aed; cursor:pointer;">
+                    ① 필드명 마이그레이션
+                </button>
+                <button id="mg-tab-rate" onclick="switchMigrationTab('rate')"
+                        style="padding:10px 18px; background:none; border:none; font-size:13px; font-weight:500;
+                               color:#64748b; border-bottom:3px solid transparent; cursor:pointer;">
+                    ② 전용률 포맷 마이그레이션
+                </button>
+            </div>
+
+            <!-- 스캔/실행 컨트롤 -->
+            <div style="display:flex; gap:10px; align-items:center; margin-bottom:14px; padding:12px 16px;
+                        background:#f5f3ff; border:1px solid #ddd6fe; border-radius:8px;">
+                <button id="mg-scan-btn" onclick="runMigrationScan()"
+                    style="padding:8px 18px; background:#7c3aed; color:#fff; border:none; border-radius:7px;
+                           font-size:13px; font-weight:600; cursor:pointer;">
+                    🔍 스캔 (dry-run)
+                </button>
+                <div id="mg-scan-status" style="font-size:12px; color:#64748b; flex:1;">
+                    버튼을 눌러 대상 빌딩을 스캔하세요.
+                </div>
+                <label style="font-size:12px; color:#64748b; display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" id="mg-select-all" onchange="toggleAllMigrationItems(this.checked)">
+                    전체 선택
+                </label>
+            </div>
+
+            <!-- 대상 목록 -->
+            <div id="mg-list-wrap" style="max-height:420px; overflow-y:auto; border:1px solid var(--border);
+                                           border-radius:8px; background:#fff;">
+                <div id="mg-empty" style="padding:40px; text-align:center; color:var(--text-muted); font-size:13px;">
+                    스캔을 실행하면 여기에 대상 목록이 표시됩니다.
+                </div>
+                <table id="mg-table" style="width:100%; border-collapse:collapse; font-size:12px; display:none;">
+                    <thead style="background:#f9fafb; position:sticky; top:0;">
+                        <tr>
+                            <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb; width:40px;">☑</th>
+                            <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb;">빌딩명</th>
+                            <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb;">권역</th>
+                            <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb;">source</th>
+                            <th style="padding:10px 12px; text-align:right; border-bottom:2px solid #e5e7eb;">현재 값</th>
+                            <th style="padding:10px 12px; text-align:right; border-bottom:2px solid #e5e7eb;">변경 후</th>
+                            <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb;">Firebase ID</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mg-tbody"></tbody>
+                </table>
+            </div>
+
+            <!-- 실행 진행률 / 로그 -->
+            <div id="mg-exec-wrap" style="display:none; margin-top:14px; padding:12px 16px;
+                                            background:#0f172a; color:#e2e8f0; border-radius:8px;
+                                            font-family:monospace; font-size:12px; max-height:200px; overflow-y:auto;">
+                <div id="mg-exec-log"></div>
+            </div>
+
+        </div>
+
+        <div class="rollback-modal-footer">
+            <div id="mg-summary" style="flex:1; font-size:12px; color:var(--text-muted);">
+                선택: <strong id="mg-sel-count" style="color:#7c3aed;">0</strong> 건 /
+                총 대상: <strong id="mg-total-count">0</strong> 건
+            </div>
+            <button onclick="closeMigrationModal()"
+                style="padding:8px 20px; background:var(--bg-secondary); border:1px solid var(--border);
+                       border-radius:7px; font-size:13px; font-weight:500; color:var(--text-muted); cursor:pointer;">
+                닫기
+            </button>
+            <button id="mg-exec-btn" onclick="executeMigration()" disabled
+                style="padding:8px 20px; background:#dc2626; color:#fff; border:none; border-radius:7px;
+                       font-size:13px; font-weight:700; cursor:pointer; opacity:0.4;">
+                ⚠️ 선택 항목 실행 (스냅샷 저장 후 진행)
+            </button>
+        </div>
+
+    </div>
+</div>
 <div class="modal-backdrop" id="reg-modal">
     <div class="reg-modal-box">
 
@@ -1185,7 +1286,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 24px 60px; }
                     </div>
                     <div class="reg-field">
                         <label class="reg-label">기준층 전용면적 (평)</label>
-                        <input class="reg-input from-excel" id="reg-typical-exclusive-py" type="number" placeholder="0">
+                        <input class="reg-input from-excel" id="reg-exclusive-floor-py" type="number" placeholder="0">
                     </div>
                 </div>
                 <div class="reg-grid three" style="margin-top:10px;">
@@ -1883,9 +1984,14 @@ const COMPARE_FIELDS = [
 function _getPortalFieldValue(portalBuilding, fieldKey) {
     const area = portalBuilding.area || {};
     // area 중첩 구조 우선 fallback을 쓰는 필드
-    if (fieldKey === 'grossFloorPy')   return area.grossFloorPy   ?? portalBuilding.grossFloorPy;
-    if (fieldKey === 'typicalFloorPy') return area.typicalFloorPy ?? portalBuilding.typicalFloorPy ?? portalBuilding.typicalFloorLeasePy;
-    if (fieldKey === 'exclusiveRate')  return area.exclusiveRate  ?? portalBuilding.exclusiveRate;
+    if (fieldKey === 'grossFloorPy')    return area.grossFloorPy    ?? portalBuilding.grossFloorPy;
+    if (fieldKey === 'typicalFloorPy')  return area.typicalFloorPy  ?? portalBuilding.typicalFloorPy ?? portalBuilding.typicalFloorLeasePy;
+    if (fieldKey === 'exclusiveRate')   return area.exclusiveRate   ?? portalBuilding.exclusiveRate;
+    // FIX (라운드 7): 기준층 전용면적은 portal-detail.js 540라인에서 exclusiveFloorPy 로 읽음
+    //   (구) admin-research.html 은 typicalExclusivePy 로 저장했으나 portal-detail.js 는 인식 못함
+    //   (신) exclusiveFloorPy 로 통일. 레거시 데이터 호환을 위해 typicalExclusivePy 도 fallback 으로 포함.
+    if (fieldKey === 'exclusiveFloorPy') return area.exclusiveFloorPy ?? portalBuilding.exclusiveFloorPy
+                                             ?? area.typicalExclusivePy ?? portalBuilding.typicalExclusivePy;
     // 그 외는 루트 레벨
     return portalBuilding[fieldKey];
 }
@@ -1926,6 +2032,16 @@ function _assignPortalFieldUpdate(updates, fieldKey, value) {
     if (fieldKey === 'exclusiveRate') {
         updates.exclusiveRate = value;
         updates['area/exclusiveRate'] = value;
+        return;
+    }
+    // FIX (라운드 7): 기준층 전용면적 — portal-detail.js 7155~7156 정책 정합
+    //   루트 + area 양쪽 저장. 레거시 typicalExclusivePy 필드는 삭제 (마이그레이션으로 처리됨).
+    if (fieldKey === 'exclusiveFloorPy') {
+        updates.exclusiveFloorPy = value;
+        updates['area/exclusiveFloorPy'] = value;
+        // 레거시 필드 잔존 방지 — 쓰기 시 동시 제거
+        updates.typicalExclusivePy = null;
+        updates['area/typicalExclusivePy'] = null;
         return;
     }
     // 그 외 필드 (grade, region, subRegion, completionYear) → 루트만
@@ -2884,11 +3000,13 @@ window.applyBulkMismatch = async function() {
                 if (!fd) return;
 
                 let rawVal = r.row[fd.excel];
-                if (['grossFloorPy','typicalFloorPy','typicalExclusivePy'].includes(fieldKey))
+                if (['grossFloorPy','typicalFloorPy','exclusiveFloorPy'].includes(fieldKey))
                     rawVal = parseFloat(String(rawVal ?? '').replace(/,/g,'')) || rawVal;
                 if (fieldKey === 'exclusiveRate') {
+                    // FIX (라운드 7): portal-detail.js 303/540/542 라인은 0~100 포맷을 기대.
+                    //   엑셀에 0.4533 (decimal) 또는 45.33 (percent) 혼용 입력 가능 → 0~100 으로 정규화.
                     const n = parseFloat(String(rawVal ?? '').replace(/,/g,''));
-                    rawVal  = isNaN(n) ? rawVal : (n > 1 ? +(n/100).toFixed(4) : +n.toFixed(4));
+                    rawVal  = isNaN(n) ? rawVal : (n <= 1 ? +(n*100).toFixed(2) : +n.toFixed(2));
                 }
                 if (fieldKey === 'completionYear')
                     rawVal = parseInt(rawVal, 10) || rawVal;
@@ -2962,7 +3080,7 @@ document.addEventListener('keydown', e => {
 // 안전 업데이트 허용 필드
 const SAFE_UPDATE_FIELDS = new Set([
     'grossFloorPy', 'grade', 'region', 'subRegion',
-    'typicalFloorPy', 'typicalExclusivePy', 'exclusiveRate', 'completionYear',
+    'typicalFloorPy', 'exclusiveFloorPy', 'exclusiveRate', 'completionYear',
     'isResearchTarget', 'rawResearchId', 'researchMatchStatus',
     'researchFieldDiff', 'researchSyncedAt',
 ]);
@@ -3129,7 +3247,7 @@ function renderDiffTable(r) {
 
 function fmtFieldVal(fieldKey, val) {
     if (val == null || val === '') return '—';
-    const numFields = ['grossFloorPy','typicalFloorPy','typicalExclusivePy'];
+    const numFields = ['grossFloorPy','typicalFloorPy','exclusiveFloorPy'];
     if (numFields.includes(fieldKey)) {
         const n = parseFloat(String(val).replace(/,/g,''));
         return isNaN(n) ? val : n.toLocaleString() + ' 평';
@@ -3204,12 +3322,13 @@ window.applyFieldsToPortal = async function() {
             if (!fd) return;
             let rawVal = r.row[fd.excel];
 
-            if (['grossFloorPy','typicalFloorPy','typicalExclusivePy'].includes(fieldKey))
+            if (['grossFloorPy','typicalFloorPy','exclusiveFloorPy'].includes(fieldKey))
                 rawVal = parseFloat(String(rawVal ?? '').replace(/,/g,'')) || rawVal;
 
             if (fieldKey === 'exclusiveRate') {
+                // FIX (라운드 7): portal-detail.js 는 0~100 포맷을 기대. 엑셀 혼용 입력 정규화.
                 const n = parseFloat(String(rawVal ?? '').replace(/,/g,''));
-                rawVal  = isNaN(n) ? rawVal : (n > 1 ? +(n/100).toFixed(4) : +n.toFixed(4));
+                rawVal  = isNaN(n) ? rawVal : (n <= 1 ? +(n*100).toFixed(2) : +n.toFixed(2));
             }
             if (fieldKey === 'completionYear')
                 rawVal = parseInt(rawVal, 10) || rawVal;
@@ -3364,11 +3483,12 @@ function _buildBuildingDataFromRow(row, nowISO) {
 
     const grossPyRaw = parseFloat(row['연면적(평)']) || null;
     const typicalPy  = parseFloat(row['기준층 임대면적']) || null;
-    const typicalExPy= parseFloat(row['기준층 전용면적']) || null;
+    const exclFloorPy= parseFloat(row['기준층 전용면적']) || null;
     const excRateRaw = parseFloat(row['전용률']);
-    // 전용률 정규화 (0~1 범위로)
+    // FIX (라운드 7): portal-detail.js 303/540/542 는 0~100 포맷 기대 → 0~100 으로 정규화
+    //   엑셀에 0.4533 (decimal) 또는 45.33 (percent) 혼용 가능 → percent 로 통일
     const excRate = !isNaN(excRateRaw)
-        ? +(excRateRaw > 1 ? (excRateRaw / 100).toFixed(4) : excRateRaw.toFixed(4))
+        ? +(excRateRaw <= 1 ? (excRateRaw * 100).toFixed(2) : excRateRaw.toFixed(2))
         : null;
     const compYear   = parseInt(row['준공년도'], 10) || null;
     const grade      = String(row['등급(신규)'] ?? '').trim();
@@ -3382,15 +3502,16 @@ function _buildBuildingDataFromRow(row, nowISO) {
         subRegion:    subRegion || null,
         grade:        grade     || null,
         // ── 면적·전용률 (portal-detail.js 정책 정합) ──
-        // FIX (필드 누락 버그): _assignPortalFieldUpdate 정책과 동일하게
-        //   1) typicalFloorPy 는 typicalFloorLeasePy 별칭과 동기화 (portal-detail.js 7151)
-        //   2) area 객체에 모든 면적/전용률 필드를 미러링하여 fallback 체인 (b.area?.X || b.X) 일치
-        //   3) typicalExclusivePy 도 area 에 미러링 (포털 상세화면에서 area 우선 읽는 케이스 대비)
+        // FIX (라운드 7): portal-detail.js 540, 7155 정책과 정합
+        //   1) typicalFloorPy ↔ typicalFloorLeasePy 별칭 동기화 (portal-detail.js 541, 7151)
+        //   2) 기준층 전용면적은 exclusiveFloorPy 로 저장 (portal-detail.js 540 에서 읽는 이름)
+        //      — 구(舊) typicalExclusivePy 이름은 portal-detail.js 가 인식 못함 → 폐기
+        //   3) 전용률은 0~100 포맷 (portal-detail.js 는 / 100 연산 사용)
         grossFloorPy:        grossPyRaw,
         grossFloorSqm:       grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
         typicalFloorPy:      typicalPy,
         typicalFloorLeasePy: typicalPy,   // 별칭 동기화 (portal-detail.js 541, 7151)
-        typicalExclusivePy:  typicalExPy,
+        exclusiveFloorPy:    exclFloorPy, // portal-detail.js 540 에서 읽는 정식 필드
         exclusiveRate:       excRate,
         // 건물 정보
         completionYear:     compYear ? String(compYear) : null,
@@ -3400,7 +3521,7 @@ function _buildBuildingDataFromRow(row, nowISO) {
             grossFloorSqm:       grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
             typicalFloorPy:      typicalPy,
             typicalFloorLeasePy: typicalPy,   // 별칭 area 에도 미러링
-            typicalExclusivePy:  typicalExPy, // area 미러링 (fallback 보강)
+            exclusiveFloorPy:    exclFloorPy, // portal-detail.js 540: b.area?.exclusiveFloorPy 우선
             exclusiveRate:       excRate,
         },
         // 리서치 태그
@@ -3467,9 +3588,9 @@ window.openRegModal = function(resultIdx) {
     const { roadAddr, jibunAddr } = buildAddressFromRow(row);
     const grossPy = parseFloat(row['연면적(평)']) || null;
     const excRate = parseFloat(row['전용률']) || null;
-    // 전용률 정규화 (0~1 사이로)
+    // FIX (라운드 7): portal-detail.js 0~100 포맷 기대 → percent 로 정규화
     const excRateNorm = excRate != null
-        ? (excRate > 1 ? +(excRate / 100).toFixed(4) : +excRate.toFixed(4))
+        ? (excRate <= 1 ? +(excRate * 100).toFixed(2) : +excRate.toFixed(2))
         : null;
 
     document.getElementById('reg-name').value           = row['빌딩명'] ?? '';
@@ -3478,7 +3599,7 @@ window.openRegModal = function(resultIdx) {
     document.getElementById('reg-subregion').value      = String(row['세부권역_Main기준'] ?? '');
     document.getElementById('reg-gross-floor-py').value = grossPy ?? '';
     document.getElementById('reg-typical-floor-py').value   = parseFloat(row['기준층 임대면적']) || '';
-    document.getElementById('reg-typical-exclusive-py').value = parseFloat(row['기준층 전용면적']) || '';
+    document.getElementById('reg-exclusive-floor-py').value = parseFloat(row['기준층 전용면적']) || '';
     document.getElementById('reg-exclusive-rate').value = excRateNorm ?? '';
     document.getElementById('reg-completion-year').value = row['준공년도'] ?? '';
 
@@ -3542,8 +3663,12 @@ window.submitNewBuilding = async function() {
     // 데이터 수집
     const grossPyRaw = parseFloat(document.getElementById('reg-gross-floor-py').value) || null;
     const typicalPy  = parseFloat(document.getElementById('reg-typical-floor-py').value) || null;
-    const typicalExPy= parseFloat(document.getElementById('reg-typical-exclusive-py').value) || null;
-    const excRate    = parseFloat(document.getElementById('reg-exclusive-rate').value) || null;
+    const exclFloorPy= parseFloat(document.getElementById('reg-exclusive-floor-py').value) || null;
+    const excRateIn  = parseFloat(document.getElementById('reg-exclusive-rate').value);
+    // FIX (라운드 7): 전용률 방어적 정규화 — 사용자가 실수로 0.xx 형태로 입력해도 0~100 으로 통일
+    const excRate = !isNaN(excRateIn)
+        ? +(excRateIn <= 1 ? (excRateIn * 100).toFixed(2) : excRateIn.toFixed(2))
+        : null;
     const compYear   = parseInt(document.getElementById('reg-completion-year').value, 10) || null;
     const grade      = document.getElementById('reg-grade').value || '';
     const subRegion  = document.getElementById('reg-subregion').value.trim();
@@ -3580,14 +3705,15 @@ window.submitNewBuilding = async function() {
             subRegion:  subRegion  || null,
             grade:      grade      || null,
             // ── 면적·전용률 (portal-detail.js 정책 정합) ──
-            // FIX (필드 누락 버그): _assignPortalFieldUpdate 와 동일 정책 적용
+            // FIX (라운드 7): portal-detail.js 540, 7155 정책과 정합
             //   - typicalFloorPy ↔ typicalFloorLeasePy 별칭 동기화 (portal-detail.js 541, 7151)
-            //   - area 객체에 모든 면적/전용률 필드 미러링
+            //   - 기준층 전용면적 → exclusiveFloorPy (portal-detail.js 540 정식 필드)
+            //   - 전용률 0~100 포맷
             grossFloorPy:        grossPyRaw,
             grossFloorSqm:       grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
             typicalFloorPy:      typicalPy,
             typicalFloorLeasePy: typicalPy,   // 별칭 동기화
-            typicalExclusivePy:  typicalExPy,
+            exclusiveFloorPy:    exclFloorPy, // portal-detail.js 540 정식 필드
             exclusiveRate:       excRate,
             // 건물 정보
             completionYear:     compYear ? String(compYear) : null,
@@ -3597,7 +3723,7 @@ window.submitNewBuilding = async function() {
                 grossFloorSqm:       grossPyRaw ? parseFloat((grossPyRaw * 3.30579).toFixed(2)) : null,
                 typicalFloorPy:      typicalPy,
                 typicalFloorLeasePy: typicalPy,   // 별칭 area 미러링
-                typicalExclusivePy:  typicalExPy, // area 미러링 (fallback 보강)
+                exclusiveFloorPy:    exclFloorPy, // portal-detail.js 540: b.area?.exclusiveFloorPy 우선
                 exclusiveRate:       excRate,
             },
             // 리서치 태그
@@ -4592,12 +4718,326 @@ document.getElementById('rollback-modal').addEventListener('click', e => {
     if (e.target === e.currentTarget) closeRollbackModal();
 });
 
+// ═════════════════════════════════════════════════════════════
+// 🔧 라운드 7: 필드 마이그레이션 (typicalExclusivePy → exclusiveFloorPy + exclusiveRate 0~1 → 0~100)
+//   - bulkSnapshots 재활용: 롤백 모달에서 `snap_migration_*` 키로 복구 가능
+//   - 개별 승인 방식: 스캔 → 체크박스 선택 → 실행
+// ═════════════════════════════════════════════════════════════
+
+const _mgState = {
+    tab: 'field',            // 'field' | 'rate'
+    items: [],               // 스캔 결과
+    selectedIds: new Set(),  // 선택된 Firebase ID
+};
+
+window.openMigrationModal = function() {
+    document.getElementById('migration-modal').classList.add('open');
+    _mgResetState();
+    switchMigrationTab('field');
+};
+
+window.closeMigrationModal = function() {
+    document.getElementById('migration-modal').classList.remove('open');
+};
+
+function _mgResetState() {
+    _mgState.items = [];
+    _mgState.selectedIds.clear();
+    const tbody = document.getElementById('mg-tbody');
+    if (tbody) tbody.innerHTML = '';
+    const table = document.getElementById('mg-table');
+    if (table) table.style.display = 'none';
+    const empty = document.getElementById('mg-empty');
+    if (empty) { empty.style.display = ''; empty.textContent = '스캔을 실행하면 여기에 대상 목록이 표시됩니다.'; }
+    const execWrap = document.getElementById('mg-exec-wrap');
+    if (execWrap) execWrap.style.display = 'none';
+    const execLog = document.getElementById('mg-exec-log');
+    if (execLog) execLog.innerHTML = '';
+    const selCnt = document.getElementById('mg-sel-count');
+    if (selCnt) selCnt.textContent = '0';
+    const totalCnt = document.getElementById('mg-total-count');
+    if (totalCnt) totalCnt.textContent = '0';
+    const execBtn = document.getElementById('mg-exec-btn');
+    if (execBtn) {
+        execBtn.disabled = true;
+        execBtn.style.opacity = '0.4';
+        execBtn.innerHTML = '⚠️ 선택 항목 실행 (스냅샷 저장 후 진행)';
+        execBtn.style.background = '#dc2626';
+    }
+    const status = document.getElementById('mg-scan-status');
+    if (status) status.textContent = '버튼을 눌러 대상 빌딩을 스캔하세요.';
+    const selAll = document.getElementById('mg-select-all');
+    if (selAll) selAll.checked = false;
+}
+
+window.switchMigrationTab = function(tab) {
+    _mgState.tab = tab;
+    const fieldBtn = document.getElementById('mg-tab-field');
+    const rateBtn  = document.getElementById('mg-tab-rate');
+    if (tab === 'field') {
+        fieldBtn.style.color = '#7c3aed';
+        fieldBtn.style.borderBottomColor = '#7c3aed';
+        fieldBtn.style.fontWeight = '700';
+        rateBtn.style.color = '#64748b';
+        rateBtn.style.borderBottomColor = 'transparent';
+        rateBtn.style.fontWeight = '500';
+    } else {
+        rateBtn.style.color = '#7c3aed';
+        rateBtn.style.borderBottomColor = '#7c3aed';
+        rateBtn.style.fontWeight = '700';
+        fieldBtn.style.color = '#64748b';
+        fieldBtn.style.borderBottomColor = 'transparent';
+        fieldBtn.style.fontWeight = '500';
+    }
+    _mgResetState();
+};
+
+function _mgEscHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, m =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+window.runMigrationScan = async function() {
+    const scanBtn = document.getElementById('mg-scan-btn');
+    const statusEl = document.getElementById('mg-scan-status');
+    scanBtn.disabled = true;
+    scanBtn.innerHTML = '<span class="spin">⚙️</span> 스캔 중...';
+    statusEl.textContent = 'Firebase buildings 전체 조회 중...';
+
+    try {
+        const { db, ref, get } = await import('./js/portal-firebase.js');
+        const snap = await get(ref(db, 'buildings'));
+        const all = snap.val() || {};
+
+        const items = [];
+        for (const [id, b] of Object.entries(all)) {
+            if (!b || typeof b !== 'object') continue;
+
+            if (_mgState.tab === 'field') {
+                // 필드명 마이그레이션: typicalExclusivePy (루트 또는 area) 가진 문서
+                const rootVal = b.typicalExclusivePy;
+                const areaVal = b.area && b.area.typicalExclusivePy;
+                if (rootVal != null || areaVal != null) {
+                    const curVal = (rootVal != null) ? rootVal : areaVal;
+                    items.push({
+                        id, name: b.name || '(이름 없음)', region: b.region || '-',
+                        source: b.source || '-',
+                        currentVal: curVal, newVal: curVal,
+                        displayCur: `${curVal} (typicalExclusivePy)`,
+                        displayNew: `${curVal} (exclusiveFloorPy)`,
+                    });
+                }
+            } else {
+                // 전용률 포맷: source='admin-research' AND 0 < exclusiveRate < 1 (가장 안전 필터)
+                if (b.source !== 'admin-research') continue;
+                const r = b.exclusiveRate;
+                if (typeof r !== 'number' || r <= 0 || r >= 1) continue;
+                items.push({
+                    id, name: b.name || '(이름 없음)', region: b.region || '-',
+                    source: b.source || '-',
+                    currentVal: r, newVal: +(r * 100).toFixed(2),
+                    displayCur: `${r} (0~1 포맷)`,
+                    displayNew: `${+(r * 100).toFixed(2)}% (0~100 포맷)`,
+                });
+            }
+        }
+
+        _mgState.items = items;
+        _mgState.selectedIds.clear();
+        _renderMigrationList();
+
+        statusEl.innerHTML = `✅ 스캔 완료 — <strong>${items.length}</strong>건 발견`;
+        document.getElementById('mg-total-count').textContent = items.length;
+        document.getElementById('mg-sel-count').textContent = '0';
+    } catch (err) {
+        statusEl.innerHTML = `❌ 스캔 실패: ${_mgEscHtml(err.message)}`;
+    } finally {
+        scanBtn.disabled = false;
+        scanBtn.innerHTML = '🔍 스캔 (dry-run)';
+    }
+};
+
+function _renderMigrationList() {
+    const tbody = document.getElementById('mg-tbody');
+    const table = document.getElementById('mg-table');
+    const empty = document.getElementById('mg-empty');
+
+    if (_mgState.items.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = '';
+        empty.textContent = '✅ 대상 빌딩이 없습니다. 마이그레이션 불필요.';
+        return;
+    }
+
+    table.style.display = '';
+    empty.style.display = 'none';
+
+    const rows = _mgState.items.map(it => `
+        <tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:8px 12px; text-align:center;">
+                <input type="checkbox" class="mg-row-cb" data-id="${_mgEscHtml(it.id)}"
+                       onchange="toggleMigrationItem('${_mgEscHtml(it.id)}', this.checked)">
+            </td>
+            <td style="padding:8px 12px; font-weight:600; color:var(--text);">${_mgEscHtml(it.name)}</td>
+            <td style="padding:8px 12px; color:var(--text-muted);">${_mgEscHtml(it.region)}</td>
+            <td style="padding:8px 12px;">
+                <span style="display:inline-block; padding:2px 8px;
+                             background:${it.source === 'admin-research' ? '#ede9fe' : '#f1f5f9'};
+                             color:${it.source === 'admin-research' ? '#6d28d9' : '#64748b'};
+                             border-radius:4px; font-size:11px; font-weight:600;">${_mgEscHtml(it.source)}</span>
+            </td>
+            <td style="padding:8px 12px; text-align:right; color:#dc2626; font-family:monospace;">${_mgEscHtml(it.displayCur)}</td>
+            <td style="padding:8px 12px; text-align:right; color:#16a34a; font-family:monospace;">${_mgEscHtml(it.displayNew)}</td>
+            <td style="padding:8px 12px; font-family:monospace; font-size:11px; color:var(--text-muted);">${_mgEscHtml(it.id)}</td>
+        </tr>
+    `).join('');
+
+    tbody.innerHTML = rows;
+}
+
+window.toggleMigrationItem = function(id, checked) {
+    if (checked) _mgState.selectedIds.add(id);
+    else _mgState.selectedIds.delete(id);
+    _updateMigrationSelSummary();
+};
+
+window.toggleAllMigrationItems = function(checked) {
+    _mgState.selectedIds.clear();
+    if (checked) _mgState.items.forEach(it => _mgState.selectedIds.add(it.id));
+    document.querySelectorAll('.mg-row-cb').forEach(cb => { cb.checked = checked; });
+    _updateMigrationSelSummary();
+};
+
+function _updateMigrationSelSummary() {
+    const n = _mgState.selectedIds.size;
+    document.getElementById('mg-sel-count').textContent = n;
+    const btn = document.getElementById('mg-exec-btn');
+    btn.disabled = (n === 0);
+    btn.style.opacity = (n === 0) ? '0.4' : '1';
+}
+
+window.executeMigration = async function() {
+    const n = _mgState.selectedIds.size;
+    if (n === 0) return;
+    const typeLabel = _mgState.tab === 'field'
+        ? '필드명 통일 (typicalExclusivePy → exclusiveFloorPy)'
+        : '전용률 포맷 보정 (×100)';
+    if (!confirm(`선택한 ${n}건에 대해 "${typeLabel}" 마이그레이션을 실행합니다.\n\n사전에 자동 스냅샷이 저장되며, 롤백 모달에서 복구 가능합니다.\n\n계속하시겠습니까?`)) return;
+
+    const execBtn = document.getElementById('mg-exec-btn');
+    execBtn.disabled = true;
+    execBtn.style.opacity = '0.6';
+    execBtn.innerHTML = '<span class="spin">⚙️</span> 실행 중...';
+
+    const logWrap = document.getElementById('mg-exec-wrap');
+    const logEl = document.getElementById('mg-exec-log');
+    logWrap.style.display = '';
+    logEl.innerHTML = '';
+    const log = (msg, color) => {
+        const line = document.createElement('div');
+        line.textContent = msg;
+        if (color) line.style.color = color;
+        logEl.appendChild(line);
+        logWrap.scrollTop = logWrap.scrollHeight;
+    };
+
+    try {
+        const { db, ref, update, get } = await import('./js/portal-firebase.js');
+
+        // 1. 스냅샷 저장 (bulkSnapshots 재활용 — 기존 롤백 UI에서 그대로 보임)
+        log('💾 스냅샷 저장 중...', '#facc15');
+        const tsISO = new Date().toISOString();
+        const snapKey = 'snap_migration_' + tsISO.replace(/[:.]/g, '-');
+        const snapData = {
+            ts: tsISO,
+            count: n,
+            migrationType: _mgState.tab,
+            tabLabel: typeLabel,
+            fields: (_mgState.tab === 'field')
+                ? ['typicalExclusivePy', 'exclusiveFloorPy']
+                : ['exclusiveRate'],
+            scope: '마이그레이션',
+            buildings: {},
+        };
+
+        const targetItems = _mgState.items.filter(it => _mgState.selectedIds.has(it.id));
+
+        for (const it of targetItems) {
+            const bs = await get(ref(db, `buildings/${it.id}`));
+            const b = bs.val();
+            if (!b) {
+                log(`⚠️  ${it.name}: Firebase 에서 찾을 수 없음`, '#f87171');
+                continue;
+            }
+            snapData.buildings[it.id] = {
+                name: b.name || '',
+                before: {
+                    typicalExclusivePy:         b.typicalExclusivePy ?? null,
+                    'area/typicalExclusivePy':  b.area && b.area.typicalExclusivePy != null ? b.area.typicalExclusivePy : null,
+                    exclusiveFloorPy:           b.exclusiveFloorPy ?? null,
+                    'area/exclusiveFloorPy':    b.area && b.area.exclusiveFloorPy != null ? b.area.exclusiveFloorPy : null,
+                    exclusiveRate:              b.exclusiveRate ?? null,
+                    'area/exclusiveRate':       b.area && b.area.exclusiveRate != null ? b.area.exclusiveRate : null,
+                },
+            };
+        }
+        await update(ref(db, 'bulkSnapshots'), { [snapKey]: snapData });
+        log(`✅ 스냅샷 저장 완료 (${snapKey})`, '#4ade80');
+
+        // 2. 순차 마이그레이션
+        log(`\n🚀 마이그레이션 시작 (${targetItems.length}건)`, '#facc15');
+        let ok = 0, fail = 0;
+        for (let i = 0; i < targetItems.length; i++) {
+            const it = targetItems[i];
+            try {
+                const updates = {};
+                if (_mgState.tab === 'field') {
+                    updates.exclusiveFloorPy         = it.newVal;
+                    updates['area/exclusiveFloorPy'] = it.newVal;
+                    updates.typicalExclusivePy        = null;
+                    updates['area/typicalExclusivePy'] = null;
+                } else {
+                    updates.exclusiveRate        = it.newVal;
+                    updates['area/exclusiveRate'] = it.newVal;
+                }
+                await update(ref(db, `buildings/${it.id}`), updates);
+                ok++;
+                if ((i + 1) % 10 === 0 || i === targetItems.length - 1) {
+                    log(`  ${i + 1}/${targetItems.length} 처리 중... (성공 ${ok}, 실패 ${fail})`);
+                }
+                if (i % 5 === 4) await new Promise(res => setTimeout(res, 30));
+            } catch (err) {
+                fail++;
+                log(`  ❌ ${it.name}: ${err.message}`, '#f87171');
+            }
+        }
+
+        log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, '#64748b');
+        log(`✅ 완료: 성공 ${ok}건 / 실패 ${fail}건`, '#4ade80');
+        log(`📎 스냅샷 키: ${snapKey}`, '#facc15');
+        log(`   (롤백 모달에서 동일 키로 복구 가능)`, '#64748b');
+
+        execBtn.innerHTML = '✅ 실행 완료';
+        execBtn.style.background = '#16a34a';
+        execBtn.style.opacity = '1';
+
+    } catch (err) {
+        log(`❌ 실행 중 오류: ${err.message}`, '#f87171');
+        execBtn.disabled = false;
+        execBtn.style.opacity = '1';
+        execBtn.innerHTML = '⚠️ 재시도';
+    }
+};
+
 // ─────────────────────────────────────────────────────────────
 // FIX 8: ESC 키로 열린 모달 순서대로 닫기
 // ─────────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    // 우선순위: 롤백 → 불일치 → 신규등록 → 일괄등록 → 수동지정 순으로 닫기
+    // 우선순위: 마이그레이션 → 롤백 → 불일치 → 신규등록 → 일괄등록 → 수동지정 순으로 닫기
+    if (document.getElementById('migration-modal')?.classList.contains('open')) {
+        closeMigrationModal(); return;
+    }
     if (document.getElementById('rollback-modal')?.classList.contains('open')) {
         closeRollbackModal(); return;
     }
