@@ -1836,6 +1836,35 @@ function _assignPortalFieldUpdate(updates, fieldKey, value) {
     updates[fieldKey] = value;
 }
 
+/**
+ * Firebase `updates` 객체를 로컬 포털 빌딩 객체에 반영.
+ *
+ * 문제: Object.assign(target, { 'area/grossFloorPy': 123 })는 키 이름 그대로
+ *       `target['area/grossFloorPy']` = 123 으로 저장되므로 `target.area.grossFloorPy`는
+ *       그대로 남음. 이 때문에 저장 후 재판정(detectFieldDiff) 시 구 area 값을 계속 읽어서
+ *       "여전히 불일치"로 보이는 버그 발생.
+ *
+ * 해결: path('/' 포함) 키를 감지해 중첩 객체로 풀어서 할당.
+ */
+function _applyUpdatesToLocal(target, updates) {
+    Object.entries(updates).forEach(([key, value]) => {
+        if (key.includes('/')) {
+            // path 키 → 중첩 객체에 할당
+            const parts = key.split('/');
+            let obj = target;
+            for (let i = 0; i < parts.length - 1; i++) {
+                if (obj[parts[i]] == null || typeof obj[parts[i]] !== 'object') {
+                    obj[parts[i]] = {};
+                }
+                obj = obj[parts[i]];
+            }
+            obj[parts[parts.length - 1]] = value;
+        } else {
+            target[key] = value;
+        }
+    });
+}
+
 function detectFieldDiff(excelRow, portalBuilding) {
     const diff = {};
     let warnCount = 0;
@@ -2028,18 +2057,12 @@ function matchExcelToPortal(excelRows, portalBldgs) {
 
         // 불일치 검출
         const { diff, warnCount } = detectFieldDiff(row, portalB);
-        // FIX: New 행이 실제로 포털에 있는 빌딩과 매칭된 경우 → 항상 mismatch로 분류.
-        //      이유: 엑셀의 ID번호가 'New'인데 포털에 rawResearchId가 없거나 다른 값이면,
-        //      사용자가 rawResearchId를 연결하도록 불일치로 띄워야 함. 다른 필드가 모두 같아도
-        //      ID 연결 자체가 "반드시 처리해야 할 차이"이므로 일괄 matched로 묻으면 안 됨.
-        let finalStatus;
-        if (isNewRow) {
-            finalStatus = 'mismatch';
-            mismatch++;
-        } else {
-            finalStatus = warnCount > 0 ? 'mismatch' : 'matched';
-            if (finalStatus === 'matched') matched++; else mismatch++;
-        }
+        // FIX: New 행이 포털과 매칭됐다고 해서 무조건 mismatch로 올리면 "전 필드 일치"인
+        //      건도 불일치 탭에 누적되어 사용자 처리 부담이 과장됨.
+        //      → 필드 차이(warnCount)만을 기준으로 판정하고, rawResearchId 연결은 저장 시
+        //         메타 필드로 자동 업데이트한다.
+        const finalStatus = warnCount > 0 ? 'mismatch' : 'matched';
+        if (finalStatus === 'matched') matched++; else mismatch++;
 
         results.push({ row, status: finalStatus, matched: portalB, method, score, diff, warnCount });
     });
@@ -2719,7 +2742,7 @@ window.applyBulkMismatch = async function() {
             try {
                 await update(ref(db, `buildings/${portalId}`), updates);
                 // 로컬 반영
-                Object.assign(r.matched, updates);
+                _applyUpdatesToLocal(r.matched, updates);
                 const { diff: newDiff, warnCount: newWarn } = detectFieldDiff(r.row, r.matched);
                 r.diff = newDiff; r.warnCount = newWarn;
                 r.status = newWarn > 0 ? 'mismatch' : 'matched';
@@ -3035,14 +3058,19 @@ window.applyFieldsToPortal = async function() {
         });
 
         updates.researchSyncedAt = new Date().toISOString();
-        updates.rawResearchId    = String(r.row['ID번호'] ?? '').trim();
+        // FIX: 'New'나 빈값은 저장하지 않음 (의미없는 메타 필드 저장 방지).
+        //      사용자가 엑셀에서 실제 ID를 부여하기 전까지는 rawResearchId를 건드리지 않는다.
+        const excelIdForSave = String(r.row['ID번호'] ?? '').trim();
+        if (excelIdForSave && excelIdForSave !== 'New') {
+            updates.rawResearchId = excelIdForSave;
+        }
         updates.isResearchTarget = true;
         if (r.row['세부권역_Main기준'])
             updates.subRegion = String(r.row['세부권역_Main기준']).trim();
 
         await update(ref(db, `buildings/${portalId}`), updates);
 
-        Object.assign(r.matched, updates);
+        _applyUpdatesToLocal(r.matched, updates);
         const { diff: newDiff, warnCount: newWarn } = detectFieldDiff(r.row, r.matched);
         r.diff = newDiff; r.warnCount = newWarn;
         r.status = newWarn > 0 ? 'mismatch' : 'matched';
@@ -3468,17 +3496,21 @@ window.saveManualAssign = async function() {
 
         const updates = {
             isResearchTarget:    true,
-            rawResearchId:       String(r.row['ID번호'] ?? '').trim(),
             researchMatchStatus: 'manual',
             researchSyncedAt:    now,
         };
+        // FIX: 'New'나 빈값은 rawResearchId에 저장하지 않음
+        const _manualExcelId = String(r.row['ID번호'] ?? '').trim();
+        if (_manualExcelId && _manualExcelId !== 'New') {
+            updates.rawResearchId = _manualExcelId;
+        }
         if (r.row['세부권역_Main기준'])
             updates.subRegion = String(r.row['세부권역_Main기준']).trim();
 
         await update(ref(db, `buildings/${b.id}`), updates);
 
         // 로컬 상태 반영
-        Object.assign(b, updates);
+        _applyUpdatesToLocal(b, updates);
         r.matched   = b;
         r.method    = '수동 지정';
         r.score     = null;
@@ -3699,10 +3731,14 @@ window.runBulkUpdate = async function() {
                 const portalId = r.matched.id;
                 const updates  = {
                     isResearchTarget:    true,
-                    rawResearchId:       String(r.row['ID번호'] ?? '').trim(),
                     researchMatchStatus: r.status,
                     researchSyncedAt:    now,
                 };
+                // FIX: 'New'나 빈값은 rawResearchId에 저장하지 않음
+                const _bulkExcelId = String(r.row['ID번호'] ?? '').trim();
+                if (_bulkExcelId && _bulkExcelId !== 'New') {
+                    updates.rawResearchId = _bulkExcelId;
+                }
 
                 if (includeSubRegion && r.row['세부권역_Main기준']) {
                     updates.subRegion = String(r.row['세부권역_Main기준']).trim();
@@ -3727,7 +3763,7 @@ window.runBulkUpdate = async function() {
                 try {
                     await update(ref(db, `buildings/${portalId}`), updates);
                     // 로컬 반영
-                    Object.assign(r.matched, updates);
+                    _applyUpdatesToLocal(r.matched, updates);
                     successCount++;
                     _bulkLog(`  ✓ ${r.matched.name || portalId}`, 'log-ok');
                 } catch (e) {
