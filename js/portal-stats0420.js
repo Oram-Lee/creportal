@@ -370,93 +370,26 @@ const _srAnomalyExclude = {
 };
 
 /**
- * 영구 제외 상태 (portal-stats-editor.js 와 연동)
- * 2026-04 신규 — 통계 대상 편집 UI 에서 Firebase 로드한 영구 제외를 주입받음.
- *
- * excludedBuildings : Set<buildingId>  — 빌딩 통째 제외 (연면적도 분모에서 빠짐)
- * excludedVacancies : Set<`${bid}__${vkey}`> — vacancy 단위 제외
- * filters           : 2차 필터 ({grades,regions,subRegions,vacOnly}) — 필터 적용
- */
-const _srPersistentExclude = {
-    excludedBuildings: new Set(),
-    excludedVacancies: new Set(),
-    filters:           null,
-};
-
-/**
- * portal-stats-editor.js 에서 호출하는 주입 함수.
- * Firebase 에 저장된 영구 제외 목록과 필터 설정을 portal-stats 에 반영한다.
- */
-window._srApplyPersistentExclusions = function(excludedBuildings, excludedVacancies, filters) {
-    _srPersistentExclude.excludedBuildings = excludedBuildings instanceof Set ? excludedBuildings : new Set();
-    _srPersistentExclude.excludedVacancies = excludedVacancies instanceof Set ? excludedVacancies : new Set();
-    _srPersistentExclude.filters           = filters || null;
-    // 즉시 현재 탭 재렌더
-    if (typeof _srRefreshCurrentTab === 'function') _srRefreshCurrentTab();
-};
-
-/**
- * 이상값 제외 + 영구 제외가 적용된 정규화 빌딩 배열 반환
+ * 이상값 제외가 적용된 정규화 빌딩 배열 반환
  * 통계 렌더 함수에서 srGetNormBuildings() 대신 이 함수를 사용
- *
- * 적용 순서:
- *   1) 2차 필터 (등급/권역/세부권역) — portal-stats-editor 에서 로드한 필터
- *   2) vacOnly (3차 필터) — 공실정보 매칭
- *   3) 빌딩 단위 영구 제외 — 분모에서도 완전히 빠짐
- *   4) vacancy 단위 영구 제외 — 해당 vacancy만 제외, 분모 유지
- *   5) 세션 anomaly 제외 — 기존 로직
  */
 function _srGetFilteredNormBuildings() {
-    let norm = srGetNormBuildings();
+    const norm = srGetNormBuildings();
+    if (!_srAnomalyExclude.enabled || _srAnomalyExclude.excludeSet.size === 0) return norm;
 
-    // ── 1) 2차 필터 (등급/권역/세부권역) ─────────────────────
-    const pFilters = _srPersistentExclude.filters;
-    if (pFilters) {
-        const match = (arr, val) => !arr || !arr.length || arr.includes(val);
-        norm = norm.filter(b => {
-            if (!match(pFilters.grades,     b._gradeAuto)) return false;
-            if (!match(pFilters.regions,    b._region))    return false;
-            if (pFilters.subRegions && pFilters.subRegions.length > 0
-                && !pFilters.subRegions.includes(b.subRegion || '')) return false;
-            return true;
-        });
-        // ── 2) vacOnly ─────────────────────────────────────────
-        if (pFilters.vacOnly) {
-            norm = norm.filter(b => (b._activeVacs || []).length > 0);
-        }
-    }
-
-    // ── 3) 빌딩 단위 영구 제외 ─────────────────────────────
-    if (_srPersistentExclude.excludedBuildings.size > 0) {
-        norm = norm.filter(b => !_srPersistentExclude.excludedBuildings.has(b.id));
-    }
-
-    // ── 4) vacancy 단위 영구 제외 + 5) 세션 anomaly 제외 ──
-    const anomalySet     = _srAnomalyExclude.enabled ? _srAnomalyExclude.excludeSet : null;
-    const persistentVSet = _srPersistentExclude.excludedVacancies;
-
-    if ((anomalySet && anomalySet.size > 0) || persistentVSet.size > 0) {
-        norm = norm.map(b => {
-            const safeVacs = b._activeVacs.filter(v => {
-                if (!v._key) return true;
-                // 세션 anomaly key 는 "bid::vkey", 영구 제외 key 는 "bid__vkey" (Firebase 제약)
-                if (anomalySet && anomalySet.has(`${b.id}::${v._key}`))   return false;
-                if (persistentVSet.has(`${b.id}__${v._key}`))             return false;
-                return true;
-            });
-            if (safeVacs.length === b._activeVacs.length) return b;
-            const vacancyPy = safeVacs.reduce((s, v) => s + srVacancyAreaPy(v), 0);
-            const gross     = parseFloat(b.grossFloorPy) || 0;
-            return {
-                ...b,
-                _activeVacs:  safeVacs,
-                _vacancyPy:   vacancyPy,
-                _vacancyRate: gross > 0 ? vacancyPy / gross * 100 : 0,
-            };
-        });
-    }
-
-    return norm;
+    return norm.map(b => {
+        const safeVacs = b._activeVacs.filter(v =>
+            !v._key || !_srAnomalyExclude.excludeSet.has(`${b.id}::${v._key}`)
+        );
+        const vacancyPy  = safeVacs.reduce((s, v) => s + srVacancyAreaPy(v), 0);
+        const gross      = parseFloat(b.grossFloorPy) || 0;
+        return {
+            ...b,
+            _activeVacs:  safeVacs,
+            _vacancyPy:   vacancyPy,
+            _vacancyRate: gross > 0 ? vacancyPy / gross * 100 : 0,
+        };
+    });
 }
 
 /** 이상값 제외 토글 (헤더 체크박스 onchange) */
@@ -667,10 +600,6 @@ window.openStatResearchModal = function() {
     const modal = document.getElementById('statResearchModal');
     if (!modal) { console.warn('[portal-stats] statResearchModal not found'); return; }
     modal.style.display = 'flex';
-    // 영구 제외 자동 로드 (portal-stats-editor.js 와 연동)
-    if (typeof window._seAutoLoadForStats === 'function') {
-        window._seAutoLoadForStats().catch(err => console.warn('[portal-stats] stats filter auto-load failed:', err));
-    }
     window.switchSRTab('summary');
 };
 
@@ -693,12 +622,6 @@ if (!window._srEscRegistered) {
     window._srEscRegistered = true;
     document.addEventListener('keydown', e => {
         if (e.key !== 'Escape') return;
-        // 편집 모달이 열려있으면 먼저 닫기
-        const editor = document.getElementById('stats-editor-modal');
-        if (editor && editor.style.display !== 'none' && editor.style.display !== '') {
-            if (typeof window.closeStatsEditorModal === 'function') window.closeStatsEditorModal();
-            return;
-        }
         const modal = document.getElementById('statResearchModal');
         if (modal && modal.style.display !== 'none') window.closeStatResearchModal();
     });
