@@ -78,20 +78,6 @@ const _seState = {
     // key: `${bid}__${source}__${publishDate}` → { verifiedAt, verifiedBy }
     verifiedGuides: new Map(),
 
-    // Phase 6 (2026-04): 월별·회사별 공실률 매트릭스 대표값 선택
-    // key: `${buildingId}__${yyyymm}` → { chosenSource, chosenAt, chosenBy, memo? }
-    //   chosenSource === null  → "이 월 명시적 제외" (분기 집계에서 해당 월 빼기)
-    //   chosenSource === string → 해당 (빌딩, 월) 의 대표 발행사
-    repCells: new Map(),
-
-    // Phase 6 (2026-04): 분기 집계에 쓸 "빌딩별 대표 월"
-    // key: buildingId → { yyyymm, chosenAt, chosenBy, memo? }
-    //   yyyymm === null   → "이 빌딩 전체 제외" (설계문서 § Firebase 스키마 주의: 객체 wrap)
-    //   yyyymm === string → repCells 에 존재하는 월 중 사용자가 선택한 대표 월
-    // ※ Firebase Realtime DB 특성상 value 로 null 직접 저장 시 키가 삭제되므로
-    //   value 를 객체로 감싸고 내부 필드만 null 로 표현. 감사추적 필드도 동시 확보.
-    repMonths: new Map(),
-
     // UI 상태
     selectedBuildingId:  null,       // 좌측에서 선택된 빌딩 (우측 vacancy 리스트 표시 대상)
     selectedSource:      null,       // Phase 4: 우측 회사 탭 선택 (null=첫번째 자동)
@@ -194,8 +180,6 @@ async function _seLoadStatsFilter(quarter) {
         _seState.excludedBuildings.clear();
         _seState.excludedVacancies.clear();
         _seState.verifiedGuides.clear();  // Phase 4
-        _seState.repCells.clear();        // Phase 6
-        _seState.repMonths.clear();       // Phase 6
         return { version: 0 };
     }
     const data = snap.val() || {};
@@ -221,25 +205,6 @@ async function _seLoadStatsFilter(quarter) {
     _seState.verifiedGuides.clear();
     Object.entries(data.verifiedGuides || {}).forEach(([guideKey, v]) => {
         _seState.verifiedGuides.set(guideKey, v || {});
-    });
-
-    // Phase 6: 매트릭스 대표 셀 (buildingId__yyyymm → { chosenSource, ... })
-    _seState.repCells.clear();
-    Object.entries(data.repCells || {}).forEach(([key, v]) => {
-        _seState.repCells.set(key, v || {});
-    });
-
-    // Phase 6: 빌딩별 대표 월 (buildingId → { yyyymm, chosenAt, chosenBy, memo? })
-    // ※ 과거 스펙(단순 string|null)으로 저장된 데이터와 호환 처리: string 이면 객체로 승격
-    _seState.repMonths.clear();
-    Object.entries(data.repMonths || {}).forEach(([bid, v]) => {
-        if (v === null || v === undefined) return;  // Firebase 에서 null 은 이미 키가 빠짐
-        if (typeof v === 'string') {
-            // legacy: "2025-12" 형태 → 객체로 래핑
-            _seState.repMonths.set(bid, { yyyymm: v, chosenAt: '', chosenBy: '' });
-        } else if (typeof v === 'object') {
-            _seState.repMonths.set(bid, v);
-        }
     });
 
     return { version: typeof data.version === 'number' ? data.version : 0 };
@@ -283,18 +248,6 @@ async function _seSaveStatsFilter() {
         verifiedGuidesObj[gk] = v;
     }
 
-    // Phase 6: 매트릭스 대표 셀
-    const repCellsObj = {};
-    for (const [k, v] of _seState.repCells.entries()) {
-        repCellsObj[k] = v;
-    }
-
-    // Phase 6: 빌딩별 대표 월 (value 객체 형태 그대로 저장 — null 값 회피)
-    const repMonthsObj = {};
-    for (const [bid, v] of _seState.repMonths.entries()) {
-        if (v && typeof v === 'object') repMonthsObj[bid] = v;
-    }
-
     const payload = {
         version:           newVersion,
         updatedAt:         now,
@@ -303,8 +256,6 @@ async function _seSaveStatsFilter() {
         excludedBuildings: excludedBuildingsObj,
         excludedVacancies: excludedVacanciesObj,
         verifiedGuides:    verifiedGuidesObj,  // Phase 4
-        repCells:          repCellsObj,         // Phase 6
-        repMonths:         repMonthsObj,        // Phase 6
     };
 
     // 3. /statsFilter/{quarter} 덮어쓰기
@@ -315,7 +266,7 @@ async function _seSaveStatsFilter() {
         quarter,
         action:      'bulk_apply',
         targetId:    '',
-        memo:        `v${_seState.version} → v${newVersion} 적용 (건물 제외 ${_seState.excludedBuildings.size}건, vacancy 제외 ${_seState.excludedVacancies.size}건, 검증 안내문 ${_seState.verifiedGuides.size}건, 매트릭스 셀 ${_seState.repCells.size}건, 대표월 ${_seState.repMonths.size}건)`,
+        memo:        `v${_seState.version} → v${newVersion} 적용 (건물 제외 ${_seState.excludedBuildings.size}건, vacancy 제외 ${_seState.excludedVacancies.size}건, 검증 안내문 ${_seState.verifiedGuides.size}건)`,
         user,
         ts:          now,
         prevVersion: _seState.version,
@@ -1712,10 +1663,6 @@ const _SE_ACTION_LABEL = {
     'verify_guide':      '안내문 검증',
     'unverify_guide':    '검증 해제',
     'bulk_toggle_guide': '그룹 일괄',
-    // Phase 6: 매트릭스 대표값 선택
-    'choose_cell':       '셀 선택',
-    'choose_month':      '월 선택',
-    'exclude_cell':      '셀 제외',
 };
 const _SE_ACTION_COLOR = {
     'add_building':      '#16a34a',
@@ -1727,10 +1674,6 @@ const _SE_ACTION_COLOR = {
     'verify_guide':      '#16a34a',
     'unverify_guide':    '#64748b',
     'bulk_toggle_guide': '#0891b2',
-    // Phase 6
-    'choose_cell':       '#0891b2',  // 청록 (설계문서 §로그 액션)
-    'choose_month':      '#0e7490',  // 진청록
-    'exclude_cell':      '#dc2626',  // 빨강
 };
 
 window._seToggleLog = async function() {
