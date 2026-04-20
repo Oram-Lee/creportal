@@ -10,7 +10,7 @@
  *   - 낙관적 락(version)으로 충돌 감지
  *
  * 데이터 파이프라인:
- *   1차: RAW 엑셀 빌딩 (isResearchTarget=true)
+ *   1차: RAW 엑셀 빌딩 (isResearchTarget=true 또는 researchMatchStatus)
  *     ↓
  *   2차: 등급/권역/세부권역 필터
  *     ↓
@@ -369,8 +369,9 @@ function _seSetDirty(v) {
 function _seRunPipeline() {
     const norm = srGetNormBuildings();
 
-    // 1차: RAW 엑셀 빌딩
-    const raw = norm.filter(b => b.isResearchTarget === true);
+    // 1차: RAW 엑셀 빌딩 (isResearchTarget=true 또는 researchMatchStatus 보유)
+    // portal.html 7132 패턴과 정합 — admin-research 에서 매칭된 빌딩도 포함
+    const raw = norm.filter(b => b.isResearchTarget === true || b.researchMatchStatus);
 
     // 2차: 등급/권역/세부권역 필터
     const f = _seState.filters;
@@ -524,7 +525,8 @@ function _seRenderFilters() {
     }
 
     // 세부권역: 현재 2차 필터 통과 빌딩에서 동적 추출
-    const raw = srGetNormBuildings().filter(b => b.isResearchTarget === true);
+    // 1차 RAW 필터는 _seRunPipeline 과 동일한 조건 사용
+    const raw = srGetNormBuildings().filter(b => b.isResearchTarget === true || b.researchMatchStatus);
     const match = (arr, val) => !arr || arr.length === 0 || arr.includes(val);
     const candidatePool = raw.filter(b =>
         match(f.grades, b._gradeAuto) && match(f.regions, b._region));
