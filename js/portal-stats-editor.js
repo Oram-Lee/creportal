@@ -1059,28 +1059,188 @@ window._seToggleVerifyGuide = function(bid, source, pd) {
 };
 
 /**
- * Phase 4: 원본 OCR 이미지 프리뷰 모달 오픈.
- * vacancy 필드 `pageImageUrl` + `pageNum` 을 그대로 활용 (Firebase Storage 재호출 불필요).
+ * Phase 4+5: 원본 OCR 이미지 프리뷰 모달 오픈.
  *
- * 데이터 흐름:
- *   해당 (bid, source, pd) 그룹의 vacancy → pageNum/pageImageUrl 중복 제거 + 오름차순 정렬
- *   → 좌측 페이지 리스트, 중앙 큰 이미지, 우측 해당 페이지의 vacancy 정보
+ * 데이터 흐름 (2단계):
+ *   1) 즉시: 해당 (bid, source, pd) 그룹의 vacancy → 이 빌딩 공실이 있는 페이지 좌측 퀵링크
+ *   2) 비동기: listAll(leasing-docs/{source}/{pd}) → 안내문 전체 페이지 목록 (219페이지 등)
+ *      → 네비게이션 바에서 전후 페이지 탐색 가능
+ *   URL 해상: 필요한 페이지만 lazy (vacancy.pageImageUrl 우선 재사용, 없으면 getDownloadURL)
  */
-window._seOpenGuidePreview = function(bid, source, pd) {
+window._seOpenGuidePreview = async function(bid, source, pd) {
     const modal = document.getElementById('se-guide-preview-modal');
     if (!modal) { console.warn('[StatsEditor] preview modal not found'); return; }
-    // 상태 저장 (렌더 & 핸들러에서 사용)
-    _sePreviewState.bid         = bid;
-    _sePreviewState.source      = source;
-    _sePreviewState.publishDate = pd;
-    _sePreviewState.activePage  = null;  // 첫 페이지 자동선택
-    _seRenderGuidePreview();
+    // 상태 초기화
+    _sePreviewState.bid             = bid;
+    _sePreviewState.source          = source;
+    _sePreviewState.publishDate     = pd;
+    _sePreviewState.activePage      = null;
+    _sePreviewState.allPages        = [];
+    _sePreviewState.urlCache        = new Map();
+    _sePreviewState.loadingManifest = true;
+    _sePreviewState.imageReqSeq     = 0;
+
+    // 1차 즉시 렌더: 이 빌딩 공실 페이지만 먼저 보이게
+    const groupPages = _seGetGroupPages(bid, source, pd);
+    if (groupPages.length > 0 && groupPages[0].pageNum !== 'unknown') {
+        _sePreviewState.activePage = groupPages[0].pageNum;
+    }
+
     modal.classList.add('show');
+    _seRenderGuidePreview();
+
+    // 키보드 리스너 부착 (중복 방지)
+    if (!_sePreviewState.keyHandler) {
+        _sePreviewState.keyHandler = _seGpKeyHandler;
+        document.addEventListener('keydown', _sePreviewState.keyHandler);
+    }
+
+    // 2차 비동기: 안내문 전체 파일 목록 로드
+    try {
+        const res = await _seLoadFolderManifest(source, pd);
+        if (res.ok) {
+            _sePreviewState.allPages = res.files;
+            console.log(`[StatsEditor] manifest loaded: ${source}/${pd} — ${res.files.length}페이지`);
+        } else {
+            console.warn('[StatsEditor] manifest load failed:', res.error);
+            // Fallback: 그룹 매핑 페이지만 allPages 에 채워서 네비게이션은 동작하게
+            _sePreviewState.allPages = groupPages
+                .filter(p => p.pageNum !== 'unknown')
+                .map(p => ({
+                    pageNum:    parseInt(p.pageNum, 10) || 0,
+                    fileName:   '',
+                    storageRef: null,
+                }));
+        }
+    } finally {
+        _sePreviewState.loadingManifest = false;
+        _seRenderGuidePreview();
+        _seUpdatePreviewImage();  // 첫 이미지 lazy 로드
+    }
 };
+
+/**
+ * Phase 5: 안내문 폴더의 파일 목록 가져오기 (listAll, 메타데이터만).
+ * 파일명 패턴 `page_004.jpg` 에서 pageNum 추출 + pageNum 오름차순 정렬.
+ */
+async function _seLoadFolderManifest(source, pd) {
+    try {
+        const { storage, storageRef } = await import('./portal-firebase.js');
+        const { listAll } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js');
+        const sfx = s => String(s).replace(/[\s.]+/g, '_').replace(/__+/g, '_');
+        const path = `leasing-docs/${sfx(source)}/${sfx(pd)}`;
+
+        const result = await listAll(storageRef(storage, path));
+        const files = result.items
+            .map(ref => {
+                // 파일명에서 첫 번째 숫자 시퀀스를 pageNum 으로 사용
+                const m = ref.name.match(/(\d+)/);
+                return {
+                    pageNum:    m ? parseInt(m[1], 10) : null,
+                    fileName:   ref.name,
+                    storageRef: ref,
+                };
+            })
+            .filter(f => f.pageNum != null)
+            .sort((a, b) => a.pageNum - b.pageNum);
+        return { ok: true, files, path };
+    } catch (err) {
+        return { ok: false, error: err.message };
+    }
+}
+
+/**
+ * Phase 5: 특정 pageNum 의 다운로드 URL 해상 (캐시 우선).
+ *   우선순위: urlCache > vacancy.pageImageUrl > getDownloadURL(storageRef)
+ */
+async function _seResolvePageUrl(pageNum) {
+    if (_sePreviewState.urlCache.has(pageNum)) {
+        return _sePreviewState.urlCache.get(pageNum);
+    }
+    // 이 빌딩 그룹의 vacancy 가 이미 보유한 URL 재사용
+    const gp = _seGetGroupPages(_sePreviewState.bid, _sePreviewState.source, _sePreviewState.publishDate);
+    const mapped = gp.find(p => String(p.pageNum) === String(pageNum));
+    if (mapped && mapped.pageImageUrl) {
+        _sePreviewState.urlCache.set(pageNum, mapped.pageImageUrl);
+        return mapped.pageImageUrl;
+    }
+    // allPages 에서 storageRef 로 fetch
+    const file = _sePreviewState.allPages.find(f => f.pageNum === pageNum);
+    if (!file || !file.storageRef) return null;
+    try {
+        const { getDownloadURL } = await import('https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js');
+        const url = await getDownloadURL(file.storageRef);
+        _sePreviewState.urlCache.set(pageNum, url);
+        return url;
+    } catch (err) {
+        console.warn('[StatsEditor] getDownloadURL failed:', err);
+        return null;
+    }
+}
+
+/** Phase 5: 이미지 영역만 비동기로 업데이트 (race-condition 방지) */
+async function _seUpdatePreviewImage() {
+    const imgSlot = document.getElementById('se-gp-imgslot');
+    if (!imgSlot) return;
+    const pn = _sePreviewState.activePage;
+    if (pn == null) {
+        imgSlot.innerHTML = `<div style="color:#cbd5e1; font-size:13px;">표시할 페이지가 없습니다.</div>`;
+        return;
+    }
+    // 캐시에 있으면 즉시 표시 (로딩 깜빡임 방지)
+    if (_sePreviewState.urlCache.has(pn)) {
+        _seDisplayImage(_sePreviewState.urlCache.get(pn), pn);
+        return;
+    }
+    // 로딩 placeholder
+    imgSlot.innerHTML = `<div style="color:#94a3b8; font-size:13px;">🔄 페이지 ${_seEsc(pn)} 로딩중...</div>`;
+    // 시퀀스 증가 후 fetch — 도중 다른 페이지 요청 오면 이 응답 무시
+    const mySeq = ++_sePreviewState.imageReqSeq;
+    const url = await _seResolvePageUrl(pn);
+    if (mySeq !== _sePreviewState.imageReqSeq) return;  // 다른 요청이 덮어씀
+    if (!url) {
+        imgSlot.innerHTML = `<div style="color:#fbbf24; text-align:center; padding:40px;">
+            ⚠️ 페이지 ${_seEsc(pn)} 의 이미지를 가져올 수 없습니다.
+        </div>`;
+        return;
+    }
+    _seDisplayImage(url, pn);
+}
+
+function _seDisplayImage(url, pageNum) {
+    const imgSlot = document.getElementById('se-gp-imgslot');
+    if (!imgSlot) return;
+    imgSlot.innerHTML = `<img src="${_seEsc(url)}" alt="page ${_seEsc(pageNum)}"
+        class="se-gp-img"
+        onerror="this.outerHTML='<div style=&quot;color:#ef4444;padding:40px;text-align:center;&quot;>❌ 이미지 로드 실패<br><span style=&quot;font-size:11px;opacity:0.8;&quot;>페이지 ${_seEsc(pageNum)} · Storage 권한 또는 URL 오류</span></div>'">`;
+}
+
+/** Phase 5: 키보드 단축키 핸들러 (document keydown) */
+function _seGpKeyHandler(e) {
+    const modal = document.getElementById('se-guide-preview-modal');
+    if (!modal || !modal.classList.contains('show')) return;
+    // 숫자 입력 중인 인풋이면 ← → 허용 X (페이지 번호 입력 방해 금지)
+    if (e.target && e.target.tagName === 'INPUT') {
+        if (e.key === 'Escape') { e.preventDefault(); _seCloseGuidePreview(); }
+        return;
+    }
+    switch (e.key) {
+        case 'ArrowLeft':  e.preventDefault(); _sePageStep(-1); break;
+        case 'ArrowRight': e.preventDefault(); _sePageStep(1);  break;
+        case 'Home':       e.preventDefault(); _sePageFirst();  break;
+        case 'End':        e.preventDefault(); _sePageLast();   break;
+        case 'Escape':     e.preventDefault(); _seCloseGuidePreview(); break;
+    }
+}
 
 window._seCloseGuidePreview = function() {
     const modal = document.getElementById('se-guide-preview-modal');
     if (modal) modal.classList.remove('show');
+    // 키보드 리스너 제거 — 메모리 누수 방지
+    if (_sePreviewState.keyHandler) {
+        document.removeEventListener('keydown', _sePreviewState.keyHandler);
+        _sePreviewState.keyHandler = null;
+    }
 };
 
 /** 프리뷰 모달 전역 상태 */
@@ -1089,6 +1249,13 @@ const _sePreviewState = {
     source:      null,
     publishDate: null,
     activePage:  null,  // 현재 표시 중인 pageNum (또는 'unknown' — 페이지번호 없는 경우)
+
+    // Phase 5: 안내문 전체 네비게이션
+    allPages:        [],             // [{pageNum:int, fileName:string, storageRef:ref|null}]
+    urlCache:        new Map(),      // pageNum → downloadURL (lazy 해상)
+    loadingManifest: false,          // listAll 진행 중 플래그
+    imageReqSeq:     0,              // 이미지 race-condition 방지용 시퀀스
+    keyHandler:      null,           // document keydown 리스너 참조 (제거용)
 };
 
 /**
@@ -1125,9 +1292,9 @@ function _seGetGroupPages(bid, source, pd) {
     return pages;
 }
 
-/** 프리뷰 모달 전체 렌더 (페이지 리스트 + 중앙 이미지 + 우측 정보) */
+/** 프리뷰 모달 전체 렌더 (페이지 퀵링크 + 네비게이션 바 + 중앙 이미지 슬롯 + 우측 정보) */
 function _seRenderGuidePreview() {
-    const { bid, source, publishDate } = _sePreviewState;
+    const { bid, source, publishDate, allPages, loadingManifest } = _sePreviewState;
     if (!bid || !source || !publishDate) return;
 
     const b = (window.state?.allBuildings || []).find(x => x.id === bid);
@@ -1136,26 +1303,41 @@ function _seRenderGuidePreview() {
     const subEl    = document.getElementById('se-gp-subtitle');
     if (titleEl) titleEl.textContent = `🖼 ${source} · ${publishDate} — ${bldgName}`;
 
-    const pages = _seGetGroupPages(bid, source, publishDate);
+    const groupPages = _seGetGroupPages(bid, source, publishDate);
+
     if (subEl) {
-        subEl.textContent = pages.length > 0
-            ? `${pages.length}개 페이지 · 공실 ${pages.reduce((s,p)=>s+p.vacancies.length,0)}건`
-            : '이 그룹의 페이지 정보가 없습니다.';
+        const gcount   = groupPages.reduce((s,p)=>s+p.vacancies.length,0);
+        const manifest = loadingManifest
+            ? '안내문 전체 로딩중…'
+            : (allPages.length > 0 ? `전체 ${allPages.length}페이지` : '전체 페이지 정보 없음');
+        subEl.textContent = `이 빌딩 공실 ${groupPages.length}페이지 · ${gcount}건 · ${manifest}`;
     }
 
     // activePage 미설정이면 첫 페이지
-    if (_sePreviewState.activePage == null && pages.length > 0) {
-        _sePreviewState.activePage = pages[0].pageNum;
+    if (_sePreviewState.activePage == null) {
+        if (groupPages.length > 0 && groupPages[0].pageNum !== 'unknown') {
+            _sePreviewState.activePage = groupPages[0].pageNum;
+        } else if (allPages.length > 0) {
+            _sePreviewState.activePage = allPages[0].pageNum;
+        }
     }
+    const curPn = _sePreviewState.activePage;
 
-    // 좌: 페이지 리스트
+    // ── 좌: 이 빌딩 공실 페이지 퀵링크 ─────────────────
     const listEl = document.getElementById('se-gp-pagelist');
     if (listEl) {
-        if (pages.length === 0) {
-            listEl.innerHTML = `<div class="se-empty" style="padding:20px 8px;">페이지 정보 없음</div>`;
+        if (groupPages.length === 0) {
+            listEl.innerHTML = `<div class="se-empty" style="padding:20px 8px;">
+                공실 페이지 정보 없음
+            </div>`;
         } else {
-            listEl.innerHTML = pages.map(p => {
-                const on = (String(p.pageNum) === String(_sePreviewState.activePage)) ? ' se-gp-page-on' : '';
+            const header = `<div style="font-size:10px; color:var(--text-muted);
+                            padding:4px 6px; margin-bottom:6px; text-transform:uppercase;
+                            letter-spacing:0.05em; font-weight:600;">
+                이 빌딩 공실
+            </div>`;
+            const items = groupPages.map(p => {
+                const on = (String(p.pageNum) === String(curPn)) ? ' se-gp-page-on' : '';
                 const label = (p.pageNum === 'unknown') ? '페이지?' : `p.${p.pageNum}`;
                 return `<button class="se-gp-page-btn${on}"
                     onclick="_seSelectPreviewPage('${_seEsc(p.pageNum)}')">
@@ -1163,43 +1345,67 @@ function _seRenderGuidePreview() {
                     <div class="se-gp-page-btn-meta">공실 ${p.vacancies.length}건</div>
                 </button>`;
             }).join('');
+            listEl.innerHTML = header + items;
         }
     }
 
-    // 현재 활성 페이지 정보
-    const cur = pages.find(p => String(p.pageNum) === String(_sePreviewState.activePage))
-             || pages[0];
-
-    // 중: 이미지
-    const imgSlot = document.getElementById('se-gp-imgslot');
-    if (imgSlot) {
-        if (!cur) {
-            imgSlot.innerHTML = `<div style="color:#cbd5e1; font-size:13px;">표시할 페이지가 없습니다.</div>`;
-        } else if (!cur.pageImageUrl) {
-            imgSlot.innerHTML = `
-                <div style="color:#fbbf24; text-align:center; padding:40px;">
-                    ⚠️ 이 페이지의 이미지 URL이 없습니다.<br>
-                    <span style="font-size:11px; opacity:0.7;">pageImageUrl 필드가 비어있어요.</span>
-                </div>`;
+    // ── 중앙 위: 네비게이션 바 ─────────────────────────
+    const navEl = document.getElementById('se-gp-nav');
+    if (navEl) {
+        if (allPages.length === 0) {
+            navEl.innerHTML = loadingManifest
+                ? `<div style="color:#94a3b8; font-size:12px;">🔄 안내문 전체 페이지 목록 로딩 중…</div>`
+                : `<div style="color:#fbbf24; font-size:12px;">⚠️ 전체 페이지 목록을 가져오지 못했습니다. 이 빌딩 공실 페이지만 탐색 가능합니다.</div>`;
         } else {
-            imgSlot.innerHTML = `<img src="${_seEsc(cur.pageImageUrl)}" alt="page ${_seEsc(cur.pageNum)}"
-                class="se-gp-img"
-                onerror="this.outerHTML='<div style=&quot;color:#ef4444;padding:40px;text-align:center;&quot;>❌ 이미지 로드 실패<br><span style=&quot;font-size:11px;opacity:0.8;&quot;>URL은 있지만 Storage 권한이나 경로 오류</span></div>'">`;
+            const curIdx = allPages.findIndex(p => p.pageNum === curPn);
+            const minP = allPages[0].pageNum;
+            const maxP = allPages[allPages.length - 1].pageNum;
+            const atFirst = curIdx <= 0;
+            const atLast  = curIdx < 0 || curIdx >= allPages.length - 1;
+            navEl.innerHTML = `
+                <button class="se-gp-nav-btn" onclick="_sePageFirst()"
+                        ${atFirst ? 'disabled' : ''} title="첫 페이지 (Home)">⏮</button>
+                <button class="se-gp-nav-btn" onclick="_sePageStep(-1)"
+                        ${atFirst ? 'disabled' : ''} title="이전 (←)">◀ 이전</button>
+                <div class="se-gp-nav-info">
+                    <span>p.</span>
+                    <input type="number" class="se-gp-nav-input"
+                        value="${curPn != null ? curPn : ''}"
+                        min="${minP}" max="${maxP}"
+                        onchange="_seGoToPage(this.value); this.blur();"
+                        title="페이지 번호 직접 입력">
+                    <span>/ ${maxP}</span>
+                    <span class="se-gp-nav-subtext">
+                        · 실존 ${curIdx + 1}/${allPages.length}
+                    </span>
+                </div>
+                <button class="se-gp-nav-btn" onclick="_sePageStep(1)"
+                        ${atLast ? 'disabled' : ''} title="다음 (→)">다음 ▶</button>
+                <button class="se-gp-nav-btn" onclick="_sePageLast()"
+                        ${atLast ? 'disabled' : ''} title="마지막 (End)">⏭</button>
+                <span class="se-gp-nav-hint">← → Home End · Esc</span>
+            `;
         }
     }
 
-    // 우: 해당 페이지의 vacancy 정보 + 검증 버튼
+    // ── 중앙 이미지 영역은 _seUpdatePreviewImage() 가 비동기로 처리 ─────
+
+    // ── 우: 현재 페이지의 vacancy + 검증 버튼 ────────────
     const sideEl = document.getElementById('se-gp-sidebar');
     if (sideEl) {
         const gk = _seMakeGuideKey(bid, source, publishDate);
         const isVerified = _seState.verifiedGuides.has(gk);
         const verInfo    = isVerified ? _seState.verifiedGuides.get(gk) : null;
 
-        const vacsHtml = cur ? cur.vacancies.map(v => {
+        // 현재 페이지에 매핑된 이 빌딩 vacancy 찾기
+        const mappedPage = groupPages.find(p => String(p.pageNum) === String(curPn));
+        const isMapped   = !!mappedPage;
+
+        const vacsHtml = isMapped ? mappedPage.vacancies.map(v => {
             const ck = _seMakeVacKey(bid, v._key || '');
             const exc = _seState.excludedVacancies.has(ck);
             return `<div class="se-gp-vac-card${exc ? ' se-gp-vac-excluded' : ''}">
-                <div class="se-gp-vac-head">${_seEsc(v.floor || v.floors || '?')}${String(v.floor||'').match(/^\d+$/) ? 'F' : ''} ${exc ? '· 제외됨' : ''}</div>
+                <div class="se-gp-vac-head">${_seEsc(v.floor || v.floors || '?')}${String(v.floor||'').match(/^\d+$/) ? 'F' : ''}${exc ? ' · 제외됨' : ''}</div>
                 <div class="se-gp-vac-row"><span>임대면적</span><span>${_seFmtNum(v.rentArea)}${v.rentArea ? '평' : ''}</span></div>
                 <div class="se-gp-vac-row"><span>전용면적</span><span>${_seFmtNum(v.exclusiveArea)}${v.exclusiveArea ? '평' : ''}</span></div>
                 <div class="se-gp-vac-row"><span>보증금/평</span><span>${_seFmtNum(v.depositPy)}</span></div>
@@ -1207,13 +1413,20 @@ function _seRenderGuidePreview() {
                 <div class="se-gp-vac-row"><span>관리비/평</span><span>${_seFmtNum(v.maintenancePy)}</span></div>
                 <div class="se-gp-vac-row"><span>입주</span><span>${_seEsc(v.moveInDate || '-')}</span></div>
             </div>`;
-        }).join('') : '';
+        }).join('') : `
+            <div style="padding:14px; background:#fef9c3; border:1px solid #fde047;
+                        border-radius:6px; font-size:12px; color:#713f12; text-align:center;">
+                ℹ️ 이 페이지에는<br>이 빌딩의 공실 매핑이 없습니다.
+                <div style="font-size:11px; opacity:0.8; margin-top:6px;">
+                    (안내문 전체 페이지 탐색 중)
+                </div>
+            </div>`;
 
         sideEl.innerHTML = `
             <div style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">
-                📋 현재 페이지에 매핑된 공실
+                📋 ${isMapped ? '현재 페이지에 매핑된 공실' : '페이지 ' + _seEsc(curPn)}
             </div>
-            ${vacsHtml || '<div class="se-empty" style="padding:20px 8px;">없음</div>'}
+            ${vacsHtml}
             <div class="se-gp-verify-wrap">
                 ${isVerified ? `
                     <div style="font-size:11px; color:#16a34a; margin-bottom:6px;">
@@ -1234,8 +1447,62 @@ function _seRenderGuidePreview() {
 }
 
 window._seSelectPreviewPage = function(pageNum) {
-    _sePreviewState.activePage = pageNum;
+    // 문자열 "unknown" 도 허용, 아니면 숫자 변환
+    const parsed = (pageNum === 'unknown') ? 'unknown' : (parseInt(pageNum, 10) || pageNum);
+    _sePreviewState.activePage = parsed;
     _seRenderGuidePreview();
+    _seUpdatePreviewImage();
+};
+
+// ─ Phase 5: 안내문 전체 네비게이션 핸들러 ─────────────────
+/** 숫자 직접 입력 (input onchange) 또는 프로그램 호출 */
+window._seGoToPage = function(pageNum) {
+    const target = parseInt(pageNum, 10);
+    if (!Number.isFinite(target)) return;
+    const pages = _sePreviewState.allPages;
+    if (pages.length === 0) return;
+    const minP = pages[0].pageNum;
+    const maxP = pages[pages.length - 1].pageNum;
+    const clamped = Math.max(minP, Math.min(maxP, target));
+    // 정확히 존재하면 그걸, 없으면 그 이상의 최초 페이지
+    let file = pages.find(p => p.pageNum === clamped);
+    if (!file) file = pages.find(p => p.pageNum >= clamped) || pages[pages.length - 1];
+    _sePreviewState.activePage = file.pageNum;
+    _seRenderGuidePreview();
+    _seUpdatePreviewImage();
+};
+
+/** 상대 이동: -1 이전, +1 다음 */
+window._sePageStep = function(delta) {
+    const pages = _sePreviewState.allPages;
+    if (pages.length === 0) return;
+    const curIdx = pages.findIndex(p => p.pageNum === _sePreviewState.activePage);
+    if (curIdx < 0) {
+        _sePreviewState.activePage = pages[0].pageNum;
+    } else {
+        const nextIdx = Math.max(0, Math.min(pages.length - 1, curIdx + delta));
+        _sePreviewState.activePage = pages[nextIdx].pageNum;
+    }
+    _seRenderGuidePreview();
+    _seUpdatePreviewImage();
+};
+
+window._sePageFirst = function() {
+    const pages = _sePreviewState.allPages;
+    if (pages.length > 0) {
+        _sePreviewState.activePage = pages[0].pageNum;
+        _seRenderGuidePreview();
+        _seUpdatePreviewImage();
+    }
+};
+
+window._sePageLast = function() {
+    const pages = _sePreviewState.allPages;
+    if (pages.length > 0) {
+        _sePreviewState.activePage = pages[pages.length - 1].pageNum;
+        _seRenderGuidePreview();
+        _seUpdatePreviewImage();
+    }
 };
 
 /** 빌딩 포함/제외 토글 */
