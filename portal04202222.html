@@ -2235,84 +2235,8 @@
     #stats-editor-modal .se-vac-cell-cb {
         width: 14px; height: 14px; cursor: pointer; accent-color: #1a73e8;
     }
-    </style>
-
-    <!-- 원본 이미지 프리뷰 모달 (Phase 4, 2026-04) — 편집 모달 위에 뜬다 -->
-    <div id="se-guide-preview-modal" style="display:none; position:fixed; top:50%; left:50%;
-         transform:translate(-50%,-50%); background:var(--bg-card); border-radius:14px;
-         padding:0; width:97%; max-width:1400px; z-index:1040;
-         box-shadow:0 16px 56px rgba(0,0,0,0.5); max-height:95vh;
-         flex-direction:column; overflow:hidden;">
-        <div style="padding:14px 18px; background:linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
-                    color:#fff; display:flex; justify-content:space-between; align-items:center;">
-            <div>
-                <div id="se-gp-title" style="font-size:16px; font-weight:700;">🖼 원본 이미지</div>
-                <div id="se-gp-subtitle" style="font-size:12px; opacity:0.9; margin-top:2px;"></div>
-            </div>
-            <button onclick="_seCloseGuidePreview()"
-                    style="background:transparent; border:1px solid rgba(255,255,255,0.5);
-                    color:#fff; width:32px; height:32px; border-radius:6px; cursor:pointer; font-size:18px;">×</button>
-        </div>
-        <div id="se-gp-body" style="display:grid; grid-template-columns:120px 1fr 260px;
-                    gap:0; flex:1; min-height:500px; max-height:calc(95vh - 60px);">
-            <!-- 좌: 페이지 썸네일 리스트 -->
-            <div id="se-gp-pagelist" style="border-right:1px solid var(--border-color);
-                        background:var(--bg-secondary); overflow-y:auto; padding:8px;"></div>
-            <!-- 중: 큰 이미지 -->
-            <div id="se-gp-imgwrap" style="overflow:auto; background:#1f2937;
-                        display:flex; align-items:center; justify-content:center; padding:12px;">
-                <div id="se-gp-imgslot" style="max-width:100%; max-height:100%;"></div>
-            </div>
-            <!-- 우: 현재 페이지의 vacancy 정보 + 검증 버튼 -->
-            <div id="se-gp-sidebar" style="border-left:1px solid var(--border-color);
-                        overflow-y:auto; padding:12px; background:var(--bg-card);"></div>
-        </div>
-    </div>
-    <style>
-    #se-guide-preview-modal.show { display: flex !important; }
-    #se-guide-preview-modal .se-gp-page-btn {
-        display: block; width: 100%; margin-bottom: 6px;
-        padding: 8px 10px; border: 1px solid var(--border-color);
-        border-radius: 6px; background: var(--bg-card); cursor: pointer;
-        font-size: 12px; font-weight: 600; color: var(--text-primary);
-        text-align: left; transition: all 0.15s;
-    }
-    #se-guide-preview-modal .se-gp-page-btn:hover { border-color: #0891b2; }
-    #se-guide-preview-modal .se-gp-page-btn.se-gp-page-on {
-        background: #0891b2; color: #fff; border-color: #0891b2;
-    }
-    #se-guide-preview-modal .se-gp-page-btn-meta {
-        font-size: 10px; font-weight: 400; opacity: 0.85; margin-top: 2px;
-    }
-    #se-guide-preview-modal img.se-gp-img {
-        max-width: 100%; max-height: calc(95vh - 100px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-    }
-    #se-guide-preview-modal .se-gp-vac-card {
-        background: #f8fafc; border: 1px solid var(--border-color);
-        border-radius: 6px; padding: 10px; margin-bottom: 8px;
-        font-size: 12px;
-    }
-    #se-guide-preview-modal .se-gp-vac-card.se-gp-vac-excluded { opacity: 0.5; background: #fef2f2; }
-    #se-guide-preview-modal .se-gp-vac-head {
-        font-size: 13px; font-weight: 700; color: #1a73e8; margin-bottom: 4px;
-    }
-    #se-guide-preview-modal .se-gp-vac-row {
-        display: flex; justify-content: space-between; padding: 2px 0;
-        color: var(--text-primary);
-    }
-    #se-guide-preview-modal .se-gp-vac-row span:first-child { color: var(--text-muted); }
-    #se-guide-preview-modal .se-gp-verify-wrap {
-        padding: 12px; border-top: 1px solid var(--border-color);
-        background: var(--bg-secondary); border-radius: 8px; margin-top: 10px;
-    }
-    #se-guide-preview-modal .se-gp-verify-btn {
-        width: 100%; padding: 10px 14px; border: none; border-radius: 6px;
-        font-size: 13px; font-weight: 700; cursor: pointer;
-        background: #16a34a; color: #fff;
-    }
-    #se-guide-preview-modal .se-gp-verify-btn.se-verified {
-        background: #fff; color: #16a34a; border: 2px solid #16a34a;
+    #stats-editor-modal .se-empty {
+        padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 13px;
     }
     </style>
 
