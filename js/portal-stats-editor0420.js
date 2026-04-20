@@ -27,7 +27,7 @@
  *   - window.state.currentUser — 사용자 정보
  *   - srGetNormBuildings() — 정규화 빌딩 (portal-stats.js)
  *   - srActiveVacancies() — 활성 공실 (portal-stats.js)
- *   - Firebase DB (./portal-firebase.js)
+ *   - Firebase DB (./js/portal-firebase.js)
  *
  * Firebase 스키마:
  *   /statsFilter/{quarter}
@@ -77,9 +77,6 @@ const _seState = {
     // UI 상태
     selectedBuildingId: null,       // 좌측에서 선택된 빌딩 (우측 vacancy 리스트 표시 대상)
     searchQuery:        '',
-
-    // Phase 3: 미저장 변경 추적
-    dirty:              false,      // 마지막 적용 후 변경 있었는지
 };
 
 /** 편집 이력 UI 상태 (접기/펴기) */
@@ -91,16 +88,11 @@ let _seLogExpanded = false;
 
 /**
  * Firebase 키 제약 회피: :: → __
- *
- * ⚠️ 주의 (Phase 2): Firebase auto-key (vacId) 는 영숫자 + '-' 구성이므로 '__' 포함 위험 없음.
- * 그러나 buildingId 가 향후 수동 부여 형태로 바뀌면 파싱 충돌 가능.
- * 현재는 excludedVacancies 의 value 에 buildingId/vacancyKey 가 명시 저장되므로
- * _seParseVacKey 는 사용하지 않음. (방어용 보관)
+ * 원본 vacancyKey 에 __ 가 들어있으면 문제 — srActiveVacancies 의 _key 형식 확인 후 안전성 검증 필요.
  */
 function _seMakeVacKey(buildingId, vacancyKey) {
     return `${buildingId}__${vacancyKey}`;
 }
-/** @deprecated Phase 2 기준 사용처 없음. 필요 시 excludedVacancies 의 value 에서 직접 참조 권장. */
 function _seParseVacKey(combinedKey) {
     const idx = combinedKey.indexOf('__');
     if (idx < 0) return { buildingId: combinedKey, vacancyKey: '' };
@@ -155,7 +147,7 @@ function _seDefaultMemo(user) {
  * @returns {Promise<{version: number}>}
  */
 async function _seLoadStatsFilter(quarter) {
-    const { db, ref, get } = await import('./portal-firebase.js');
+    const { db, ref, get } = await import('./js/portal-firebase.js');
     const snap = await get(ref(db, `statsFilter/${quarter}`));
     if (!snap.exists()) {
         // 신규 분기 — 빈 상태
@@ -191,7 +183,7 @@ async function _seLoadStatsFilter(quarter) {
  * @returns {Promise<{ok: boolean, reason?: string, newVersion?: number}>}
  */
 async function _seSaveStatsFilter() {
-    const { db, ref, get, update, push, set } = await import('./portal-firebase.js');
+    const { db, ref, get, update, push, set } = await import('./js/portal-firebase.js');
     const quarter = _seState.quarter;
     if (!quarter) return { ok: false, reason: '분기가 선택되지 않았습니다.' };
 
@@ -252,7 +244,7 @@ async function _seSaveStatsFilter() {
  * 최근 편집 이력 로드 (해당 분기 최근 20건)
  */
 async function _seLoadRecentLogs(quarter, limit = 20) {
-    const { db, ref, get } = await import('./portal-firebase.js');
+    const { db, ref, get } = await import('./js/portal-firebase.js');
     const snap = await get(ref(db, 'statsFilterLogs'));
     if (!snap.exists()) return [];
     const all = snap.val() || {};
@@ -262,100 +254,6 @@ async function _seLoadRecentLogs(quarter, limit = 20) {
         .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
         .slice(0, limit);
     return filtered;
-}
-
-/**
- * Phase 3: 개별 액션 로그 즉시 Firebase push.
- * 실패해도 UI 는 진행 (낙관적). 에러는 콘솔에만.
- *
- * @param {string} action     'add_building' | 'remove_building' | 'add_vacancy' | 'remove_vacancy' | 'filter_change'
- * @param {string} targetId   빌딩 id 또는 "bid__vkey" 또는 filter 키
- * @param {string} targetLabel 빌딩명 또는 "YYYY-MM source floor" 등 사람이 보는 라벨
- * @param {string} memo       사용자 메모 or 기본값
- */
-async function _sePushActionLog(action, targetId, targetLabel, memo) {
-    try {
-        const { db, ref, push } = await import('./portal-firebase.js');
-        await push(ref(db, 'statsFilterLogs'), {
-            quarter:     _seState.quarter,
-            action,
-            targetId:    targetId    || '',
-            targetLabel: targetLabel || '',
-            memo:        memo        || '',
-            user:        _seGetCurrentUser(),
-            ts:          _seNow(),
-            prevVersion: _seState.version,
-        });
-    } catch (err) {
-        console.warn('[StatsEditor] action log push failed:', err, { action, targetId });
-    }
-}
-
-/**
- * Phase 3: 편집 이력 패널이 열려있다면 재로드 (실시간 반영).
- */
-async function _seReloadLogPanelIfOpen() {
-    if (!_seLogExpanded) return;
-    const body = document.getElementById('se-log-body');
-    if (!body) return;
-    // 현재 분기 로드
-    try {
-        const logs = await _seLoadRecentLogs(_seState.quarter, 20);
-        if (logs.length === 0) {
-            body.innerHTML = `<div style="padding:10px; color:var(--text-muted); font-size:12px;">편집 이력 없음</div>`;
-        } else {
-            body.innerHTML = logs.map(l => {
-                const act = l.action || '-';
-                const label = (typeof _SE_ACTION_LABEL !== 'undefined' && _SE_ACTION_LABEL[act]) || act;
-                const color = (typeof _SE_ACTION_COLOR !== 'undefined' && _SE_ACTION_COLOR[act]) || '#64748b';
-                const ts = (l.ts || '').slice(0, 16).replace('T', ' ');
-                return `
-                <div class="se-log-row">
-                    <span class="se-log-ts">${_seEsc(ts)}</span>
-                    <span class="se-log-user">${_seEsc(l.user || '-')}</span>
-                    <span class="se-log-action" style="color:${color};">${_seEsc(label)}</span>
-                    <span class="se-log-memo">${_seEsc(l.targetLabel ? `${l.targetLabel} — ` : '')}${_seEsc(l.memo || '')}</span>
-                </div>`;
-            }).join('');
-        }
-        body.dataset.loadedQuarter = _seState.quarter;
-    } catch (err) {
-        console.warn('[StatsEditor] log panel reload failed:', err);
-    }
-}
-
-/**
- * Phase 3: dirty 플래그 설정 및 beforeunload 핸들러 등록/해제 관리.
- * dirty=true 로 전환 시 beforeunload 리스너 부착, false 로 전환 시 해제.
- */
-function _seBeforeUnloadHandler(e) {
-    if (!_seState.dirty) return;
-    // 크롬 최신 정책: 커스텀 메시지는 표시 안 되지만 네이티브 확인창은 뜸
-    e.preventDefault();
-    e.returnValue = '저장되지 않은 변경 사항이 있습니다. 정말 나가시겠습니까?';
-    return e.returnValue;
-}
-function _seSetDirty(v) {
-    const was = _seState.dirty;
-    _seState.dirty = !!v;
-    if (was === _seState.dirty) return;  // 변화 없으면 skip
-
-    if (_seState.dirty) {
-        window.addEventListener('beforeunload', _seBeforeUnloadHandler);
-    } else {
-        window.removeEventListener('beforeunload', _seBeforeUnloadHandler);
-    }
-    // 적용 버튼에 dirty 상태 표시 (시각적 피드백)
-    const btn = document.getElementById('se-apply-btn');
-    if (btn) {
-        if (_seState.dirty) {
-            btn.textContent = '✓ 적용 (변경 있음)';
-            btn.style.boxShadow = '0 0 0 3px rgba(251, 191, 36, 0.5)';
-        } else {
-            btn.textContent = '✓ 적용';
-            btn.style.boxShadow = '';
-        }
-    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -394,11 +292,9 @@ function _seRunPipeline() {
     // 검색 필터 (UI 전용 — 건수엔 영향 X, 반환 리스트에만 적용)
     const query = _seState.searchQuery.trim().toLowerCase();
     const displayBuildings = query
-        ? afterVacOnly.filter(b => {
-            const nm = (b.name || b.buildingName || '').toLowerCase();
-            const ad = (b.address || '').toLowerCase();
-            return nm.includes(query) || ad.includes(query);
-        })
+        ? afterVacOnly.filter(b =>
+            (b.name || '').toLowerCase().includes(query)
+            || (b.address || '').toLowerCase().includes(query))
         : afterVacOnly;
 
     return {
@@ -425,7 +321,6 @@ window.openStatsEditorModal = async function() {
     _seState.loaded  = false;
     _seState.searchQuery = '';
     _seState.selectedBuildingId = null;
-    _seSetDirty(false);  // Phase 3: 모달 열 때 dirty 리셋
 
     // 모달 표시
     modal.style.display = 'flex';
@@ -438,15 +333,6 @@ window.openStatsEditorModal = async function() {
 };
 
 window.closeStatsEditorModal = function() {
-    // Phase 3: 미저장 변경 있으면 경고
-    if (_seState.dirty) {
-        const ok = confirm('저장되지 않은 변경 사항이 있습니다.\n' +
-                           '이대로 닫으면 변경이 메모리에서 사라집니다.\n' +
-                           '(편집 이력 로그는 이미 Firebase 에 기록되었습니다.)\n\n' +
-                           '정말 닫으시겠습니까?');
-        if (!ok) return;
-    }
-    _seSetDirty(false);  // beforeunload 해제
     const modal = document.getElementById('stats-editor-modal');
     if (modal) modal.style.display = 'none';
 };
@@ -586,9 +472,7 @@ function _seRenderBuildingList() {
         const ga = GRADE_ORDER[a._gradeAuto] ?? 99;
         const gb = GRADE_ORDER[b._gradeAuto] ?? 99;
         if (ga !== gb) return ga - gb;
-        const an = a.name || a.buildingName || '';
-        const bn = b.name || b.buildingName || '';
-        return an.localeCompare(bn, 'ko');
+        return (a.name || '').localeCompare(b.name || '', 'ko');
     });
 
     el.innerHTML = sorted.map(b => {
@@ -604,7 +488,7 @@ function _seRenderBuildingList() {
                 onclick="event.stopPropagation()"
                 onchange="_seToggleBuilding('${_seEsc(b.id)}', this.checked)">
             <div class="se-bldg-info">
-                <div class="se-bldg-name">${_seEsc(b.name || b.buildingName || '(이름 없음)')}</div>
+                <div class="se-bldg-name">${_seEsc(b.name || '(이름 없음)')}</div>
                 <div class="se-bldg-meta">
                     <span class="se-badge se-badge-grade">${_seEsc(b._gradeAuto || '-')}</span>
                     <span class="se-badge se-badge-region">${_seEsc(b._region || '-')}</span>
@@ -649,7 +533,7 @@ function _seRenderVacancyList() {
         return (db || '').localeCompare(da || '');
     });
 
-    const bldgName = _seEsc(b.name || b.buildingName || '');
+    const bldgName = _seEsc(b.name || '');
 
     el.innerHTML = `
         <div style="padding:10px 14px; background:var(--bg-secondary); border-radius:6px;
@@ -665,10 +549,8 @@ function _seRenderVacancyList() {
             const isExcluded = _seState.excludedVacancies.has(combinedKey);
             const memo = isExcluded ? _seState.excludedVacancies.get(combinedKey).memo || '' : '';
             const areaPy = srVacancyAreaPy(v);
-            // FIX (Phase 2): vacancy 필드명 확정 — portal.html 3615~3617 라인 기준
-            //   source (기업명), publishDate (YYYY-MM), floor
             const date   = v.publishDate || '-';
-            const source = v.source || v.sourceCompany || '-';
+            const source = v.sourceCompany || v.source || '-';
             const floor  = v.floor || v.floors || '-';
 
             return `<div class="se-vac-row${isExcluded ? ' se-vac-excluded' : ''}">
@@ -707,21 +589,8 @@ function _seRenderSelectionSummary() {
 window._seOnQuarterChange = async function() {
     const sel = document.getElementById('se-quarter');
     if (!sel) return;
-
-    // Phase 3: 미저장 변경 있으면 경고
-    if (_seState.dirty) {
-        const ok = confirm(`저장되지 않은 변경 사항이 있습니다 (${_seState.quarter}).\n` +
-                           `다른 분기로 전환하면 변경이 사라집니다.\n\n계속하시겠습니까?`);
-        if (!ok) {
-            // 셀렉트 원복
-            sel.value = _seState.quarter;
-            return;
-        }
-    }
-
     _seState.quarter = sel.value;
     _seState.selectedBuildingId = null;
-    _seSetDirty(false);  // 새 분기 로드하므로 dirty 리셋
     await _seReloadAndRender();
 };
 
@@ -731,11 +600,6 @@ window._seToggleFilter = function(type, value, checked) {
     const idx = arr.indexOf(value);
     if (checked && idx < 0) arr.push(value);
     else if (!checked && idx >= 0) arr.splice(idx, 1);
-    // Phase 3: 필터 변경 로그 + dirty
-    _sePushActionLog('filter_change', `${type}:${value}`, value,
-        `${type} ${checked ? '추가' : '제거'}: ${value}`);
-    _seSetDirty(true);
-    _seReloadLogPanelIfOpen();
     // 상위 필터가 바뀌면 세부권역 재계산 필요
     _seRenderFilters();
     _seRenderPipelineSummary();
@@ -745,11 +609,6 @@ window._seToggleFilter = function(type, value, checked) {
 
 window._seToggleVacOnly = function(checked) {
     _seState.filters.vacOnly = !!checked;
-    // Phase 3
-    _sePushActionLog('filter_change', 'vacOnly', 'vacOnly',
-        `공실정보 필터 ${checked ? 'ON' : 'OFF'}`);
-    _seSetDirty(true);
-    _seReloadLogPanelIfOpen();
     _seRenderPipelineSummary();
     _seRenderBuildingList();
     _seRenderVacancyList();
@@ -769,15 +628,9 @@ window._seSelectBuilding = function(bid) {
 /** 빌딩 포함/제외 토글 */
 window._seToggleBuilding = function(bid, includeChecked) {
     const user = _seGetCurrentUser();
-    // 라벨용 빌딩명 추출
-    const b = (window.state?.allBuildings || []).find(x => x.id === bid);
-    const bName = (b && (b.name || b.buildingName)) || bid;
-
     if (includeChecked) {
         // 포함 → excludedBuildings 에서 제거
         _seState.excludedBuildings.delete(bid);
-        // Phase 3: 개별 로그
-        _sePushActionLog('add_building', bid, bName, '제외 해제');
     } else {
         // 제외 → 메모 프롬프트 (선택, ESC/취소 시 기본 메모)
         const memoIn = prompt('제외 사유 (선택, Enter로 건너뛰기):', '');
@@ -789,11 +642,7 @@ window._seToggleBuilding = function(bid, includeChecked) {
             excludedAt: _seNow(),
             excludedBy: user,
         });
-        // Phase 3: 개별 로그
-        _sePushActionLog('remove_building', bid, bName, memo);
     }
-    _seSetDirty(true);
-    _seReloadLogPanelIfOpen();
     _seRenderPipelineSummary();
     _seRenderBuildingList();
     _seRenderSelectionSummary();
@@ -803,23 +652,8 @@ window._seToggleBuilding = function(bid, includeChecked) {
 window._seToggleVacancy = function(bid, vkey, includeChecked) {
     const user = _seGetCurrentUser();
     const ck = _seMakeVacKey(bid, vkey);
-    // 라벨용 vacancy 정보 추출
-    const b = (window.state?.allBuildings || []).find(x => x.id === bid);
-    const bName = (b && (b.name || b.buildingName)) || bid;
-    let vLabel = `${bName} / ${vkey}`;
-    if (b) {
-        const v = (b.vacancies || []).find(x => x && x._key === vkey);
-        if (v) {
-            const src  = v.source || v.sourceCompany || '-';
-            const date = v.publishDate || '-';
-            const fl   = v.floor || v.floors || '-';
-            vLabel = `${bName} / ${date} ${src} ${fl}층`;
-        }
-    }
-
     if (includeChecked) {
         _seState.excludedVacancies.delete(ck);
-        _sePushActionLog('add_vacancy', ck, vLabel, '제외 해제');
     } else {
         const memoIn = prompt('제외 사유 (선택, Enter로 건너뛰기):', '');
         const memo = (memoIn === null || memoIn.trim() === '')
@@ -832,10 +666,7 @@ window._seToggleVacancy = function(bid, vkey, includeChecked) {
             excludedAt: _seNow(),
             excludedBy: user,
         });
-        _sePushActionLog('remove_vacancy', ck, vLabel, memo);
     }
-    _seSetDirty(true);
-    _seReloadLogPanelIfOpen();
     _seRenderVacancyList();
     _seRenderSelectionSummary();
 };
@@ -843,31 +674,6 @@ window._seToggleVacancy = function(bid, vkey, includeChecked) {
 /** 적용 버튼 */
 window._seApply = async function() {
     const btn = document.getElementById('se-apply-btn');
-
-    // Phase 2: 필터 설정이 있으면 전체 통계 영향 확인 프롬프트
-    const f = _seState.filters;
-    const hasFilter =
-        (f.grades && f.grades.length > 0)
-        || (f.regions && f.regions.length > 0)
-        || (f.subRegions && f.subRegions.length > 0)
-        || !f.vacOnly;  // 기본값 true 에서 벗어났으면
-    const hasExclusion = _seState.excludedBuildings.size > 0 || _seState.excludedVacancies.size > 0;
-
-    if (hasFilter) {
-        const filterSummary = [
-            (f.grades && f.grades.length > 0) ? `등급: ${f.grades.join(', ')}` : null,
-            (f.regions && f.regions.length > 0) ? `권역: ${f.regions.join(', ')}` : null,
-            (f.subRegions && f.subRegions.length > 0) ? `세부권역 ${f.subRegions.length}개` : null,
-            !f.vacOnly ? '공실정보 없는 빌딩 포함' : null,
-        ].filter(Boolean).join('\n  · ');
-        const ok = confirm(
-            `⚠️ 필터가 설정되어 있습니다:\n\n  · ${filterSummary}\n\n` +
-            `이 필터는 통계 모달 전체 탭에 영구 적용됩니다.\n` +
-            `(모든 사용자가 볼 때 동일한 필터 적용)\n\n계속하시겠습니까?`
-        );
-        if (!ok) return;
-    }
-
     if (btn) {
         btn.disabled = true;
         btn.textContent = '저장 중...';
@@ -886,13 +692,8 @@ window._seApply = async function() {
                 _seState.filters
             );
         }
-        const summary = `빌딩 ${_seState.excludedBuildings.size}건, 임대안내문 ${_seState.excludedVacancies.size}건 제외`;
-        // Phase 3: 저장 성공 시 dirty 리셋 (closeStatsEditorModal 의 confirm 우회)
-        _seSetDirty(false);
-        alert(`✅ 적용 완료 (v${res.newVersion})\n\n${summary}`);
-        // dirty=false 상태로 모달 닫기
-        const modal = document.getElementById('stats-editor-modal');
-        if (modal) modal.style.display = 'none';
+        alert(`✅ 적용 완료 (v${res.newVersion})`);
+        closeStatsEditorModal();
         if (typeof window.refreshStatResearch === 'function') {
             window.refreshStatResearch();
         }
@@ -902,34 +703,12 @@ window._seApply = async function() {
     } finally {
         if (btn) {
             btn.disabled = false;
-            // dirty 상태면 적용 버튼 텍스트 유지
-            if (_seState.dirty) {
-                btn.textContent = '✓ 적용 (변경 있음)';
-            } else {
-                btn.textContent = '✓ 적용';
-            }
+            btn.textContent = '✓ 적용';
         }
     }
 };
 
 /** 편집 이력 토글 */
-const _SE_ACTION_LABEL = {
-    'add_building':    '빌딩 포함',
-    'remove_building': '빌딩 제외',
-    'add_vacancy':     '공실 포함',
-    'remove_vacancy':  '공실 제외',
-    'filter_change':   '필터 변경',
-    'bulk_apply':      '일괄 적용',
-};
-const _SE_ACTION_COLOR = {
-    'add_building':    '#16a34a',
-    'remove_building': '#dc2626',
-    'add_vacancy':     '#16a34a',
-    'remove_vacancy':  '#dc2626',
-    'filter_change':   '#7c3aed',
-    'bulk_apply':      '#1a73e8',
-};
-
 window._seToggleLog = async function() {
     const wrap = document.getElementById('se-log-wrap');
     const body = document.getElementById('se-log-body');
@@ -937,27 +716,21 @@ window._seToggleLog = async function() {
     _seLogExpanded = !_seLogExpanded;
     wrap.classList.toggle('se-log-open', _seLogExpanded);
 
-    // Phase 3: 열 때마다 최신 로그 로드 (즉시 기록 정책이므로 캐시 무효)
-    if (_seLogExpanded) {
+    if (_seLogExpanded && body.dataset.loadedQuarter !== _seState.quarter) {
         body.innerHTML = `<div style="padding:10px; color:var(--text-muted); font-size:12px;">로딩 중...</div>`;
         try {
             const logs = await _seLoadRecentLogs(_seState.quarter, 20);
             if (logs.length === 0) {
                 body.innerHTML = `<div style="padding:10px; color:var(--text-muted); font-size:12px;">편집 이력 없음</div>`;
             } else {
-                body.innerHTML = logs.map(l => {
-                    const act = l.action || '-';
-                    const label = _SE_ACTION_LABEL[act] || act;
-                    const color = _SE_ACTION_COLOR[act] || '#64748b';
-                    const ts = (l.ts || '').slice(0, 16).replace('T', ' ');
-                    return `
+                body.innerHTML = logs.map(l => `
                     <div class="se-log-row">
-                        <span class="se-log-ts">${_seEsc(ts)}</span>
+                        <span class="se-log-ts">${_seEsc((l.ts || '').slice(0, 16).replace('T', ' '))}</span>
                         <span class="se-log-user">${_seEsc(l.user || '-')}</span>
-                        <span class="se-log-action" style="color:${color};">${_seEsc(label)}</span>
-                        <span class="se-log-memo">${_seEsc(l.targetLabel ? `${l.targetLabel} — ` : '')}${_seEsc(l.memo || '')}</span>
-                    </div>`;
-                }).join('');
+                        <span class="se-log-action">${_seEsc(l.action || '-')}</span>
+                        <span class="se-log-memo">${_seEsc(l.memo || '')}</span>
+                    </div>
+                `).join('');
             }
             body.dataset.loadedQuarter = _seState.quarter;
         } catch (err) {
@@ -978,10 +751,10 @@ window._seAutoLoadForStats = async function() {
     const now = new Date();
     const curQ = `${now.getFullYear()}Q${Math.ceil((now.getMonth() + 1) / 3)}`;
     try {
-        const { db, ref, get } = await import('./portal-firebase.js');
+        const { db, ref, get } = await import('./js/portal-firebase.js');
         const snap = await get(ref(db, `statsFilter/${curQ}`));
-        const data = snap.exists() ? (snap.val() || {}) : {};
-        // FIX (Phase 2): 데이터 없어도 상태 리셋 목적으로 호출 (이전 세션 잔존 제거)
+        if (!snap.exists()) return;
+        const data = snap.val() || {};
         const excludedBuildings = new Set(Object.keys(data.excludedBuildings || {}));
         const excludedVacancies = new Set(Object.keys(data.excludedVacancies || {}));
         if (typeof window._srApplyPersistentExclusions === 'function') {
