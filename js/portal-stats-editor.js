@@ -10,7 +10,7 @@
  *   - 낙관적 락(version)으로 충돌 감지
  *
  * 데이터 파이프라인:
- *   1차: RAW 엑셀 빌딩 (isResearchTarget=true 또는 researchMatchStatus)
+ *   1차: 전체 빌딩 (현재 admin-research 플래그 미주입 상태라 필터 걷어냄 — Line 372 참조)
  *     ↓
  *   2차: 등급/권역/세부권역 필터
  *     ↓
@@ -369,9 +369,12 @@ function _seSetDirty(v) {
 function _seRunPipeline() {
     const norm = srGetNormBuildings();
 
-    // 1차: RAW 엑셀 빌딩 (isResearchTarget=true 또는 researchMatchStatus 보유)
-    // portal.html 7132 패턴과 정합 — admin-research 에서 매칭된 빌딩도 포함
-    const raw = norm.filter(b => b.isResearchTarget === true || b.researchMatchStatus);
+    // 1차: 전체 빌딩 허용
+    // ⚠️ 2026-04 현재 admin-research 파이프라인이 isResearchTarget / researchMatchStatus
+    //    플래그를 데이터에 주입하기 전이라, 엄격 조건을 걸면 RAW=0 으로 막혀버림.
+    //    admin-research 가 안정 주입하게 되면 아래 한 줄로 복원:
+    //    const raw = norm.filter(b => b.isResearchTarget === true || b.researchMatchStatus);
+    const raw = norm;
 
     // 2차: 등급/권역/세부권역 필터
     const f = _seState.filters;
@@ -525,8 +528,8 @@ function _seRenderFilters() {
     }
 
     // 세부권역: 현재 2차 필터 통과 빌딩에서 동적 추출
-    // 1차 RAW 필터는 _seRunPipeline 과 동일한 조건 사용
-    const raw = srGetNormBuildings().filter(b => b.isResearchTarget === true || b.researchMatchStatus);
+    // 1차 RAW 필터는 _seRunPipeline 과 동일 — 현재는 전체 허용
+    const raw = srGetNormBuildings();
     const match = (arr, val) => !arr || arr.length === 0 || arr.includes(val);
     const candidatePool = raw.filter(b =>
         match(f.grades, b._gradeAuto) && match(f.regions, b._region));
