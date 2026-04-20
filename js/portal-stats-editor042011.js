@@ -74,15 +74,9 @@ const _seState = {
     // 5차 선택: vacancy 단위 제외
     excludedVacancies: new Map(),   // `${bid}__${vkey}` → { buildingId, vacancyKey, memo, excludedAt, excludedBy }
 
-    // Phase 4 (2026-04): 임대안내문 그룹(회사+발행월) 검증마크
-    // key: `${bid}__${source}__${publishDate}` → { verifiedAt, verifiedBy }
-    verifiedGuides: new Map(),
-
     // UI 상태
-    selectedBuildingId:  null,       // 좌측에서 선택된 빌딩 (우측 vacancy 리스트 표시 대상)
-    selectedSource:      null,       // Phase 4: 우측 회사 탭 선택 (null=첫번째 자동)
-    selectedPublishDate: null,       // Phase 4: 우측 발행월 선택 (null=해당 source의 최신 자동)
-    searchQuery:         '',
+    selectedBuildingId: null,       // 좌측에서 선택된 빌딩 (우측 vacancy 리스트 표시 대상)
+    searchQuery:        '',
 
     // Phase 3: 미저장 변경 추적
     dirty:              false,      // 마지막 적용 후 변경 있었는지
@@ -105,17 +99,6 @@ let _seLogExpanded = false;
  */
 function _seMakeVacKey(buildingId, vacancyKey) {
     return `${buildingId}__${vacancyKey}`;
-}
-
-/**
- * Phase 4: 임대안내문 그룹 키 — buildingId + source + publishDate 조합.
- * Firebase 키 제약(공백/슬래시/따옴표) 회피용 sanitize 포함.
- */
-function _seSanitizeKeyPart(s) {
-    return String(s ?? '').replace(/[.#$\[\]\/\s'"`]/g, '_');
-}
-function _seMakeGuideKey(buildingId, source, publishDate) {
-    return `${buildingId}__${_seSanitizeKeyPart(source)}__${_seSanitizeKeyPart(publishDate)}`;
 }
 /** @deprecated Phase 2 기준 사용처 없음. 필요 시 excludedVacancies 의 value 에서 직접 참조 권장. */
 function _seParseVacKey(combinedKey) {
@@ -179,7 +162,6 @@ async function _seLoadStatsFilter(quarter) {
         _seState.filters = { grades: [], regions: [], subRegions: [], vacOnly: true };
         _seState.excludedBuildings.clear();
         _seState.excludedVacancies.clear();
-        _seState.verifiedGuides.clear();  // Phase 4
         return { version: 0 };
     }
     const data = snap.val() || {};
@@ -199,12 +181,6 @@ async function _seLoadStatsFilter(quarter) {
     _seState.excludedVacancies.clear();
     Object.entries(data.excludedVacancies || {}).forEach(([combinedKey, v]) => {
         _seState.excludedVacancies.set(combinedKey, v || {});
-    });
-
-    // Phase 4: 검증된 임대안내문
-    _seState.verifiedGuides.clear();
-    Object.entries(data.verifiedGuides || {}).forEach(([guideKey, v]) => {
-        _seState.verifiedGuides.set(guideKey, v || {});
     });
 
     return { version: typeof data.version === 'number' ? data.version : 0 };
@@ -242,11 +218,6 @@ async function _seSaveStatsFilter() {
     for (const [ck, v] of _seState.excludedVacancies.entries()) {
         excludedVacanciesObj[ck] = v;
     }
-    // Phase 4: 검증된 임대안내문 그룹
-    const verifiedGuidesObj = {};
-    for (const [gk, v] of _seState.verifiedGuides.entries()) {
-        verifiedGuidesObj[gk] = v;
-    }
 
     const payload = {
         version:           newVersion,
@@ -255,7 +226,6 @@ async function _seSaveStatsFilter() {
         filters:           _seState.filters,
         excludedBuildings: excludedBuildingsObj,
         excludedVacancies: excludedVacanciesObj,
-        verifiedGuides:    verifiedGuidesObj,  // Phase 4
     };
 
     // 3. /statsFilter/{quarter} 덮어쓰기
@@ -266,7 +236,7 @@ async function _seSaveStatsFilter() {
         quarter,
         action:      'bulk_apply',
         targetId:    '',
-        memo:        `v${_seState.version} → v${newVersion} 적용 (건물 제외 ${_seState.excludedBuildings.size}건, vacancy 제외 ${_seState.excludedVacancies.size}건, 검증 안내문 ${_seState.verifiedGuides.size}건)`,
+        memo:        `v${_seState.version} → v${newVersion} 적용 (건물 제외 ${_seState.excludedBuildings.size}건, vacancy 제외 ${_seState.excludedVacancies.size}건)`,
         user,
         ts:          now,
         prevVersion: _seState.version,
@@ -651,83 +621,13 @@ function _seRenderBuildingList() {
     }).join('');
 }
 
-/**
- * Phase 4: 선택된 빌딩의 vacancy 를 (source, publishDate) 로 그룹핑하여 정리된 구조 반환.
- * @returns {{
- *   sourceStats: Array<{source:string, count:number, pdCount:number}>,  // 회사별 탭용
- *   pdsBySource: Map<string, string[]>,  // source → 발행월 내림차순 목록
- *   groups: Map<string, Array<vacancy>>, // `${source}__${pd}` → vacancy 목록
- * }}
- */
-function _seBuildGuideIndex(building) {
-    const vacs = srActiveVacancies(building);
-    const bySrcPd  = new Map();   // "src__pd" → vacancy[]
-    const pdsBySrc = new Map();   // src → Set<pd>
-    const srcCount = new Map();   // src → count
-
-    vacs.forEach(v => {
-        const src = v.source || v.sourceCompany || '(미지정)';
-        const pd  = v.publishDate || '(미기재)';
-        const gk  = `${src}__${pd}`;
-        if (!bySrcPd.has(gk))    bySrcPd.set(gk, []);
-        bySrcPd.get(gk).push(v);
-        if (!pdsBySrc.has(src))  pdsBySrc.set(src, new Set());
-        pdsBySrc.get(src).add(pd);
-        srcCount.set(src, (srcCount.get(src) || 0) + 1);
-    });
-
-    // 정렬: source 는 vacancy 많은 순, 발행월은 최신 내림차순
-    const sourceStats = [...srcCount.entries()]
-        .map(([source, count]) => ({
-            source,
-            count,
-            pdCount: pdsBySrc.get(source)?.size || 0,
-        }))
-        .sort((a, b) => b.count - a.count);
-
-    const pdsBySource = new Map();
-    for (const [src, pdSet] of pdsBySrc.entries()) {
-        const sorted = [...pdSet].sort((a, b) => {
-            const da = srNormalizeDate(a === '(미기재)' ? '' : a);
-            const db = srNormalizeDate(b === '(미기재)' ? '' : b);
-            return (db || '').localeCompare(da || '');
-        });
-        pdsBySource.set(src, sorted);
-    }
-
-    return { sourceStats, pdsBySource, groups: bySrcPd };
-}
-
-/**
- * Phase 4: 그룹(source+publishDate)의 체크 상태 계산.
- * @returns {'all'|'partial'|'none'}
- */
-function _seGroupCheckState(bid, vacs) {
-    let inc = 0, exc = 0;
-    vacs.forEach(v => {
-        const ck = _seMakeVacKey(bid, v._key || '');
-        if (_seState.excludedVacancies.has(ck)) exc++;
-        else inc++;
-    });
-    if (exc === 0)               return 'all';
-    if (inc === 0)               return 'none';
-    return 'partial';
-}
-
-/** 숫자 천단위 포맷 (문자열/숫자 모두 허용) */
-function _seFmtNum(v) {
-    const n = parseFloat(String(v ?? '').replace(/,/g, ''));
-    if (!Number.isFinite(n) || n === 0) return '-';
-    return n.toLocaleString('ko-KR');
-}
-
 function _seRenderVacancyList() {
     const el = document.getElementById('se-vacancy-list');
     if (!el) return;
 
     const bid = _seState.selectedBuildingId;
     if (!bid) {
-        el.innerHTML = `<div class="se-empty">
+        el.innerHTML = `<div style="padding:40px 20px; text-align:center; color:var(--text-muted); font-size:13px;">
             좌측에서 빌딩을 선택하면<br>해당 빌딩의 임대안내문이 표시됩니다.
         </div>`;
         return;
@@ -735,165 +635,63 @@ function _seRenderVacancyList() {
 
     const b = (window.state?.allBuildings || []).find(x => x.id === bid);
     if (!b) {
-        el.innerHTML = `<div class="se-empty" style="color:var(--danger);">빌딩을 찾을 수 없습니다.</div>`;
+        el.innerHTML = `<div style="padding:40px 20px; text-align:center; color:var(--danger);">빌딩을 찾을 수 없습니다.</div>`;
         return;
     }
 
-    const idx = _seBuildGuideIndex(b);
-    if (idx.sourceStats.length === 0) {
-        el.innerHTML = `<div class="se-empty">이 빌딩의 활성 임대안내문이 없습니다.</div>`;
+    const vacancies = srActiveVacancies(b);
+    if (vacancies.length === 0) {
+        el.innerHTML = `<div style="padding:40px 20px; text-align:center; color:var(--text-muted); font-size:13px;">
+            이 빌딩의 활성 임대안내문이 없습니다.
+        </div>`;
         return;
     }
 
-    // selectedSource 기본값: 첫 번째 (vacancy 가장 많은 회사)
-    let curSrc = _seState.selectedSource;
-    if (!curSrc || !idx.sourceStats.find(s => s.source === curSrc)) {
-        curSrc = idx.sourceStats[0].source;
-        _seState.selectedSource = curSrc;
-    }
-    const pds = idx.pdsBySource.get(curSrc) || [];
-
-    // selectedPublishDate 기본값: 해당 source의 최신
-    let curPd = _seState.selectedPublishDate;
-    if (!curPd || !pds.includes(curPd)) {
-        curPd = pds[0] || null;
-        _seState.selectedPublishDate = curPd;
-    }
-
-    const bldgName  = _seEsc(b.name || b.buildingName || '');
-    const totalVacs = idx.sourceStats.reduce((s, x) => s + x.count, 0);
-
-    // ── 1. 헤더 (빌딩명 + 총 건수) ────────────────────
-    const headerHtml = `
-        <div class="se-bldg-title">
-            <span>🏢 ${bldgName}</span>
-            <span style="font-size:11px; font-weight:400; color:var(--text-muted);">
-                총 임대안내문 ${totalVacs}건 · 회사 ${idx.sourceStats.length}곳
-            </span>
-        </div>`;
-
-    // ── 2. 회사별 탭 ──────────────────────────────────
-    const tabsHtml = `
-        <div class="se-src-tabs">
-            ${idx.sourceStats.map(s => `
-                <button class="se-src-tab${s.source === curSrc ? ' se-src-tab-on' : ''}"
-                        onclick="_seSelectSource('${_seEsc(s.source)}')">
-                    ${_seEsc(s.source)}
-                    <span class="se-src-tab-count">${s.count}</span>
-                </button>
-            `).join('')}
-        </div>`;
-
-    // ── 3. 발행월 셀렉트 ─────────────────────────────
-    const pdSelectHtml = `
-        <div class="se-pd-wrap">
-            <span>📅 발행월</span>
-            <select class="se-pd-select" onchange="_seSelectPublishDate(this.value)">
-                ${pds.map(pd => `
-                    <option value="${_seEsc(pd)}"${pd === curPd ? ' selected' : ''}>
-                        ${_seEsc(pd)}
-                    </option>
-                `).join('')}
-            </select>
-            <span style="color:var(--text-muted); font-size:11px;">
-                — ${_seEsc(curSrc)} 의 발행호 ${pds.length}건
-            </span>
-        </div>`;
-
-    // ── 4. 현재 (source, pd) 그룹 카드 ────────────────
-    const groupKey = `${curSrc}__${curPd}`;
-    const groupVacs = idx.groups.get(groupKey) || [];
-    const guideFbKey = _seMakeGuideKey(bid, curSrc, curPd);
-    const isVerified = _seState.verifiedGuides.has(guideFbKey);
-    const verInfo    = isVerified ? _seState.verifiedGuides.get(guideFbKey) : null;
-
-    // 층 번호 기준 정렬 (숫자 추출 후 오름차순)
-    const sortedVacs = [...groupVacs].sort((a, b) => {
-        const na = parseInt(String(a.floor || a.floors || '').replace(/[^0-9-]/g, ''), 10) || 0;
-        const nb = parseInt(String(b.floor || b.floors || '').replace(/[^0-9-]/g, ''), 10) || 0;
-        return na - nb;
+    // publishDate 내림차순
+    const sorted = [...vacancies].sort((a, v2) => {
+        const da = srNormalizeDate(a.publishDate || '');
+        const db = srNormalizeDate(v2.publishDate || '');
+        return (db || '').localeCompare(da || '');
     });
 
-    // 헤더 체크박스 3상태
-    const groupState = _seGroupCheckState(bid, sortedVacs);
+    const bldgName = _seEsc(b.name || b.buildingName || '');
 
-    const groupCardHtml = `
-        <div class="se-guide-card${isVerified ? ' se-guide-verified' : ''}">
-            <div class="se-guide-header">
-                <input type="checkbox" class="se-group-cb"
-                    ${groupState === 'all' ? 'checked' : ''}
-                    ${groupState === 'partial' ? 'data-indeterminate="true"' : ''}
-                    onchange="_seToggleGroupExclude('${_seEsc(bid)}', '${_seEsc(curSrc)}', '${_seEsc(curPd)}', this.checked)"
-                    title="그룹 전체 체크/해제">
-                <div class="se-guide-title">
-                    <span>${_seEsc(curSrc)} · ${_seEsc(curPd)}</span>
-                    <span style="font-size:11px; font-weight:400; color:var(--text-muted);">
-                        공실 ${sortedVacs.length}건
-                    </span>
-                    ${isVerified ? `
-                        <span class="se-guide-verify-badge" title="${_seEsc((verInfo?.verifiedAt || '').slice(0,10))} · ${_seEsc(verInfo?.verifiedBy || '')}">
-                            ✓ 검증됨
-                        </span>
-                    ` : ''}
+    el.innerHTML = `
+        <div style="padding:10px 14px; background:var(--bg-secondary); border-radius:6px;
+                    font-size:12px; font-weight:600; color:var(--text-primary); margin-bottom:8px;">
+            🏢 ${bldgName}
+            <span style="font-size:11px; font-weight:400; color:var(--text-muted); margin-left:6px;">
+                임대안내문 ${vacancies.length}건
+            </span>
+        </div>
+        ${sorted.map(v => {
+            const vkey = v._key || '';
+            const combinedKey = _seMakeVacKey(bid, vkey);
+            const isExcluded = _seState.excludedVacancies.has(combinedKey);
+            const memo = isExcluded ? _seState.excludedVacancies.get(combinedKey).memo || '' : '';
+            const areaPy = srVacancyAreaPy(v);
+            // FIX (Phase 2): vacancy 필드명 확정 — portal.html 3615~3617 라인 기준
+            //   source (기업명), publishDate (YYYY-MM), floor
+            const date   = v.publishDate || '-';
+            const source = v.source || v.sourceCompany || '-';
+            const floor  = v.floor || v.floors || '-';
+
+            return `<div class="se-vac-row${isExcluded ? ' se-vac-excluded' : ''}">
+                <input type="checkbox" class="se-vac-cb"
+                    ${!isExcluded ? 'checked' : ''}
+                    onchange="_seToggleVacancy('${_seEsc(bid)}', '${_seEsc(vkey)}', this.checked)">
+                <div class="se-vac-info">
+                    <div class="se-vac-top">
+                        <span class="se-badge se-badge-date">${_seEsc(date)}</span>
+                        <span style="color:var(--text-primary); font-weight:600;">${_seEsc(source)}</span>
+                        <span style="color:var(--text-muted);">${_seEsc(floor)}층</span>
+                    </div>
+                    <div class="se-vac-meta">면적: ${areaPy.toFixed(1)}평</div>
+                    ${memo ? `<div class="se-memo">📝 ${_seEsc(memo)}</div>` : ''}
                 </div>
-                <div class="se-guide-actions">
-                    <button class="se-guide-btn se-guide-btn-orig"
-                            onclick="_seOpenLeasingGuide('${_seEsc(bid)}', '${_seEsc(curSrc)}', '${_seEsc(curPd)}')"
-                            title="새 탭에서 임대안내문 페이지 열기">
-                        🔗 원본보기
-                    </button>
-                    <button class="se-guide-btn se-guide-btn-verify${isVerified ? ' se-verified' : ''}"
-                            onclick="_seToggleVerifyGuide('${_seEsc(bid)}', '${_seEsc(curSrc)}', '${_seEsc(curPd)}')"
-                            title="원본과 대조 후 검증 완료 표시">
-                        ${isVerified ? '✓ 검증됨' : '✓ 검증마크'}
-                    </button>
-                </div>
-            </div>
-            <table class="se-guide-table">
-                <thead>
-                    <tr>
-                        <th style="width:32px;"></th>
-                        <th>층</th>
-                        <th>임대면적</th>
-                        <th>전용면적</th>
-                        <th>보증금/평</th>
-                        <th>임대료/평</th>
-                        <th>관리비/평</th>
-                        <th>입주</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${sortedVacs.map(v => {
-                        const vkey = v._key || '';
-                        const ck   = _seMakeVacKey(bid, vkey);
-                        const exc  = _seState.excludedVacancies.has(ck);
-                        const floor = v.floor || v.floors || '-';
-                        const rA = v.rentArea || v.rentAreaPy || '';
-                        const eA = v.exclusiveArea || v.exclusiveAreaPy || '';
-                        return `<tr class="${exc ? 'se-vac-row-excluded' : ''}">
-                            <td>
-                                <input type="checkbox" class="se-vac-cell-cb"
-                                    ${!exc ? 'checked' : ''}
-                                    onchange="_seToggleVacancy('${_seEsc(bid)}', '${_seEsc(vkey)}', this.checked)">
-                            </td>
-                            <td>${_seEsc(floor)}${String(floor).match(/^\d+$/) ? 'F' : ''}</td>
-                            <td>${_seFmtNum(rA)}${rA ? '평' : ''}</td>
-                            <td>${_seFmtNum(eA)}${eA ? '평' : ''}</td>
-                            <td>${_seFmtNum(v.depositPy)}</td>
-                            <td>${_seFmtNum(v.rentPy)}</td>
-                            <td>${_seFmtNum(v.maintenancePy)}</td>
-                            <td>${_seEsc(v.moveInDate || '-')}</td>
-                        </tr>`;
-                    }).join('')}
-                </tbody>
-            </table>
-        </div>`;
-
-    el.innerHTML = headerHtml + tabsHtml + pdSelectHtml + groupCardHtml;
-
-    // HTML attribute로는 indeterminate 직접 설정 불가 — DOM property로 후처리
-    const grpCb = el.querySelector('.se-group-cb[data-indeterminate="true"]');
-    if (grpCb) grpCb.indeterminate = true;
+            </div>`;
+        }).join('')}
+    `;
 }
 
 function _seRenderSelectionSummary() {
@@ -969,103 +767,8 @@ window._seOnSearch = function(val) {
 
 window._seSelectBuilding = function(bid) {
     _seState.selectedBuildingId = bid;
-    // Phase 4: 빌딩 바뀔 때 탭/발행월 선택 리셋 — 첫번째 자동 선택되도록
-    _seState.selectedSource      = null;
-    _seState.selectedPublishDate = null;
     _seRenderBuildingList();
     _seRenderVacancyList();
-};
-
-// ─ Phase 4: 임대안내문 그룹 핸들러 ──────────────────────────
-
-/** 회사 탭 전환 */
-window._seSelectSource = function(source) {
-    _seState.selectedSource      = source;
-    _seState.selectedPublishDate = null;  // 회사 바뀌면 발행월도 리셋 (최신 자동)
-    _seRenderVacancyList();
-};
-
-/** 발행월 전환 */
-window._seSelectPublishDate = function(pd) {
-    _seState.selectedPublishDate = pd;
-    _seRenderVacancyList();
-};
-
-/**
- * 그룹(회사+발행월) 전체 체크/해제.
- * 개별 vacancy 로그 폭발 방지 위해 bulk_toggle_guide 단일 로그로 기록.
- */
-window._seToggleGroupExclude = function(bid, source, pd, includeChecked) {
-    const b = (window.state?.allBuildings || []).find(x => x.id === bid);
-    if (!b) return;
-    const vacs = srActiveVacancies(b).filter(v => {
-        const vs = v.source || v.sourceCompany || '(미지정)';
-        const vp = v.publishDate || '(미기재)';
-        return vs === source && vp === pd;
-    });
-    if (vacs.length === 0) return;
-
-    const user = _seGetCurrentUser();
-    const now  = _seNow();
-    const bName = (b.name || b.buildingName) || bid;
-    const memo  = `${source} · ${pd} 그룹 ${includeChecked ? '전체 포함' : '전체 제외'} (${vacs.length}건)`;
-
-    vacs.forEach(v => {
-        const ck = _seMakeVacKey(bid, v._key || '');
-        if (includeChecked) {
-            _seState.excludedVacancies.delete(ck);
-        } else {
-            _seState.excludedVacancies.set(ck, {
-                buildingId: bid,
-                vacancyKey: v._key || '',
-                memo,
-                excludedAt: now,
-                excludedBy: user,
-            });
-        }
-    });
-
-    _sePushActionLog('bulk_toggle_guide',
-        _seMakeGuideKey(bid, source, pd),
-        `${bName} / ${source} · ${pd}`,
-        memo);
-    _seSetDirty(true);
-    _seReloadLogPanelIfOpen();
-    _seRenderPipelineSummary();
-    _seRenderVacancyList();
-    _seRenderSelectionSummary();
-};
-
-/** 그룹 검증마크 토글 */
-window._seToggleVerifyGuide = function(bid, source, pd) {
-    const gk = _seMakeGuideKey(bid, source, pd);
-    const b = (window.state?.allBuildings || []).find(x => x.id === bid);
-    const bName = (b && (b.name || b.buildingName)) || bid;
-    const label = `${bName} / ${source} · ${pd}`;
-
-    if (_seState.verifiedGuides.has(gk)) {
-        _seState.verifiedGuides.delete(gk);
-        _sePushActionLog('unverify_guide', gk, label, '검증 해제');
-    } else {
-        _seState.verifiedGuides.set(gk, {
-            verifiedAt: _seNow(),
-            verifiedBy: _seGetCurrentUser(),
-        });
-        _sePushActionLog('verify_guide', gk, label, '원본 대조 후 검증 완료');
-    }
-    _seSetDirty(true);
-    _seReloadLogPanelIfOpen();
-    _seRenderVacancyList();
-};
-
-/**
- * leasing-guide.html 새 탭으로 열기.
- * 쿼리스트링으로 컨텍스트 전달 — leasing-guide가 무시해도 무해 (딥링크 옵션).
- */
-window._seOpenLeasingGuide = function(bid, source, pd) {
-    const qs = new URLSearchParams({ buildingId: bid, source, publishDate: pd });
-    const url = `leasing-guide.html?${qs.toString()}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
 };
 
 /** 빌딩 포함/제외 토글 */
@@ -1216,27 +919,20 @@ window._seApply = async function() {
 
 /** 편집 이력 토글 */
 const _SE_ACTION_LABEL = {
-    'add_building':      '빌딩 포함',
-    'remove_building':   '빌딩 제외',
-    'add_vacancy':       '공실 포함',
-    'remove_vacancy':    '공실 제외',
-    'filter_change':     '필터 변경',
-    'bulk_apply':        '일괄 적용',
-    // Phase 4: 임대안내문 그룹
-    'verify_guide':      '안내문 검증',
-    'unverify_guide':    '검증 해제',
-    'bulk_toggle_guide': '그룹 일괄',
+    'add_building':    '빌딩 포함',
+    'remove_building': '빌딩 제외',
+    'add_vacancy':     '공실 포함',
+    'remove_vacancy':  '공실 제외',
+    'filter_change':   '필터 변경',
+    'bulk_apply':      '일괄 적용',
 };
 const _SE_ACTION_COLOR = {
-    'add_building':      '#16a34a',
-    'remove_building':   '#dc2626',
-    'add_vacancy':       '#16a34a',
-    'remove_vacancy':    '#dc2626',
-    'filter_change':     '#7c3aed',
-    'bulk_apply':        '#1a73e8',
-    'verify_guide':      '#16a34a',
-    'unverify_guide':    '#64748b',
-    'bulk_toggle_guide': '#0891b2',
+    'add_building':    '#16a34a',
+    'remove_building': '#dc2626',
+    'add_vacancy':     '#16a34a',
+    'remove_vacancy':  '#dc2626',
+    'filter_change':   '#7c3aed',
+    'bulk_apply':      '#1a73e8',
 };
 
 window._seToggleLog = async function() {
