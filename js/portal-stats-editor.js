@@ -920,6 +920,9 @@ function _seRenderHeaderInfo() {
 
 function _seRenderFilters() {
     const f = _seState.filters;
+    // 공통 헬퍼 — 등급/권역/세부권역 블록에서 모두 사용되므로 최상단에 선언
+    // ※ Phase 6 Step 3.5 에서 권역 진행률 계산에도 쓰이므로 TDZ 회피 위해 여기로 승격
+    const match = (arr, val) => !arr || arr.length === 0 || arr.includes(val);
 
     // 등급 체크박스
     const GRADES = ['Prime', 'A', 'B', 'C', 'D', 'E'];
@@ -1003,7 +1006,6 @@ function _seRenderFilters() {
     // 세부권역: 현재 2차 필터 통과 빌딩에서 동적 추출
     // 1차 RAW 필터는 _seRunPipeline 과 동일 — 현재는 전체 허용
     const raw = srGetNormBuildings();
-    const match = (arr, val) => !arr || arr.length === 0 || arr.includes(val);
     const candidatePool = raw.filter(b =>
         match(f.grades, b._gradeAuto) && match(f.regions, b._region));
     const subRegionSet = new Set();
