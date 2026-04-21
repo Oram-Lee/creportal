@@ -325,6 +325,7 @@ function _seSeedAutoJudgments(bid, vacs) {
 
     const user = _seGetCurrentUser();
     const now  = _seNow();
+    const lastM = _seGetQuarterLastMonth(_seState.quarter);
 
     for (const v of vacs) {
         const vkey = v?._key || '';
@@ -334,6 +335,24 @@ function _seSeedAutoJudgments(bid, vacs) {
         // 이미 어떤 결정이든 있으면 skip (수동·자동 모두 보존)
         if (_seState.excludedVacancies.has(ck)) continue;
 
+        // 1순위 (Phase 6 Step 3.5 핫픽스): 분기 마지막 월 외 발행호 공실은 먼저 제외
+        //  floor/moveInDate 판정과 무관하게, 발행 시점이 분기 마지막 월이 아니면 이번 분기 통계에 포함하지 않음.
+        //  배지(⚡/🔻/❓)는 _seAutoJudgeVacancy 가 공실 내재 속성으로 렌더 시점에 계속 표시 (A안 유지).
+        //  사용자가 "분기 외 월을 의도적 선택" 시에만 수동 체크로 통계 편입 가능.
+        const vNorm = srNormalizeDate(v.publishDate || '');
+        if (lastM && vNorm && vNorm !== lastM) {
+            _seState.excludedVacancies.set(ck, {
+                buildingId: bid,
+                vacancyKey: vkey,
+                memo:       `📅 자동: 분기 마지막 월(${lastM}) 외 발행 (${vNorm})`,
+                excludedAt: now,
+                excludedBy: user,
+                judgedBy:   'auto',
+            });
+            continue;
+        }
+
+        // 2순위: 분기 마지막 월 내 공실에 대해서만 floor/moveInDate 기준 판정
         const { shouldInclude, badge, reason } = _seAutoJudgeVacancy(v);
         if (shouldInclude) continue;  // 포함 판정은 별도 저장 불필요
 
