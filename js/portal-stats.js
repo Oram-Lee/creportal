@@ -382,6 +382,10 @@ const _srPersistentExclude = {
     excludedVacancies: new Set(),
     filters:           null,
 };
+// Phase 6 Step 3.5 핫픽스 (2026-04): summary 모듈이 편집 상태에 접근할 수 있도록 window 에 노출.
+// ※ _srApplyPersistentExclusions 가 매번 새 Set 을 대입하므로 동일 참조 유지를 위해 객체 자체를 노출.
+//   summary 모듈은 이 객체에서 excludedBuildings / excludedVacancies / filters 를 읽기 전용으로 사용.
+window._srPersistentExclude = _srPersistentExclude;
 
 /**
  * portal-stats-editor.js 에서 호출하는 주입 함수.
