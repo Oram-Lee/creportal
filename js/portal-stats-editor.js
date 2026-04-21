@@ -36,7 +36,16 @@
  *       updatedBy         : email
  *       filters           : { grades, regions, subRegions, vacOnly }
  *       excludedBuildings : { [buildingId]: { memo, excludedAt, excludedBy } }
- *       excludedVacancies : { [bid__vkey]:  { buildingId, vacancyKey, memo, excludedAt, excludedBy } }
+ *       excludedVacancies : { [bid__vkey]:  { buildingId, vacancyKey, memo, excludedAt, excludedBy, judgedBy? } }
+ *                           ※ Phase 6 Step 3.5: judgedBy: 'auto' | 'manual'
+ *                              'auto'  — 자동 판정 엔진이 시드한 결과 (다음 시드 시 덮어써도 OK)
+ *                              'manual'— 사용자가 체크박스 토글로 명시 지정 (시드 시 보존)
+ *                              필드 없음 — 레거시 데이터. 로드 시 'manual'로 간주(사용자 수동 가정)
+ *       verifiedGuides    : { [bid__src__pd]: { verifiedAt, verifiedBy } }  // Phase 4
+ *       repCells          : { [bid__yyyymm]: { chosenSource, chosenAt, chosenBy, memo? } }  // Phase 6
+ *       repMonths         : { [bid]: { yyyymm, chosenAt, chosenBy, memo? } }  // Phase 6
+ *       verifiedBuildings : { [bid]: { verifiedAt, verifiedBy, quarter, memo? } }  // Phase 6 Step 3.5
+ *       verifiedRegions   : { [quarter__region]: { verifiedAt, verifiedBy, buildingCount, memo? } }  // Phase 6 Step 3.5
  *   /statsFilterLogs/{autoKey}
  *       quarter, action, targetId, memo, user, ts, prevVersion
  * ═══════════════════════════════════════════════════════════════
@@ -92,11 +101,29 @@ const _seState = {
     //   value 를 객체로 감싸고 내부 필드만 null 로 표현. 감사추적 필드도 동시 확보.
     repMonths: new Map(),
 
+    // Phase 6 Step 3.5 (2026-04): 빌딩 검수 완료 마크
+    // key: buildingId → { verifiedAt, verifiedBy, quarter, memo? }
+    // ※ excludedBuildings 와 별개 레이어 — "검수함" 은 "제외" 를 의미하지 않음.
+    //   현업이 해당 빌딩의 공실 행을 모두 확인했다는 체크리스트 용도.
+    verifiedBuildings: new Map(),
+
+    // Phase 6 Step 3.5 (2026-04): 권역 검수 완료 마크 (분기 × 권역)
+    // key: `${quarter}__${region}` → { verifiedAt, verifiedBy, buildingCount, memo? }
+    //   e.g. "2026Q1__CBD"
+    //   권역의 모든 대상 빌딩이 verifiedBuildings 에 있을 때 활성되는 "권역 확정" 마크.
+    verifiedRegions: new Map(),
+
     // UI 상태
     selectedBuildingId:  null,       // 좌측에서 선택된 빌딩 (우측 vacancy 리스트 표시 대상)
     selectedSource:      null,       // Phase 4: 우측 회사 탭 선택 (null=첫번째 자동)
     selectedPublishDate: null,       // Phase 4: 우측 발행월 선택 (null=해당 source의 최신 자동)
     searchQuery:         '',
+
+    // Phase 6 Step 3.5 (2026-04): 빌딩 단위 자동 판정 시드 완료 플래그
+    // ※ 인메모리 전용 (Firebase 저장 X) — 모달 오픈마다 재시드 가능하도록 각 세션에서 리셋
+    //   `_seSeedAutoJudgments(bid, vacs)` 가 이 Set 으로 중복 방지.
+    //   modal open / quarter change 시 .clear() 호출해 리셋.
+    seededBuildings: new Set(),
 
     // Phase 3: 미저장 변경 추적
     dirty:              false,      // 마지막 적용 후 변경 있었는지
@@ -177,6 +204,248 @@ function _seDefaultMemo(user) {
     return `사유 미입력 — ${user}`;
 }
 
+// ─ Phase 6 Step 3.5: 분기·층·입주시기 유틸 ─────────────────────
+
+/**
+ * 분기 문자열 → 해당 분기의 마지막 월 (YYYY-MM)
+ * @param {string} quarter  "2026Q1"
+ * @returns {string}        "2026-03"  (파싱 실패 시 '')
+ */
+function _seGetQuarterLastMonth(quarter) {
+    const m = /^(\d{4})Q([1-4])$/.exec(String(quarter || '').trim());
+    if (!m) return '';
+    const year = m[1];
+    const q    = parseInt(m[2], 10);
+    const lastMon = q * 3;  // Q1→3, Q2→6, Q3→9, Q4→12
+    return `${year}-${String(lastMon).padStart(2, '0')}`;
+}
+
+/**
+ * 층명이 지하인지 판정
+ * - 패턴: "B1F" / "b2" / "지하1층" / "지하" 포함
+ * - 일반 숫자층("1F", "B동 1층") 오판 방지: B로 시작하되 뒤가 숫자여야 지하
+ * @param {string} floor  층명 원본
+ * @returns {boolean}
+ */
+function _seIsUnderground(floor) {
+    if (!floor) return false;
+    const s = String(floor).trim();
+    if (!s || s === '-') return false;
+    // 명시 키워드
+    if (s.includes('지하')) return true;
+    // 정규식: 대소문자 구분없이 B + 숫자 + 선택적 F (B1F, B2, b1 등)
+    if (/^B\d+F?$/i.test(s)) return true;
+    // 영문 "basement" 보조
+    if (/^basement/i.test(s)) return true;
+    return false;
+}
+
+/**
+ * 입주시기 텍스트 정규화 후 "즉시입주 가능" 여부 판정
+ * - "즉시" / "즉시입주" / "바로입주" / "즉시가능" 등 매칭
+ * - 공백·기호 제거 후 정확 키워드 체크
+ * @param {string} moveInDate  vacancy.moveInDate 원본
+ * @returns {boolean}
+ */
+function _seIsImmediateMoveIn(moveInDate) {
+    if (!moveInDate) return false;
+    // 공백·하이픈·괄호·특수문자 제거 → 소문자 변환
+    const norm = String(moveInDate).replace(/[\s\-()[\]【】·.,/]/g, '').toLowerCase();
+    if (!norm) return false;
+    // 정확 매칭 (브리프 §4 원칙: "즉시/즉시입주"만 자동 포함, 날짜형은 수동)
+    const IMMEDIATE_KEYWORDS = ['즉시', '즉시입주', '즉시가능', '바로입주', '바로가능'];
+    return IMMEDIATE_KEYWORDS.some(kw => norm.includes(kw));
+}
+
+/**
+ * 공실 행 자동 판정 엔진 (Phase 6 Step 3.5)
+ *
+ * 판정 규칙 (브리프 §4 — 최소주의 원칙):
+ *   ⚡ 즉시: moveInDate 가 "즉시/즉시입주" → 포함
+ *   🔻 지하: floor 가 B1F/지하 패턴 → 제외
+ *   ❓ 검수필요: 그 외 모든 경우 (리테일 자동 판정 보류 — Q1=C안)
+ *
+ * @param {Object} vacancy
+ * @returns {{ shouldInclude: boolean, badge: string, reason: string }}
+ */
+function _seAutoJudgeVacancy(vacancy) {
+    if (!vacancy) {
+        return { shouldInclude: false, badge: '❓', reason: '데이터 없음' };
+    }
+    const floor      = vacancy.floor || vacancy.floors || '';
+    const moveInDate = vacancy.moveInDate || '';
+
+    // 1) 지하층 최우선 제외 (층 기준이 가장 강한 신호)
+    if (_seIsUnderground(floor)) {
+        return {
+            shouldInclude: false,
+            badge: '🔻',
+            reason: `지하층(${floor}) 자동 제외`,
+        };
+    }
+
+    // 2) 즉시 입주 가능 → 자동 포함
+    if (_seIsImmediateMoveIn(moveInDate)) {
+        return {
+            shouldInclude: true,
+            badge: '⚡',
+            reason: `입주시기 "${moveInDate}" → 즉시입주 자동 포함`,
+        };
+    }
+
+    // 3) 그 외 모든 경우 → 검수필요 (기본 제외, 사용자 수동 결정 대기)
+    //    리테일은 Q1=C안(자동 판정 보류)에 따라 ❓ 로 흡수.
+    //    "26년 3월 입주 가능" 같은 미래 날짜형도 여기 포함 — 사용자가 보고 판단.
+    return {
+        shouldInclude: false,
+        badge: '❓',
+        reason: moveInDate
+            ? `입주시기 "${moveInDate}" → 검수 필요`
+            : '입주시기 미기재 → 검수 필요',
+    };
+}
+
+/**
+ * 빌딩 단위 자동 판정 시드 (Phase 6 Step 3.5)
+ *
+ * 시드 정책 (설계 대화 확정 — 옵션 B + lazy):
+ *   1) 이미 excludedVacancies 에 entry 가 있으면 judgedBy 불문 **건드리지 않음**
+ *      (사용자 수동 결정은 물론, 이전 자동 시드 결과도 보존 — idempotent)
+ *   2) entry 가 없는 공실만 자동 판정 수행
+ *   3) shouldInclude=false 인 경우 excludedVacancies 에 추가 (judgedBy='auto')
+ *      shouldInclude=true 인 경우 아무것도 하지 않음 (= 포함 상태 유지)
+ *   4) 본 함수는 _seState.seededBuildings 체크로 모달 오픈당 1회만 실행
+ *
+ * @param {string} bid  buildingId
+ * @param {Array}  vacs 해당 빌딩의 활성 공실 배열
+ */
+function _seSeedAutoJudgments(bid, vacs) {
+    if (!bid || !Array.isArray(vacs)) return;
+    if (_seState.seededBuildings.has(bid)) return;  // 이미 시드됨
+
+    const user = _seGetCurrentUser();
+    const now  = _seNow();
+
+    for (const v of vacs) {
+        const vkey = v?._key || '';
+        if (!vkey) continue;
+        const ck = _seMakeVacKey(bid, vkey);
+
+        // 이미 어떤 결정이든 있으면 skip (수동·자동 모두 보존)
+        if (_seState.excludedVacancies.has(ck)) continue;
+
+        const { shouldInclude, badge, reason } = _seAutoJudgeVacancy(v);
+        if (shouldInclude) continue;  // 포함 판정은 별도 저장 불필요
+
+        _seState.excludedVacancies.set(ck, {
+            buildingId: bid,
+            vacancyKey: vkey,
+            memo:       `${badge} 자동: ${reason}`,
+            excludedAt: now,
+            excludedBy: user,
+            judgedBy:   'auto',
+        });
+    }
+
+    _seState.seededBuildings.add(bid);
+}
+
+/**
+ * yyyymm 이 해당 분기에 속하는가?
+ * @param {string} yyyymm  "2026-03"
+ * @param {string} quarter "2026Q1"
+ * @returns {boolean}
+ */
+function _seIsInQuarter(yyyymm, quarter) {
+    const ym = /^(\d{4})-(\d{2})$/.exec(String(yyyymm || ''));
+    if (!ym) return false;
+    const qm = /^(\d{4})Q([1-4])$/.exec(String(quarter || ''));
+    if (!qm) return false;
+    if (ym[1] !== qm[1]) return false;
+    const mon = parseInt(ym[2], 10);
+    const q   = parseInt(qm[2], 10);
+    return Math.ceil(mon / 3) === q;
+}
+
+/**
+ * 빌딩의 "분기 마지막 월 상태" 뱃지 판정 (Phase 6 Step 3.5 §②)
+ *
+ * 우선순위 (위에서부터 체크, 첫 매칭 반환):
+ *   🟢 green  — 분기 마지막 월에 공실 정보 존재 (vacancy 행 있음)
+ *   ⚪ white  — 분기 마지막 월에 _meta.noVacancy=true (공실없음 명시 선언)
+ *   🟡 yellow — 분기 마지막 월 OCR 없음, but 분기 내 다른 월에 OCR 있음
+ *   🔴 red    — 분기 내 어떤 월에도 OCR 없음
+ *
+ * @param {Object} building
+ * @returns {{ code: 'green'|'white'|'yellow'|'red', label: string, lastMonthVacCount: number, totalVacCount: number }}
+ */
+function _seGetBuildingBadge(building) {
+    const quarter = _seState.quarter;
+    const lastM   = _seGetQuarterLastMonth(quarter);
+    // "2026-03" → "3월"
+    const lastMonLabel = lastM ? `${parseInt(lastM.slice(5, 7), 10)}월` : '';
+
+    const rawVacs = (building && building.vacancies) || [];
+    let vacInLastM = 0;
+    let vacInAnyMonthInQuarter = 0;
+    let noVacancyDeclaredInLastM = false;
+    let anyOcrAcrossAllMonths = false;
+
+    for (const v of rawVacs) {
+        if (!v) continue;
+        const norm = srNormalizeDate(v.publishDate);
+        if (!norm) continue;
+
+        const isMeta = v._key && String(v._key).endsWith('_meta');
+        const inLastM = norm === lastM;
+        const inQuarter = _seIsInQuarter(norm, quarter);
+
+        if (isMeta) {
+            // _meta: 공실없음 선언 등 메타 행 — 공실 카운트에는 넣지 않지만
+            // OCR 존재 증거로는 인정 (발행사가 그 월에 안내문 발행했다는 뜻)
+            if (inLastM && v.noVacancy === true) noVacancyDeclaredInLastM = true;
+            if (inQuarter) anyOcrAcrossAllMonths = true;
+            continue;
+        }
+        // 일반 공실 행
+        if (v.status === 'deleted' || v.hidden === true || v.deleted === true) continue;
+        if (inLastM)   vacInLastM++;
+        if (inQuarter) vacInAnyMonthInQuarter++;
+        if (inQuarter) anyOcrAcrossAllMonths = true;
+    }
+
+    if (vacInLastM > 0) {
+        return {
+            code: 'green',
+            label: `${lastMonLabel} 공실 ${vacInLastM}건`,
+            lastMonthVacCount: vacInLastM,
+            totalVacCount:     vacInAnyMonthInQuarter,
+        };
+    }
+    if (noVacancyDeclaredInLastM) {
+        return {
+            code: 'white',
+            label: `${lastMonLabel} 공실 없음`,
+            lastMonthVacCount: 0,
+            totalVacCount:     vacInAnyMonthInQuarter,
+        };
+    }
+    if (anyOcrAcrossAllMonths) {
+        return {
+            code: 'yellow',
+            label: `${lastMonLabel} 정보 없음`,
+            lastMonthVacCount: 0,
+            totalVacCount:     vacInAnyMonthInQuarter,
+        };
+    }
+    return {
+        code: 'red',
+        label: '모든 월 정보 없음',
+        lastMonthVacCount: 0,
+        totalVacCount:     0,
+    };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 3. Firebase 로드/저장
 // ═══════════════════════════════════════════════════════════════
@@ -196,6 +465,8 @@ async function _seLoadStatsFilter(quarter) {
         _seState.verifiedGuides.clear();  // Phase 4
         _seState.repCells.clear();        // Phase 6
         _seState.repMonths.clear();       // Phase 6
+        _seState.verifiedBuildings.clear();  // Phase 6 Step 3.5
+        _seState.verifiedRegions.clear();    // Phase 6 Step 3.5
         return { version: 0 };
     }
     const data = snap.val() || {};
@@ -214,7 +485,11 @@ async function _seLoadStatsFilter(quarter) {
 
     _seState.excludedVacancies.clear();
     Object.entries(data.excludedVacancies || {}).forEach(([combinedKey, v]) => {
-        _seState.excludedVacancies.set(combinedKey, v || {});
+        const val = v || {};
+        // Phase 6 Step 3.5: judgedBy 필드 레거시 호환
+        // 과거 데이터는 사용자가 직접 지정한 결과 → 'manual' 로 간주 (자동 시드가 덮어쓰지 않음)
+        if (!val.judgedBy) val.judgedBy = 'manual';
+        _seState.excludedVacancies.set(combinedKey, val);
     });
 
     // Phase 4: 검증된 임대안내문
@@ -240,6 +515,18 @@ async function _seLoadStatsFilter(quarter) {
         } else if (typeof v === 'object') {
             _seState.repMonths.set(bid, v);
         }
+    });
+
+    // Phase 6 Step 3.5: 빌딩 검수 완료
+    _seState.verifiedBuildings.clear();
+    Object.entries(data.verifiedBuildings || {}).forEach(([bid, v]) => {
+        _seState.verifiedBuildings.set(bid, v || {});
+    });
+
+    // Phase 6 Step 3.5: 권역 검수 완료 (quarter__region)
+    _seState.verifiedRegions.clear();
+    Object.entries(data.verifiedRegions || {}).forEach(([key, v]) => {
+        _seState.verifiedRegions.set(key, v || {});
     });
 
     return { version: typeof data.version === 'number' ? data.version : 0 };
@@ -295,6 +582,17 @@ async function _seSaveStatsFilter() {
         if (v && typeof v === 'object') repMonthsObj[bid] = v;
     }
 
+    // Phase 6 Step 3.5: 빌딩 검수 완료
+    const verifiedBuildingsObj = {};
+    for (const [bid, v] of _seState.verifiedBuildings.entries()) {
+        verifiedBuildingsObj[bid] = v;
+    }
+    // Phase 6 Step 3.5: 권역 검수 완료 (quarter__region)
+    const verifiedRegionsObj = {};
+    for (const [k, v] of _seState.verifiedRegions.entries()) {
+        verifiedRegionsObj[k] = v;
+    }
+
     const payload = {
         version:           newVersion,
         updatedAt:         now,
@@ -302,9 +600,11 @@ async function _seSaveStatsFilter() {
         filters:           _seState.filters,
         excludedBuildings: excludedBuildingsObj,
         excludedVacancies: excludedVacanciesObj,
-        verifiedGuides:    verifiedGuidesObj,  // Phase 4
-        repCells:          repCellsObj,         // Phase 6
-        repMonths:         repMonthsObj,        // Phase 6
+        verifiedGuides:    verifiedGuidesObj,       // Phase 4
+        repCells:          repCellsObj,             // Phase 6
+        repMonths:         repMonthsObj,            // Phase 6
+        verifiedBuildings: verifiedBuildingsObj,    // Phase 6 Step 3.5
+        verifiedRegions:   verifiedRegionsObj,      // Phase 6 Step 3.5
     };
 
     // 3. /statsFilter/{quarter} 덮어쓰기
@@ -315,7 +615,7 @@ async function _seSaveStatsFilter() {
         quarter,
         action:      'bulk_apply',
         targetId:    '',
-        memo:        `v${_seState.version} → v${newVersion} 적용 (건물 제외 ${_seState.excludedBuildings.size}건, vacancy 제외 ${_seState.excludedVacancies.size}건, 검증 안내문 ${_seState.verifiedGuides.size}건, 매트릭스 셀 ${_seState.repCells.size}건, 대표월 ${_seState.repMonths.size}건)`,
+        memo:        `v${_seState.version} → v${newVersion} 적용 (건물 제외 ${_seState.excludedBuildings.size}건, vacancy 제외 ${_seState.excludedVacancies.size}건, 검증 안내문 ${_seState.verifiedGuides.size}건, 매트릭스 셀 ${_seState.repCells.size}건, 대표월 ${_seState.repMonths.size}건, 빌딩검수 ${_seState.verifiedBuildings.size}건, 권역확정 ${_seState.verifiedRegions.size}건)`,
         user,
         ts:          now,
         prevVersion: _seState.version,
@@ -465,31 +765,71 @@ function _seRunPipeline() {
         return true;
     });
 
-    // 3차: vacOnly 토글
-    const afterVacOnly = f.vacOnly
-        ? afterFilter.filter(b => (b._activeVacs || []).length > 0)
+    // 3차: 분기 마지막 월 OCR 매칭 (Phase 6 Step 3.5 — vacOnly 대체)
+    //  vacOnly=ON 시: 🟢(공실) + ⚪(공실없음선언) 만 통과. 🟡/🔴 은 걸러냄.
+    //  vacOnly=OFF 시: 전부 통과 (사용자가 🟡/🔴 도 수동 검토).
+    const afterLastMonthMatch = f.vacOnly
+        ? afterFilter.filter(b => {
+            const badge = _seGetBuildingBadge(b);
+            return badge.code === 'green' || badge.code === 'white';
+        })
         : afterFilter;
 
-    // 4차: 빌딩 단위 제외 적용 (UI 노출은 유지 — 체크 해제 상태로 표시)
-    // 여기서는 건수 계산용으로만 사용
-    const afterExclude = afterVacOnly.filter(b => !_seState.excludedBuildings.has(b.id));
+    // 4차: 대표 선택 — 분기 마지막 월 repCells 에 chosenSource 가 지정된 빌딩
+    //  (자동 시드는 아직 없음. 수동 탭 클릭으로만 카운트. 자동 시드는 사이클 4-C 에서 렌더 시 발동)
+    //  현재는 repCells 에 해당 (bid, lastM) 키가 있고 chosenSource 가 비어있지 않으면 카운트.
+    const quarter = _seState.quarter;
+    const lastM   = _seGetQuarterLastMonth(quarter);
+    const afterRepChosen = afterLastMonthMatch.filter(b => {
+        if (!lastM) return false;
+        const cell = _seState.repCells.get(`${b.id}__${lastM}`);
+        return !!(cell && cell.chosenSource);
+    });
+
+    // 5차: 유효 공실 건수 — 분기 마지막 월의 대표 소스에 속한 vacancy 중
+    //       excludedVacancies 에 없는 것만 카운트
+    let validVacancyCount = 0;
+    afterRepChosen.forEach(b => {
+        const cell = _seState.repCells.get(`${b.id}__${lastM}`);
+        const chosenSrc = cell?.chosenSource;
+        if (!chosenSrc) return;
+        const rawVacs = b.vacancies || [];
+        for (const v of rawVacs) {
+            if (!v) continue;
+            if (v._key && String(v._key).endsWith('_meta')) continue;
+            if (v.status === 'deleted' || v.hidden === true || v.deleted === true) continue;
+            const src  = v.source || v.sourceCompany || '(미지정)';
+            const norm = srNormalizeDate(v.publishDate);
+            if (norm !== lastM) continue;
+            if (src !== chosenSrc) continue;
+            const ck = _seMakeVacKey(b.id, v._key || '');
+            if (_seState.excludedVacancies.has(ck)) continue;
+            validVacancyCount++;
+        }
+    });
+
+    // 4차 (기존 호환): 빌딩 단위 제외 — 위 단계들과 별개로 건물 제외 상태 집계
+    const afterExclude = afterLastMonthMatch.filter(b => !_seState.excludedBuildings.has(b.id));
 
     // 검색 필터 (UI 전용 — 건수엔 영향 X, 반환 리스트에만 적용)
     const query = _seState.searchQuery.trim().toLowerCase();
     const displayBuildings = query
-        ? afterVacOnly.filter(b => {
+        ? afterLastMonthMatch.filter(b => {
             const nm = (b.name || b.buildingName || '').toLowerCase();
             const ad = (b.address || '').toLowerCase();
             return nm.includes(query) || ad.includes(query);
         })
-        : afterVacOnly;
+        : afterLastMonthMatch;
 
     return {
-        raw:          raw.length,
-        afterFilter:  afterFilter.length,
-        afterVacOnly: afterVacOnly.length,
-        afterExclude: afterExclude.length,
-        buildings:    displayBuildings,
+        raw:                raw.length,
+        afterFilter:        afterFilter.length,
+        afterLastMonthMatch: afterLastMonthMatch.length,   // 🟢⚪ 빌딩 수
+        afterRepChosen:     afterRepChosen.length,         // 대표 선택 완료 빌딩 수
+        validVacancyCount,                                 // 유효 공실 건수 (5단계)
+        afterVacOnly:       afterLastMonthMatch.length,    // 레거시 호환 (기존 코드 참조용)
+        afterExclude:       afterExclude.length,           // 레거시 호환
+        buildings:          displayBuildings,
     };
 }
 
@@ -508,6 +848,7 @@ window.openStatsEditorModal = async function() {
     _seState.loaded  = false;
     _seState.searchQuery = '';
     _seState.selectedBuildingId = null;
+    _seState.seededBuildings.clear();  // Phase 6 Step 3.5: 자동 시드 재실행 허용
     _seSetDirty(false);  // Phase 3: 모달 열 때 dirty 리셋
 
     // 모달 표시
@@ -593,17 +934,70 @@ function _seRenderFilters() {
         `).join('');
     }
 
-    // 권역 체크박스
+    // 권역 체크박스 (Phase 6 Step 3.5: 진행률 배지 + 확정 상태/버튼)
     const REGIONS = ['CBD', 'GBD', 'YBD', 'BBD', 'Others'];
     const regWrap = document.getElementById('se-filter-regions');
     if (regWrap) {
-        regWrap.innerHTML = REGIONS.map(r => `
-            <label class="se-chip${f.regions.includes(r) ? ' se-chip-on' : ''}">
-                <input type="checkbox" ${f.regions.includes(r) ? 'checked' : ''}
-                    onchange="_seToggleFilter('regions', '${r}', this.checked)">
-                ${r}
-            </label>
-        `).join('');
+        // 각 권역별 검수 진행률 계산 (Q2=A안 분모 규칙)
+        //   🟢⚪ 빌딩: 무조건 분모, 검수 토글 시 분자
+        //   🟡🔴 빌딩: 검수 토글된 것만 분모·분자 모두 포함
+        const raw2 = srGetNormBuildings();
+        const afterGrade = raw2.filter(b => match(f.grades, b._gradeAuto));
+        const progressByRegion = {};
+        REGIONS.forEach(r => progressByRegion[r] = { denom: 0, num: 0, total: 0 });
+        afterGrade.forEach(b => {
+            const r = b._region;
+            if (!(r in progressByRegion)) return;
+            progressByRegion[r].total++;
+            const bb = _seGetBuildingBadge(b);
+            const isGreenOrWhite = bb.code === 'green' || bb.code === 'white';
+            const isVerified = _seState.verifiedBuildings.has(b.id);
+            if (isGreenOrWhite) {
+                progressByRegion[r].denom++;
+                if (isVerified) progressByRegion[r].num++;
+            } else if (isVerified) {
+                progressByRegion[r].denom++;
+                progressByRegion[r].num++;
+            }
+        });
+
+        regWrap.innerHTML = REGIONS.map(r => {
+            const p = progressByRegion[r];
+            const isSelected = f.regions.includes(r);
+            const verifiedKey = `${_seState.quarter}__${r}`;
+            const isConfirmed = _seState.verifiedRegions.has(verifiedKey);
+            const confirmedInfo = isConfirmed ? _seState.verifiedRegions.get(verifiedKey) : null;
+            const isFull = p.denom > 0 && p.num === p.denom;
+
+            const progressHtml = p.total > 0
+                ? `<span class="se-region-progress${isFull ? ' se-region-progress-full' : ''}">${p.num}/${p.denom}</span>`
+                : '';
+
+            let trailingHtml = '';
+            if (isConfirmed) {
+                trailingHtml = `<span class="se-region-confirmed-badge"
+                    title="${_seEsc((confirmedInfo?.verifiedAt || '').slice(0,10))} · ${_seEsc(confirmedInfo?.verifiedBy || '')}"
+                    onclick="_seConfirmVerifyRegion('${r}')" role="button">
+                    ✅ 확정
+                </span>`;
+            } else if (isFull) {
+                trailingHtml = `<button class="se-region-confirm-btn"
+                    onclick="_seConfirmVerifyRegion('${r}')"
+                    title="${r} 권역 검수 확정">
+                    🎯 ${r} 확정
+                </button>`;
+            }
+
+            return `<div class="se-region-group">
+                <label class="se-chip${isSelected ? ' se-chip-on' : ''}${isConfirmed ? ' se-chip-confirmed' : ''}">
+                    <input type="checkbox" ${isSelected ? 'checked' : ''}
+                        onchange="_seToggleFilter('regions', '${r}', this.checked)">
+                    ${r}
+                    ${progressHtml}
+                </label>
+                ${trailingHtml}
+            </div>`;
+        }).join('');
     }
 
     // 세부권역: 현재 2차 필터 통과 빌딩에서 동적 추출
@@ -639,14 +1033,18 @@ function _seRenderPipelineSummary() {
     const pipeline = _seRunPipeline();
     const el = document.getElementById('se-pipeline-summary');
     if (!el) return;
+    const lastM = _seGetQuarterLastMonth(_seState.quarter);
+    const lastMonLabel = lastM ? `${parseInt(lastM.slice(5, 7), 10)}월` : '';
     el.innerHTML = `
         <div class="se-pipe-step">RAW: <b>${pipeline.raw}</b></div>
         <span class="se-pipe-arrow">→</span>
-        <div class="se-pipe-step">2차 필터 후: <b>${pipeline.afterFilter}</b></div>
+        <div class="se-pipe-step">2차 필터: <b>${pipeline.afterFilter}</b></div>
         <span class="se-pipe-arrow">→</span>
-        <div class="se-pipe-step">공실 매칭 후: <b>${pipeline.afterVacOnly}</b></div>
+        <div class="se-pipe-step">${lastMonLabel} 매칭: <b>${pipeline.afterLastMonthMatch}</b></div>
         <span class="se-pipe-arrow">→</span>
-        <div class="se-pipe-step se-pipe-final">최종 통계: <b>${pipeline.afterExclude}</b></div>
+        <div class="se-pipe-step">대표 선택: <b>${pipeline.afterRepChosen}</b></div>
+        <span class="se-pipe-arrow">→</span>
+        <div class="se-pipe-step se-pipe-final">유효 공실: <b>${pipeline.validVacancyCount}</b>건</div>
     `;
 }
 
@@ -678,10 +1076,17 @@ function _seRenderBuildingList() {
     el.innerHTML = sorted.map(b => {
         const isExcluded = _seState.excludedBuildings.has(b.id);
         const isSelected = _seState.selectedBuildingId === b.id;
-        const vacCount = (b._activeVacs || []).length;
         const memo = isExcluded ? _seState.excludedBuildings.get(b.id).memo || '' : '';
 
-        return `<div class="se-bldg-row${isSelected ? ' se-bldg-selected' : ''}${isExcluded ? ' se-bldg-excluded' : ''}"
+        // Phase 6 Step 3.5: 빌딩 상태 뱃지 + 분기 내/전체 공실 카운터
+        const bb = _seGetBuildingBadge(b);
+        const totalVacCount = (b._activeVacs || []).length;
+
+        // Phase 6 Step 3.5: 빌딩 검수 완료 상태
+        const isVerifiedBldg = _seState.verifiedBuildings.has(b.id);
+        const verBldgInfo = isVerifiedBldg ? _seState.verifiedBuildings.get(b.id) : null;
+
+        return `<div class="se-bldg-row${isSelected ? ' se-bldg-selected' : ''}${isExcluded ? ' se-bldg-excluded' : ''}${isVerifiedBldg ? ' se-bldg-verified' : ''}"
                      onclick="_seSelectBuilding('${_seEsc(b.id)}')">
             <input type="checkbox" class="se-bldg-cb"
                 ${!isExcluded ? 'checked' : ''}
@@ -692,10 +1097,22 @@ function _seRenderBuildingList() {
                 <div class="se-bldg-meta">
                     <span class="se-badge se-badge-grade">${_seEsc(b._gradeAuto || '-')}</span>
                     <span class="se-badge se-badge-region">${_seEsc(b._region || '-')}</span>
-                    <span style="color:var(--text-muted);">vacancy ${vacCount}건</span>
+                    <span class="se-badge se-badge-status se-badge-status-${bb.code}" title="${_seEsc(bb.label)}">
+                        ${_seEsc(bb.label)}
+                    </span>
+                </div>
+                <div class="se-bldg-vac-count">
+                    <b>${bb.lastMonthVacCount}</b>건 <span style="color:var(--text-muted);">/ 전체 ${totalVacCount}건</span>
                 </div>
                 ${memo ? `<div class="se-memo">📝 ${_seEsc(memo)}</div>` : ''}
             </div>
+            <button class="se-verify-toggle${isVerifiedBldg ? ' se-verify-toggle-on' : ''}"
+                    onclick="event.stopPropagation(); _seToggleVerifyBuilding('${_seEsc(b.id)}')"
+                    title="${isVerifiedBldg
+                        ? `검수 해제 — ${_seEsc((verBldgInfo?.verifiedAt || '').slice(0,10))} · ${_seEsc(verBldgInfo?.verifiedBy || '')}`
+                        : '이 빌딩의 공실 행을 모두 확인했음을 표시'}">
+                ${isVerifiedBldg ? '✓' : '○'}
+            </button>
         </div>`;
     }).join('');
 }
@@ -788,11 +1205,46 @@ function _seRenderVacancyList() {
         return;
     }
 
+    // Phase 6 Step 3.5: 빌딩 진입 시 lazy 자동 판정 시드 (idempotent)
+    //   이미 시드된 빌딩은 재실행 안 됨. 사용자 수동 결정도 보존.
+    const activeVacs = srActiveVacancies(b);
+    _seSeedAutoJudgments(bid, activeVacs);
+
     const idx = _seBuildGuideIndex(b);
     if (idx.sourceStats.length === 0) {
         el.innerHTML = `<div class="se-empty">이 빌딩의 활성 임대안내문이 없습니다.</div>`;
         return;
     }
+
+    // Phase 6 Step 3.5: 분기 마지막 월 + 대표 회사 자동 시드
+    const quarter = _seState.quarter;
+    const lastM   = _seGetQuarterLastMonth(quarter);
+    if (lastM) {
+        const repKey = `${bid}__${lastM}`;
+        const existingRep = _seState.repCells.get(repKey);
+        if (!existingRep || !existingRep.chosenSource) {
+            // 분기 마지막 월에 실제 발행이 있는 회사 중 최다 → 자동 시드
+            // (sourceStats 는 이미 vacancy 많은 순으로 정렬되어 있음)
+            const topSrc = idx.sourceStats.find(s => {
+                const pdsOfSrc = idx.pdsBySource.get(s.source) || [];
+                return pdsOfSrc.some(pd => srNormalizeDate(pd) === lastM);
+            });
+            if (topSrc) {
+                _seState.repCells.set(repKey, {
+                    chosenSource: topSrc.source,
+                    chosenAt:     _seNow(),
+                    chosenBy:     _seGetCurrentUser(),
+                    memo:         '자동 시드 (최다 발행 회사)',
+                });
+                // ※ dirty 표시 안 함 — 자동 시드는 묵시적 상태이며 사용자가 실제 변경 시 저장됨
+            }
+        }
+    }
+
+    // 현재 대표 회사 (⭐ 표시용, 분기 마지막 월 기준)
+    const repChosenSource = lastM
+        ? (_seState.repCells.get(`${bid}__${lastM}`)?.chosenSource || null)
+        : null;
 
     // selectedSource 기본값: 첫 번째 (vacancy 가장 많은 회사)
     let curSrc = _seState.selectedSource;
@@ -802,12 +1254,17 @@ function _seRenderVacancyList() {
     }
     const pds = idx.pdsBySource.get(curSrc) || [];
 
-    // selectedPublishDate 기본값: 해당 source의 최신
+    // Phase 6 Step 3.5: selectedPublishDate 기본값 = 분기 마지막 월
+    //   해당 회사에 분기 마지막 월 발행호가 있으면 그걸 기본, 없으면 기존처럼 최신.
     let curPd = _seState.selectedPublishDate;
     if (!curPd || !pds.includes(curPd)) {
-        curPd = pds[0] || null;
+        const pdForLastM = pds.find(pd => srNormalizeDate(pd) === lastM);
+        curPd = pdForLastM || pds[0] || null;
         _seState.selectedPublishDate = curPd;
     }
+
+    const curPdNorm = srNormalizeDate(curPd || '');
+    const curPdOutOfQuarter = curPdNorm && !_seIsInQuarter(curPdNorm, quarter);
 
     const bldgName  = _seEsc(b.name || b.buildingName || '');
     const totalVacs = idx.sourceStats.reduce((s, x) => s + x.count, 0);
@@ -821,32 +1278,38 @@ function _seRenderVacancyList() {
             </span>
         </div>`;
 
-    // ── 2. 회사별 탭 ──────────────────────────────────
+    // ── 2. 회사별 탭 (Phase 6 Step 3.5: 대표 회사에 ⭐) ─
     const tabsHtml = `
         <div class="se-src-tabs">
-            ${idx.sourceStats.map(s => `
-                <button class="se-src-tab${s.source === curSrc ? ' se-src-tab-on' : ''}"
-                        onclick="_seSelectSource('${_seEsc(s.source)}')">
-                    ${_seEsc(s.source)}
+            ${idx.sourceStats.map(s => {
+                const isRep = s.source === repChosenSource;
+                return `<button class="se-src-tab${s.source === curSrc ? ' se-src-tab-on' : ''}${isRep ? ' se-src-tab-rep' : ''}"
+                        onclick="_seSelectSource('${_seEsc(s.source)}')"
+                        title="${isRep ? '분기 마지막 월 대표 회사 (클릭 시 재지정)' : '클릭 시 이 회사를 분기 대표로 지정'}">
+                    ${isRep ? '⭐ ' : ''}${_seEsc(s.source)}
                     <span class="se-src-tab-count">${s.count}</span>
-                </button>
-            `).join('')}
+                </button>`;
+            }).join('')}
         </div>`;
 
-    // ── 3. 발행월 셀렉트 ─────────────────────────────
+    // ── 3. 발행월 셀렉트 (Phase 6 Step 3.5: [분기 외] 배지) ──
     const pdSelectHtml = `
         <div class="se-pd-wrap">
             <span>📅 발행월</span>
             <select class="se-pd-select" onchange="_seSelectPublishDate(this.value)">
-                ${pds.map(pd => `
-                    <option value="${_seEsc(pd)}"${pd === curPd ? ' selected' : ''}>
-                        ${_seEsc(pd)}
-                    </option>
-                `).join('')}
+                ${pds.map(pd => {
+                    const norm = srNormalizeDate(pd);
+                    const outOfQ = norm && !_seIsInQuarter(norm, quarter);
+                    const label = outOfQ ? `${pd} [분기 외]` : pd;
+                    return `<option value="${_seEsc(pd)}"${pd === curPd ? ' selected' : ''}>
+                        ${_seEsc(label)}
+                    </option>`;
+                }).join('')}
             </select>
-            <span style="color:var(--text-muted); font-size:11px;">
-                — ${_seEsc(curSrc)} 의 발행호 ${pds.length}건
-            </span>
+            ${curPdOutOfQuarter
+                ? `<span style="color:#c2410c; font-size:11px; font-weight:600;">⚠️ 분기 외 발행호 — 의도적 선택 시에만 통계 반영</span>`
+                : `<span style="color:var(--text-muted); font-size:11px;">— ${_seEsc(curSrc)} 의 발행호 ${pds.length}건</span>`
+            }
         </div>`;
 
     // ── 4. 현재 (source, pd) 그룹 카드 ────────────────
@@ -902,6 +1365,7 @@ function _seRenderVacancyList() {
                 <thead>
                     <tr>
                         <th style="width:32px;"></th>
+                        <th style="width:42px;">판정</th>
                         <th>층</th>
                         <th>임대면적</th>
                         <th>전용면적</th>
@@ -915,15 +1379,37 @@ function _seRenderVacancyList() {
                     ${sortedVacs.map(v => {
                         const vkey = v._key || '';
                         const ck   = _seMakeVacKey(bid, vkey);
-                        const exc  = _seState.excludedVacancies.has(ck);
+                        const excEntry = _seState.excludedVacancies.get(ck);
+                        const exc = !!excEntry;
                         const floor = v.floor || v.floors || '-';
                         const rA = v.rentArea || v.rentAreaPy || '';
                         const eA = v.exclusiveArea || v.exclusiveAreaPy || '';
+
+                        // Phase 6 Step 3.5: 자동 판정 배지 (실시간 재판정)
+                        //  judgment 는 vacancy 데이터 자체에 기반 (사용자 오버라이드와 무관)
+                        //  체크박스 상태는 excludedVacancies 기준이므로 배지/체크 불일치 가능 → 정상
+                        const judgment = _seAutoJudgeVacancy(v);
+                        const manualOverride = excEntry && excEntry.judgedBy === 'manual';
+                        // 배지 툴팁: 자동 판정 근거 + (있으면) 사용자 수동 오버라이드 표시
+                        const badgeTitle = manualOverride
+                            ? `자동 판정: ${judgment.reason}\n현재 상태: 사용자 수동 지정`
+                            : judgment.reason;
+                        // 배지 색상 클래스: 배지 문자로 분기
+                        const badgeCls = judgment.badge === '⚡' ? 'se-auto-badge-immediate'
+                                       : judgment.badge === '🔻' ? 'se-auto-badge-underground'
+                                       : 'se-auto-badge-review';
+
                         return `<tr class="${exc ? 'se-vac-row-excluded' : ''}">
                             <td>
                                 <input type="checkbox" class="se-vac-cell-cb"
                                     ${!exc ? 'checked' : ''}
                                     onchange="_seToggleVacancy('${_seEsc(bid)}', '${_seEsc(vkey)}', this.checked)">
+                            </td>
+                            <td>
+                                <span class="se-auto-badge ${badgeCls}${manualOverride ? ' se-auto-badge-manual' : ''}"
+                                      title="${_seEsc(badgeTitle)}">
+                                    ${judgment.badge}${manualOverride ? '✋' : ''}
+                                </span>
                             </td>
                             <td>${_seEsc(floor)}${String(floor).match(/^\d+$/) ? 'F' : ''}</td>
                             <td>${_seFmtNum(rA)}${rA ? '평' : ''}</td>
@@ -977,6 +1463,7 @@ window._seOnQuarterChange = async function() {
 
     _seState.quarter = sel.value;
     _seState.selectedBuildingId = null;
+    _seState.seededBuildings.clear();  // Phase 6 Step 3.5: 분기 바뀌면 재시드
     _seSetDirty(false);  // 새 분기 로드하므로 dirty 리셋
     await _seReloadAndRender();
 };
@@ -1027,10 +1514,39 @@ window._seSelectBuilding = function(bid) {
 
 // ─ Phase 4: 임대안내문 그룹 핸들러 ──────────────────────────
 
-/** 회사 탭 전환 */
+/** 회사 탭 전환 (Phase 6 Step 3.5: 클릭 = 대표 회사 지정)
+ *
+ *  A안 — 현재 보고 있는 발행월(selectedPublishDate)의 yyyymm 에 해당하는
+ *  repCells 셀의 chosenSource 를 즉시 덮어쓰기. 사용자가 분기 외 월을 보고 있으면
+ *  그 월에 대표가 기록되어 매트릭스 탭(Step 4)에서도 해당 월 집계에 반영.
+ */
 window._seSelectSource = function(source) {
+    const bid = _seState.selectedBuildingId;
+    const prevPd = _seState.selectedPublishDate;
+    const prevPdNorm = srNormalizeDate(prevPd || '');
+
+    // 1) 현재 pd 의 yyyymm 에 대표 기록 (있을 때만)
+    if (bid && prevPdNorm) {
+        const repKey = `${bid}__${prevPdNorm}`;
+        const prevCell = _seState.repCells.get(repKey);
+        if (!prevCell || prevCell.chosenSource !== source) {
+            _seState.repCells.set(repKey, {
+                chosenSource: source,
+                chosenAt:     _seNow(),
+                chosenBy:     _seGetCurrentUser(),
+                memo:         '사용자 탭 클릭으로 지정',
+            });
+            _sePushActionLog('choose_rep_source', repKey, `${source} @ ${prevPdNorm}`,
+                `${prevPdNorm} 대표 회사 = ${source}`);
+            _seSetDirty(true);
+        }
+    }
+
+    // 2) 선택 상태 전환 — 발행월은 새 회사의 최신(또는 분기 마지막 월)으로 자동 재선정
     _seState.selectedSource      = source;
-    _seState.selectedPublishDate = null;  // 회사 바뀌면 발행월도 리셋 (최신 자동)
+    _seState.selectedPublishDate = null;  // 다음 렌더에서 자동 선정
+    _seReloadLogPanelIfOpen();
+    _seRenderPipelineSummary();   // 대표 선택 카운트 갱신
     _seRenderVacancyList();
 };
 
@@ -1070,6 +1586,7 @@ window._seToggleGroupExclude = function(bid, source, pd, includeChecked) {
                 memo,
                 excludedAt: now,
                 excludedBy: user,
+                judgedBy:   'manual',  // Phase 6 Step 3.5: 그룹 bulk 도 사용자 명시 결정
             });
         }
     });
@@ -1606,8 +2123,16 @@ window._seToggleVacancy = function(bid, vkey, includeChecked) {
     }
 
     if (includeChecked) {
+        // 제외 해제 (= 포함으로 전환)
+        // Phase 6 Step 3.5 known limitation:
+        // 여기서 그냥 delete 만 하면 모달 재오픈 시 자동 시드가 다시 자동 제외로 복원할 수 있음.
+        // 같은 세션 내에서는 seededBuildings 플래그로 보호되지만, 세션을 넘어가면 복원됨.
+        // 현업 피드백 봐서 필요하면 별도 manualIncludes Set 추가 고려.
+        const prev = _seState.excludedVacancies.get(ck);
+        const prevJudgedBy = prev?.judgedBy || 'manual';
         _seState.excludedVacancies.delete(ck);
-        _sePushActionLog('add_vacancy', ck, vLabel, '제외 해제');
+        _sePushActionLog('add_vacancy', ck, vLabel,
+            prevJudgedBy === 'auto' ? '자동 제외 → 수동 포함' : '제외 해제');
     } else {
         const memoIn = prompt('제외 사유 (선택, Enter로 건너뛰기):', '');
         const memo = (memoIn === null || memoIn.trim() === '')
@@ -1619,6 +2144,7 @@ window._seToggleVacancy = function(bid, vkey, includeChecked) {
             memo,
             excludedAt: _seNow(),
             excludedBy: user,
+            judgedBy:   'manual',  // Phase 6 Step 3.5: 사용자 명시 결정 → 시드가 덮어쓰지 않음
         });
         _sePushActionLog('remove_vacancy', ck, vLabel, memo);
     }
@@ -1626,6 +2152,88 @@ window._seToggleVacancy = function(bid, vkey, includeChecked) {
     _seReloadLogPanelIfOpen();
     _seRenderVacancyList();
     _seRenderSelectionSummary();
+};
+
+/**
+ * 빌딩 검수 완료 토글 (Phase 6 Step 3.5)
+ *  - verifiedBuildings Map 에 set/delete
+ *  - 로그 기록 + dirty
+ *  - 빌딩 카드 + 권역 진행률 재렌더
+ */
+window._seToggleVerifyBuilding = function(bid) {
+    const user = _seGetCurrentUser();
+    const b = (window.state?.allBuildings || []).find(x => x.id === bid);
+    const bName = (b && (b.name || b.buildingName)) || bid;
+    const quarter = _seState.quarter;
+
+    if (_seState.verifiedBuildings.has(bid)) {
+        _seState.verifiedBuildings.delete(bid);
+        _sePushActionLog('unverify_building', bid, bName, '빌딩 검수 해제');
+    } else {
+        _seState.verifiedBuildings.set(bid, {
+            verifiedAt: _seNow(),
+            verifiedBy: user,
+            quarter,
+        });
+        _sePushActionLog('verify_building', bid, bName, '빌딩 검수 완료');
+    }
+    _seSetDirty(true);
+    _seReloadLogPanelIfOpen();
+    _seRenderBuildingList();   // 빌딩 카드 ✓ 상태 반영
+    _seRenderFilters();        // 권역 진행률 · 확정 버튼 갱신
+};
+
+/**
+ * 권역 검수 확정 토글 (Phase 6 Step 3.5)
+ *  - 미확정 → 확정: 100% 도달 확인 후 verifiedRegions set
+ *  - 확정 → 해제: 확정 배지 클릭 시 해제 확인 후 delete
+ *  - 로그 기록 + dirty + 필터 재렌더
+ */
+window._seConfirmVerifyRegion = function(region) {
+    const quarter = _seState.quarter;
+    const key = `${quarter}__${region}`;
+    const user = _seGetCurrentUser();
+
+    if (_seState.verifiedRegions.has(key)) {
+        // 해제
+        const ok = confirm(`${region} 권역 확정을 해제하시겠습니까?\n검수 진행률 배지는 유지되지만 "🎯 확정" 표시가 사라집니다.`);
+        if (!ok) return;
+        _seState.verifiedRegions.delete(key);
+        _sePushActionLog('unconfirm_region', key, `${quarter} ${region}`, '권역 확정 해제');
+    } else {
+        // 확정 (진행률 재계산해 분모 저장)
+        const raw2 = srGetNormBuildings();
+        const f = _seState.filters;
+        const matchFn = (arr, val) => !arr || arr.length === 0 || arr.includes(val);
+        const afterGrade = raw2.filter(b => matchFn(f.grades, b._gradeAuto));
+        let denom = 0, num = 0;
+        afterGrade.forEach(b => {
+            if (b._region !== region) return;
+            const bb = _seGetBuildingBadge(b);
+            const isGW = bb.code === 'green' || bb.code === 'white';
+            const isVer = _seState.verifiedBuildings.has(b.id);
+            if (isGW) { denom++; if (isVer) num++; }
+            else if (isVer) { denom++; num++; }
+        });
+        // 방어: 버튼이 잘못 활성화된 상태에서 호출됐을 때 차단
+        if (denom === 0 || num !== denom) {
+            alert(`${region} 권역 검수가 완료되지 않았습니다 (${num}/${denom}).\n모든 대상 빌딩을 먼저 "✓ 검수완료"로 표시해주세요.`);
+            return;
+        }
+        const ok = confirm(`${region} 권역 (${denom}개 빌딩) 검수를 확정하시겠습니까?\n확정 후에도 배지 클릭으로 해제할 수 있습니다.`);
+        if (!ok) return;
+        _seState.verifiedRegions.set(key, {
+            verifiedAt:    _seNow(),
+            verifiedBy:    user,
+            buildingCount: denom,
+            memo:          '권역 검수 확정',
+        });
+        _sePushActionLog('confirm_region', key, `${quarter} ${region}`,
+            `권역 확정 (빌딩 ${denom}개)`);
+    }
+    _seSetDirty(true);
+    _seReloadLogPanelIfOpen();
+    _seRenderFilters();
 };
 
 /** 적용 버튼 */
