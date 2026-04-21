@@ -99,9 +99,108 @@ function _sumQuarterRange(qLabel) {
     return { from: `${year}-${mStart}`, to: `${year}-${mEnd}` };
 }
 
+// ─── Phase 6 Step 3.5 핫픽스 (2026-04) ───────────────────────────
+// 분기 요약 대시보드와 편집 모드 간 수치 정합성 확보를 위한 두 가지 헬퍼:
+//
+//  (1) _sumGetQuarterLastMonth(qLabel)
+//      분기의 마지막 월(YYYY-MM)을 반환. 분기 정의 = "분기 마지막 월의 스냅샷"
+//      A안 결정에 따라 분기 요약도 분기 마지막 월의 발행 안내문만 집계 대상으로 함.
+//
+//  (2) _sumApplyEditorState(normBuildings)
+//      window._srPersistentExclude (편집 모드가 _srApplyPersistentExclusions 로 주입한 상태)를
+//      summary 데이터에 적용. portal-stats.js 의 _srGetFilteredNormBuildings 와 동일 로직을
+//      summary 모듈 내부에 복제 (portal-stats.js 수정 회피 — Step 4 안정성 우선).
+//
+// 적용 순서 (portal-stats.js _srGetFilteredNormBuildings 와 동일):
+//   1) 2차 필터 (등급/권역/세부권역) — pFilters
+//   2) vacOnly 토글
+//   3) 빌딩 단위 영구 제외 — 분모에서도 빠짐
+//   4) vacancy 단위 영구 제외 — 해당 vacancy만 제외, 분모 유지
+//
+// ※ 편집 모드 미사용 시 (_srPersistentExclude 가 비었을 때) raw 와 동일하게 동작.
+function _sumGetQuarterLastMonth(qLabel) {
+    const { to } = _sumQuarterRange(qLabel);
+    return to || '';
+}
+
+function _sumApplyEditorState(normBuildings) {
+    const pe = window._srPersistentExclude;
+    if (!pe) return normBuildings;  // 편집 모드 미사용
+
+    let norm = normBuildings;
+
+    // 1) 2차 필터 (등급/권역/세부권역) + 2) vacOnly
+    const pFilters = pe.filters;
+    if (pFilters) {
+        const matchAny = (arr, val) => !arr || !arr.length || arr.includes(val);
+        norm = norm.filter(b => {
+            if (!matchAny(pFilters.grades,     b._gradeAuto)) return false;
+            if (!matchAny(pFilters.regions,    b._region))    return false;
+            if (pFilters.subRegions && pFilters.subRegions.length > 0
+                && !pFilters.subRegions.includes(b.subRegion || '')) return false;
+            return true;
+        });
+        if (pFilters.vacOnly) {
+            norm = norm.filter(b => (b._activeVacs || []).length > 0);
+        }
+    }
+
+    // 3) 빌딩 단위 영구 제외
+    const exBldgSet = pe.excludedBuildings;
+    if (exBldgSet && exBldgSet.size > 0) {
+        norm = norm.filter(b => !exBldgSet.has(b.id));
+    }
+
+    // 4) vacancy 단위 영구 제외 (anomaly 제외는 summary 에 영향 X — 무시)
+    const exVacSet = pe.excludedVacancies;
+    if (exVacSet && exVacSet.size > 0) {
+        const lib = window.srLib;
+        norm = norm.map(b => {
+            const safeVacs = (b._activeVacs || []).filter(v => {
+                if (!v._key) return true;
+                if (exVacSet.has(`${b.id}__${v._key}`)) return false;
+                return true;
+            });
+            if (safeVacs.length === (b._activeVacs || []).length) return b;
+            const vacancyPy = safeVacs.reduce((s, v) => s + lib.srVacancyAreaPy(v), 0);
+            const gross     = parseFloat(b.grossFloorPy) || 0;
+            return {
+                ...b,
+                _activeVacs:  safeVacs,
+                _vacancyPy:   vacancyPy,
+                _vacancyRate: gross > 0 ? vacancyPy / gross * 100 : 0,
+            };
+        });
+    }
+
+    return norm;
+}
+
 /**
- * 특정 분기에 속하는 공실 데이터만 반환
- * (publishDate가 해당 분기 범위 내에 있는 것)
+ * Phase 6 Step 3.5 — A안: 분기 마지막 월의 발행 안내문 공실만 반환
+ * 기존 _sumFilterVacByQuarter (분기 3개월 전체 합산) 를 대체.
+ * @param {Array} vacancies  building._activeVacs
+ * @param {string} qLabel    'YYYYQN'
+ * @returns {Array}          분기 마지막 월 발행분만
+ */
+function _sumFilterVacByQuarterLastMonth(vacancies, qLabel) {
+    const lib = window.srLib;
+    const lastM = _sumGetQuarterLastMonth(qLabel);
+    if (!lastM) return [];
+    return (vacancies || []).filter(v => {
+        if (!v) return false;
+        const norm = lib.srNormalizeDate(v.publishDate);
+        return norm === lastM;
+    });
+}
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * @deprecated Phase 6 Step 3.5 핫픽스 이후 미사용.
+ * "분기 = 분기 마지막 월 스냅샷" 정의(A안)로 변경되어
+ * _sumFilterVacByQuarterLastMonth 가 대체. 호환성 유지 위해 함수 시그니처는 보존.
+ *
+ * 특정 분기에 속하는 공실 데이터만 반환 (분기 3개월 전체 합산 — 기존 동작)
  */
 function _sumFilterVacByQuarter(vacancies, qLabel) {
     const lib = window.srLib;
@@ -153,7 +252,8 @@ function _sumCalcRegionStats(qLabel, grade) {
     const lib = window.srLib;
     if (!lib || !qLabel) return {};
 
-    const normBuildings = lib.srGetNormBuildings();
+    // Phase 6 Step 3.5 핫픽스: raw 대신 편집 상태(필터·exclude) 반영된 결과 사용
+    const normBuildings = _sumApplyEditorState(lib.srGetNormBuildings());
     // grade: string | string[] | [] 모두 수용
     const gradeArr = Array.isArray(grade) ? grade : (grade ? [grade] : []);
     const filtered = gradeArr.length > 0
@@ -173,8 +273,8 @@ function _sumCalcRegionStats(qLabel, grade) {
         result[r].gross     += gross;
         result[r].bldgCount += 1;
 
-        // 공실: 해당 분기 publishDate 기준
-        const vacs = _sumFilterVacByQuarter(b._activeVacs, qLabel);
+        // Phase 6 Step 3.5 A안: 분기 마지막 월 발행 공실만 (기존 3개월 합산 → 단일 월 스냅샷)
+        const vacs = _sumFilterVacByQuarterLastMonth(b._activeVacs, qLabel);
         const vacPy = vacs.reduce((s, v) => s + lib.srVacancyAreaPy(v), 0);
         result[r].vacPy += vacPy;
 
@@ -538,7 +638,8 @@ function _sumCalcCrossStats(qLabel, prevQ, gradeArr) {
     const GRADES_SHOW = lib.SR_GRADES.filter(g => g !== 'E'); // E등급 제외
     const targetGrades = gradeArr.length > 0 ? gradeArr : GRADES_SHOW;
 
-    const normBuildings = lib.srGetNormBuildings();
+    // Phase 6 Step 3.5 핫픽스: raw 대신 편집 상태(필터·exclude) 반영된 결과 사용
+    const normBuildings = _sumApplyEditorState(lib.srGetNormBuildings());
 
     // 초기화
     const result = {};
@@ -559,17 +660,17 @@ function _sumCalcCrossStats(qLabel, prevQ, gradeArr) {
         result[r][g].bldgCount += 1;
         result[r][g].gross     += gross;
 
-        // 기준 분기 공실
-        const vacs  = _sumFilterVacByQuarter(b._activeVacs, qLabel);
+        // Phase 6 Step 3.5 A안: 분기 마지막 월 발행 공실만
+        const vacs  = _sumFilterVacByQuarterLastMonth(b._activeVacs, qLabel);
         result[r][g].vacPy += vacs.reduce((s, v) => s + lib.srVacancyAreaPy(v), 0);
 
         // 기준 분기 임대가
         const rent = _sumGetRentForQuarter(b, qLabel);
         if (rent.rentPy > 0) { result[r][g].rentSum += rent.rentPy; result[r][g].rentCnt += 1; }
 
-        // 비교 분기
+        // 비교 분기 (역시 마지막 월 스냅샷)
         if (prevQ) {
-            const pvacs = _sumFilterVacByQuarter(b._activeVacs, prevQ);
+            const pvacs = _sumFilterVacByQuarterLastMonth(b._activeVacs, prevQ);
             result[r][g].prevGross  += gross;
             result[r][g].prevVacPy  += pvacs.reduce((s, v) => s + lib.srVacancyAreaPy(v), 0);
             const prent = _sumGetRentForQuarter(b, prevQ);
