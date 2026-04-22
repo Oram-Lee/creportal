@@ -496,12 +496,6 @@ async function _seLoadStatsFilter(quarter) {
         subRegions: Array.isArray(data.filters?.subRegions) ? data.filters.subRegions : [],
         vacOnly:    data.filters?.vacOnly !== false,  // undefined 는 true 로
     };
-    // Phase 6 Step 3.5 핫픽스 (2026-04): 레거시 'Others' → 'ETC' 자동 마이그레이션
-    // ※ 이전 버전에서 저장된 regions 에 'Others' 가 있으면 매칭 0건 버그를 일으키므로
-    //   로드 시점에 'ETC' 로 변환. 다음 저장 시 정상 값으로 덮어써짐.
-    _seState.filters.regions = _seState.filters.regions.map(r => r === 'Others' ? 'ETC' : r);
-    // 권역 진행률 Map 키 역시 'quarter__Others' → 'quarter__ETC' 로 이관
-    // (verifiedRegions 는 뒤에서 로드되므로 여기선 처리 안 함 — 해당 블록에서 처리)
 
     _seState.excludedBuildings.clear();
     Object.entries(data.excludedBuildings || {}).forEach(([bid, v]) => {
@@ -551,11 +545,7 @@ async function _seLoadStatsFilter(quarter) {
     // Phase 6 Step 3.5: 권역 검수 완료 (quarter__region)
     _seState.verifiedRegions.clear();
     Object.entries(data.verifiedRegions || {}).forEach(([key, v]) => {
-        // Phase 6 Step 3.5 핫픽스: 레거시 'quarter__Others' 키를 'quarter__ETC' 로 이관
-        const migratedKey = key.endsWith('__Others')
-            ? key.slice(0, -'__Others'.length) + '__ETC'
-            : key;
-        _seState.verifiedRegions.set(migratedKey, v || {});
+        _seState.verifiedRegions.set(key, v || {});
     });
 
     return { version: typeof data.version === 'number' ? data.version : 0 };
@@ -967,10 +957,7 @@ function _seRenderFilters() {
     }
 
     // 권역 체크박스 (Phase 6 Step 3.5: 진행률 배지 + 확정 상태/버튼)
-    // ※ 2026-04 핫픽스: 기존 'Others' → 'ETC' 로 통일.
-    //   portal-stats.js SR_REGIONS 및 b._region 값이 'ETC' 로 세팅되므로
-    //   편집 모드에서 'Others' 를 쓰면 필터 매칭이 0건이 됨 (건물데이터와 불일치).
-    const REGIONS = ['CBD', 'GBD', 'YBD', 'BBD', 'ETC'];
+    const REGIONS = ['CBD', 'GBD', 'YBD', 'BBD', 'Others'];
     const regWrap = document.getElementById('se-filter-regions');
     if (regWrap) {
         // 각 권역별 검수 진행률 계산 (Q2=A안 분모 규칙)
