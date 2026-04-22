@@ -2464,15 +2464,7 @@
                     border-radius:14px 14px 0 0; display:flex; justify-content:space-between;
                     align-items:center; flex-shrink:0;">
             <div>
-                <div style="font-size:15px; font-weight:700; color:#fff; display:flex; align-items:center; gap:8px;">
-                    📋 통계 대상 편집
-                    <!-- Phase 6 Post-3.5 (Tier B): 분기 상태 배지 (📝 작업중 / ✅ 최종) -->
-                    <span id="se-status-label"
-                          style="display:inline-block; padding:2px 9px; border-radius:10px;
-                                 font-size:11px; font-weight:700; letter-spacing:0.3px;
-                                 background:rgba(251, 191, 36, 0.25); color:#fde68a;
-                                 border:1px solid rgba(251, 191, 36, 0.5);">📝 작업중</span>
-                </div>
+                <div style="font-size:15px; font-weight:700; color:#fff;">📋 통계 대상 편집</div>
                 <div style="font-size:11px; color:rgba(255,255,255,0.8); margin-top:2px;">
                     빌딩/임대안내문 개별 선택으로 통계 산출 모집단을 정밀 제어 ·
                     <span id="se-user-label" style="font-weight:600;"></span> ·
@@ -2484,29 +2476,11 @@
                     style="padding:6px 12px; background:#fff;
                            border:1px solid rgba(255,255,255,0.4); color:#6d28d9;
                            border-radius:6px; font-size:12px; font-weight:700; cursor:pointer;"></select>
-                <!-- Phase 6 Post-3.5 (Tier B): 2버튼 구조 (draft / finalized 상태에 따라 show/hide) -->
-                <!-- draft 상태: 💾 임시 저장 + 🎯 최종 저장 -->
-                <!-- finalized 상태: 🔓 재산출 해제 -->
-                <button id="se-save-draft-btn" onclick="_seSaveDraft()"
-                    title="임시 저장: 편집을 계속 이어갈 수 있습니다. 대시보드에 '작업중' 으로 표시."
-                    style="padding:6px 14px; background:#fff; color:#6d28d9;
+                <button id="se-apply-btn" onclick="_seApply()"
+                    style="padding:6px 18px; background:#fff; color:#6d28d9;
                            border:none; border-radius:7px; font-size:13px;
                            font-weight:700; cursor:pointer;">
-                    💾 임시 저장
-                </button>
-                <button id="se-finalize-btn" onclick="_seFinalize()"
-                    title="최종 저장: 이 분기 스냅샷을 공식 집계 소스로 확정. 편집이 잠깁니다."
-                    style="padding:6px 14px; background:#10b981; color:#fff;
-                           border:none; border-radius:7px; font-size:13px;
-                           font-weight:700; cursor:pointer;">
-                    🎯 최종 저장
-                </button>
-                <button id="se-unfinalize-btn" onclick="_seUnfinalize()"
-                    title="재산출 해제: 최종 상태를 풀고 편집 가능 상태로 되돌립니다."
-                    style="display:none; padding:6px 14px; background:#f59e0b; color:#fff;
-                           border:none; border-radius:7px; font-size:13px;
-                           font-weight:700; cursor:pointer;">
-                    🔓 재산출 해제
+                    ✓ 적용
                 </button>
                 <button onclick="closeStatsEditorModal()"
                     style="background:rgba(255,255,255,0.15); border:none; color:#fff;
@@ -2516,8 +2490,8 @@
             </div>
         </div>
 
-        <!-- 본문 (Phase 6 Post-3.5 Tier B: id 부여로 잠금 상태 시 일괄 pointer-events:none 적용 대상) -->
-        <div id="se-modal-body" style="overflow-y:auto; flex:1; min-height:0; padding:14px 22px;">
+        <!-- 본문 -->
+        <div style="overflow-y:auto; flex:1; min-height:0; padding:14px 22px;">
 
             <div id="se-loading" style="display:none; text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">
                 <span style="display:inline-block; animation:spin 1s linear infinite;">⚙️</span> 로딩 중...

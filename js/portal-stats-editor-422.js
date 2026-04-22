@@ -113,21 +113,6 @@ const _seState = {
     //   권역의 모든 대상 빌딩이 verifiedBuildings 에 있을 때 활성되는 "권역 확정" 마크.
     verifiedRegions: new Map(),
 
-    // Phase 6 Post-3.5 (Tier B, 2026-04): 분기 상태 스키마
-    // ─────────────────────────────────────────────────────────────
-    //   status:       'draft' | 'finalized'
-    //     · 'draft'     → 편집 자유. 대시보드에 "📝 작업중" 표시.
-    //     · 'finalized' → 편집 잠금. 공식 스냅샷 확정. "🔓 재산출 해제" 필요.
-    //   finalizedAt:  최종 저장 시각 (ISO) · status === 'finalized' 일 때만 채움
-    //   finalizedBy:  최종 저장자 (user email) · status === 'finalized' 일 때만 채움
-    //   quarterStatuses: 드롭다운 상태 배지용 다른 분기들 상태 캐시
-    //     key: 'YYYYQN' → 'draft' | 'finalized' | null(데이터 없음)
-    //     · 모달 오픈 시 일괄 로드. 저장/최종/해제 시 갱신.
-    status:          'draft',
-    finalizedAt:     '',
-    finalizedBy:     '',
-    quarterStatuses: new Map(),
-
     // UI 상태
     selectedBuildingId:  null,       // 좌측에서 선택된 빌딩 (우측 vacancy 리스트 표시 대상)
     selectedSource:      null,       // Phase 4: 우측 회사 탭 선택 (null=첫번째 자동)
@@ -212,23 +197,6 @@ function _seGetAvailableQuarters() {
         out.push(`${yy}Q${qq}`);
     }
     return out;
-}
-
-/**
- * Phase 6 Post-3.5 (#8): 오늘 기준 "직전 완료 분기" 반환
- * ※ portal-stats-summary.js 의 _sumPrevCompletedQuarter() 와 동일 로직.
- *   모듈 간 의존을 피하기 위해 editor 내부에 로컬 복제 유지.
- *   예) 2026-04 시점 → 진행 중 2026Q2 → 직전 완료 2026Q1 반환
- * @returns {string} 'YYYYQN'
- */
-function _sePrevCompletedQuarter() {
-    const now   = new Date();
-    const year  = now.getFullYear();
-    const month = now.getMonth() + 1;
-    const curQ  = Math.ceil(month / 3);
-    const prevQ    = curQ > 1 ? curQ - 1 : 4;
-    const prevYear = curQ > 1 ? year : year - 1;
-    return `${prevYear}Q${prevQ}`;
 }
 
 /** 메모 없으면 자동 기본값 */
@@ -518,10 +486,6 @@ async function _seLoadStatsFilter(quarter) {
         _seState.repMonths.clear();       // Phase 6
         _seState.verifiedBuildings.clear();  // Phase 6 Step 3.5
         _seState.verifiedRegions.clear();    // Phase 6 Step 3.5
-        // Phase 6 Post-3.5 (Tier B): 신규 분기는 draft 상태로 시작
-        _seState.status      = 'draft';
-        _seState.finalizedAt = '';
-        _seState.finalizedBy = '';
         return { version: 0 };
     }
     const data = snap.val() || {};
@@ -594,27 +558,14 @@ async function _seLoadStatsFilter(quarter) {
         _seState.verifiedRegions.set(migratedKey, v || {});
     });
 
-    // Phase 6 Post-3.5 (Tier B): 분기 상태 복원
-    // ※ 기존 데이터는 status 필드 없음 → 'draft' 로 간주 (레거시 호환)
-    _seState.status      = data.status === 'finalized' ? 'finalized' : 'draft';
-    _seState.finalizedAt = typeof data.finalizedAt === 'string' ? data.finalizedAt : '';
-    _seState.finalizedBy = typeof data.finalizedBy === 'string' ? data.finalizedBy : '';
-
     return { version: typeof data.version === 'number' ? data.version : 0 };
 }
 
 /**
  * 저장 (충돌 감지 포함)
- *
- * Phase 6 Post-3.5 (Tier B): saveMode 파라미터 도입
- *   · 'draft'     → status='draft' 저장 (임시 저장). finalizedAt/By 제거.
- *   · 'finalize'  → status='finalized' 저장. finalizedAt/By 기록.
- *   · 'unfinalize'→ status='draft' 로 되돌림 + 내용은 기존 그대로 (재산출 해제 전용).
- *
- * @param {'draft'|'finalize'|'unfinalize'} saveMode
  * @returns {Promise<{ok: boolean, reason?: string, newVersion?: number}>}
  */
-async function _seSaveStatsFilter(saveMode = 'draft') {
+async function _seSaveStatsFilter() {
     const { db, ref, get, update, push, set } = await import('./portal-firebase.js');
     const quarter = _seState.quarter;
     if (!quarter) return { ok: false, reason: '분기가 선택되지 않았습니다.' };
@@ -671,19 +622,6 @@ async function _seSaveStatsFilter(saveMode = 'draft') {
         verifiedRegionsObj[k] = v;
     }
 
-    // Phase 6 Post-3.5 (Tier B): 저장 모드에 따른 status/finalized 필드 결정
-    let nextStatus, nextFinalizedAt, nextFinalizedBy;
-    if (saveMode === 'finalize') {
-        nextStatus      = 'finalized';
-        nextFinalizedAt = now;
-        nextFinalizedBy = user;
-    } else {
-        // 'draft' 또는 'unfinalize' 둘 다 draft 상태로 귀결
-        nextStatus      = 'draft';
-        nextFinalizedAt = '';
-        nextFinalizedBy = '';
-    }
-
     const payload = {
         version:           newVersion,
         updatedAt:         now,
@@ -696,31 +634,17 @@ async function _seSaveStatsFilter(saveMode = 'draft') {
         repMonths:         repMonthsObj,            // Phase 6
         verifiedBuildings: verifiedBuildingsObj,    // Phase 6 Step 3.5
         verifiedRegions:   verifiedRegionsObj,      // Phase 6 Step 3.5
-        // Phase 6 Post-3.5 (Tier B): 분기 상태 필드
-        status:            nextStatus,
-        finalizedAt:       nextFinalizedAt,
-        finalizedBy:       nextFinalizedBy,
     };
 
     // 3. /statsFilter/{quarter} 덮어쓰기
     await set(ref(db, `statsFilter/${quarter}`), payload);
 
     // 4. /statsFilterLogs 에 이력 추가
-    //    Phase 6 Post-3.5 (Tier B): action 을 saveMode 로 구체화
-    const actionByMode = {
-        'draft':      'save_draft',
-        'finalize':   'finalize',
-        'unfinalize': 'unfinalize',
-    };
     const logEntry = {
         quarter,
-        action:      actionByMode[saveMode] || 'bulk_apply',
+        action:      'bulk_apply',
         targetId:    '',
-        memo:        `v${_seState.version} → v${newVersion} [${saveMode}] ` +
-                     `(건물 제외 ${_seState.excludedBuildings.size}건, vacancy 제외 ${_seState.excludedVacancies.size}건, ` +
-                     `검증 안내문 ${_seState.verifiedGuides.size}건, 매트릭스 셀 ${_seState.repCells.size}건, ` +
-                     `대표월 ${_seState.repMonths.size}건, 빌딩검수 ${_seState.verifiedBuildings.size}건, ` +
-                     `권역확정 ${_seState.verifiedRegions.size}건)`,
+        memo:        `v${_seState.version} → v${newVersion} 적용 (건물 제외 ${_seState.excludedBuildings.size}건, vacancy 제외 ${_seState.excludedVacancies.size}건, 검증 안내문 ${_seState.verifiedGuides.size}건, 매트릭스 셀 ${_seState.repCells.size}건, 대표월 ${_seState.repMonths.size}건, 빌딩검수 ${_seState.verifiedBuildings.size}건, 권역확정 ${_seState.verifiedRegions.size}건)`,
         user,
         ts:          now,
         prevVersion: _seState.version,
@@ -728,66 +652,8 @@ async function _seSaveStatsFilter(saveMode = 'draft') {
     };
     await push(ref(db, 'statsFilterLogs'), logEntry);
 
-    // 상태 반영 (다음 저장 충돌 방지 · UI 갱신용)
-    _seState.version     = newVersion;
-    _seState.status      = nextStatus;
-    _seState.finalizedAt = nextFinalizedAt;
-    _seState.finalizedBy = nextFinalizedBy;
-    // 드롭다운 상태 캐시 갱신
-    _seState.quarterStatuses.set(quarter, nextStatus);
-
+    _seState.version = newVersion;
     return { ok: true, newVersion };
-}
-
-/**
- * Phase 6 Post-3.5 (Tier B): 모든 분기 status 일괄 로드 (드롭다운 배지용)
- *
- * statsFilter 루트 한 번 fetch 해서 각 분기 키의 status 만 추출.
- * 상태가 없는 (finalized/draft 필드 없는) 레거시 분기는 'draft' 로 간주.
- *
- * ※ 모달 오픈 시 1회 호출. 저장·최종·해제 직후에는 해당 분기만
- *   `_seState.quarterStatuses.set(...)` 으로 로컬 갱신 (full reload 불필요).
- */
-async function _seLoadAllQuarterStatuses() {
-    try {
-        const { db, ref, get } = await import('./portal-firebase.js');
-        const snap = await get(ref(db, 'statsFilter'));
-        _seState.quarterStatuses.clear();
-        if (!snap.exists()) return;
-        const all = snap.val() || {};
-        for (const [q, v] of Object.entries(all)) {
-            if (!v || typeof v !== 'object') continue;
-            const st = v.status === 'finalized' ? 'finalized' : 'draft';
-            _seState.quarterStatuses.set(q, st);
-        }
-    } catch (err) {
-        console.warn('[StatsEditor] loadAllQuarterStatuses failed:', err);
-        // 실패해도 치명적이지 않음 (드롭다운 배지만 빠짐)
-    }
-}
-
-/**
- * Phase 6 Post-3.5 (Tier B): 현재 분기가 편집 잠금 상태인가?
- * @returns {boolean}
- */
-function _seIsLocked() {
-    return _seState.status === 'finalized';
-}
-
-/**
- * Phase 6 Post-3.5 (Tier B): 편집 액션 진입 가드.
- *
- * 잠금 상태면 경고 표시 후 false 반환. 호출부는 `if (!_seGuardEdit()) return;` 패턴.
- * ※ UI 에서 pointer-events:none 으로 1차 차단하지만, 프로그래밍적 호출
- *   (e.g. 콘솔, 자동화 스크립트) 에 대한 안전망으로 함수 레벨에서도 가드.
- */
-function _seGuardEdit() {
-    if (_seIsLocked()) {
-        alert(`🔒 이 분기(${_seState.quarter})는 최종 저장 상태입니다.\n\n` +
-              `편집하려면 상단의 "🔓 재산출 해제" 버튼을 먼저 눌러주세요.`);
-        return false;
-    }
-    return true;
 }
 
 /**
@@ -887,16 +753,14 @@ function _seSetDirty(v) {
     } else {
         window.removeEventListener('beforeunload', _seBeforeUnloadHandler);
     }
-    // Phase 6 Post-3.5 (Tier B): 임시 저장 버튼에 dirty 상태 표시 (시각적 피드백)
-    //   기존 se-apply-btn → se-save-draft-btn 으로 타겟 변경.
-    //   '🎯 최종 저장' 버튼은 dirty 여부와 무관하게 항상 같은 레이블 유지.
-    const btn = document.getElementById('se-save-draft-btn');
+    // 적용 버튼에 dirty 상태 표시 (시각적 피드백)
+    const btn = document.getElementById('se-apply-btn');
     if (btn) {
         if (_seState.dirty) {
-            btn.textContent = '💾 임시 저장 (변경 있음)';
+            btn.textContent = '✓ 적용 (변경 있음)';
             btn.style.boxShadow = '0 0 0 3px rgba(251, 191, 36, 0.5)';
         } else {
-            btn.textContent = '💾 임시 저장';
+            btn.textContent = '✓ 적용';
             btn.style.boxShadow = '';
         }
     }
@@ -1006,11 +870,10 @@ window.openStatsEditorModal = async function() {
     const modal = document.getElementById('stats-editor-modal');
     if (!modal) return;
 
-    // Phase 6 Post-3.5 (#8): 기본 분기 = 직전 완료 분기
-    // ※ 종전 "현재 진행 중 분기" 에서 변경.
-    //   검수 완료/마감 워크플로는 직전 분기 대상이 절대 다수이므로 UX 개선.
-    //   예) 2026-04 시점 → 과거 2026Q2(진행중) → 현재 2026Q1(직전완료)
-    _seState.quarter = _sePrevCompletedQuarter();
+    // 기본 분기: 현재 분기
+    const now = new Date();
+    const curQ = `${now.getFullYear()}Q${Math.ceil((now.getMonth() + 1) / 3)}`;
+    _seState.quarter = curQ;
     _seState.loaded  = false;
     _seState.searchQuery = '';
     _seState.selectedBuildingId = null;
@@ -1020,11 +883,7 @@ window.openStatsEditorModal = async function() {
     // 모달 표시
     modal.style.display = 'flex';
 
-    // Phase 6 Post-3.5 (Tier B): 모든 분기의 status 캐시 로드 (드롭다운 배지용)
-    //   실패해도 치명적이지 않음 — 배지만 빠지므로 await 하되 예외는 내부에서 흡수.
-    await _seLoadAllQuarterStatuses();
-
-    // 분기 셀렉트 초기화 (status 캐시 반영)
+    // 분기 셀렉트 초기화
     _seRenderQuarterSelect();
 
     // Firebase 로드 + 렌더
@@ -1078,20 +937,7 @@ function _seRenderQuarterSelect() {
     const sel = document.getElementById('se-quarter');
     if (!sel) return;
     const qs = _seGetAvailableQuarters();
-
-    // Phase 6 Post-3.5 (Tier B): quarterStatuses 캐시로 각 option 에 상태 배지 덧붙임
-    //   · 'finalized' → ✅ 최종
-    //   · 'draft'     → 📝 작업중
-    //   · 없음        → 배지 없음 (아직 편집 데이터 없는 신규 분기)
-    const statusLabel = (q) => {
-        const st = _seState.quarterStatuses.get(q);
-        if (st === 'finalized') return ' ✅ 최종';
-        if (st === 'draft')     return ' 📝 작업중';
-        return '';
-    };
-    sel.innerHTML = qs.map(q =>
-        `<option value="${q}"${q === _seState.quarter ? ' selected' : ''}>${q}${statusLabel(q)}</option>`
-    ).join('');
+    sel.innerHTML = qs.map(q => `<option value="${q}"${q === _seState.quarter ? ' selected' : ''}>${q}</option>`).join('');
 }
 
 function _seRenderHeaderInfo() {
@@ -1099,46 +945,6 @@ function _seRenderHeaderInfo() {
     if (ver) ver.textContent = `v${_seState.version}`;
     const user = document.getElementById('se-user-label');
     if (user) user.textContent = _seGetCurrentUser();
-
-    // Phase 6 Post-3.5 (Tier B): 상태 배지 + 버튼 가시성 + 편집 영역 잠금
-    const locked = _seIsLocked();
-
-    // 상태 배지 (헤더 서브라인)
-    const badge = document.getElementById('se-status-label');
-    if (badge) {
-        if (locked) {
-            badge.textContent = '✅ 최종';
-            badge.style.background    = 'rgba(16, 185, 129, 0.25)';   // 녹색 계열
-            badge.style.color         = '#d1fae5';
-            badge.style.border        = '1px solid rgba(16, 185, 129, 0.5)';
-            badge.title = _seState.finalizedAt
-                ? `최종 저장: ${_seState.finalizedAt.slice(0, 19).replace('T', ' ')} by ${_seState.finalizedBy || 'unknown'}`
-                : '최종 저장됨';
-        } else {
-            badge.textContent = '📝 작업중';
-            badge.style.background    = 'rgba(251, 191, 36, 0.25)';   // 황금 계열
-            badge.style.color         = '#fde68a';
-            badge.style.border        = '1px solid rgba(251, 191, 36, 0.5)';
-            badge.title = '임시 저장 상태 (편집 가능)';
-        }
-    }
-
-    // 버튼 가시성
-    const draftBtn    = document.getElementById('se-save-draft-btn');
-    const finalizeBtn = document.getElementById('se-finalize-btn');
-    const unlockBtn   = document.getElementById('se-unfinalize-btn');
-    if (draftBtn)    draftBtn.style.display    = locked ? 'none'         : 'inline-block';
-    if (finalizeBtn) finalizeBtn.style.display = locked ? 'none'         : 'inline-block';
-    if (unlockBtn)   unlockBtn.style.display   = locked ? 'inline-block' : 'none';
-
-    // 편집 영역 pointer-events + opacity (시각적 잠금)
-    // ※ 상단 헤더(분기 셀렉트/버튼)와 본문은 분리. 본문만 잠김.
-    const body = document.getElementById('se-modal-body');
-    if (body) {
-        body.style.opacity       = locked ? '0.55' : '';
-        body.style.pointerEvents = locked ? 'none' : '';
-        body.style.filter        = locked ? 'grayscale(0.3)' : '';
-    }
 }
 
 function _seRenderFilters() {
@@ -1697,7 +1503,6 @@ window._seOnQuarterChange = async function() {
 };
 
 window._seToggleFilter = function(type, value, checked) {
-    if (!_seGuardEdit()) return;  // Tier B: 잠금 가드
     const arr = _seState.filters[type];
     if (!Array.isArray(arr)) return;
     const idx = arr.indexOf(value);
@@ -1716,7 +1521,6 @@ window._seToggleFilter = function(type, value, checked) {
 };
 
 window._seToggleVacOnly = function(checked) {
-    if (!_seGuardEdit()) return;  // Tier B: 잠금 가드
     _seState.filters.vacOnly = !!checked;
     // Phase 3
     _sePushActionLog('filter_change', 'vacOnly', 'vacOnly',
@@ -1791,7 +1595,6 @@ window._seSelectPublishDate = function(pd) {
  * 개별 vacancy 로그 폭발 방지 위해 bulk_toggle_guide 단일 로그로 기록.
  */
 window._seToggleGroupExclude = function(bid, source, pd, includeChecked) {
-    if (!_seGuardEdit()) return;  // Tier B: 잠금 가드
     const b = (window.state?.allBuildings || []).find(x => x.id === bid);
     if (!b) return;
     const vacs = srActiveVacancies(b).filter(v => {
@@ -1835,7 +1638,6 @@ window._seToggleGroupExclude = function(bid, source, pd, includeChecked) {
 
 /** 그룹 검증마크 토글 */
 window._seToggleVerifyGuide = function(bid, source, pd) {
-    if (!_seGuardEdit()) return;  // Tier B: 잠금 가드
     const gk = _seMakeGuideKey(bid, source, pd);
     const b = (window.state?.allBuildings || []).find(x => x.id === bid);
     const bName = (b && (b.name || b.buildingName)) || bid;
@@ -2305,7 +2107,6 @@ window._sePageLast = function() {
 
 /** 빌딩 포함/제외 토글 */
 window._seToggleBuilding = function(bid, includeChecked) {
-    if (!_seGuardEdit()) return;  // Tier B: 잠금 가드
     const user = _seGetCurrentUser();
     // 라벨용 빌딩명 추출
     const b = (window.state?.allBuildings || []).find(x => x.id === bid);
@@ -2339,7 +2140,6 @@ window._seToggleBuilding = function(bid, includeChecked) {
 
 /** vacancy 포함/제외 토글 */
 window._seToggleVacancy = function(bid, vkey, includeChecked) {
-    if (!_seGuardEdit()) return;  // Tier B: 잠금 가드
     const user = _seGetCurrentUser();
     const ck = _seMakeVacKey(bid, vkey);
     // 라벨용 vacancy 정보 추출
@@ -2395,7 +2195,6 @@ window._seToggleVacancy = function(bid, vkey, includeChecked) {
  *  - 빌딩 카드 + 권역 진행률 재렌더
  */
 window._seToggleVerifyBuilding = function(bid) {
-    if (!_seGuardEdit()) return;  // Tier B: 잠금 가드
     const user = _seGetCurrentUser();
     const b = (window.state?.allBuildings || []).find(x => x.id === bid);
     const bName = (b && (b.name || b.buildingName)) || bid;
@@ -2425,7 +2224,6 @@ window._seToggleVerifyBuilding = function(bid) {
  *  - 로그 기록 + dirty + 필터 재렌더
  */
 window._seConfirmVerifyRegion = function(region) {
-    if (!_seGuardEdit()) return;  // Tier B: 잠금 가드
     const quarter = _seState.quarter;
     const key = `${quarter}__${region}`;
     const user = _seGetCurrentUser();
@@ -2473,192 +2271,75 @@ window._seConfirmVerifyRegion = function(region) {
 };
 
 /** 적용 버튼 */
-// ═══════════════════════════════════════════════════════════════
-// Phase 6 Post-3.5 (Tier B): 저장 버튼 핸들러 3종
-// ─────────────────────────────────────────────────────────────────
-//  · _seSaveDraft   — 💾 임시 저장: 편집을 이어갈 수 있는 중간 저장
-//  · _seFinalize    — 🎯 최종 저장: 분기 스냅샷 확정 + 편집 잠금
-//  · _seUnfinalize  — 🔓 재산출 해제: finalized → draft 복귀
-//
-//  종전 _seApply 단일 버튼 구조를 위 3개로 분해. 공통 로직(필터 확인,
-//  성공 후 통계 페이지 반영)은 내부 헬퍼 _seFinishSave 로 추출.
-// ═══════════════════════════════════════════════════════════════
+window._seApply = async function() {
+    const btn = document.getElementById('se-apply-btn');
 
-/**
- * 필터 설정이 있을 때 "전체 통계에 영향" 확인 프롬프트.
- * @returns {boolean} true = 계속 진행, false = 취소
- */
-function _seConfirmFilterEffect() {
+    // Phase 2: 필터 설정이 있으면 전체 통계 영향 확인 프롬프트
     const f = _seState.filters;
     const hasFilter =
         (f.grades && f.grades.length > 0)
         || (f.regions && f.regions.length > 0)
         || (f.subRegions && f.subRegions.length > 0)
-        || !f.vacOnly;
-    if (!hasFilter) return true;
+        || !f.vacOnly;  // 기본값 true 에서 벗어났으면
+    const hasExclusion = _seState.excludedBuildings.size > 0 || _seState.excludedVacancies.size > 0;
 
-    const filterSummary = [
-        (f.grades && f.grades.length > 0) ? `등급: ${f.grades.join(', ')}` : null,
-        (f.regions && f.regions.length > 0) ? `권역: ${f.regions.join(', ')}` : null,
-        (f.subRegions && f.subRegions.length > 0) ? `세부권역 ${f.subRegions.length}개` : null,
-        !f.vacOnly ? '공실정보 없는 빌딩 포함' : null,
-    ].filter(Boolean).join('\n  · ');
-    return confirm(
-        `⚠️ 필터가 설정되어 있습니다:\n\n  · ${filterSummary}\n\n` +
-        `이 필터는 통계 모달 전체 탭에 영구 적용됩니다.\n` +
-        `(모든 사용자가 볼 때 동일한 필터 적용)\n\n계속하시겠습니까?`
-    );
-}
-
-/**
- * 저장 성공 후 공통 처리: 통계 페이지 반영, dirty 리셋, 대시보드 갱신.
- * 주의: 모달을 닫지는 않음 (호출부에서 닫을지 결정).
- */
-function _seApplyToStatsPage() {
-    if (typeof window._srApplyPersistentExclusions === 'function') {
-        window._srApplyPersistentExclusions(
-            new Set(_seState.excludedBuildings.keys()),
-            new Set(_seState.excludedVacancies.keys()),
-            _seState.filters
+    if (hasFilter) {
+        const filterSummary = [
+            (f.grades && f.grades.length > 0) ? `등급: ${f.grades.join(', ')}` : null,
+            (f.regions && f.regions.length > 0) ? `권역: ${f.regions.join(', ')}` : null,
+            (f.subRegions && f.subRegions.length > 0) ? `세부권역 ${f.subRegions.length}개` : null,
+            !f.vacOnly ? '공실정보 없는 빌딩 포함' : null,
+        ].filter(Boolean).join('\n  · ');
+        const ok = confirm(
+            `⚠️ 필터가 설정되어 있습니다:\n\n  · ${filterSummary}\n\n` +
+            `이 필터는 통계 모달 전체 탭에 영구 적용됩니다.\n` +
+            `(모든 사용자가 볼 때 동일한 필터 적용)\n\n계속하시겠습니까?`
         );
+        if (!ok) return;
     }
-    _seSetDirty(false);
-    if (typeof window.refreshStatResearch === 'function') {
-        window.refreshStatResearch();
+
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '저장 중...';
     }
-}
-
-/**
- * 💾 임시 저장 — 편집을 계속 이어갈 수 있는 중간 저장.
- * status='draft'. 모달은 닫지 않고 편집 계속 가능 상태 유지.
- */
-window._seSaveDraft = async function() {
-    if (!_seConfirmFilterEffect()) return;
-
-    const btn = document.getElementById('se-save-draft-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
     try {
-        const res = await _seSaveStatsFilter('draft');
+        const res = await _seSaveStatsFilter();
         if (!res.ok) {
-            alert(`❌ 임시 저장 실패\n\n${res.reason}`);
+            alert(`❌ 저장 실패\n\n${res.reason}`);
             return;
         }
-        _seApplyToStatsPage();
-        const summary = `빌딩 ${_seState.excludedBuildings.size}건, ` +
-                        `임대안내문 ${_seState.excludedVacancies.size}건 제외`;
-        // 헤더 배지·버튼 즉시 반영
-        _seRenderHeaderInfo();
-        _seRenderQuarterSelect();
-        alert(`💾 임시 저장 완료 (v${res.newVersion})\n\n${summary}\n\n` +
-              `계속 편집할 수 있습니다.`);
+        // 통계 페이지에 즉시 반영
+        if (typeof window._srApplyPersistentExclusions === 'function') {
+            window._srApplyPersistentExclusions(
+                new Set(_seState.excludedBuildings.keys()),
+                new Set(_seState.excludedVacancies.keys()),
+                _seState.filters
+            );
+        }
+        const summary = `빌딩 ${_seState.excludedBuildings.size}건, 임대안내문 ${_seState.excludedVacancies.size}건 제외`;
+        // Phase 3: 저장 성공 시 dirty 리셋 (closeStatsEditorModal 의 confirm 우회)
+        _seSetDirty(false);
+        alert(`✅ 적용 완료 (v${res.newVersion})\n\n${summary}`);
+        // dirty=false 상태로 모달 닫기
+        const modal = document.getElementById('stats-editor-modal');
+        if (modal) modal.style.display = 'none';
+        if (typeof window.refreshStatResearch === 'function') {
+            window.refreshStatResearch();
+        }
     } catch (err) {
-        console.error('[StatsEditor] saveDraft failed:', err);
-        alert(`❌ 임시 저장 중 오류: ${err.message}`);
+        console.error('[StatsEditor] apply failed:', err);
+        alert(`❌ 저장 중 오류: ${err.message}`);
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.textContent = '💾 임시 저장';
-            // dirty 상태 표시는 _seSetDirty 가 관리
+            // dirty 상태면 적용 버튼 텍스트 유지
             if (_seState.dirty) {
-                btn.textContent = '💾 임시 저장 (변경 있음)';
+                btn.textContent = '✓ 적용 (변경 있음)';
+            } else {
+                btn.textContent = '✓ 적용';
             }
         }
     }
-};
-
-/**
- * 🎯 최종 저장 — 분기 스냅샷을 공식 집계 소스로 확정.
- * status='finalized'. 저장 후 편집 잠금. 모달은 닫음.
- */
-window._seFinalize = async function() {
-    if (!_seConfirmFilterEffect()) return;
-
-    // 이중 확인: 잠금 + 대시보드 영향
-    const confirmMsg =
-        `🎯 이 분기(${_seState.quarter})를 최종 저장하시겠습니까?\n\n` +
-        `이후 처리:\n` +
-        `  · 분기 스냅샷이 공식 집계 소스로 확정됩니다.\n` +
-        `  · 편집 모달이 잠기며, 변경하려면 "🔓 재산출 해제" 가 필요합니다.\n` +
-        `  · 대시보드에 ✅ 최종 상태로 표시됩니다.\n\n` +
-        `계속하시겠습니까?`;
-    if (!confirm(confirmMsg)) return;
-
-    const btn = document.getElementById('se-finalize-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
-    try {
-        const res = await _seSaveStatsFilter('finalize');
-        if (!res.ok) {
-            alert(`❌ 최종 저장 실패\n\n${res.reason}`);
-            return;
-        }
-        _seApplyToStatsPage();
-        const summary = `빌딩 ${_seState.excludedBuildings.size}건, ` +
-                        `임대안내문 ${_seState.excludedVacancies.size}건 제외`;
-        alert(`✅ 최종 저장 완료 (v${res.newVersion})\n\n${summary}\n\n` +
-              `이 분기는 이제 ✅ 최종 상태입니다.`);
-        // 모달 닫기
-        const modal = document.getElementById('stats-editor-modal');
-        if (modal) modal.style.display = 'none';
-    } catch (err) {
-        console.error('[StatsEditor] finalize failed:', err);
-        alert(`❌ 최종 저장 중 오류: ${err.message}`);
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = '🎯 최종 저장';
-        }
-    }
-};
-
-/**
- * 🔓 재산출 해제 — finalized 상태를 풀고 draft 로 되돌림.
- * 내용(제외/검수 등)은 그대로 유지. status 만 전환 + finalizedAt/By 제거.
- * 즉시 Firebase 반영 (별도 저장 불필요).
- */
-window._seUnfinalize = async function() {
-    if (!_seIsLocked()) {
-        alert(`이미 편집 가능 상태(📝 작업중)입니다.`);
-        return;
-    }
-
-    const confirmMsg =
-        `🔓 이 분기(${_seState.quarter})의 재산출을 해제하시겠습니까?\n\n` +
-        `이후 처리:\n` +
-        `  · 편집 잠금이 풀리고 📝 작업중 상태로 되돌아갑니다.\n` +
-        `  · 지금까지의 편집 내용은 그대로 유지됩니다.\n` +
-        `  · 재편집 후 다시 "🎯 최종 저장" 을 눌러야 공식 스냅샷으로 확정됩니다.\n\n` +
-        `계속하시겠습니까?`;
-    if (!confirm(confirmMsg)) return;
-
-    const btn = document.getElementById('se-unfinalize-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '해제 중...'; }
-    try {
-        const res = await _seSaveStatsFilter('unfinalize');
-        if (!res.ok) {
-            alert(`❌ 재산출 해제 실패\n\n${res.reason}`);
-            return;
-        }
-        // UI 즉시 갱신 (헤더 배지 + 버튼 + 본문 잠금 해제 + 드롭다운 배지)
-        _seRenderHeaderInfo();
-        _seRenderQuarterSelect();
-        alert(`🔓 재산출 해제 완료 (v${res.newVersion})\n\n편집 가능 상태로 전환되었습니다.`);
-    } catch (err) {
-        console.error('[StatsEditor] unfinalize failed:', err);
-        alert(`❌ 재산출 해제 중 오류: ${err.message}`);
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = '🔓 재산출 해제';
-        }
-    }
-};
-
-/**
- * @deprecated Phase 6 Post-3.5 (Tier B) 이후: _seApply 는 _seSaveDraft 로 리다이렉트.
- *   이전 세션에서 남아있을 수 있는 onclick 참조 호환용. 새 코드는 _seSaveDraft 직접 호출.
- */
-window._seApply = async function() {
-    return window._seSaveDraft();
 };
 
 /** 편집 이력 토글 */
@@ -2677,13 +2358,6 @@ const _SE_ACTION_LABEL = {
     'choose_cell':       '셀 선택',
     'choose_month':      '월 선택',
     'exclude_cell':      '셀 제외',
-    // Phase 6 Step 3.5: 빌딩 검수
-    'verify_building':   '빌딩 검수 완료',
-    'unverify_building': '빌딩 검수 해제',
-    // Phase 6 Post-3.5 (Tier B): 저장 모드별 액션
-    'save_draft':        '💾 임시 저장',
-    'finalize':          '🎯 최종 저장',
-    'unfinalize':        '🔓 재산출 해제',
 };
 const _SE_ACTION_COLOR = {
     'add_building':      '#16a34a',
@@ -2699,13 +2373,6 @@ const _SE_ACTION_COLOR = {
     'choose_cell':       '#0891b2',  // 청록 (설계문서 §로그 액션)
     'choose_month':      '#0e7490',  // 진청록
     'exclude_cell':      '#dc2626',  // 빨강
-    // Phase 6 Step 3.5
-    'verify_building':   '#16a34a',
-    'unverify_building': '#64748b',
-    // Phase 6 Post-3.5 (Tier B)
-    'save_draft':        '#f59e0b',  // 주황 (작업중 계열)
-    'finalize':          '#10b981',  // 녹색 (최종 확정)
-    'unfinalize':        '#f59e0b',  // 주황 (draft 복귀)
 };
 
 window._seToggleLog = async function() {
