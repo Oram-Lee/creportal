@@ -191,11 +191,42 @@ export function srDetectReportRegion(address) {
 
     // ─── 이하 '서울' 포함 주소에 한해 세분화 ───
 
-    // ─── 1) 특수 동 단위 우선 매칭 ───
-    if (/용산구\s+동자동/.test(a))   return { region: 'CBD',    subCategory: 'CBD' };
-    if (/영등포구\s+여의도/.test(a)) return { region: 'YBD',    subCategory: 'YBD' };
-    if (/마포구\s+상암동/.test(a))   return { region: 'Others', subCategory: 'DMC' };
-    if (/강서구\s+마곡동/.test(a))   return { region: 'Others', subCategory: '마곡' };
+    // ─── 1) 특수 동 단위 우선 매칭 (행정동 + 도로명 화이트리스트) ───
+    // ※ Phase 1 배포 후 진단 결과 (2026-04-23):
+    //   DB 주소가 "행정동" 대신 "도로명" 으로 저장된 빌딩이 대다수라
+    //   동 단위 매칭만으로는 대규모 누락 발생 → 도로명 화이트리스트 병행.
+    //   화이트리스트는 해당 권역 경계 안에 확실히 있는 도로명만 포함.
+
+    // CBD 예외: 용산구 동자동 (용산구 유일한 CBD)
+    //   한강대로는 동자동~한강로3가까지 길게 이어져 구간별 구분 불가 → 동 명시만 CBD
+    if (/용산구.*동자동|동자동.*용산구/.test(a))
+        return { region: 'CBD', subCategory: 'CBD' };
+
+    // YBD: 영등포구 여의도동 + 여의도 섬 도로명 화이트리스트
+    //   포함 도로명: 여의대로·여의공원로·여의나루로·여의대방로·여의동로
+    //               · 의사당대로·국제금융로·은행로·국회대로·63로
+    //   전부 여의도 섬 안 한정 (지리 검증 완료)
+    if (/영등포구/.test(a) && (
+        /여의도/.test(a) ||
+        /여의대로|여의공원로|여의나루로|여의대방로|여의동로/.test(a) ||
+        /의사당대로|국제금융로|은행로|국회대로|63로/.test(a)
+    )) return { region: 'YBD', subCategory: 'YBD' };
+
+    // Others/DMC: 마포구 상암동 + 상암/DMC 도로명
+    //   포함: 상암산로·성암로·매봉산로·월드컵북로
+    //   월드컵북로는 상암 한정으로 간주 (현업 확정 2026-04-23)
+    if (/마포구/.test(a) && (
+        /상암동/.test(a) ||
+        /상암산로|성암로|매봉산로|월드컵북로/.test(a)
+    )) return { region: 'Others', subCategory: 'DMC' };
+
+    // Others/마곡: 강서구 마곡동 + 마곡 도로명
+    //   포함: 마곡중앙로(+가지도로)·마곡동로
+    //   공항대로는 마곡~등촌~염창까지 이어져 제외 (보수적 방침)
+    if (/강서구/.test(a) && (
+        /마곡동/.test(a) ||
+        /마곡중앙.*로|마곡동로/.test(a)
+    )) return { region: 'Others', subCategory: '마곡' };
 
     // ─── 2) Others 서브카테고리 매칭 ───
     if (/송파구\s+(잠실본동|잠실\d동|삼전동|석촌동|방이2동)/.test(a))
