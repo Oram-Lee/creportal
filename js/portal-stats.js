@@ -509,8 +509,20 @@ window._srPersistentExclude = _srPersistentExclude;
 window._srApplyPersistentExclusions = function(excludedBuildings, excludedVacancies, filters, quarter) {
     _srPersistentExclude.excludedBuildings = excludedBuildings instanceof Set ? excludedBuildings : new Set();
     _srPersistentExclude.excludedVacancies = excludedVacancies instanceof Set ? excludedVacancies : new Set();
-    _srPersistentExclude.filters           = filters || null;
-    _srPersistentExclude.loadedQuarter     = typeof quarter === 'string' ? quarter : '';
+
+    // Phase 1 마이그 (2026-04): filters.regions 에 'ETC' 있으면 'Others' 자동 추가
+    // 편집 모달에서 저장 직후 이 경로로 주입되므로, _srLoadPersistentForQuarter 와 동일하게 마이그.
+    // (기존 ETC 단일 바구니가 신 체계에서 Others + ETC 로 분리되었으므로 집계 범위 유지 목적)
+    let appliedFilters = filters || null;
+    if (appliedFilters && Array.isArray(appliedFilters.regions)) {
+        const regs = [...appliedFilters.regions];
+        if (regs.includes('ETC') && !regs.includes('Others')) {
+            regs.push('Others');
+            appliedFilters = { ...appliedFilters, regions: regs };
+        }
+    }
+    _srPersistentExclude.filters       = appliedFilters;
+    _srPersistentExclude.loadedQuarter = typeof quarter === 'string' ? quarter : '';
     // 즉시 현재 탭 재렌더
     if (typeof _srRefreshCurrentTab === 'function') _srRefreshCurrentTab();
 };
