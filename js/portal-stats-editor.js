@@ -532,12 +532,15 @@ async function _seLoadStatsFilter(quarter) {
         subRegions: Array.isArray(data.filters?.subRegions) ? data.filters.subRegions : [],
         vacOnly:    data.filters?.vacOnly !== false,  // undefined 는 true 로
     };
-    // Phase 6 Step 3.5 핫픽스 (2026-04): 레거시 'Others' → 'ETC' 자동 마이그레이션
-    // ※ 이전 버전에서 저장된 regions 에 'Others' 가 있으면 매칭 0건 버그를 일으키므로
-    //   로드 시점에 'ETC' 로 변환. 다음 저장 시 정상 값으로 덮어써짐.
-    _seState.filters.regions = _seState.filters.regions.map(r => r === 'Others' ? 'ETC' : r);
-    // 권역 진행률 Map 키 역시 'quarter__Others' → 'quarter__ETC' 로 이관
-    // (verifiedRegions 는 뒤에서 로드되므로 여기선 처리 안 함 — 해당 블록에서 처리)
+    // Phase 1 마이그 (2026-04): 레거시 'ETC' → 신 체계 ETC + Others 자동 확장
+    // ※ 신 체계에서 'ETC'=서울외, 'Others'=서울내 비주력 으로 분리됨.
+    //   기존 저장값은 둘을 구분하지 않고 'ETC' 단일 바구니로 취급했으므로,
+    //   기존 집계 범위 보존을 위해 'ETC' 포함 시 'Others' 도 자동 추가.
+    //   사용자는 편집 모달에서 Others 체크 해제 가능.
+    //   ※ 기존 'Others' → 'ETC' 변환 로직은 신 체계에서 데이터 파괴이므로 제거됨.
+    if (_seState.filters.regions.includes('ETC') && !_seState.filters.regions.includes('Others')) {
+        _seState.filters.regions = [..._seState.filters.regions, 'Others'];
+    }
 
     _seState.excludedBuildings.clear();
     Object.entries(data.excludedBuildings || {}).forEach(([bid, v]) => {
@@ -587,12 +590,24 @@ async function _seLoadStatsFilter(quarter) {
     // Phase 6 Step 3.5: 권역 검수 완료 (quarter__region)
     _seState.verifiedRegions.clear();
     Object.entries(data.verifiedRegions || {}).forEach(([key, v]) => {
-        // Phase 6 Step 3.5 핫픽스: 레거시 'quarter__Others' 키를 'quarter__ETC' 로 이관
-        const migratedKey = key.endsWith('__Others')
-            ? key.slice(0, -'__Others'.length) + '__ETC'
-            : key;
-        _seState.verifiedRegions.set(migratedKey, v || {});
+        _seState.verifiedRegions.set(key, v || {});
     });
+    // Phase 1 마이그 (2026-04): 레거시 '__ETC' 확정 이력을 '__Others' 로도 복제
+    // ※ 기존 ETC 범위에 있던 서울 내 비주력 빌딩의 검수 이력을 잃지 않기 위함.
+    //   복제는 in-memory 에서만 발생하며, 다음 저장 시 DB 에 영속화됨.
+    //   이미 __Others 키가 존재하면 건너뛰어 중복 생성 방지.
+    //   ※ 기존 '__Others' → '__ETC' 이관 로직은 신 체계에서 데이터 파괴이므로 제거됨.
+    for (const [key, v] of Array.from(_seState.verifiedRegions.entries())) {
+        if (key.endsWith('__ETC')) {
+            const othersKey = key.slice(0, -'__ETC'.length) + '__Others';
+            if (!_seState.verifiedRegions.has(othersKey)) {
+                _seState.verifiedRegions.set(othersKey, {
+                    ...v,
+                    memo: (v?.memo || '') + ' [자동복제: Phase1 마이그]',
+                });
+            }
+        }
+    }
 
     // Phase 6 Post-3.5 (Tier B): 분기 상태 복원
     // ※ 기존 데이터는 status 필드 없음 → 'draft' 로 간주 (레거시 호환)
@@ -1161,10 +1176,12 @@ function _seRenderFilters() {
     }
 
     // 권역 체크박스 (Phase 6 Step 3.5: 진행률 배지 + 확정 상태/버튼)
-    // ※ 2026-04 핫픽스: 기존 'Others' → 'ETC' 로 통일.
-    //   portal-stats.js SR_REGIONS 및 b._region 값이 'ETC' 로 세팅되므로
-    //   편집 모드에서 'Others' 를 쓰면 필터 매칭이 0건이 됨 (건물데이터와 불일치).
-    const REGIONS = ['CBD', 'GBD', 'YBD', 'BBD', 'ETC'];
+    // ※ Phase 1 (2026-04): 리포트 기준 6개 체계로 확장
+    //   CBD · GBD · YBD · BBD · Others · ETC
+    //   · Others: 서울 내 4대권역 아닌 지역 (9개 서브: 마포/공덕·DMC·잠실·송파문정·영등포·구로가산·용산·마곡·서울기타)
+    //   · ETC:    서울 외 (리포트 범위 밖)
+    //   portal-stats.js SR_REGIONS 와 동기 유지.
+    const REGIONS = ['CBD', 'GBD', 'YBD', 'BBD', 'Others', 'ETC'];
     const regWrap = document.getElementById('se-filter-regions');
     if (regWrap) {
         // 각 권역별 검수 진행률 계산 (Q2=A안 분모 규칙)
