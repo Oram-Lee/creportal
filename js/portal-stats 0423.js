@@ -98,16 +98,8 @@ export function srGetAllEffectiveDates(buildings) {
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * 주소 문자열에서 권역 추론 (레거시 — 지도/빌딩 상세 등에서 사용)
+ * 주소 문자열에서 권역 추론
  * portal-utils.js의 detectRegion()과 동일한 로직 (의존성 없이 자체 구현)
- *
- * @deprecated Phase 1 (2026-04) 이후 통계 경로에서는 사용 금지.
- *   통계 집계·차트·편집 모달은 {@link srDetectReportRegion} 을 사용.
- *   본 함수는 지도 마커/빌딩 상세 등 비-통계 UI 에서만 잔존 사용.
- *   기준 차이:
- *     · 본 함수: GBD 에 송파구 포함, YBD 에 마포/당산 포함
- *     · srDetectReportRegion: 오피스 마켓 리포트 기준 (송파/마포 등은 Others)
- *
  * @param {string} address
  * @returns {"CBD"|"GBD"|"YBD"|"BBD"|"ETC"}
  */
@@ -134,98 +126,9 @@ export function srDetectRegion(address) {
  * 빌딩의 권역 반환 (stored → 추론 fallback)
  * @param {Object} building
  * @returns {"CBD"|"GBD"|"YBD"|"BBD"|"ETC"}
- *
- * @deprecated Phase 1 (2026-04) 이후 통계 경로에서는 {@link srDetectReportRegion} 사용.
  */
 export function srGetRegion(building) {
     return building.region || srDetectRegion(building.address) || 'ETC';
-}
-
-// ─────────────────────────────────────────────────────────────
-// Phase 1 (2026-04) 신설 — 오피스 마켓 리포트 기준 권역 분류
-// 기존 srDetectRegion 과 분류 기준이 완전히 다름 (_기준.xlsx 참조)
-// ─────────────────────────────────────────────────────────────
-
-/**
- * 주소 문자열에서 리포트 기준 권역 반환
- * 오피스 마켓 리포트 분류기준 (_기준.xlsx) 기반
- *
- * 분류 체계 (2026-04 현업 확정):
- *   서울 내: CBD / GBD / YBD / BBD(분당포함) / Others (9개 서브)
- *   서울 외: ETC (리포트 범위 밖)
- *
- * 핵심 차이점 vs srDetectRegion:
- *   · GBD: 송파구 제외
- *   · YBD: 영등포구 여의도동만 (마포/당산 제외)
- *   · CBD: 종로/중구/서대문구 + 용산구 동자동
- *   · BBD: 성남시 분당구만 (수정구·중원구 제외)
- *   · Others: 서울 내 4대권역 아닌 지역 (9개 서브카테고리)
- *   · ETC: 서울이 아닌 모든 지역 (리포트 범위 밖)
- *
- * 우선순위:
- *   0) 서울/분당 판정 — 아니면 즉시 ETC
- *   1) 특수 동 단위 매칭 (동자동/여의도/상암/마곡)
- *   2) Others 서브카테고리 매칭 (잠실/문정/공덕권)
- *   3) 구 단위 매칭 (CBD/GBD)
- *   4) Others 범용 (영등포/용산/구로·금천)
- *   5) 서울 내 미매칭 → Others (서울기타)
- *
- * @param {string} address
- * @returns {{ region: string, subCategory: string }}
- *   region:      'CBD' | 'GBD' | 'YBD' | 'BBD' | 'Others' | 'ETC'
- *   subCategory: Others 세분화 시 서브 이름 (예: '마포/공덕', 'DMC', '서울기타')
- *                메인 권역인 경우 region 과 동일
- */
-export function srDetectReportRegion(address) {
-    if (!address) return { region: 'ETC', subCategory: 'ETC' };
-    const a = address;
-
-    // ─── 0) 서울/분당 여부 판정 ───
-    // BBD (성남시 분당구) 는 서울 아니지만 리포트 4대권역 포함 — 먼저 매칭
-    if (/성남시\s*분당구|^분당구|\s분당구/.test(a))
-        return { region: 'BBD', subCategory: 'BBD' };
-
-    // 서울 아니면 ETC 직행 (리포트 범위 밖)
-    if (!/서울/.test(a))
-        return { region: 'ETC', subCategory: 'ETC' };
-
-    // ─── 이하 '서울' 포함 주소에 한해 세분화 ───
-
-    // ─── 1) 특수 동 단위 우선 매칭 ───
-    if (/용산구\s+동자동/.test(a))   return { region: 'CBD',    subCategory: 'CBD' };
-    if (/영등포구\s+여의도/.test(a)) return { region: 'YBD',    subCategory: 'YBD' };
-    if (/마포구\s+상암동/.test(a))   return { region: 'Others', subCategory: 'DMC' };
-    if (/강서구\s+마곡동/.test(a))   return { region: 'Others', subCategory: '마곡' };
-
-    // ─── 2) Others 서브카테고리 매칭 ───
-    if (/송파구\s+(잠실본동|잠실\d동|삼전동|석촌동|방이2동)/.test(a))
-        return { region: 'Others', subCategory: '잠실' };
-    if (/송파구\s+문정\d동/.test(a))
-        return { region: 'Others', subCategory: '송파/문정' };
-    if (/마포구\s+(용강동|도화동|공덕동|염리동|아현동|마포동|대흥동)/.test(a))
-        return { region: 'Others', subCategory: '마포/공덕' };
-
-    // ─── 3) 구 단위 매칭 (CBD/GBD) ───
-    if (/종로구|중구\s|서대문구/.test(a)) return { region: 'CBD', subCategory: 'CBD' };
-    if (/서초구|강남구/.test(a))          return { region: 'GBD', subCategory: 'GBD' };
-
-    // ─── 4) Others 범용 카테고리 ───
-    if (/영등포구/.test(a))       return { region: 'Others', subCategory: '영등포' };
-    if (/용산구/.test(a))         return { region: 'Others', subCategory: '용산' };
-    if (/구로구|금천구/.test(a)) return { region: 'Others', subCategory: '구로/가산' };
-
-    // ─── 5) 서울 내 미매칭 ───
-    // 예: 송파 거여/오금/가락, 동작구, 강북구, 노원구, 성동구, 성북구, 관악구 등
-    return { region: 'Others', subCategory: '서울기타' };
-}
-
-/**
- * 간편 래퍼 — region 코드만 반환 (차트/필터 매칭용)
- * @param {string} address
- * @returns {string} 'CBD' | 'GBD' | 'YBD' | 'BBD' | 'Others' | 'ETC'
- */
-export function srDetectReportRegionCode(address) {
-    return srDetectReportRegion(address).region;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -410,19 +313,13 @@ export function srGetBestRent(building) {
  * 원본 객체를 변경하지 않고 새 객체 반환
  *
  * 추가 파생 필드:
- *   _region       : 리포트 기준 권역 (Phase 1 2026-04 이후)
- *   _subCategory  : Others 서브카테고리 (Phase 2 UI용)
+ *   _region       : 정규화된 권역
  *   _gradeAuto    : 연면적 기반 자동 등급
  *   _sizeBand     : 규모 구간
  *   _activeVacs   : 활성 공실 배열 (캐시)
  *   _vacancyPy    : 공실 전용면적 합계(평)
  *   _vacancyRate  : 추정 공실률 (%)
  *   _bestRent     : srGetBestRent() 결과
- *
- * ※ Phase 1 (2026-04): _region 계산 방식 변경
- *   이전: building.region (DB 저장값) 우선 사용
- *   이후: 주소만 보고 리포트 기준 재계산 (DB 값 무시)
- *   이유: DB 의 region 은 지도 UI 용이고, 리포트 기준과 분류체계가 다름
  *
  * @param {Object} building
  * @returns {Object}
@@ -431,18 +328,16 @@ export function srNormBuilding(building) {
     const activeVacs = srActiveVacancies(building);
     const vacancyPy  = activeVacs.reduce((s, v) => s + srVacancyAreaPy(v), 0);
     const gross      = parseFloat(building.grossFloorPy) || 0;
-    const reportReg  = srDetectReportRegion(building.address);  // Phase 1: 리포트 기준 재계산
 
     return {
         ...building,
-        _region:       reportReg.region,        // Phase 1: 리포트 기준
-        _subCategory:  reportReg.subCategory,   // Phase 1: Others 서브카테고리 (Phase 2 UI용)
-        _gradeAuto:    srGradeFromPy(building.grossFloorPy),
-        _sizeBand:     srSizeBand(building.grossFloorPy),
-        _activeVacs:   activeVacs,
-        _vacancyPy:    vacancyPy,
-        _vacancyRate:  gross > 0 ? vacancyPy / gross * 100 : 0,
-        _bestRent:     srGetBestRent(building),
+        _region:      srGetRegion(building),
+        _gradeAuto:   srGradeFromPy(building.grossFloorPy),
+        _sizeBand:    srSizeBand(building.grossFloorPy),
+        _activeVacs:  activeVacs,
+        _vacancyPy:   vacancyPy,
+        _vacancyRate: gross > 0 ? vacancyPy / gross * 100 : 0,
+        _bestRent:    srGetBestRent(building),
     };
 }
 
@@ -538,21 +433,8 @@ window._srLoadPersistentForQuarter = async function(quarter) {
         const data = snap.exists() ? (snap.val() || {}) : {};
         _srPersistentExclude.excludedBuildings = new Set(Object.keys(data.excludedBuildings || {}));
         _srPersistentExclude.excludedVacancies = new Set(Object.keys(data.excludedVacancies || {}));
-
-        // Phase 1 마이그 (2026-04): filters.regions 에 'ETC' 있으면 'Others' 자동 추가
-        // 이유: 기존 'ETC' 는 "서울외 + 서울내 비주력" 을 모두 포함하는 단일 바구니였음.
-        //       신 체계에서 "서울내 비주력" 은 'Others' 로 분리됐으므로 기존 집계 범위 유지를 위해
-        //       로드 시점에 자동 확장. 사용자는 편집 모달에서 개별 해제 가능.
-        const loadedFilters = data.filters || null;
-        if (loadedFilters && Array.isArray(loadedFilters.regions)) {
-            const regs = [...loadedFilters.regions];
-            if (regs.includes('ETC') && !regs.includes('Others')) {
-                regs.push('Others');
-            }
-            loadedFilters.regions = regs;
-        }
-        _srPersistentExclude.filters       = loadedFilters;
-        _srPersistentExclude.loadedQuarter = quarter;
+        _srPersistentExclude.filters           = data.filters || null;
+        _srPersistentExclude.loadedQuarter     = quarter;
         if (typeof _srRefreshCurrentTab === 'function') _srRefreshCurrentTab();
     } catch (err) {
         console.warn('[portal-stats] quarter sync failed:', quarter, err);
@@ -753,12 +635,8 @@ export function srAvg(arr) {
 
 /**
  * 권역 목록 (표시 순서 고정)
- * Phase 1 (2026-04): Others 추가 — 리포트 기준 6개 체계
- *   · CBD/GBD/YBD/BBD: 리포트 4대 주력 권역 (BBD 는 성남 분당구 포함)
- *   · Others: 서울 내 4대권역 아닌 지역 (9개 서브: 마포/공덕·DMC·잠실·송파문정·영등포·구로가산·용산·마곡·서울기타)
- *   · ETC: 서울 외 (리포트 범위 밖)
  */
-export const SR_REGIONS = ['CBD', 'GBD', 'YBD', 'BBD', 'Others', 'ETC'];
+export const SR_REGIONS = ['CBD', 'GBD', 'YBD', 'BBD', 'ETC'];
 
 /**
  * 등급 목록 (표시 순서 고정)
@@ -767,17 +645,13 @@ export const SR_GRADES = ['Prime', 'A', 'B', 'C', 'D', 'E'];
 
 /**
  * 권역별 색상
- * Phase 1 (2026-04): Others 색상 추가
- *   · Others: 기존 ETC 색 계승 (slate-500, 중간톤 회색)
- *   · ETC:    중립 회색 (slate-400, 연한톤) — 리포트 범위 밖임을 시각적 구분
  */
 export const SR_REGION_COLOR = {
-    CBD:    '#0284c7',
-    GBD:    '#16a34a',
-    YBD:    '#7c3aed',
-    BBD:    '#ea580c',
-    Others: '#6b7280',  // 기존 ETC 색 계승
-    ETC:    '#9ca3af',  // 연한 회색 (Others 와 구분)
+    CBD: '#0284c7',
+    GBD: '#16a34a',
+    YBD: '#7c3aed',
+    BBD: '#ea580c',
+    ETC: '#6b7280',
 };
 
 /**
@@ -887,8 +761,6 @@ window.srLib = {
     srGetAllEffectiveDates,
     srDetectRegion,
     srGetRegion,
-    srDetectReportRegion,      // Phase 1 (2026-04): 리포트 기준 권역 분류
-    srDetectReportRegionCode,  // Phase 1 (2026-04): 리포트 기준 권역 코드만 반환
     srParsePrice,
     srToManwon,
     srGradeFromPy,
