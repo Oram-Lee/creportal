@@ -1536,98 +1536,20 @@
         // 주소 정규화
         function normalizeAddress(address) {
             if (!address) return '';
-            let normalized = String(address).trim();
+            let normalized = address.trim();
             
             // 서울시 표기 통일
             normalized = normalized.replace(/서울특별시/g, '서울');
             normalized = normalized.replace(/서울시/g, '서울');
-            // 경기도 등 광역단체 생략 가능
-            normalized = normalized.replace(/경기도/g, '경기');
-            normalized = normalized.replace(/인천광역시/g, '인천');
             
-            // 괄호 내용 제거 (예: "(역삼동)" 제거)
+            // 괄호 내용 제거
             normalized = normalized.replace(/\s*\([^)]*\)/g, '');
             
-            // 번지 표기 통일: "123-45번지" → "123-45"
-            normalized = normalized.replace(/번지/g, '');
-            
             // 특수문자 정리
-            normalized = normalized.replace(/[,.]/g, ' ');
+            normalized = normalized.replace(/[,.]/, ' ');
             normalized = normalized.replace(/\s+/g, ' ').trim();
             
             return normalized;
-        }
-        
-        // ★ v2.3: Haversine 거리 계산 (단위: m)
-        function haversineDistance(lat1, lng1, lat2, lng2) {
-            if (!lat1 || !lng1 || !lat2 || !lng2) return Infinity;
-            
-            const R = 6371000; // 지구 반지름 (m)
-            const toRad = (deg) => deg * Math.PI / 180;
-            
-            const dLat = toRad(lat2 - lat1);
-            const dLng = toRad(lng2 - lng1);
-            
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                      Math.sin(dLng/2) * Math.sin(dLng/2);
-            
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        }
-        
-        // ★ v2.3: 두 주소가 "명확히 다른 건물"인지 판정 (페이지 병합 차단용)
-        // 목적: 페이지 12(A빌딩) ↔ 페이지 13(B빌딩) 오병합 방지
-        // - 둘 다 주소가 있고 구 또는 도로명이 명확히 다르면 true
-        // - 한쪽만 주소 있거나 불분명하면 false (병합 허용)
-        function areAddressesLikelyDifferent(addr1, addr2) {
-            if (!addr1 || !addr2) return false;
-            
-            const n1 = normalizeAddress(addr1);
-            const n2 = normalizeAddress(addr2);
-            
-            if (!n1 || !n2) return false;
-            if (n1 === n2) return false;
-            
-            // 구 추출
-            const guRegex = /(강남구|강동구|강북구|강서구|관악구|광진구|구로구|금천구|노원구|도봉구|동대문구|동작구|마포구|서대문구|서초구|성동구|성북구|송파구|양천구|영등포구|용산구|은평구|종로구|중구|중랑구|분당구|수정구|중원구|권선구|영통구|장안구|팔달구|연수구|남동구|부평구|계양구|서구|동구|남구|북구)/;
-            const gu1 = n1.match(guRegex)?.[1];
-            const gu2 = n2.match(guRegex)?.[1];
-            
-            // 둘 다 구가 있고 다르면 → 확실히 다른 건물
-            if (gu1 && gu2 && gu1 !== gu2) {
-                return true;
-            }
-            
-            // 도로명 + 번지 추출
-            const roadRegex = /([가-힣]+(?:대?로|길))\s*(\d+(?:\-\d+)?)/;
-            const road1 = n1.match(roadRegex);
-            const road2 = n2.match(roadRegex);
-            
-            if (road1 && road2) {
-                // 같은 구에서 도로명까지 같은데 번지가 다르면 다른 건물로 볼 수 있으나
-                // 같은 도로의 인접 건물일 수도 있으니 도로명이 다른 경우만 확정
-                if (road1[1] !== road2[1]) {
-                    return true;
-                }
-                // 같은 도로의 번지 비교 — 번지 차이가 크면 다른 건물
-                const num1 = parseInt(road1[2].split('-')[0]);
-                const num2 = parseInt(road2[2].split('-')[0]);
-                if (!isNaN(num1) && !isNaN(num2) && Math.abs(num1 - num2) > 20) {
-                    return true;
-                }
-            }
-            
-            // 동 비교
-            const dongRegex = /([가-힣]+동)\s*(\d+)?/;
-            const dong1 = n1.match(dongRegex);
-            const dong2 = n2.match(dongRegex);
-            
-            if (dong1 && dong2 && dong1[1] !== dong2[1]) {
-                return true;
-            }
-            
-            return false; // 불확실 → 병합 허용
         }
         
         // 핵심 주소 추출 (구 + 도로명/동 + 번지)
@@ -1639,11 +1561,10 @@
             const gu = guMatch ? guMatch[1] : '';
             
             // 도로명 추출 (예: 삼봉로 71, 테헤란로 123)
-            // ★ v2.3: "대로"도 지원 (예: 강남대로 123)
-            const roadMatch = normalized.match(/([가-힣]+대?로|[가-힣]+길)\s*(\d+(?:\-\d+)?)/);
+            const roadMatch = normalized.match(/([가-힣]+로|[가-힣]+길)\s*\d+/);
             
             // 동 + 숫자 추출 (예: 삼성동 123)
-            const dongNumMatch = normalized.match(/([가-힣]+동)\s*(\d+(?:\-\d+)?)/);
+            const dongNumMatch = normalized.match(/([가-힣]+동)\s*\d+/);
             
             // ★ v2.2: 동 + 영문/숫자 혼합 지번 (예: 마곡동 CP3-2, 상암동 DMC1-2)
             const dongAlphaNumMatch = normalized.match(/([가-힣]+동)\s*([A-Za-z0-9][-A-Za-z0-9]*)/);
@@ -1652,13 +1573,11 @@
             const dongOnlyMatch = normalized.match(/([가-힣]+동)(?:\s|$)/);
             
             if (roadMatch) {
-                // ★ v2.3: 번지를 정규화 (123-45 유지, 123-00 → 123)
-                const num = roadMatch[2].replace(/-0+$/, '');
-                return `${gu} ${roadMatch[1]} ${num}`.trim();
+                return `${gu} ${roadMatch[0]}`.trim();
             } else if (dongNumMatch) {
-                const num = dongNumMatch[2].replace(/-0+$/, '');
-                return `${gu} ${dongNumMatch[1]} ${num}`.trim();
+                return `${gu} ${dongNumMatch[0]}`.trim();
             } else if (dongAlphaNumMatch) {
+                // 마곡동 CP3-2 → "강서구 마곡동 CP3-2"
                 return `${gu} ${dongAlphaNumMatch[1]} ${dongAlphaNumMatch[2]}`.trim();
             } else if (dongOnlyMatch) {
                 return `${gu} ${dongOnlyMatch[1]}`.trim();
@@ -1726,17 +1645,12 @@
         }
         
         // 빌딩 매칭 (프론트엔드)
-        // 빌딩 매칭 (프론트엔드)
-        // ★ v2.3: 좌표 거리 검증 + 가중치 재조정 (주소 80 / 이름 20) + 반자동 승인
-        async function matchBuilding(buildingName, address, threshold = 0.7, inputCoords = null) {
+        async function matchBuilding(buildingName, address, threshold = 0.7) {
             const buildings = await loadBuildings();
             const candidates = [];
             
             const inputAddrKey = extractAddressKey(address);
             const inputNameNorm = (buildingName || '').replace(/빌딩|타워|센터|오피스/g, '').trim().toLowerCase();
-            
-            // ★ v2.3: 좌표 거리 임계값 (m) — "동일 건물" 확신 거리
-            const COORD_SAME_BUILDING_M = 100;
             
             for (const [bldgId, bldg] of Object.entries(buildings)) {
                 if (!bldg || typeof bldg !== 'object') continue;
@@ -1749,24 +1663,7 @@
                 const addrKey = extractAddressKey(bldgAddr);
                 const addrSim = stringSimilarity(inputAddrKey, addrKey);
                 const addrJibunSim = stringSimilarity(inputAddrKey, extractAddressKey(bldgAddrJibun));
-                let bestAddrSim = Math.max(addrSim, addrJibunSim);
-                
-                // ★ v2.3: 좌표 거리 검증 (inputCoords가 있고 Firebase 빌딩도 좌표 있을 때)
-                let coordDistance = null;
-                let coordBoosted = false;
-                if (inputCoords?.lat && inputCoords?.lng && 
-                    bldg.coordinates?.lat && bldg.coordinates?.lng) {
-                    coordDistance = haversineDistance(
-                        inputCoords.lat, inputCoords.lng,
-                        bldg.coordinates.lat, bldg.coordinates.lng
-                    );
-                    
-                    // 100m 이내: 주소 유사도를 0.95로 끌어올림 (좌표가 더 신뢰도 높음)
-                    if (coordDistance <= COORD_SAME_BUILDING_M) {
-                        bestAddrSim = Math.max(bestAddrSim, 0.95);
-                        coordBoosted = true;
-                    }
-                }
+                const bestAddrSim = Math.max(addrSim, addrJibunSim);
                 
                 // 이름 유사도
                 let nameSim = stringSimilarity(inputNameNorm, bldgName);
@@ -1782,14 +1679,10 @@
                     nameSim = Math.max(nameSim, bestAliasSim);
                 }
                 
-                // ★ v2.3: 가중치 재조정 (주소 80% + 이름 20%)
-                // 이유: 빌딩명은 임대안내문마다 천차만별이지만 주소는 비교적 안정적
-                const totalScore = bestAddrSim * 0.8 + nameSim * 0.2;
+                // 종합 점수 (주소 70% + 이름 30%)
+                const totalScore = bestAddrSim * 0.7 + nameSim * 0.3;
                 
-                // ★ v2.3: 좌표가 100m 이내인데 이름이 많이 다른 경우 → 확인 필요 플래그
-                const needsCoordConfirmation = coordBoosted && nameSim < 0.4;
-                
-                if (totalScore >= threshold || coordBoosted) {
+                if (totalScore >= threshold) {
                     candidates.push({
                         buildingId: bldgId,
                         name: bldg.name,
@@ -1797,67 +1690,43 @@
                         addressJibun: bldgAddrJibun,
                         score: totalScore,
                         addressScore: bestAddrSim,
-                        nameScore: nameSim,
-                        coordDistance: coordDistance,
-                        coordBoosted: coordBoosted,
-                        needsCoordConfirmation: needsCoordConfirmation
+                        nameScore: nameSim
                     });
                 }
             }
             
-            // 점수 순 정렬 — 좌표 부스트된 후보는 최우선
-            candidates.sort((a, b) => {
-                if (a.coordBoosted && !b.coordBoosted) return -1;
-                if (!a.coordBoosted && b.coordBoosted) return 1;
-                return b.score - a.score;
-            });
-            
-            const bestMatch = candidates.length > 0 ? candidates[0] : null;
-            
-            // ★ v2.3: 자동 매칭 판정
-            // - 일반: 점수 >= 0.85
-            // - 좌표 100m 이내 + 이름 유사도 0.4+ : 자동 매칭
-            // - 좌표 100m 이내 + 이름 유사도 0.4 미만: 확인 필요 (반자동)
-            const isAutoMatch = bestMatch && (
-                bestMatch.score >= 0.85 ||
-                (bestMatch.coordBoosted && !bestMatch.needsCoordConfirmation)
-            );
+            // 점수 순 정렬
+            candidates.sort((a, b) => b.score - a.score);
             
             return {
                 candidates: candidates.slice(0, 5),
-                bestMatch: bestMatch,
-                auto: isAutoMatch,
-                needsConfirmation: bestMatch?.needsCoordConfirmation || false
+                bestMatch: candidates.length > 0 ? candidates[0] : null,
+                auto: candidates.length > 0 && candidates[0].score >= 0.85
             };
         }
         
         // 배치 매칭
-        // ★ v2.3: 입력 좌표(있으면) 전달, auto 판정은 matchBuilding에 위임
         async function batchMatchBuildings(items, autoThreshold = 0.85) {
-            console.log('🔄 배치 매칭 시작:', items.length, '개 (v2.3: 좌표 검증)');
+            console.log('🔄 배치 매칭 시작:', items.length, '개');
             
             // 빌딩 먼저 로드
             await loadBuildings();
             
             const results = [];
-            let coordBoostedCount = 0;
-            let confirmationNeededCount = 0;
             
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
                 const buildingName = item.buildingName || item.building_name || '';
                 const address = item.address || '';
-                const inputCoords = item.coordinates || null; // OCR 단계에서 좌표가 채워져 있으면 사용
                 
-                const result = await matchBuilding(buildingName, address, 0.7, inputCoords);
-                
-                // 카운트
-                if (result.bestMatch?.coordBoosted) coordBoostedCount++;
-                if (result.needsConfirmation) confirmationNeededCount++;
+                const result = await matchBuilding(buildingName, address);
                 
                 results.push({
                     input: item,
-                    result: result  // auto, needsConfirmation은 이미 matchBuilding에서 계산됨
+                    result: {
+                        ...result,
+                        auto: result.bestMatch && result.bestMatch.score >= autoThreshold
+                    }
                 });
                 
                 // 진행률 표시 (10개마다)
@@ -1867,16 +1736,12 @@
             }
             
             console.log('✅ 배치 매칭 완료');
-            if (coordBoostedCount > 0) console.log(`  좌표 기반 자동매칭: ${coordBoostedCount}건`);
-            if (confirmationNeededCount > 0) console.log(`  ⚠️ 반자동 확인 필요: ${confirmationNeededCount}건`);
             
             // 요약
             const summary = {
                 total: results.length,
                 autoMatched: results.filter(r => r.result.auto).length,
                 needsReview: results.filter(r => r.result.candidates?.length > 0 && !r.result.auto).length,
-                confirmationNeeded: confirmationNeededCount,
-                coordBoosted: coordBoostedCount,
                 noMatch: results.filter(r => !r.result.candidates?.length).length
             };
             
@@ -3039,59 +2904,30 @@
         function mergeMultiPageBuildings(pages) {
             if (!pages || pages.length === 0) return pages;
             
-            console.log('=== MULTI-PAGE MERGE v4 (주소 검증 + 복합키 dedup) ===');
+            console.log('=== MULTI-PAGE MERGE v3 (경계 기반) ===');
             
-            // ★ v4: 빌딩명 경계 식별 시, 이름이 없어도 주소가 다르면 경계로 승격
-            const boundaries = [];
+            // ★ Step 1: 빌딩명이 있는 페이지를 경계점(boundary)으로 식별
+            // 경계점 = 새로운 빌딩이 시작되는 페이지
+            const boundaries = []; // [{startIdx, buildingName, ...}]
             
             for (let i = 0; i < pages.length; i++) {
                 const page = pages[i];
                 const name = page.buildingName || '';
-                const pageAddr = page.address || '';
                 
-                // Case A: 빌딩명이 있는 페이지
-                if (name) {
-                    // 이전 경계의 빌딩과 같은 이름이면 경계가 아님 (같은 빌딩의 추가 페이지)
-                    if (boundaries.length > 0) {
-                        const lastBoundary = boundaries[boundaries.length - 1];
-                        const nameSimilar = areBuildingNamesSimilar(lastBoundary.name, name);
-                        
-                        // ★ v4: 이름이 비슷해도 주소가 명확히 다르면 다른 빌딩으로 판정
-                        const addrDifferent = areAddressesLikelyDifferent(lastBoundary.address, pageAddr);
-                        
-                        if (nameSimilar && !addrDifferent) {
-                            console.log(`  P${page.pageNum}: "${name}" → 이전 경계 "${lastBoundary.name}"와 동일 빌딩 간주, 스킵`);
-                            continue;
-                        }
-                        
-                        if (nameSimilar && addrDifferent) {
-                            console.log(`  P${page.pageNum}: "${name}" — 이름은 비슷하지만 주소 다름 → 별개 빌딩으로 승격`);
-                        }
-                    }
-                    
-                    boundaries.push({ startIdx: i, name, address: pageAddr, pageNum: page.pageNum });
-                    console.log(`  경계 #${boundaries.length}: P${page.pageNum} "${name}" (idx=${i}, addr="${pageAddr.slice(0, 30)}")`);
-                    continue;
-                }
+                if (!name) continue;
                 
-                // Case B (v4 신규): 빌딩명은 없지만 주소가 있고, 이전 경계와 주소가 명확히 다른 경우
-                // → 이것도 새 경계(이름 미상 빌딩)로 처리 — A빌딩 페이지에 B빌딩 공실이 병합되는 것 방지
-                if (pageAddr && boundaries.length > 0) {
+                // 이전 경계의 빌딩과 같은 이름이면 경계가 아님 (같은 빌딩의 추가 페이지)
+                if (boundaries.length > 0) {
                     const lastBoundary = boundaries[boundaries.length - 1];
-                    if (areAddressesLikelyDifferent(lastBoundary.address, pageAddr)) {
-                        // 공실 테이블이 있는 경우에만 새 경계로 승격 (단순 광고/목차는 제외)
-                        if ((page.vacancies || []).length > 0) {
-                            boundaries.push({ 
-                                startIdx: i, 
-                                name: `(이름미상) ${pageAddr.slice(0, 20)}`, 
-                                address: pageAddr, 
-                                pageNum: page.pageNum,
-                                nameless: true
-                            });
-                            console.log(`  ⚠️ 경계 승격 #${boundaries.length}: P${page.pageNum} — 이름 없으나 주소가 이전과 다름 ("${pageAddr.slice(0, 30)}")`);
-                        }
+                    if (areBuildingNamesSimilar(lastBoundary.name, name)) {
+                        // 같은 빌딩 — 경계 추가 안 함
+                        console.log(`  P${page.pageNum}: "${name}" → 이전 경계 "${lastBoundary.name}"와 동일, 스킵`);
+                        continue;
                     }
                 }
+                
+                boundaries.push({ startIdx: i, name, pageNum: page.pageNum });
+                console.log(`  경계 #${boundaries.length}: P${page.pageNum} "${name}" (idx=${i})`);
             }
             
             // 경계가 없으면 원본 그대로 반환
@@ -3099,14 +2935,6 @@
                 console.log('  경계점 없음 → 원본 반환');
                 return pages;
             }
-            
-            // ★ v4: 복합키 기반 dedup (floor + rentArea + exclusiveArea)
-            const makeVacancyKey = (v) => {
-                const floor = String(v?.floor || '').trim().toUpperCase();
-                const ra = (v?.rentArea != null) ? Math.round(Number(v.rentArea) * 10) / 10 : null;
-                const ea = (v?.exclusiveArea != null) ? Math.round(Number(v.exclusiveArea) * 10) / 10 : null;
-                return `${floor}|${ra}|${ea}`;
-            };
             
             // ★ Step 2: 각 경계 구간의 페이지를 그룹으로 묶기
             const merged = [];
@@ -3119,18 +2947,19 @@
                 const basePage = { ...pages[startIdx] };
                 basePage.vacancies = [...(basePage.vacancies || [])];
                 const mergedPageNums = [basePage.pageNum];
-                const existingKeys = new Set(basePage.vacancies.map(makeVacancyKey));
+                const existingFloors = new Set(basePage.vacancies.map(v => v.floor));
                 
                 // 경계 구간 내 나머지 페이지들을 병합
                 for (let j = startIdx + 1; j < endIdx; j++) {
                     const page = pages[j];
                     const pageVacancies = page.vacancies || [];
                     
-                    // ★ 안전장치 1: 연속 페이지인 경우만 병합
+                    // ★ 안전장치: 연속 페이지이고 공실 테이블이 있는 경우만 병합
                     const prevPageNum = pages[j - 1]?.pageNum || 0;
                     const isConsecutive = Math.abs((page.pageNum || 0) - prevPageNum) <= 1;
                     
                     if (!isConsecutive) {
+                        // 연속이 아니면 병합하지 않고 독립 항목으로 추가
                         console.log(`  P${page.pageNum}: 비연속 → 독립 처리`);
                         if (pageVacancies.length > 0 || page.buildingName) {
                             merged.push(page);
@@ -3139,25 +2968,8 @@
                     }
                     
                     if (pageVacancies.length === 0 && !page.address) {
+                        // 공실도 없고 주소 정보도 없는 페이지 → 스킵 (광고/목차 등)
                         console.log(`  P${page.pageNum}: 공실0 + 주소없음 → 스킵`);
-                        continue;
-                    }
-                    
-                    // ★ v4 안전장치 2: 주소 차이 검증 (가장 중요)
-                    // 경계 페이지와 현재 페이지 주소가 명확히 다르면 병합 차단
-                    if (basePage.address && page.address &&
-                        areAddressesLikelyDifferent(basePage.address, page.address)) {
-                        console.log(`  ⚠️ P${page.pageNum}: 주소가 기준 빌딩과 다름 → 독립 처리`);
-                        console.log(`     기준: "${basePage.address.slice(0, 40)}"`);
-                        console.log(`     현재: "${page.address.slice(0, 40)}"`);
-                        // 독립 항목으로 merged에 푸시 (단, 빌딩명 없으면 추후 수동 검토 필요)
-                        if (pageVacancies.length > 0) {
-                            merged.push({ 
-                                ...page, 
-                                _needsManualReview: true,
-                                _reviewReason: '주소 불일치로 자동 병합 차단됨'
-                            });
-                        }
                         continue;
                     }
                     
@@ -3174,12 +2986,11 @@
                     if (!basePage.typicalFloorArea && page.typicalFloorArea) basePage.typicalFloorArea = page.typicalFloorArea;
                     if (!basePage.nearbyStation && page.nearbyStation) basePage.nearbyStation = page.nearbyStation;
                     
-                    // ★ v4: 공실 합치기 — 복합키 기반 중복 판정
+                    // 공실 합치기 (층 중복 방지)
                     for (const vacancy of pageVacancies) {
-                        const key = makeVacancyKey(vacancy);
-                        if (!existingKeys.has(key)) {
+                        if (!existingFloors.has(vacancy.floor)) {
                             basePage.vacancies.push(vacancy);
-                            existingKeys.add(key);
+                            existingFloors.add(vacancy.floor);
                         }
                     }
                     
@@ -3209,7 +3020,7 @@
             }
             
             console.log(`[Result] ${pages.length} pages → ${merged.length} buildings`);
-            console.log('=== MULTI-PAGE MERGE v4 DONE ===');
+            console.log('=== MULTI-PAGE MERGE v3 DONE ===');
             return merged;
         }
         
@@ -3585,19 +3396,14 @@
                 console.log('매칭 요약:', summary);
                 
                 // Step 2: 매칭 검토 필요한 항목 확인
-                // ★ v2.3: needsConfirmation(좌표 근접하나 이름 다른 케이스)도 검토 대상으로 포함
-                const needsReview = matchResults.filter(r => !r.result.auto && r.result.candidates?.length > 0 && !r.result.needsConfirmation);
-                const coordConfirmNeeded = matchResults.filter(r => r.result.needsConfirmation);
+                const needsReview = matchResults.filter(r => !r.result.auto && r.result.candidates?.length > 0);
                 const noMatch = matchResults.filter(r => !r.result.candidates?.length);
-                const autoMatched = matchResults.filter(r => r.result.auto && !r.result.needsConfirmation);
+                const autoMatched = matchResults.filter(r => r.result.auto);
                 
-                const toastMsg = `자동매칭 ${autoMatched.length}건, 검토필요 ${needsReview.length}건` +
-                    (coordConfirmNeeded.length > 0 ? `, 📍좌표확인 ${coordConfirmNeeded.length}건` : '') +
-                    `, 매칭실패 ${noMatch.length}건`;
-                showToast(toastMsg, 'info');
+                showToast(`자동매칭 ${autoMatched.length}건, 검토필요 ${needsReview.length}건, 매칭실패 ${noMatch.length}건`, 'info');
                 
-                // Step 3: 검토 필요하면 모달 표시 (coordConfirmNeeded도 포함)
-                if (needsReview.length > 0 || noMatch.length > 0 || coordConfirmNeeded.length > 0) {
+                // Step 3: 검토 필요하면 모달 표시
+                if (needsReview.length > 0 || noMatch.length > 0) {
                     state.matchResults = matchResults;
                     state.saveContext = { company, publishDate, documentId, region };
                     showMatchReviewModal(matchResults, summary);
@@ -3618,21 +3424,9 @@
             const needsReview = matchResults.filter(r => !r.result.auto && r.result.candidates?.length > 0);
             const noMatch = matchResults.filter(r => !r.result.candidates?.length);
             const autoMatched = matchResults.filter(r => r.result.auto);
-            // ★ v2.3: 반자동 확인 필요 (좌표는 가까우나 이름이 많이 다른 케이스)
-            const coordConfirmNeeded = matchResults.filter(r => r.result.needsConfirmation);
-            
-            // 후보 옵션 포맷팅 헬퍼 - 좌표 거리 표시 포함
-            const formatCandidate = (c) => {
-                const scorePct = Math.round(c.score * 100);
-                const distStr = c.coordDistance != null && isFinite(c.coordDistance)
-                    ? ` [📍 ${Math.round(c.coordDistance)}m]` 
-                    : '';
-                const boostMark = c.coordBoosted ? ' ⭐' : '';
-                return `${c.name} (${scorePct}%)${distStr}${boostMark} - ${c.address}`;
-            };
             
             document.getElementById('matchReviewContent').innerHTML = `
-                <div class="match-summary" style="display: flex; gap: 20px; margin-bottom: 20px; padding: 16px; background: var(--bg-secondary); border-radius: 8px; flex-wrap: wrap;">
+                <div class="match-summary" style="display: flex; gap: 20px; margin-bottom: 20px; padding: 16px; background: var(--bg-secondary); border-radius: 8px;">
                     <div style="text-align: center;">
                         <div style="font-size: 24px; font-weight: 700; color: var(--success-color);">${autoMatched.length}</div>
                         <div style="font-size: 12px; color: var(--text-muted);">자동 매칭</div>
@@ -3641,54 +3435,11 @@
                         <div style="font-size: 24px; font-weight: 700; color: var(--warning-color);">${needsReview.length}</div>
                         <div style="font-size: 12px; color: var(--text-muted);">검토 필요</div>
                     </div>
-                    ${coordConfirmNeeded.length > 0 ? `
-                    <div style="text-align: center;">
-                        <div style="font-size: 24px; font-weight: 700; color: #0ea5e9;">${coordConfirmNeeded.length}</div>
-                        <div style="font-size: 12px; color: var(--text-muted);">📍 좌표 확인</div>
-                    </div>
-                    ` : ''}
                     <div style="text-align: center;">
                         <div style="font-size: 24px; font-weight: 700; color: var(--danger-color);">${noMatch.length}</div>
                         <div style="font-size: 12px; color: var(--text-muted);">매칭 실패</div>
                     </div>
                 </div>
-                
-                ${coordConfirmNeeded.length > 0 ? `
-                <div class="coord-confirm-section" style="margin-bottom: 20px; padding: 12px; background: #eff6ff; border-left: 4px solid #0ea5e9; border-radius: 4px;">
-                    <h4 style="margin-bottom: 12px; color: #0c4a6e;">📍 좌표는 근접하지만 이름이 다른 건 (${coordConfirmNeeded.length}건) — 확인 권장</h4>
-                    <div style="font-size: 12px; color: #475569; margin-bottom: 12px;">
-                        반경 100m 이내에 기존 빌딩이 있으나 이름 표기가 상이합니다. 동일 빌딩이면 해당 빌딩을 선택(별칭으로 자동 추가)하고, 다른 빌딩이면 "신규 빌딩으로 등록"을 선택하세요.
-                    </div>
-                    <div style="max-height: 300px; overflow-y: auto;">
-                        ${coordConfirmNeeded.map((r, idx) => {
-                            const globalIdx = matchResults.indexOf(r);
-                            return `
-                            <div style="padding: 12px; border: 1px solid #bae6fd; border-radius: 8px; margin-bottom: 8px; background: white;" data-idx="${globalIdx}">
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                                    <div>
-                                        <div style="font-weight: 600;">OCR 빌딩: ${r.input.buildingName || '(이름없음)'}</div>
-                                        <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${r.input.address || ''}</div>
-                                    </div>
-                                    <span style="padding: 2px 8px; background: #dbeafe; color: #1e40af; border-radius: 10px; font-size: 11px; font-weight: 600;">
-                                        📍 ${Math.round(r.result.bestMatch.coordDistance || 0)}m
-                                    </span>
-                                </div>
-                                <select class="match-select" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;" onchange="updateMatchSelection(${globalIdx}, this.value)">
-                                    <option value="">-- 어떻게 처리할까요? --</option>
-                                    ${r.result.candidates.map(c => `
-                                        <option value="${c.buildingId}">
-                                            ${formatCandidate(c)}
-                                        </option>
-                                    `).join('')}
-                                    <option value="__new__">신규 빌딩으로 등록 (다른 건물)</option>
-                                    <option value="__skip__">건너뛰기</option>
-                                </select>
-                            </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </div>
-                ` : ''}
                 
                 ${needsReview.length > 0 ? `
                 <div class="review-section" style="margin-bottom: 20px;">
@@ -3702,7 +3453,7 @@
                                     <option value="">-- 선택하세요 --</option>
                                     ${r.result.candidates.map(c => `
                                         <option value="${c.buildingId}" ${c.score >= 0.85 ? 'selected' : ''}>
-                                            ${formatCandidate(c)}
+                                            ${c.name} (${Math.round(c.score * 100)}%) - ${c.address}
                                         </option>
                                     `).join('')}
                                     <option value="__skip__">건너뛰기 (저장 안 함)</option>
@@ -3792,20 +3543,8 @@
         
         // 매칭 선택 업데이트
         window.updateMatchSelection = function(idx, value) {
-            if (!state.matchResults[idx]) return;
-            
-            const r = state.matchResults[idx];
-            r.selectedBuildingId = value;
-            
-            // ★ v2.3: 좌표 기반 매칭(반자동 확인)에서 기존 빌딩을 승인한 경우
-            // → OCR로 추출된 빌딩명을 해당 빌딩의 aliases로 자동 등록 플래그
-            // (실제 Firebase 저장은 saveVacanciesToFirebase 단계에서 처리)
-            if (value && value !== '__new__' && value !== '__skip__' && r.result?.needsConfirmation) {
-                const ocrName = (r.input?.buildingName || '').trim();
-                if (ocrName) {
-                    r.addAliasOnSave = ocrName;
-                    console.log(`  📍 좌표 기반 승인: "${ocrName}"을 빌딩 ${value}의 별칭으로 추가 예정`);
-                }
+            if (state.matchResults[idx]) {
+                state.matchResults[idx].selectedBuildingId = value;
             }
         };
         
@@ -4237,24 +3976,6 @@
                             if (Object.keys(autoUpdates).length > 0) {
                                 await db.ref(`buildings/${buildingId}`).update(autoUpdates);
                                 console.log(`빌딩 ${buildingId} 자동 업데이트:`, Object.keys(autoUpdates));
-                            }
-                            
-                            // ★ v2.3: 좌표 기반 승인 시 OCR 빌딩명을 별칭으로 자동 추가
-                            if (r.addAliasOnSave) {
-                                const aliasToAdd = r.addAliasOnSave.trim();
-                                const currentAliases = Array.isArray(existingData.aliases) ? existingData.aliases : [];
-                                const existingName = (existingData.name || '').trim();
-                                
-                                // 이미 같은 이름이거나 별칭에 있으면 스킵
-                                const alreadyExists = 
-                                    aliasToAdd === existingName ||
-                                    currentAliases.some(a => (a || '').trim() === aliasToAdd);
-                                
-                                if (!alreadyExists && aliasToAdd) {
-                                    const newAliases = [...currentAliases, aliasToAdd];
-                                    await db.ref(`buildings/${buildingId}/aliases`).set(newAliases);
-                                    console.log(`  📍 별칭 자동 추가: "${aliasToAdd}" → 빌딩 ${buildingId} (${existingName})`);
-                                }
                             }
                             
                             // ★ #13: OCR 빌딩명이 기존 빌딩명과 다르면 aliases에 자동 누적
