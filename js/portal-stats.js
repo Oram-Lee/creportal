@@ -4009,27 +4009,30 @@ export function srBuildingMatrix(building, opts = {}) {
 // ═══════════════════════════════════════════════════════════════
 // PHASE 2 MVP: 분기 비교 AI 분석 모달
 // (2026-04) — 권역별 공실현황 탭 상단 버튼에서 호출
+//
+// 설계 원칙 (2026-04 Oram 확정):
+//   · 기준 분기 (baseline) = 현재 통계 모달의 분기 (_srPersistentExclude.loadedQuarter)
+//   · 편집 모달에서 저장된 빌딩셋 · 제외목록 · repMonth 그대로 적용
+//   · 비교 대상 분기 하나만 드롭다운에서 선택
+//   · 분석 우선순위:
+//       1) 동일 빌딩의 공실 변화 (가장 가치 있음)
+//       2) 권역별 공실률 집계 변화
+//       3) 신규 공실 빌딩 · 해소 빌딩 (빌딩셋 차이)
 // ═══════════════════════════════════════════════════════════════
 
-// 백엔드 엔드포인트 (Render.com)
 const _SR_COMPARE_API = 'https://portal-dsyl.onrender.com/api/analyze-quarters';
-
-// 모달 DOM ID
 const _SR_CMP_MODAL_ID = 'sr-compare-modal';
 
-// 모달 내부 상태 (재오픈 시 선택 유지)
 const _srCompareState = {
     quartersAvailable: [],   // [{ q: '2026Q1', status: 'draft'|'finalized' }, ...]
-    selectedA:   '',
-    selectedB:   '',
-    includeDraft: true,
-    mode:         'same-baseline',  // 'same-baseline' | 'independent'
-    lastSnapshots: null,   // 디버그용 raw 집계 보관
+    baselineQuarter:   '',   // 현재 통계 모달이 보고 있는 분기 (읽기 전용)
+    compareQuarter:    '',   // 비교 대상 분기 (드롭다운)
+    includeDraft:      true,
+    lastPayload:       null, // raw 데이터 표시용
 };
 
 /**
- * statsFilter 루트 전체를 스캔해 분기 목록 로드
- * 각 분기의 status (draft/finalized) 도 같이
+ * statsFilter 루트를 스캔해 분기 목록 로드
  */
 async function _srLoadAvailableQuarters() {
     try {
@@ -4038,7 +4041,7 @@ async function _srLoadAvailableQuarters() {
         const root = snap.val() || {};
         const list = Object.keys(root)
             .sort()
-            .reverse()   // 최신 분기 먼저
+            .reverse()
             .map(q => ({
                 q,
                 status: root[q]?.status === 'finalized' ? 'finalized' : 'draft',
@@ -4052,192 +4055,259 @@ async function _srLoadAvailableQuarters() {
 }
 
 /**
- * 분기 하나에 대한 집계 스냅샷 계산
- * 현재 UI 필터 (_srUI) 와 영구필터 (_srPersistentExclude) 를 분기별로 다시 적용
- *
- * 주의: 이 함수는 "동일 잣대" 모드에서도 쓰이므로,
- *   baseline filter 를 인자로 받아 해당 분기 빌딩셋에만 발행월 필터 등 적용
+ * 분기 → 월 범위 ('2026Q1' → ['2026-01','2026-02','2026-03'])
  */
-async function _srComputeQuarterSnapshot(quarter, opts = {}) {
+function _srQuarterMonths(q) {
+    if (!/^\d{4}Q[1-4]$/.test(q)) return [];
+    const yyyy  = q.slice(0, 4);
+    const qPart = q.slice(5);
+    const ms = { Q1: ['01','02','03'], Q2: ['04','05','06'],
+                 Q3: ['07','08','09'], Q4: ['10','11','12'] }[qPart] || [];
+    return ms.map(m => `${yyyy}-${m}`);
+}
+
+/**
+ * 핵심 집계 함수 — "동일 빌딩셋 이중 분기 집계" (옵션 A 방향)
+ *
+ * baseline: 현재 편집 저장 상태 (_srPersistentExclude 기반)
+ * 방식:
+ *   1) baseline 빌딩셋 확정 (filters/excluded/vacOnly 적용)
+ *   2) baseline 의 repMonths 를 로드
+ *   3) 각 빌딩에 대해 두 분기 각각의 "대표 공실 수치" 계산:
+ *      - baseline 분기: repMonth 가 있으면 그 월, 없으면 baseline 분기 마지막 월
+ *      - 비교 분기: baseline 의 repMonth yyyymm 을 "비교 분기의 대응 월" 로 치환 후 그 월,
+ *        치환 월이 비교 분기 범위 밖이면 비교 분기 마지막 월
+ *   4) 빌딩별로 vacancyPy 합산 (해당 월의 공실만)
+ *   5) 권역별 롤업
+ *
+ * @param {string} baselineQ  현재 통계 모달 분기
+ * @param {string} compareQ   비교 대상 분기
+ * @returns {Promise<{ baseline, compare, buildingPairs, diff }>}
+ */
+async function _srBuildComparePayload(baselineQ, compareQ) {
     const { db, ref, get } = await import('./portal-firebase.js');
-    const snap = await get(ref(db, `statsFilter/${quarter}`));
-    const data = snap.val() || {};
 
-    // 해당 분기의 filters.regions 에 ETC 있으면 Others 자동 추가 (Phase 1 마이그 동일)
-    const filters = data.filters || {};
-    const regs = Array.isArray(filters.regions) ? [...filters.regions] : [];
-    if (regs.includes('ETC') && !regs.includes('Others')) regs.push('Others');
+    // baseline 의 편집 저장 상태 로드 (현재 메모리 + DB 교차)
+    const baseSnap = await get(ref(db, `statsFilter/${baselineQ}`));
+    const baseData = baseSnap.val() || {};
+    const repMonths = baseData.repMonths || {};
+    const baselineFilters = baseData.filters || {};
+    const baselineRegs = Array.isArray(baselineFilters.regions) ? [...baselineFilters.regions] : [];
+    if (baselineRegs.includes('ETC') && !baselineRegs.includes('Others')) baselineRegs.push('Others');
+    const excludedB = new Set(Object.keys(baseData.excludedBuildings || {}));
+    const excludedV = new Set(Object.keys(baseData.excludedVacancies || {}));
 
-    const excludedB = new Set(Object.keys(data.excludedBuildings || {}));
-    const excludedV = new Set(Object.keys(data.excludedVacancies || {}));
-
-    // 분기 → 월 범위
-    const [yyyy, qPart] = [quarter.slice(0, 4), quarter.slice(5)];  // '2026', 'Q1'
-    const qMonths = {
-        Q1: ['01','02','03'], Q2: ['04','05','06'],
-        Q3: ['07','08','09'], Q4: ['10','11','12']
-    }[qPart] || [];
-    const monthPrefixes = qMonths.map(m => `${yyyy}-${m}`);
-
-    // 빌딩 정규화 + 분기 필터 적용
-    let norm = srGetNormBuildings();
-
-    // 1) 등급 필터
+    // baseline 빌딩셋 확정
     const match = (arr, val) => !arr || !arr.length || arr.includes(val);
-    norm = norm.filter(b => {
-        if (!match(filters.grades, b._gradeAuto)) return false;
-        if (!match(regs,           b._region))   return false;
+    const norm = srGetNormBuildings();
+    const baselineBldgs = norm.filter(b => {
+        if (!match(baselineFilters.grades, b._gradeAuto)) return false;
+        if (!match(baselineRegs,           b._region))    return false;
+        if (excludedB.has(b.id))                          return false;
         return true;
     });
 
-    // 2) 빌딩 단위 제외
-    if (excludedB.size > 0) {
-        norm = norm.filter(b => !excludedB.has(b.id));
-    }
+    // 월 범위
+    const baselineMonths = _srQuarterMonths(baselineQ);
+    const compareMonths  = _srQuarterMonths(compareQ);
+    const baselineLastMo = baselineMonths[baselineMonths.length - 1];
+    const compareLastMo  = compareMonths[compareMonths.length - 1];
 
-    // 3) vacancy 단위 제외 + 발행월 필터 (분기 범위)
-    const bldgAgg = norm.map(b => {
-        const vacs = (b._activeVacs || []).filter(v => {
+    // 빌딩별 이중 집계
+    const pairs = [];
+    for (const b of baselineBldgs) {
+        const gross = parseFloat(b.grossFloorPy) || 0;
+        // repMonth 확정
+        const rm = repMonths[b.id];
+        const baselineRepMo = (rm && typeof rm === 'object' && rm.yyyymm) ? rm.yyyymm
+                             : (typeof rm === 'string' ? rm : baselineLastMo);
+        // 비교 분기의 "대응 월": baselineRepMo 와 월 포지션이 같은 월
+        // 예: baseline 2026Q1, rep='2026-02' → compare 2025Q4 → 대응 = '2025-11' (Q 내 두 번째 달)
+        let compareRepMo = compareLastMo;
+        if (baselineRepMo) {
+            const pos = baselineMonths.indexOf(baselineRepMo);
+            if (pos >= 0 && pos < compareMonths.length) {
+                compareRepMo = compareMonths[pos];
+            }
+        }
+
+        // vacancy 필터: baseline 의 excludedV 를 양쪽에 모두 적용 (동일 잣대)
+        //   + 해당 월 매칭
+        const matchMonth = (vacs, yyyymm) => vacs.filter(v => {
             if (v._key && excludedV.has(`${b.id}__${v._key}`)) return false;
             const pd = String(v.publishDate || v.pd || '').slice(0, 7);
-            if (monthPrefixes.length > 0 && !monthPrefixes.includes(pd)) return false;
-            return true;
+            return pd === yyyymm;
         });
-        const vacancyPy = vacs.reduce((s, v) => s + srVacancyAreaPy(v), 0);
-        const gross     = parseFloat(b.grossFloorPy) || 0;
-        return {
-            id:         b.id,
-            name:       b.name,
-            region:     b._region,
-            grade:      b._gradeAuto,
+        const baselineVacs = matchMonth(b._activeVacs || [], baselineRepMo);
+        const compareVacs  = matchMonth(b._activeVacs || [], compareRepMo);
+
+        const baselinePy = baselineVacs.reduce((s,v) => s + srVacancyAreaPy(v), 0);
+        const comparePy  = compareVacs.reduce((s,v)  => s + srVacancyAreaPy(v), 0);
+
+        // vacOnly: baseline 기준으로 양쪽 다 0 이면 스킵
+        //   — AI 프롬프트 크기 관리 (baseline 에 공실 있거나 compare 에 공실 있는 건만 유지)
+        if (baselineFilters.vacOnly !== false && baselinePy === 0 && comparePy === 0) continue;
+
+        pairs.push({
+            id:     b.id,
+            name:   b.name,
+            region: b._region,
+            grade:  b._gradeAuto,
             gross,
-            vacancies:  vacs,
-            vacancyPy,
-            vacancyRate:gross > 0 ? vacancyPy / gross * 100 : 0,
-        };
-    });
+            baselineMo: baselineRepMo,
+            compareMo:  compareRepMo,
+            baseline: { count: baselineVacs.length, py: baselinePy,
+                        rate: gross > 0 ? baselinePy / gross * 100 : 0 },
+            compare:  { count: compareVacs.length,  py: comparePy,
+                        rate: gross > 0 ? comparePy  / gross * 100 : 0 },
+        });
+    }
 
-    // 4) 공실정보 있는 빌딩만 (vacOnly 반영)
-    const withVac = filters.vacOnly !== false
-        ? bldgAgg.filter(b => b.vacancies.length > 0)
-        : bldgAgg;
-
-    // 5) 집계
-    const summary = {
-        totalBuildings:       withVac.length,
-        buildingsWithVacancy: withVac.filter(b => b.vacancyPy > 0).length,
-        totalVacancyCount:    withVac.reduce((s,b) => s + b.vacancies.length, 0),
-        totalVacancyPy:       withVac.reduce((s,b) => s + b.vacancyPy, 0),
+    // 권역별 롤업
+    const rollup = (side) => {
+        const by = {};
+        SR_REGIONS.forEach(r => by[r] = { buildings: 0, vacancyCount: 0, vacancyPy: 0, gross: 0 });
+        pairs.forEach(p => {
+            const bucket = by[p.region];
+            if (!bucket) return;
+            bucket.buildings++;
+            bucket.vacancyCount += p[side].count;
+            bucket.vacancyPy    += p[side].py;
+            bucket.gross        += p.gross;
+        });
+        const out = {};
+        Object.keys(by).forEach(r => {
+            const e = by[r];
+            if (e.buildings === 0) return;  // 빈 권역은 제외
+            out[r] = {
+                buildings:    e.buildings,
+                vacancyCount: e.vacancyCount,
+                vacancyPy:    Math.round(e.vacancyPy),
+                rate:         e.gross > 0 ? +(e.vacancyPy / e.gross * 100).toFixed(2) : 0,
+            };
+        });
+        return out;
     };
-    const totalGross = withVac.reduce((s,b) => s + b.gross, 0);
-    summary.overallRate = totalGross > 0 ? summary.totalVacancyPy / totalGross * 100 : 0;
 
-    const byRegion = {};
-    SR_REGIONS.forEach(rgn => {
-        const inRgn = withVac.filter(b => b.region === rgn);
-        const rGross = inRgn.reduce((s,b) => s + b.gross, 0);
-        byRegion[rgn] = {
-            buildings:    inRgn.length,
-            vacancyCount: inRgn.reduce((s,b) => s + b.vacancies.length, 0),
-            vacancyPy:    inRgn.reduce((s,b) => s + b.vacancyPy, 0),
-            rate:         rGross > 0 ? inRgn.reduce((s,b) => s + b.vacancyPy, 0) / rGross * 100 : 0,
+    const baselineByRgn = rollup('baseline');
+    const compareByRgn  = rollup('compare');
+
+    // 전체 요약
+    const sumSide = (side) => {
+        const total = pairs.reduce((s,p) => s + p[side].py, 0);
+        const gross = pairs.reduce((s,p) => s + p.gross, 0);
+        return {
+            totalBuildings:       pairs.length,
+            buildingsWithVacancy: pairs.filter(p => p[side].py > 0).length,
+            totalVacancyCount:    pairs.reduce((s,p) => s + p[side].count, 0),
+            totalVacancyPy:       Math.round(total),
+            overallRate:          gross > 0 ? +(total / gross * 100).toFixed(2) : 0,
         };
-    });
-
-    // 필터 컨텍스트 라벨 (프롬프트용)
-    const filterCtxParts = [];
-    if (filters.grades?.length)  filterCtxParts.push(filters.grades.join('/') + '등급');
-    if (regs.length && regs.length < SR_REGIONS.length) filterCtxParts.push(regs.join('/'));
-    filterCtxParts.push(`${yyyy}-${qMonths[0]}~${yyyy}-${qMonths[qMonths.length-1]}`);
-    if (data.status === 'finalized') filterCtxParts.push('최종저장');
-    else                              filterCtxParts.push('작업중');
-
-    return {
-        quarter,
-        status: data.status || 'draft',
-        filterContext: filterCtxParts.join(' · '),
-        summary,
-        byRegion,
-        // 빌딩 단위 상세 (diff 계산용)
-        _buildings: withVac,
     };
-}
-
-/**
- * 두 분기 스냅샷의 차이 계산
- * - 권역별 공실률/빌딩수/면적 변화
- * - 신규 진입 빌딩 (B 에만 있음)
- * - 해소 빌딩 (A 에만 있음)
- */
-function _srComputeQuarterDiff(snapA, snapB) {
-    const diff = { byRegion: {}, newBuildings: {}, resolvedBuildings: {} };
+    const baselineSummary = sumSide('baseline');
+    const compareSummary  = sumSide('compare');
 
     // 권역별 delta
-    SR_REGIONS.forEach(rgn => {
-        const a = snapA.byRegion[rgn] || { buildings:0, vacancyPy:0, rate:0 };
-        const b = snapB.byRegion[rgn] || { buildings:0, vacancyPy:0, rate:0 };
-        // 의미있는 변화가 있는 권역만 포함
-        const hasAny = a.buildings || b.buildings;
-        if (hasAny) {
-            diff.byRegion[rgn] = {
-                rateDelta:     +(b.rate      - a.rate     ).toFixed(2),
-                buildingDelta: b.buildings   - a.buildings,
-                pyDelta:       Math.round(b.vacancyPy - a.vacancyPy),
-            };
-        }
+    const diffByRegion = {};
+    SR_REGIONS.forEach(r => {
+        const a = baselineByRgn[r];  // baseline
+        const c = compareByRgn[r];   // compare
+        if (!a && !c) return;
+        const aRate = a?.rate || 0;
+        const cRate = c?.rate || 0;
+        diffByRegion[r] = {
+            // baseline → compare 방향
+            baselineRate:   aRate,
+            compareRate:    cRate,
+            rateDelta:      +(cRate - aRate).toFixed(2),
+            buildingDelta:  (c?.buildings || 0) - (a?.buildings || 0),
+            pyDelta:        (c?.vacancyPy   || 0) - (a?.vacancyPy  || 0),
+        };
     });
 
-    // 빌딩 단위 비교 (공실 있는 빌딩 ID 기준)
-    const aMap = new Map();
-    const bMap = new Map();
-    (snapA._buildings || []).filter(b => b.vacancyPy > 0).forEach(b => aMap.set(b.id, b));
-    (snapB._buildings || []).filter(b => b.vacancyPy > 0).forEach(b => bMap.set(b.id, b));
+    // 빌딩 단위 변화 분류
+    //   - newVacancy:    baseline py=0 & compare py>0
+    //   - resolvedVacancy: baseline py>0 & compare py=0
+    //   - increased:     baseline py>0 & compare py > baseline py
+    //   - decreased:     baseline py>0 & compare py < baseline py (>0)
+    //   - unchanged:     baseline py == compare py (> 0 만)
+    const newVac = [];
+    const resolvedVac = [];
+    const increased = [];
+    const decreased = [];
+    pairs.forEach(p => {
+        const bP = p.baseline.py, cP = p.compare.py;
+        if (bP === 0 && cP > 0) {
+            newVac.push(p);
+        } else if (bP > 0 && cP === 0) {
+            resolvedVac.push(p);
+        } else if (bP > 0 && cP > bP) {
+            increased.push(p);
+        } else if (bP > 0 && cP < bP && cP > 0) {
+            decreased.push(p);
+        }
+    });
+    // 각 분류 상위 N 건만 (프롬프트 크기 관리)
+    const topBy = (arr, keyFn, limit=10) =>
+        arr.map(p => ({
+            name:        p.name || '(무명)',
+            region:      p.region,
+            baselineCnt: p.baseline.count, baselinePy: Math.round(p.baseline.py),
+            compareCnt:  p.compare.count,  comparePy:  Math.round(p.compare.py),
+        })).sort((a,b) => Math.abs(keyFn(b)) - Math.abs(keyFn(a))).slice(0, limit);
 
-    // 신규: B 에만
-    const newByRgn = {};
-    for (const [id, b] of bMap) {
-        if (!aMap.has(id)) {
-            if (!newByRgn[b.region]) newByRgn[b.region] = [];
-            newByRgn[b.region].push({
-                name:          b.name || '(무명)',
-                vacancyCount:  b.vacancies.length,
-                vacancyPy:     Math.round(b.vacancyPy),
+    const byRegionList = (arr) => {
+        const by = {};
+        arr.forEach(p => {
+            if (!by[p.region]) by[p.region] = [];
+            by[p.region].push({
+                name:        p.name || '(무명)',
+                baselineCnt: p.baseline.count, baselinePy: Math.round(p.baseline.py),
+                compareCnt:  p.compare.count,  comparePy:  Math.round(p.compare.py),
             });
-        }
-    }
-    // 권역별 정렬 + 상위 10개 컷 (프롬프트 크기 관리)
-    Object.keys(newByRgn).forEach(rgn => {
-        newByRgn[rgn].sort((x,y) => y.vacancyPy - x.vacancyPy);
-        newByRgn[rgn] = newByRgn[rgn].slice(0, 10);
-    });
-    diff.newBuildings = newByRgn;
+        });
+        Object.keys(by).forEach(r => {
+            by[r].sort((a,b) => (b.comparePy - b.baselinePy) - (a.comparePy - a.baselinePy));
+            by[r] = by[r].slice(0, 8);
+        });
+        return by;
+    };
 
-    // 해소: A 에만
-    const resByRgn = {};
-    for (const [id, b] of aMap) {
-        if (!bMap.has(id)) {
-            if (!resByRgn[b.region]) resByRgn[b.region] = [];
-            resByRgn[b.region].push({
-                name:              b.name || '(무명)',
-                prevVacancyCount:  b.vacancies.length,
-                prevVacancyPy:     Math.round(b.vacancyPy),
-            });
-        }
-    }
-    Object.keys(resByRgn).forEach(rgn => {
-        resByRgn[rgn].sort((x,y) => y.prevVacancyPy - x.prevVacancyPy);
-        resByRgn[rgn] = resByRgn[rgn].slice(0, 10);
-    });
-    diff.resolvedBuildings = resByRgn;
+    return {
+        meta: {
+            baselineQuarter: baselineQ,
+            compareQuarter:  compareQ,
+            direction:       baselineQ < compareQ ? 'forward' : 'backward',  // baseline 이전이면 forward
+            baselineStatus:  baseData.status || 'draft',
+            totalPairs:      pairs.length,
+            filterContext:   _srFormatFilterContext(baselineFilters, baselineRegs, baselineQ, baseData.status),
+        },
+        baseline: { quarter: baselineQ, summary: baselineSummary, byRegion: baselineByRgn },
+        compare:  { quarter: compareQ,  summary: compareSummary,  byRegion: compareByRgn  },
+        diff: {
+            byRegion:       diffByRegion,
+            newVacancy:     byRegionList(newVac),        // 신규 공실 (권역별 상위)
+            resolvedVacancy:byRegionList(resolvedVac),   // 해소 (권역별 상위)
+            increased:      topBy(increased,  p => p.compare.py - p.baseline.py, 10),
+            decreased:      topBy(decreased,  p => p.baseline.py - p.compare.py, 10),
+        },
+        _rawPairs: pairs,  // 디버그용
+    };
+}
 
-    return diff;
+function _srFormatFilterContext(filters, regs, q, status) {
+    const parts = [];
+    if (filters.grades?.length)   parts.push(filters.grades.join('/') + '등급');
+    if (regs.length && regs.length < SR_REGIONS.length) parts.push(regs.join('/'));
+    parts.push(q);
+    parts.push(status === 'finalized' ? '최종저장' : '작업중');
+    return parts.join(' · ');
 }
 
 /**
- * 모달 DOM 을 document.body 에 삽입하고 열기
+ * 모달 열기
  */
 window._srOpenCompareModal = async function() {
-    // 이미 있으면 재사용
     let modal = document.getElementById(_SR_CMP_MODAL_ID);
     if (!modal) {
         modal = document.createElement('div');
@@ -4245,7 +4315,6 @@ window._srOpenCompareModal = async function() {
         document.body.appendChild(modal);
     }
 
-    // 우선 로딩 표시
     modal.innerHTML = `
     <div style="position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:9999;
                 display:flex; align-items:center; justify-content:center;"
@@ -4263,24 +4332,36 @@ window._srOpenCompareModal = async function() {
                    color:var(--text-muted); padding:4px 10px;">✕</button>
         </div>
         <div id="sr-cmp-body" style="padding:20px; overflow-y:auto; flex:1;">
-          <div style="text-align:center; padding:40px; color:var(--text-muted);">
-            분기 목록 로딩 중...
-          </div>
+          <div style="text-align:center; padding:40px; color:var(--text-muted);">분기 목록 로딩 중...</div>
         </div>
       </div>
     </div>`;
 
-    // 분기 목록 로드
-    const quarters = await _srLoadAvailableQuarters();
-    if (quarters.length === 0) {
+    // baseline 분기 확정
+    _srCompareState.baselineQuarter = _srPersistentExclude.loadedQuarter || '';
+    if (!_srCompareState.baselineQuarter) {
         document.getElementById('sr-cmp-body').innerHTML =
-            '<div style="text-align:center; padding:40px; color:#ef4444;">저장된 분기가 없습니다.</div>';
+            `<div style="color:#ef4444; padding:40px; text-align:center;">
+                <b>기준 분기가 설정되지 않았습니다.</b><br><br>
+                편집 모달에서 분기를 선택·저장한 후 다시 시도하세요.
+             </div>`;
         return;
     }
 
-    // 기본값: 상태와 무관하게 최신 두 분기
-    if (!_srCompareState.selectedA) _srCompareState.selectedA = quarters[1]?.q || quarters[0].q;
-    if (!_srCompareState.selectedB) _srCompareState.selectedB = quarters[0].q;
+    const quarters = await _srLoadAvailableQuarters();
+    if (quarters.length < 2) {
+        document.getElementById('sr-cmp-body').innerHTML =
+            `<div style="color:#ef4444; padding:40px; text-align:center;">
+                비교할 다른 분기가 없습니다. (저장된 분기 ${quarters.length}개)
+             </div>`;
+        return;
+    }
+
+    // 비교 대상 기본값: baseline 바로 앞(또는 뒤) 분기
+    if (!_srCompareState.compareQuarter || _srCompareState.compareQuarter === _srCompareState.baselineQuarter) {
+        const others = quarters.filter(x => x.q !== _srCompareState.baselineQuarter);
+        _srCompareState.compareQuarter = others[0]?.q || '';
+    }
 
     _srRenderCompareForm();
 };
@@ -4291,43 +4372,61 @@ window._srCloseCompareModal = function() {
 };
 
 /**
- * 모달 본문 (폼 + 결과 영역) 렌더링
+ * 모달 본문 렌더
  */
 function _srRenderCompareForm() {
     const body = document.getElementById('sr-cmp-body');
     if (!body) return;
 
-    const qOpts = (selected) => _srCompareState.quartersAvailable
+    const baselineQ = _srCompareState.baselineQuarter;
+    const baselineInfo = _srCompareState.quartersAvailable.find(x => x.q === baselineQ);
+    const baselineBadge = baselineInfo?.status === 'finalized' ? '✅' : '📝';
+
+    const compareOpts = _srCompareState.quartersAvailable
+        .filter(q => q.q !== baselineQ)
         .filter(q => _srCompareState.includeDraft || q.status === 'finalized')
         .map(q => {
             const badge = q.status === 'finalized' ? '✅' : '📝';
-            return `<option value="${q.q}" ${q.q===selected?'selected':''}>${q.q} ${badge} ${q.status}</option>`;
+            const sel = q.q === _srCompareState.compareQuarter ? 'selected' : '';
+            return `<option value="${q.q}" ${sel}>${q.q} ${badge} ${q.status}</option>`;
         }).join('');
 
     body.innerHTML = `
     <!-- 폼 -->
     <div style="background:var(--bg-secondary); border-radius:8px; padding:16px; margin-bottom:16px;">
-      <div style="display:grid; grid-template-columns:1fr auto 1fr; gap:12px; align-items:end;">
-        <div>
-          <label style="display:block; font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:4px;">
-            분기 A (이전)
-          </label>
-          <select id="sr-cmp-qA" onchange="_srCompareState.selectedA=this.value"
-            style="width:100%; padding:8px 10px; border:1px solid var(--border-color); border-radius:6px;
-                   background:var(--bg-primary); color:var(--text-primary); font-size:13px;">
-            ${qOpts(_srCompareState.selectedA)}
-          </select>
+      <div style="display:flex; gap:12px; align-items:stretch;">
+        <!-- 기준 분기 (읽기 전용) -->
+        <div style="flex:1; padding:12px; background:var(--bg-primary); border:2px solid #7c3aed;
+                    border-radius:8px;">
+          <div style="font-size:10px; font-weight:700; color:#7c3aed; margin-bottom:4px; letter-spacing:0.5px;">
+            📌 기준 분기 (현재 편집 저장 상태)
+          </div>
+          <div style="font-size:18px; font-weight:700; color:var(--text-primary);">
+            ${baselineQ} ${baselineBadge}
+          </div>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+            편집 모달 저장된 빌딩셋 · 제외목록 · 대표월 적용
+          </div>
         </div>
-        <div style="padding-bottom:8px; color:var(--text-muted); font-size:18px;">→</div>
-        <div>
-          <label style="display:block; font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:4px;">
-            분기 B (이후)
+
+        <!-- 화살표 -->
+        <div style="align-self:center; color:var(--text-muted); font-size:24px;">⇄</div>
+
+        <!-- 비교 분기 (선택) -->
+        <div style="flex:1; padding:12px; background:var(--bg-primary); border:1px solid var(--border-color);
+                    border-radius:8px;">
+          <label style="font-size:10px; font-weight:700; color:var(--text-muted); margin-bottom:4px;
+                        display:block; letter-spacing:0.5px;">
+            비교 대상 분기
           </label>
-          <select id="sr-cmp-qB" onchange="_srCompareState.selectedB=this.value"
-            style="width:100%; padding:8px 10px; border:1px solid var(--border-color); border-radius:6px;
-                   background:var(--bg-primary); color:var(--text-primary); font-size:13px;">
-            ${qOpts(_srCompareState.selectedB)}
+          <select id="sr-cmp-qB" onchange="_srCompareState.compareQuarter=this.value"
+            style="width:100%; padding:6px 10px; border:1px solid var(--border-color); border-radius:6px;
+                   background:var(--bg-primary); color:var(--text-primary); font-size:14px; font-weight:600;">
+            ${compareOpts}
           </select>
+          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+            동일 빌딩셋 · 동일 제외목록 · 대응월 매칭
+          </div>
         </div>
       </div>
 
@@ -4338,20 +4437,8 @@ function _srRenderCompareForm() {
             onchange="_srCompareState.includeDraft=this.checked; _srRenderCompareForm()">
           작업중(draft) 분기 포함
         </label>
-        <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="sr-cmp-mode" value="same-baseline"
-            ${_srCompareState.mode==='same-baseline'?'checked':''}
-            onchange="_srCompareState.mode=this.value">
-          동일 잣대 <span style="color:var(--text-muted); font-size:11px;">(분기 A 기준으로 고정)</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="sr-cmp-mode" value="independent"
-            ${_srCompareState.mode==='independent'?'checked':''}
-            onchange="_srCompareState.mode=this.value">
-          각자 기준 <span style="color:var(--text-muted); font-size:11px;">(각 분기 저장값 그대로)</span>
-        </label>
         <button onclick="_srRunCompareAnalysis()" id="sr-cmp-run-btn"
-          style="margin-left:auto; padding:8px 16px; border:none; border-radius:6px;
+          style="margin-left:auto; padding:10px 20px; border:none; border-radius:6px;
                  background:linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
                  color:#fff; font-size:13px; font-weight:700; cursor:pointer;
                  box-shadow:0 2px 6px rgba(124,58,237,.3);">
@@ -4366,11 +4453,11 @@ function _srRenderCompareForm() {
              border:1px solid var(--border-color); border-radius:8px;
              font-size:14px; line-height:1.7; color:var(--text-primary);">
       <div style="color:var(--text-muted); text-align:center; padding:40px;">
-        분기 두 개를 선택하고 <b>🤖 AI 분석하기</b> 버튼을 누르세요.
+        비교 대상 분기를 선택하고 <b>🤖 AI 분석하기</b> 버튼을 누르세요.
       </div>
     </div>
 
-    <!-- Raw 데이터 (접힘) -->
+    <!-- Raw 데이터 -->
     <details style="margin-top:12px;">
       <summary style="cursor:pointer; font-size:11px; color:var(--text-muted); user-select:none;">
         🔍 집계 raw 데이터 보기 (개발자용)
@@ -4385,58 +4472,35 @@ function _srRenderCompareForm() {
 }
 
 /**
- * "AI 분석하기" 핸들러 — 집계 → API 호출 → 스트리밍 수신
+ * "AI 분석하기" 핸들러
  */
 window._srRunCompareAnalysis = async function() {
-    const qA = _srCompareState.selectedA;
-    const qB = _srCompareState.selectedB;
-    if (!qA || !qB) {
-        alert('분기 두 개를 선택해주세요.');
-        return;
-    }
-    if (qA === qB) {
-        alert('서로 다른 분기를 선택해주세요.');
-        return;
-    }
+    const baselineQ = _srCompareState.baselineQuarter;
+    const compareQ  = _srCompareState.compareQuarter;
+    if (!baselineQ) { alert('기준 분기가 없습니다.'); return; }
+    if (!compareQ)  { alert('비교 대상 분기를 선택해주세요.'); return; }
+    if (baselineQ === compareQ) { alert('서로 다른 분기를 선택해주세요.'); return; }
 
     const btn = document.getElementById('sr-cmp-run-btn');
     const resultEl = document.getElementById('sr-cmp-result');
     const rawEl    = document.getElementById('sr-cmp-raw');
-    if (btn) {
-        btn.disabled = true;
-        btn.style.opacity = '0.6';
-        btn.innerHTML = '⏳ 집계 중...';
-    }
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.innerHTML = '⏳ 집계 중...'; }
     resultEl.innerHTML =
-        '<div style="color:var(--text-muted); text-align:center; padding:40px;">' +
-        '분기 데이터 집계 중...</div>';
+        '<div style="color:var(--text-muted); text-align:center; padding:40px;">빌딩 이중 집계 중...</div>';
 
     try {
-        // 두 분기 집계
-        const [snapA, snapB] = await Promise.all([
-            _srComputeQuarterSnapshot(qA),
-            _srComputeQuarterSnapshot(qB),
-        ]);
-        const diff = _srComputeQuarterDiff(snapA, snapB);
-
-        // 프롬프트 전달용 (내부 _buildings 필드는 제외 — 프롬프트 비대화 방지)
-        const payload = {
-            quarters: {
-                [qA]: { filterContext: snapA.filterContext, summary: snapA.summary, byRegion: snapA.byRegion },
-                [qB]: { filterContext: snapB.filterContext, summary: snapB.summary, byRegion: snapB.byRegion },
-            },
-            diff,
-            mode: _srCompareState.mode,
-        };
-        _srCompareState.lastSnapshots = payload;
+        const payload = await _srBuildComparePayload(baselineQ, compareQ);
+        _srCompareState.lastPayload = payload;
         if (rawEl) rawEl.textContent = JSON.stringify(payload, null, 2);
 
-        // 스트리밍 시작
+        console.log(`[compare] baseline=${baselineQ} compare=${compareQ} · 대상 빌딩 ${payload.meta.totalPairs}개`);
+
         if (btn) btn.innerHTML = '⏳ AI 분석 중...';
         resultEl.innerHTML =
-            '<div style="color:var(--text-muted); font-size:12px; margin-bottom:8px;">' +
-            '🤖 Claude Sonnet 4 가 분석 중입니다...</div>' +
-            '<div id="sr-cmp-stream" style="white-space:pre-wrap;"></div>';
+            `<div style="color:var(--text-muted); font-size:12px; margin-bottom:8px;">
+                🤖 Claude Sonnet 4 가 분석 중입니다 · 대상 ${payload.meta.totalPairs}개 빌딩
+             </div>
+             <div id="sr-cmp-stream" style="white-space:pre-wrap;"></div>`;
 
         await _srStreamCompareAnalysis(payload, document.getElementById('sr-cmp-stream'));
 
@@ -4444,19 +4508,17 @@ window._srRunCompareAnalysis = async function() {
     } catch (err) {
         console.error('[compare] 분석 실패:', err);
         resultEl.innerHTML =
-            `<div style="color:#ef4444; padding:20px;">` +
-            `<b>오류 발생</b><br><br>${err.message || err}<br><br>` +
-            `<small>콘솔(F12)에서 상세 내용 확인 가능합니다.</small></div>`;
+            `<div style="color:#ef4444; padding:20px;">
+                <b>오류 발생</b><br><br>${err.message || err}<br><br>
+                <small>콘솔(F12)에서 상세 내용 확인 가능합니다.</small>
+             </div>`;
     } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.style.opacity = '1';
-        }
+        if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
     }
 };
 
 /**
- * SSE 스트리밍 수신 → outputEl 에 점진적으로 텍스트 표시 + 마크다운 간단 렌더
+ * SSE 스트리밍 수신
  */
 async function _srStreamCompareAnalysis(payload, outputEl) {
     const resp = await fetch(_SR_COMPARE_API, {
@@ -4479,10 +4541,8 @@ async function _srStreamCompareAnalysis(payload, outputEl) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-
-        // SSE 이벤트는 "\n\n" 으로 구분됨
         const events = buffer.split('\n\n');
-        buffer = events.pop();  // 마지막은 미완성이므로 버퍼로
+        buffer = events.pop();
 
         for (const ev of events) {
             const lines = ev.split('\n');
@@ -4500,7 +4560,6 @@ async function _srStreamCompareAnalysis(payload, outputEl) {
             if (eventType === 'content' && parsed.text) {
                 fullText += parsed.text;
                 outputEl.innerHTML = _srMarkdownLite(fullText);
-                // 스트리밍 중 자동 스크롤
                 outputEl.scrollTop = outputEl.scrollHeight;
             } else if (eventType === 'error') {
                 throw new Error(parsed.error || '스트리밍 중 오류');
@@ -4512,11 +4571,9 @@ async function _srStreamCompareAnalysis(payload, outputEl) {
 }
 
 /**
- * 최소한의 마크다운 렌더러 (H2, H3, 리스트, 강조만)
- * AI 응답을 안전하게 표시 (외부 라이브러리 없이)
+ * 경량 마크다운 렌더러
  */
 function _srMarkdownLite(md) {
-    // 간단한 HTML 이스케이프
     const esc = (s) => s.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const lines = md.split('\n');
     const out = [];
