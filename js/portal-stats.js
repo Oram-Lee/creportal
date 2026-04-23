@@ -4067,241 +4067,282 @@ function _srQuarterMonths(q) {
 }
 
 /**
- * 핵심 집계 함수 — "동일 빌딩셋 이중 분기 집계" (옵션 A 방향)
+ * 한 분기의 편집 모달 상태를 재현하여 "유효 공실" 단위로 집계
  *
- * baseline: 현재 편집 저장 상태 (_srPersistentExclude 기반)
- * 방식:
- *   1) baseline 빌딩셋 확정 (filters/excluded/vacOnly 적용)
- *   2) baseline 의 repMonths 를 로드
- *   3) 각 빌딩에 대해 두 분기 각각의 "대표 공실 수치" 계산:
- *      - baseline 분기: repMonth 가 있으면 그 월, 없으면 baseline 분기 마지막 월
- *      - 비교 분기: baseline 의 repMonth yyyymm 을 "비교 분기의 대응 월" 로 치환 후 그 월,
- *        치환 월이 비교 분기 범위 밖이면 비교 분기 마지막 월
- *   4) 빌딩별로 vacancyPy 합산 (해당 월의 공실만)
- *   5) 권역별 롤업
+ * 편집 모달 파이프라인 재현:
+ *   1) filters.grades / filters.regions (Phase 1 ETC→Others 확장 포함)
+ *   2) excludedBuildings 제외
+ *   3) excludedVacancies 제외 (vacancy 단위)
+ *   4) repMonths[bid] 가 있으면 해당 월만, 없으면 분기 범위 전체
+ *   5) vacOnly=true 면 공실 있는 빌딩만
  *
- * @param {string} baselineQ  현재 통계 모달 분기
- * @param {string} compareQ   비교 대상 분기
- * @returns {Promise<{ baseline, compare, buildingPairs, diff }>}
+ * @param {string} quarter 예: '2026Q1'
+ * @returns {Promise<{quarter, status, filterContext, summary, byRegion, buildings}>}
+ *   buildings: [{id, name, region, grade, gross, vacancyCount, vacancyPy, vacancyRate,
+ *                avgRentPy, repMonth, vacancies:[{publishDate, rentPy, py, ...}]}]
  */
-async function _srBuildComparePayload(baselineQ, compareQ) {
+async function _srComputeQuarterStandalone(quarter) {
     const { db, ref, get } = await import('./portal-firebase.js');
+    const snap = await get(ref(db, `statsFilter/${quarter}`));
+    const data = snap.val() || {};
 
-    // baseline 의 편집 저장 상태 로드 (현재 메모리 + DB 교차)
-    const baseSnap = await get(ref(db, `statsFilter/${baselineQ}`));
-    const baseData = baseSnap.val() || {};
-    const repMonths = baseData.repMonths || {};
-    const baselineFilters = baseData.filters || {};
-    const baselineRegs = Array.isArray(baselineFilters.regions) ? [...baselineFilters.regions] : [];
-    if (baselineRegs.includes('ETC') && !baselineRegs.includes('Others')) baselineRegs.push('Others');
-    const excludedB = new Set(Object.keys(baseData.excludedBuildings || {}));
-    const excludedV = new Set(Object.keys(baseData.excludedVacancies || {}));
+    const filters   = data.filters || {};
+    const regs      = Array.isArray(filters.regions) ? [...filters.regions] : [];
+    if (regs.includes('ETC') && !regs.includes('Others')) regs.push('Others');
+    const excludedB = new Set(Object.keys(data.excludedBuildings || {}));
+    const excludedV = new Set(Object.keys(data.excludedVacancies || {}));
+    const repMonths = data.repMonths || {};
+    const status    = data.status || 'draft';
 
-    // baseline 빌딩셋 확정
+    const quarterMonths = _srQuarterMonths(quarter);  // ['2026-01', '02', '03']
+
+    // 빌딩 1차 필터 (등급 · 권역 · 제외)
     const match = (arr, val) => !arr || !arr.length || arr.includes(val);
     const norm = srGetNormBuildings();
-    const baselineBldgs = norm.filter(b => {
-        if (!match(baselineFilters.grades, b._gradeAuto)) return false;
-        if (!match(baselineRegs,           b._region))    return false;
-        if (excludedB.has(b.id))                          return false;
+    const candidates = norm.filter(b => {
+        if (!match(filters.grades, b._gradeAuto)) return false;
+        if (!match(regs,           b._region))    return false;
+        if (excludedB.has(b.id))                  return false;
         return true;
     });
 
-    // 월 범위
-    const baselineMonths = _srQuarterMonths(baselineQ);
-    const compareMonths  = _srQuarterMonths(compareQ);
-    const baselineLastMo = baselineMonths[baselineMonths.length - 1];
-    const compareLastMo  = compareMonths[compareMonths.length - 1];
-
-    // 빌딩별 이중 집계
-    const pairs = [];
-    for (const b of baselineBldgs) {
-        const gross = parseFloat(b.grossFloorPy) || 0;
-        // repMonth 확정
+    // 빌딩별 유효 공실 집계
+    const buildings = [];
+    for (const b of candidates) {
+        // 해당 빌딩의 대표월 확정
         const rm = repMonths[b.id];
-        const baselineRepMo = (rm && typeof rm === 'object' && rm.yyyymm) ? rm.yyyymm
-                             : (typeof rm === 'string' ? rm : baselineLastMo);
-        // 비교 분기의 "대응 월": baselineRepMo 와 월 포지션이 같은 월
-        // 예: baseline 2026Q1, rep='2026-02' → compare 2025Q4 → 대응 = '2025-11' (Q 내 두 번째 달)
-        let compareRepMo = compareLastMo;
-        if (baselineRepMo) {
-            const pos = baselineMonths.indexOf(baselineRepMo);
-            if (pos >= 0 && pos < compareMonths.length) {
-                compareRepMo = compareMonths[pos];
-            }
-        }
+        const repMo = (rm && typeof rm === 'object' && rm.yyyymm) ? rm.yyyymm
+                    : (typeof rm === 'string' ? rm : null);
 
-        // vacancy 필터: baseline 의 excludedV 를 양쪽에 모두 적용 (동일 잣대)
-        //   + 해당 월 매칭
-        const matchMonth = (vacs, yyyymm) => vacs.filter(v => {
+        // 유효 공실 선별
+        const validVacs = (b._activeVacs || []).filter(v => {
             if (v._key && excludedV.has(`${b.id}__${v._key}`)) return false;
             const pd = String(v.publishDate || v.pd || '').slice(0, 7);
-            return pd === yyyymm;
+            if (repMo) {
+                // 대표월 지정: 해당 월만
+                return pd === repMo;
+            } else {
+                // 미지정: 분기 범위 전체
+                return quarterMonths.includes(pd);
+            }
         });
-        const baselineVacs = matchMonth(b._activeVacs || [], baselineRepMo);
-        const compareVacs  = matchMonth(b._activeVacs || [], compareRepMo);
 
-        const baselinePy = baselineVacs.reduce((s,v) => s + srVacancyAreaPy(v), 0);
-        const comparePy  = compareVacs.reduce((s,v)  => s + srVacancyAreaPy(v), 0);
+        const vacancyPy = validVacs.reduce((s,v) => s + srVacancyAreaPy(v), 0);
+        const gross     = parseFloat(b.grossFloorPy) || 0;
 
-        // vacOnly: baseline 기준으로 양쪽 다 0 이면 스킵
-        //   — AI 프롬프트 크기 관리 (baseline 에 공실 있거나 compare 에 공실 있는 건만 유지)
-        if (baselineFilters.vacOnly !== false && baselinePy === 0 && comparePy === 0) continue;
+        // 평균 임대가 (공실 기반, 면적 가중)
+        let avgRentPy = null;
+        if (validVacs.length > 0) {
+            let rentSum = 0, pySum = 0;
+            validVacs.forEach(v => {
+                const r  = srParsePrice(v.rentPy);
+                const py = srVacancyAreaPy(v);
+                if (r && py > 0) { rentSum += r * py; pySum += py; }
+            });
+            if (pySum > 0) avgRentPy = Math.round(rentSum / pySum);
+        }
 
-        pairs.push({
-            id:     b.id,
-            name:   b.name,
-            region: b._region,
-            grade:  b._gradeAuto,
+        buildings.push({
+            id:           b.id,
+            name:         b.name,
+            region:       b._region,
+            subCategory:  b._subCategory,
+            grade:        b._gradeAuto,
             gross,
-            baselineMo: baselineRepMo,
-            compareMo:  compareRepMo,
-            baseline: { count: baselineVacs.length, py: baselinePy,
-                        rate: gross > 0 ? baselinePy / gross * 100 : 0 },
-            compare:  { count: compareVacs.length,  py: comparePy,
-                        rate: gross > 0 ? comparePy  / gross * 100 : 0 },
+            repMonth:     repMo,
+            vacancyCount: validVacs.length,
+            vacancyPy:    Math.round(vacancyPy),
+            vacancyRate:  gross > 0 ? +(vacancyPy / gross * 100).toFixed(2) : 0,
+            avgRentPy,
+            vacancies:    validVacs,  // raw 데이터 (나중에 제거 가능)
         });
     }
 
-    // 권역별 롤업
-    const rollup = (side) => {
-        const by = {};
-        SR_REGIONS.forEach(r => by[r] = { buildings: 0, vacancyCount: 0, vacancyPy: 0, gross: 0 });
-        pairs.forEach(p => {
-            const bucket = by[p.region];
-            if (!bucket) return;
-            bucket.buildings++;
-            bucket.vacancyCount += p[side].count;
-            bucket.vacancyPy    += p[side].py;
-            bucket.gross        += p.gross;
-        });
-        const out = {};
-        Object.keys(by).forEach(r => {
-            const e = by[r];
-            if (e.buildings === 0) return;  // 빈 권역은 제외
-            out[r] = {
-                buildings:    e.buildings,
-                vacancyCount: e.vacancyCount,
-                vacancyPy:    Math.round(e.vacancyPy),
-                rate:         e.gross > 0 ? +(e.vacancyPy / e.gross * 100).toFixed(2) : 0,
-            };
-        });
-        return out;
-    };
-
-    const baselineByRgn = rollup('baseline');
-    const compareByRgn  = rollup('compare');
+    // vacOnly 반영
+    const withVac = filters.vacOnly !== false
+        ? buildings.filter(b => b.vacancyCount > 0)
+        : buildings;
 
     // 전체 요약
-    const sumSide = (side) => {
-        const total = pairs.reduce((s,p) => s + p[side].py, 0);
-        const gross = pairs.reduce((s,p) => s + p.gross, 0);
-        return {
-            totalBuildings:       pairs.length,
-            buildingsWithVacancy: pairs.filter(p => p[side].py > 0).length,
-            totalVacancyCount:    pairs.reduce((s,p) => s + p[side].count, 0),
-            totalVacancyPy:       Math.round(total),
-            overallRate:          gross > 0 ? +(total / gross * 100).toFixed(2) : 0,
-        };
+    const totalVacPy = withVac.reduce((s,b) => s + b.vacancyPy, 0);
+    const totalGross = withVac.reduce((s,b) => s + b.gross, 0);
+    const summary = {
+        totalBuildings:       withVac.length,
+        buildingsWithVacancy: withVac.filter(b => b.vacancyCount > 0).length,
+        totalVacancyCount:    withVac.reduce((s,b) => s + b.vacancyCount, 0),
+        totalVacancyPy:       totalVacPy,
+        overallRate:          totalGross > 0 ? +(totalVacPy / totalGross * 100).toFixed(2) : 0,
     };
-    const baselineSummary = sumSide('baseline');
-    const compareSummary  = sumSide('compare');
 
-    // 권역별 delta
+    // 권역별 롤업
+    const byRegion = {};
+    SR_REGIONS.forEach(r => {
+        const inR = withVac.filter(b => b.region === r);
+        if (inR.length === 0) return;
+        const rVacPy = inR.reduce((s,b) => s + b.vacancyPy, 0);
+        const rGross = inR.reduce((s,b) => s + b.gross, 0);
+        byRegion[r] = {
+            buildings:    inR.length,
+            vacancyCount: inR.reduce((s,b) => s + b.vacancyCount, 0),
+            vacancyPy:    rVacPy,
+            rate:         rGross > 0 ? +(rVacPy / rGross * 100).toFixed(2) : 0,
+        };
+    });
+
+    // 필터 컨텍스트
+    const ctxParts = [];
+    if (filters.grades?.length)   ctxParts.push(filters.grades.join('/') + '등급');
+    if (regs.length && regs.length < SR_REGIONS.length) ctxParts.push(regs.join('/'));
+    ctxParts.push(quarter);
+    ctxParts.push(status === 'finalized' ? '최종저장' : '작업중');
+    if (Object.keys(repMonths).length > 0) ctxParts.push(`대표월 지정 ${Object.keys(repMonths).length}개`);
+
+    return {
+        quarter,
+        status,
+        filterContext: ctxParts.join(' · '),
+        summary,
+        byRegion,
+        buildings: withVac,
+    };
+}
+
+/**
+ * 두 분기 집계를 받아 "동일 빌딩 변화" + "권역별 변화" 페이로드 생성
+ *
+ * 정책 (2026-04 Oram 확정):
+ *   · 각 분기는 각자 기준으로 집계 완료된 상태
+ *   · 공통 빌딩(ID 교집합) 만 "변화 추적" 대상 — 한쪽에만 있는 빌딩은 언급 최소화
+ *   · 권역별 수치는 각자 기준 그대로 비교
+ */
+async function _srBuildComparePayload(baselineQ, compareQ) {
+    const [baseline, compare] = await Promise.all([
+        _srComputeQuarterStandalone(baselineQ),
+        _srComputeQuarterStandalone(compareQ),
+    ]);
+
+    // 빌딩 ID 매핑
+    const baseMap = new Map();
+    const compMap = new Map();
+    baseline.buildings.forEach(b => baseMap.set(b.id, b));
+    compare.buildings.forEach(b  => compMap.set(b.id, b));
+
+    // 공통 빌딩 (교집합)
+    const commonIds = [...baseMap.keys()].filter(id => compMap.has(id));
+
+    // 공통 빌딩 변화 분류
+    const increased = [];  // 공실 확대 (양쪽 공실 있음)
+    const decreased = [];  // 공실 축소 (양쪽 공실 있음)
+    const unchanged = [];  // 변화 없음
+    const newVacancy = [];      // baseline 0 → compare >0
+    const resolvedVacancy = []; // baseline >0 → compare 0
+    const rentChanged = [];     // 임대가 변화 (양쪽 임대가 있음)
+
+    for (const id of commonIds) {
+        const a = baseMap.get(id);  // baseline
+        const c = compMap.get(id);  // compare
+
+        const pair = {
+            id,
+            name:   a.name || c.name || '(무명)',
+            region: a.region,
+            grade:  a.grade,
+            baseline: {
+                count: a.vacancyCount, py: a.vacancyPy, rate: a.vacancyRate,
+                rentPy: a.avgRentPy, repMonth: a.repMonth,
+            },
+            compare: {
+                count: c.vacancyCount, py: c.vacancyPy, rate: c.vacancyRate,
+                rentPy: c.avgRentPy, repMonth: c.repMonth,
+            },
+            pyDelta: c.vacancyPy - a.vacancyPy,
+        };
+
+        // 공실 변화 분류
+        if (a.vacancyPy === 0 && c.vacancyPy > 0) newVacancy.push(pair);
+        else if (a.vacancyPy > 0 && c.vacancyPy === 0) resolvedVacancy.push(pair);
+        else if (a.vacancyPy > 0 && c.vacancyPy > a.vacancyPy) increased.push(pair);
+        else if (a.vacancyPy > 0 && c.vacancyPy < a.vacancyPy && c.vacancyPy > 0) decreased.push(pair);
+        else if (a.vacancyPy > 0 && a.vacancyPy === c.vacancyPy) unchanged.push(pair);
+
+        // 임대가 변화 (독립 분류 — 공실 변화와 겹칠 수 있음)
+        if (a.avgRentPy && c.avgRentPy && Math.abs(a.avgRentPy - c.avgRentPy) >= 5000) {
+            // 5천원/평 이상 차이 = 유의미한 호가 변화
+            rentChanged.push({
+                id, name: pair.name, region: pair.region,
+                baselineRent: a.avgRentPy, compareRent: c.avgRentPy,
+                rentDelta:    c.avgRentPy - a.avgRentPy,
+            });
+        }
+    }
+
+    // 각 분류 정렬 + 상위 N 건만 (프롬프트 크기 관리)
+    increased.sort((x,y) => (y.compare.py - y.baseline.py) - (x.compare.py - x.baseline.py));
+    decreased.sort((x,y) => (y.baseline.py - y.compare.py) - (x.baseline.py - x.compare.py));
+    newVacancy.sort((x,y) => y.compare.py - x.compare.py);
+    resolvedVacancy.sort((x,y) => y.baseline.py - x.baseline.py);
+    rentChanged.sort((x,y) => Math.abs(y.rentDelta) - Math.abs(x.rentDelta));
+
+    // 권역별 delta (각자 기준 수치 비교)
     const diffByRegion = {};
     SR_REGIONS.forEach(r => {
-        const a = baselineByRgn[r];  // baseline
-        const c = compareByRgn[r];   // compare
+        const a = baseline.byRegion[r];
+        const c = compare.byRegion[r];
         if (!a && !c) return;
         const aRate = a?.rate || 0;
         const cRate = c?.rate || 0;
         diffByRegion[r] = {
-            // baseline → compare 방향
-            baselineRate:   aRate,
-            compareRate:    cRate,
-            rateDelta:      +(cRate - aRate).toFixed(2),
-            buildingDelta:  (c?.buildings || 0) - (a?.buildings || 0),
-            pyDelta:        (c?.vacancyPy   || 0) - (a?.vacancyPy  || 0),
+            baseline: { buildings: a?.buildings || 0, vacancyPy: a?.vacancyPy || 0, rate: aRate },
+            compare:  { buildings: c?.buildings || 0, vacancyPy: c?.vacancyPy || 0, rate: cRate },
+            rateDelta:     +(cRate - aRate).toFixed(2),
+            buildingDelta: (c?.buildings || 0) - (a?.buildings || 0),
+            pyDelta:       (c?.vacancyPy || 0) - (a?.vacancyPy || 0),
         };
     });
-
-    // 빌딩 단위 변화 분류
-    //   - newVacancy:    baseline py=0 & compare py>0
-    //   - resolvedVacancy: baseline py>0 & compare py=0
-    //   - increased:     baseline py>0 & compare py > baseline py
-    //   - decreased:     baseline py>0 & compare py < baseline py (>0)
-    //   - unchanged:     baseline py == compare py (> 0 만)
-    const newVac = [];
-    const resolvedVac = [];
-    const increased = [];
-    const decreased = [];
-    pairs.forEach(p => {
-        const bP = p.baseline.py, cP = p.compare.py;
-        if (bP === 0 && cP > 0) {
-            newVac.push(p);
-        } else if (bP > 0 && cP === 0) {
-            resolvedVac.push(p);
-        } else if (bP > 0 && cP > bP) {
-            increased.push(p);
-        } else if (bP > 0 && cP < bP && cP > 0) {
-            decreased.push(p);
-        }
-    });
-    // 각 분류 상위 N 건만 (프롬프트 크기 관리)
-    const topBy = (arr, keyFn, limit=10) =>
-        arr.map(p => ({
-            name:        p.name || '(무명)',
-            region:      p.region,
-            baselineCnt: p.baseline.count, baselinePy: Math.round(p.baseline.py),
-            compareCnt:  p.compare.count,  comparePy:  Math.round(p.compare.py),
-        })).sort((a,b) => Math.abs(keyFn(b)) - Math.abs(keyFn(a))).slice(0, limit);
-
-    const byRegionList = (arr) => {
-        const by = {};
-        arr.forEach(p => {
-            if (!by[p.region]) by[p.region] = [];
-            by[p.region].push({
-                name:        p.name || '(무명)',
-                baselineCnt: p.baseline.count, baselinePy: Math.round(p.baseline.py),
-                compareCnt:  p.compare.count,  comparePy:  Math.round(p.compare.py),
-            });
-        });
-        Object.keys(by).forEach(r => {
-            by[r].sort((a,b) => (b.comparePy - b.baselinePy) - (a.comparePy - a.baselinePy));
-            by[r] = by[r].slice(0, 8);
-        });
-        return by;
-    };
 
     return {
         meta: {
             baselineQuarter: baselineQ,
             compareQuarter:  compareQ,
-            direction:       baselineQ < compareQ ? 'forward' : 'backward',  // baseline 이전이면 forward
-            baselineStatus:  baseData.status || 'draft',
-            totalPairs:      pairs.length,
-            filterContext:   _srFormatFilterContext(baselineFilters, baselineRegs, baselineQ, baseData.status),
+            baselineTotal:   baseline.summary.totalBuildings,
+            compareTotal:    compare.summary.totalBuildings,
+            commonBuildings: commonIds.length,
         },
-        baseline: { quarter: baselineQ, summary: baselineSummary, byRegion: baselineByRgn },
-        compare:  { quarter: compareQ,  summary: compareSummary,  byRegion: compareByRgn  },
+        baseline: {
+            quarter: baselineQ,
+            filterContext: baseline.filterContext,
+            summary: baseline.summary,
+            byRegion: baseline.byRegion,
+        },
+        compare: {
+            quarter: compareQ,
+            filterContext: compare.filterContext,
+            summary: compare.summary,
+            byRegion: compare.byRegion,
+        },
         diff: {
-            byRegion:       diffByRegion,
-            newVacancy:     byRegionList(newVac),        // 신규 공실 (권역별 상위)
-            resolvedVacancy:byRegionList(resolvedVac),   // 해소 (권역별 상위)
-            increased:      topBy(increased,  p => p.compare.py - p.baseline.py, 10),
-            decreased:      topBy(decreased,  p => p.baseline.py - p.compare.py, 10),
+            byRegion:        diffByRegion,
+            // 공통 빌딩 변화 (각 상위 N 개만)
+            increased:       increased.slice(0, 15).map(_srStripPairForPayload),
+            decreased:       decreased.slice(0, 15).map(_srStripPairForPayload),
+            newVacancy:      newVacancy.slice(0, 15).map(_srStripPairForPayload),
+            resolvedVacancy: resolvedVacancy.slice(0, 15).map(_srStripPairForPayload),
+            rentChanged:     rentChanged.slice(0, 15),
         },
-        _rawPairs: pairs,  // 디버그용
     };
 }
 
-function _srFormatFilterContext(filters, regs, q, status) {
-    const parts = [];
-    if (filters.grades?.length)   parts.push(filters.grades.join('/') + '등급');
-    if (regs.length && regs.length < SR_REGIONS.length) parts.push(regs.join('/'));
-    parts.push(q);
-    parts.push(status === 'finalized' ? '최종저장' : '작업중');
-    return parts.join(' · ');
+/**
+ * 페이로드 전송용 압축 (불필요한 필드 제거)
+ */
+function _srStripPairForPayload(p) {
+    return {
+        name: p.name, region: p.region, grade: p.grade,
+        baseline: { count: p.baseline.count, py: p.baseline.py, rate: p.baseline.rate,
+                    rentPy: p.baseline.rentPy },
+        compare:  { count: p.compare.count,  py: p.compare.py,  rate: p.compare.rate,
+                    rentPy: p.compare.rentPy },
+    };
 }
 
 /**
@@ -4493,12 +4534,17 @@ window._srRunCompareAnalysis = async function() {
         _srCompareState.lastPayload = payload;
         if (rawEl) rawEl.textContent = JSON.stringify(payload, null, 2);
 
-        console.log(`[compare] baseline=${baselineQ} compare=${compareQ} · 대상 빌딩 ${payload.meta.totalPairs}개`);
+        console.log(`[compare] baseline=${baselineQ}(${payload.baseline.summary.totalBuildings}개) ` +
+                    `compare=${compareQ}(${payload.compare.summary.totalBuildings}개) ` +
+                    `· 공통 ${payload.meta.commonBuildings}개`);
 
         if (btn) btn.innerHTML = '⏳ AI 분석 중...';
         resultEl.innerHTML =
             `<div style="color:var(--text-muted); font-size:12px; margin-bottom:8px;">
-                🤖 Claude Sonnet 4 가 분석 중입니다 · 대상 ${payload.meta.totalPairs}개 빌딩
+                🤖 Claude Sonnet 4 가 분석 중입니다 ·
+                ${baselineQ} ${payload.baseline.summary.totalBuildings}개 ↔
+                ${compareQ} ${payload.compare.summary.totalBuildings}개 ·
+                공통 ${payload.meta.commonBuildings}개 빌딩
              </div>
              <div id="sr-cmp-stream" style="white-space:pre-wrap;"></div>`;
 
