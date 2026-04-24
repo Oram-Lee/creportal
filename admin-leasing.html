@@ -3174,6 +3174,8 @@
         function showReocrCompareModal(idx, building, parsed, stats, perPage) {
             // 임시 저장 (확정 버튼에서 사용)
             window._reocrPendingCompare = { idx, building, parsed, stats };
+            // ★ v2.6.5: perPage 정보도 전역에 저장 → executeReocrOverwrite의 Vision 실패 감지용
+            window._reocrPerPageSummary = perPage || [];
             
             const existing = document.getElementById('reocrCompareModal');
             if (existing) existing.remove();
@@ -3378,6 +3380,7 @@
             const m = document.getElementById('reocrCompareModal');
             if (m) m.remove();
             window._reocrPendingCompare = null;
+            window._reocrPerPageSummary = null;  // ★ v2.6.5: 전역 상태 정리
         };
         
         // ─────────────────────────────────────────────────────────────────
@@ -3387,17 +3390,54 @@
             const pending = window._reocrPendingCompare;
             if (!pending) return;
             
-            const { building, parsed } = pending;
+            const { building, parsed, stats } = pending;
             const newVacs = parsed?.vacancies || [];
+            const oldCount = building.vacancies.length;
+            const newCount = newVacs.length;
             
             if (newVacs.length === 0) {
                 if (!confirm('재OCR 결과가 0건입니다. 그래도 기존 공실을 전부 삭제하시겠습니까?')) return;
             }
             
+            // ★ v2.6.5: 재OCR 결과 급감 감지 (기존보다 50% 이상 줄어들면 강경고)
+            // 원인: Vision API 실패로 OCR 텍스트만 fallback되면 매트릭스 인식 품질 급락
+            //       (예: 마곡 K-SQUARE 13건 → 4건 케이스)
+            if (oldCount > 0 && newCount < oldCount) {
+                const lossRate = ((oldCount - newCount) / oldCount * 100).toFixed(0);
+                const lossCount = oldCount - newCount;
+                
+                // Vision 전부 실패 감지
+                const perPageSummary = window._reocrPerPageSummary || [];
+                const allVisionFailed = perPageSummary.length > 0 && 
+                    perPageSummary.every(p => p.visionError || p.fallbackMode === 'text-only');
+                
+                if (lossRate >= 50 || allVisionFailed) {
+                    const warningTitle = allVisionFailed 
+                        ? '⛔ Vision API 전부 실패 + 공실 수 급감'
+                        : `⚠️ 공실 수 ${lossRate}% 급감`;
+                    const reason = allVisionFailed
+                        ? 'AI Vision이 모든 페이지에서 실패했고, OCR 텍스트만으로 parsing이 되어 정확도가 낮습니다.\n'
+                        : '';
+                    
+                    const forceProceed = confirm(
+                        `${warningTitle}\n\n` +
+                        `기존 ${oldCount}건 → 재OCR ${newCount}건 (${lossCount}건 손실)\n\n` +
+                        reason +
+                        `덮어쓰기하면 ${lossCount}건이 영구 삭제됩니다.\n\n` +
+                        `🛑 권장 조치:\n` +
+                        `  1. 백엔드가 업데이트 중일 수 있음 — 5분 뒤 재시도\n` +
+                        `  2. Render 로그에서 "모든 Claude 모델 호출 실패" 확인\n` +
+                        `  3. ai_parser.py의 CLAUDE_VISION_MODEL_CHAIN 확인\n\n` +
+                        `그래도 강제로 덮어쓰시겠습니까? (일반적으로 "취소" 권장)`
+                    );
+                    if (!forceProceed) return;
+                }
+            }
+            
             // 최종 확인
             const finalConfirm = confirm(
                 `[${building.buildingName}]\n\n` +
-                `기존 ${building.vacancies.length}건 삭제 → 재OCR 결과 ${newVacs.length}건 삽입\n\n` +
+                `기존 ${oldCount}건 삭제 → 재OCR 결과 ${newCount}건 삽입\n\n` +
                 `이 작업은 되돌릴 수 없습니다. 진행하시겠습니까?`
             );
             if (!finalConfirm) return;
