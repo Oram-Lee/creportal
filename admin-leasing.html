@@ -1271,6 +1271,7 @@
                                     <th style="width:40px;">P</th>
                                     <th style="width:150px;">빌딩명</th>
                                     <th style="width:200px;">주소</th>
+                                    <th style="width:80px;">동/타워</th>
                                     <th>공실층</th>
                                     <th>전용(평)</th>
                                     <th>임대(평)</th>
@@ -1693,21 +1694,35 @@
             const guMatch = normalized.match(/(강남구|강동구|강북구|강서구|관악구|광진구|구로구|금천구|노원구|도봉구|동대문구|동작구|마포구|서대문구|서초구|성동구|성북구|송파구|양천구|영등포구|용산구|은평구|종로구|중구|중랑구)/);
             const gu = guMatch ? guMatch[1] : '';
             
-            // 도로명 추출 (예: 삼봉로 71, 테헤란로 123)
-            // ★ v2.3: "대로"도 지원 (예: 강남대로 123)
+            // ★ v2.4: 특수 블록 코드 감지 (마곡지구 CP1-1/CP3-2, 상암 DMC1-2, 판교 D1 등)
+            // 이런 코드는 실제 주소가 아닌 "지구 내 구획 번호"라 일반 빌딩 주소와 비교 불가
+            // → 동 단위까지만 추출하여 동 기반 매칭 유도
+            const SPECIAL_BLOCK_PATTERN = /\b(CP\d+(?:-\d+)?|DMC\d*(?:-\d+)?|D\d+(?:-\d+)?|블록\s*\d+|지구\s*\d+|BP\d+(?:-\d+)?)\b/i;
+            const hasSpecialBlock = SPECIAL_BLOCK_PATTERN.test(normalized);
+            
+            // 도로명 추출 (예: 삼봉로 71, 테헤란로 123, 강남대로 456)
             const roadMatch = normalized.match(/([가-힣]+대?로|[가-힣]+길)\s*(\d+(?:\-\d+)?)/);
             
             // 동 + 숫자 추출 (예: 삼성동 123)
             const dongNumMatch = normalized.match(/([가-힣]+동)\s*(\d+(?:\-\d+)?)/);
             
-            // ★ v2.2: 동 + 영문/숫자 혼합 지번 (예: 마곡동 CP3-2, 상암동 DMC1-2)
+            // 동 + 영문/숫자 혼합 지번 (예: 마곡동 CP3-2, 상암동 DMC1-2)
             const dongAlphaNumMatch = normalized.match(/([가-힣]+동)\s*([A-Za-z0-9][-A-Za-z0-9]*)/);
             
-            // 동만 있는 경우 (예: 마곡동)
+            // 동만 있는 경우
             const dongOnlyMatch = normalized.match(/([가-힣]+동)(?:\s|$)/);
             
+            // ★ v2.4: 특수 블록 코드가 있으면 구획 번호를 키에서 제외 (동까지만)
+            // 이렇게 해야 "마곡동 CP3-2" 와 "마곡중앙로 161" 이 별개 주소로 취급되지 않음
+            if (hasSpecialBlock) {
+                if (dongOnlyMatch) {
+                    return `${gu} ${dongOnlyMatch[1]}`.trim();
+                }
+                return gu || normalized.slice(0, 20);
+            }
+            
             if (roadMatch) {
-                // ★ v2.3: 번지를 정규화 (123-45 유지, 123-00 → 123)
+                // 번지를 정규화 (123-45 유지, 123-00 → 123)
                 const num = roadMatch[2].replace(/-0+$/, '');
                 return `${gu} ${roadMatch[1]} ${num}`.trim();
             } else if (dongNumMatch) {
@@ -1720,6 +1735,133 @@
             }
             
             return gu || normalized.slice(0, 20);
+        }
+        
+        // ★ v2.4: 주소 구성요소 파싱 (구/동/도로/번지)
+        // ★ v2.5: 괄호 안 동명도 인식 (예: "마곡중앙로 161 (마곡동)", "테헤란로 123 (역삼동, 강남대로 반대편)")
+        function parseAddressComponents(addr) {
+            if (!addr) return { gu: '', dong: '', road: '', hasSpecialBlock: false };
+            
+            // ★ v2.5: 괄호 내 구/동 사전 추출 (normalizeAddress가 괄호 제거하기 전)
+            // 실제 예시:
+            //   "서울시 강서구 마곡중앙로 161 (마곡동)"              → 괄호에서 마곡동
+            //   "서울시 강남구 테헤란로 123 (역삼동, 삼성빌딩)"       → 괄호에서 역삼동
+            //   "서울시 서초구 서초대로 396 (서초동, 강남빌딩 1층)"   → 괄호에서 서초동
+            //   "서울시 중구 을지로 66 (을지로2가)"                 → 괄호에서 을지로2가(동 아님 — 처리 제외)
+            const parenContents = [];
+            const parenRegex = /\(([^)]+)\)/g;
+            let pm;
+            const rawStr = String(addr);
+            while ((pm = parenRegex.exec(rawStr)) !== null) {
+                parenContents.push(pm[1]);
+            }
+            let parenDong = '';
+            let parenGu = '';
+            for (const content of parenContents) {
+                // 괄호 내용 중 첫 번째 "...동" 패턴 (단, "X가"는 제외 → "을지로2가" 방지)
+                if (!parenDong) {
+                    const m = content.match(/([가-힣]+동)(?!가)/);
+                    if (m) parenDong = m[1];
+                }
+                if (!parenGu) {
+                    const m = content.match(/([가-힣]+구)/);
+                    if (m) parenGu = m[1];
+                }
+            }
+            
+            const normalized = normalizeAddress(addr);
+            
+            // 구 추출 (본문 우선, 없으면 괄호)
+            let gu = (normalized.match(/(강남구|강동구|강북구|강서구|관악구|광진구|구로구|금천구|노원구|도봉구|동대문구|동작구|마포구|서대문구|서초구|성동구|성북구|송파구|양천구|영등포구|용산구|은평구|종로구|중구|중랑구|분당구|수정구|중원구|권선구|영통구|장안구|팔달구|연수구|남동구|부평구|계양구|서구|동구|남구|북구)/)?.[1]) || '';
+            if (!gu && parenGu) gu = parenGu;
+            
+            // 동 추출 (본문 우선, 없으면 괄호)
+            let dong = (normalized.match(/([가-힣]+동)(?:\s|$|\d|[A-Z])/)?.[1]) || '';
+            if (!dong && parenDong) dong = parenDong;
+            
+            const road = (normalized.match(/([가-힣]+대?로|[가-힣]+길)/)?.[1]) || '';
+            const hasSpecialBlock = /\b(CP\d+(?:-\d+)?|DMC\d*(?:-\d+)?|D\d+(?:-\d+)?)\b/i.test(normalized);
+            
+            return { gu, dong, road, hasSpecialBlock };
+        }
+        
+        // ★ v2.4: 주소 유사도 고급 계산 (이상한 주소·지번·도로명 모두 대응)
+        //
+        // 핵심 아이디어:
+        // 1. 구/동/도로명을 파싱해서 단계별 매칭 (같은 구 0.3 / 동 0.6 / 도로 0.8)
+        // 2. 도로명 주소와 지번 주소 양쪽 모두 비교
+        // 3. "마곡동 CP3-2" 같은 특수 블록은 동까지만 매칭
+        // 4. 도로명에 동명 접두사가 포함된 경우도 처리 (예: "마곡중앙로"의 "마곡" ≈ "마곡동")
+        // 5. 공통 지명 키워드 (마곡/역삼/강남) 있으면 보너스
+        function addressSimilarityAdvanced(inputAddr, bldgAddr, bldgAddrJibun = '') {
+            if (!inputAddr) return 0;
+            // ★ v2.5: 빌딩의 address와 addressJibun 중 하나라도 있으면 매칭 진행
+            if (!bldgAddr && !bldgAddrJibun) return 0;
+            if (!bldgAddr) bldgAddr = bldgAddrJibun;  // 도로명 없으면 지번을 주소로 사용
+            
+            const key1 = extractAddressKey(inputAddr);
+            const key2 = extractAddressKey(bldgAddr);
+            const key2Jibun = bldgAddrJibun ? extractAddressKey(bldgAddrJibun) : '';
+            
+            // 1. 기본 문자열 유사도 — 도로명/지번 중 최고값
+            let sim = Math.max(
+                stringSimilarity(key1, key2),
+                key2Jibun ? stringSimilarity(key1, key2Jibun) : 0
+            );
+            
+            // 2. 구성요소 파싱
+            const p1 = parseAddressComponents(inputAddr);
+            const p2 = parseAddressComponents(bldgAddr);
+            const p2j = bldgAddrJibun ? parseAddressComponents(bldgAddrJibun) : { gu: '', dong: '', road: '' };
+            
+            // 3. 구/동/도로 단계별 최소 점수 보장
+            const sameGu = p1.gu && (p1.gu === p2.gu || p1.gu === p2j.gu);
+            const sameDong = p1.dong && (p1.dong === p2.dong || p1.dong === p2j.dong);
+            const sameRoad = p1.road && p2.road && p1.road === p2.road;
+            
+            if (sameGu) {
+                sim = Math.max(sim, 0.3);
+                if (sameDong) {
+                    sim = Math.max(sim, 0.6);
+                    if (sameRoad) {
+                        sim = Math.max(sim, 0.8);
+                    }
+                }
+            }
+            
+            // 4. ★ 동명 접두사가 도로명에 포함되는 경우 매칭 (예: "마곡동" + "마곡중앙로")
+            // 마곡지구 특유의 현상 — 지구명이 도로명과 동명에 공유됨
+            if (sameGu && p1.dong && !sameDong) {
+                const dongPrefix = p1.dong.replace(/동$/, '');  // "마곡동" → "마곡"
+                if (dongPrefix.length >= 2) {
+                    const inBldgRoad = p2.road && p2.road.startsWith(dongPrefix);
+                    const inBldgRoadJibun = p2j.road && p2j.road.startsWith(dongPrefix);
+                    if (inBldgRoad || inBldgRoadJibun) {
+                        sim = Math.max(sim, 0.55);  // 동 prefix 공유 → 동 매칭과 유사
+                    }
+                }
+            }
+            // 역방향도 확인 (입력에 도로명, 저장에 동)
+            if (sameGu && p2.dong && !sameDong && p1.road) {
+                const dongPrefix = p2.dong.replace(/동$/, '');
+                if (dongPrefix.length >= 2 && p1.road.startsWith(dongPrefix)) {
+                    sim = Math.max(sim, 0.55);
+                }
+            }
+            
+            // 5. 공통 지명 보너스 (LOCATION_KEYWORDS)
+            const upper1 = String(inputAddr).toUpperCase();
+            const upper2 = String(bldgAddr).toUpperCase();
+            const upper2j = String(bldgAddrJibun || '').toUpperCase();
+            const commonLocations = LOCATION_KEYWORDS.filter(kw => {
+                const kwUp = kw.toUpperCase();
+                return upper1.includes(kwUp) && (upper2.includes(kwUp) || upper2j.includes(kwUp));
+            });
+            if (commonLocations.length > 0 && !sameDong && !sameRoad) {
+                sim = Math.max(sim, 0.35);  // 공통 지명만 있으면 최소 0.35 (참고 후보 노출용)
+            }
+            
+            return Math.min(1.0, sim);
         }
         
         // 문자열 유사도 (0~1)
@@ -1982,11 +2124,8 @@
                 const bldgAddr = bldg.address || '';
                 const bldgAddrJibun = bldg.addressJibun || '';
                 
-                // 주소 유사도
-                const addrKey = extractAddressKey(bldgAddr);
-                const addrSim = stringSimilarity(inputAddrKey, addrKey);
-                const addrJibunSim = stringSimilarity(inputAddrKey, extractAddressKey(bldgAddrJibun));
-                let bestAddrSim = Math.max(addrSim, addrJibunSim);
+                // ★ v2.4: 주소 유사도 고급 계산 (특수 블록/동단위/지번-도로명 양방향)
+                let bestAddrSim = addressSimilarityAdvanced(address, bldgAddr, bldgAddrJibun);
                 
                 // ★ v2.3: 좌표 거리 검증 (inputCoords가 있고 Firebase 빌딩도 좌표 있을 때)
                 let coordDistance = null;
@@ -3910,6 +4049,9 @@
                 if (data.vacancies && data.vacancies.length > 0) {
                     data.vacancies.forEach((v, vIdx) => {
                         vacancyCount++;
+                        const towerDisplay = v.tower 
+                            ? `<span style="display:inline-block; padding:2px 6px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:600;">${v.tower}</span>`
+                            : '<span style="color:var(--text-muted); font-size:11px;">-</span>';
                         html += `
                             <tr data-idx="${idx}" data-vidx="${vIdx}">
                                 <td>
@@ -3920,6 +4062,9 @@
                                 </td>
                                 <td>
                                     <input type="text" value="${data.address || ''}" onchange="updateField(${idx}, 'address', this.value)">
+                                </td>
+                                <td style="text-align:center;">
+                                    ${towerDisplay}
                                 </td>
                                 <td>
                                     <input type="text" value="${v.floor || ''}" onchange="updateVacancyField(${idx}, ${vIdx}, 'floor', this.value)">
@@ -3974,6 +4119,7 @@
                             <td style="text-align:center; color:var(--text-muted);">-</td>
                             <td style="text-align:center; color:var(--text-muted);">-</td>
                             <td style="text-align:center; color:var(--text-muted);">-</td>
+                            <td style="text-align:center; color:var(--text-muted);">-</td>
                             <td>
                                 <span class="status-badge" style="background:#6b7280;">만실</span>
                             </td>
@@ -3988,7 +4134,7 @@
                 }
             });
             
-            tbody.innerHTML = html || '<tr><td colspan="12" style="text-align:center; padding:40px; color:var(--text-muted);">추출된 데이터가 없습니다</td></tr>';
+            tbody.innerHTML = html || '<tr><td colspan="13" style="text-align:center; padding:40px; color:var(--text-muted);">추출된 데이터가 없습니다</td></tr>';
             
             document.getElementById('resultBuildingCount').textContent = buildingCount;
             document.getElementById('resultVacancyCount').textContent = vacancyCount;
