@@ -2475,6 +2475,14 @@
         }
         
         // 기존 OCR 추출물 조회 (source + year + month 필터)
+        // ═══════════════════════════════════════════════════════════════════
+        // ★ v2.6: 재OCR 검색 전면 재작성
+        // - 독립 vacancies 컬렉션 기반 (vacancies/{buildingId}/{vacancyId})
+        // - 이관된 데이터(transferredFrom 필드) 감지 및 배지 표시
+        // - 영한 음차 매칭 (이전 턴에 빠졌던 부분)
+        // - 단계별 진단 통계로 "왜 결과 0건?" 디버깅
+        // - source 관대 매칭 (id/name/aliases 모두)
+        // ═══════════════════════════════════════════════════════════════════
         window.searchExistingOcr = async function() {
             const source = document.getElementById('reocrSource').value;
             const year = document.getElementById('reocrYear').value;
@@ -2489,8 +2497,7 @@
                 return;
             }
             
-            // publishDate 필터 패턴 생성
-            // year만: "2026", year+month: "2026.04"
+            // publishDate 필터 패턴
             let datePrefix = '';
             if (year && month) {
                 datePrefix = `${year}.${month}`;
@@ -2503,61 +2510,140 @@
             resultsDiv.innerHTML = '';
             
             try {
-                const buildings = await loadBuildings(true); // 최신 데이터
+                // ★ v2.6: loadBuildings가 vacanciesCache(독립 컬렉션)도 로드함
+                await loadBuildings(true);
+                const buildings = buildingsCache || {};
+                const vacsByBuilding = vacanciesCache || {};
+                
+                // ★ v2.6: source 관대 매칭 준비 (id/name/aliases 모두 인정)
+                const sourceNormSet = new Set();
+                sourceNormSet.add(source.toLowerCase().trim());
+                if (state.sourceCompanies) {
+                    for (const sc of state.sourceCompanies) {
+                        if (sc.id === source || sc.name === source ||
+                            (sc.id || '').toLowerCase() === source.toLowerCase() ||
+                            (sc.name || '').toLowerCase() === source.toLowerCase()) {
+                            sourceNormSet.add((sc.id || '').toLowerCase().trim());
+                            sourceNormSet.add((sc.name || '').toLowerCase().trim());
+                            (sc.aliases || []).forEach(al => sourceNormSet.add((al || '').toLowerCase().trim()));
+                        }
+                    }
+                }
+                sourceNormSet.delete('');
+                console.log('[searchExistingOcr] source 매칭 대상:', [...sourceNormSet]);
+                
+                const matchesSource = (vacSource) => {
+                    const v = (vacSource || '').toLowerCase().trim();
+                    return v && sourceNormSet.has(v);
+                };
+                
+                // ★ v2.6: 진단 통계
+                const stats = {
+                    totalBuildings: Object.keys(buildings).length,
+                    totalVacancies: 0,
+                    bySource: {},
+                    matchedBySource: 0,
+                    matchedByDate: 0,
+                    matchedByName: 0,
+                    datesForSource: new Set(),
+                    transferredCount: 0,
+                    buildingsForSourceDate: [],
+                };
+                
                 const matched = [];
                 
-                for (const [bldgId, bldg] of Object.entries(buildings)) {
-                    if (!bldg || typeof bldg !== 'object') continue;
+                // ★ v2.6: 독립 vacancies 컬렉션 기반 순회 (vacancies/{buildingId}/{vacancyId})
+                for (const [bldgId, bldgVacancies] of Object.entries(vacsByBuilding)) {
+                    if (!bldgVacancies || typeof bldgVacancies !== 'object') continue;
                     
-                    // 빌딩명 필터
-                    if (bldgFilter) {
-                        const name = (bldg.name || '').toLowerCase();
-                        const addr = (bldg.address || '').toLowerCase();
-                        if (!name.includes(bldgFilter) && !addr.includes(bldgFilter)) continue;
-                    }
+                    const bldg = buildings[bldgId];
+                    if (!bldg) continue;  // 빌딩이 삭제됐는데 공실만 남은 orphan 케이스 스킵
                     
-                    // 해당 빌딩의 vacancies를 source + date 조건으로 필터
-                    const vacanciesObj = bldg.vacancies || {};
                     const matchingVacs = [];
+                    let bldgPassesDate = false;
                     
-                    for (const [vacId, vac] of Object.entries(vacanciesObj)) {
+                    for (const [vacId, vac] of Object.entries(bldgVacancies)) {
                         if (!vac || typeof vac !== 'object') continue;
+                        stats.totalVacancies++;
                         
                         const vacSource = vac.source || '';
                         const vacDate = vac.publishDate || '';
+                        const isTransferred = !!vac.transferredFrom;
                         
-                        // source 매칭 (대소문자 무시)
-                        if (vacSource.toLowerCase() !== source.toLowerCase()) continue;
+                        const srcKey = vacSource || '(없음)';
+                        stats.bySource[srcKey] = (stats.bySource[srcKey] || 0) + 1;
                         
-                        // 날짜 매칭
+                        // 1) source 매칭
+                        if (!matchesSource(vacSource)) continue;
+                        stats.matchedBySource++;
+                        stats.datesForSource.add(vacDate || '(없음)');
+                        
+                        // 2) 날짜 매칭
                         if (datePrefix && !vacDate.startsWith(datePrefix)) continue;
+                        stats.matchedByDate++;
+                        bldgPassesDate = true;
+                        
+                        if (isTransferred) stats.transferredCount++;
                         
                         matchingVacs.push({ vacId, ...vac });
                     }
                     
-                    if (matchingVacs.length > 0) {
-                        // 대표 페이지 이미지 URL (있는 경우)
-                        const pageImageUrl = matchingVacs.find(v => v.pageImageUrl)?.pageImageUrl || null;
-                        const pageNum = matchingVacs[0].pageNum || null;
-                        const publishDate = matchingVacs[0].publishDate || '';
-                        
-                        matched.push({
-                            buildingId: bldgId,
-                            buildingName: bldg.name || '(이름없음)',
-                            address: bldg.address || bldg.addressJibun || '',
-                            vacancies: matchingVacs,
-                            pageImageUrl,
-                            pageNum,
-                            publishDate,
-                        });
+                    if (bldgPassesDate) {
+                        stats.buildingsForSourceDate.push(bldg.name || '(이름없음)');
                     }
+                    
+                    if (matchingVacs.length === 0) continue;
+                    
+                    // 3) 빌딩명 필터 - 영한 음차 매칭 포함
+                    if (bldgFilter) {
+                        const bldgNameLower = (bldg.name || '').toLowerCase();
+                        const addrLower = (bldg.address || '').toLowerCase();
+                        const addrJibunLower = (bldg.addressJibun || '').toLowerCase();
+                        const aliases = bldg.aliases || [];
+                        
+                        const directMatch = 
+                            bldgNameLower.includes(bldgFilter) ||
+                            addrLower.includes(bldgFilter) ||
+                            addrJibunLower.includes(bldgFilter) ||
+                            aliases.some(al => (al || '').toLowerCase().includes(bldgFilter));
+                        
+                        // 영한 음차 매칭 ("케이스퀘어" → "K-SQUARE" 빌딩도 찾음)
+                        const nameAdvSim = nameSimilarityAdvanced(bldgFilter, bldg.name || '');
+                        const aliasAdvSim = aliases.reduce(
+                            (max, al) => Math.max(max, nameSimilarityAdvanced(bldgFilter, al)), 0
+                        );
+                        const translitMatch = Math.max(nameAdvSim, aliasAdvSim) >= 0.5;
+                        
+                        if (!directMatch && !translitMatch) continue;
+                    }
+                    
+                    stats.matchedByName += matchingVacs.length;
+                    
+                    // 이관된 공실 개수 계산 (빌딩 단위 통계용)
+                    const transferredInThisBldg = matchingVacs.filter(v => v.transferredFrom).length;
+                    const pageImageUrl = matchingVacs.find(v => v.pageImageUrl)?.pageImageUrl || null;
+                    const pageNum = matchingVacs[0].pageNum || null;
+                    const publishDate = matchingVacs[0].publishDate || '';
+                    
+                    matched.push({
+                        buildingId: bldgId,
+                        buildingName: bldg.name || '(이름없음)',
+                        address: bldg.address || bldg.addressJibun || '',
+                        vacancies: matchingVacs,
+                        pageImageUrl,
+                        pageNum,
+                        publishDate,
+                        transferredCount: transferredInThisBldg,
+                        hasTransferred: transferredInThisBldg > 0,
+                        allTransferred: transferredInThisBldg === matchingVacs.length,
+                    });
                 }
                 
-                // 빌딩명 가나다 정렬
-                matched.sort((a, b) => a.buildingName.localeCompare(b.buildingName, 'ko'));
+                console.log('[searchExistingOcr] 진단 통계:', stats);
                 
+                matched.sort((a, b) => a.buildingName.localeCompare(b.buildingName, 'ko'));
                 reocrState.buildings = matched;
-                renderReocrResults(matched, source, datePrefix);
+                renderReocrResults(matched, source, datePrefix, stats, bldgFilter);
                 
             } catch (err) {
                 console.error('재OCR 조회 실패:', err);
@@ -2566,19 +2652,62 @@
             }
         };
         
-        // 조회 결과 렌더링
-        function renderReocrResults(matched, source, datePrefix) {
+        // 조회 결과 렌더링 (★ v2.6: 이관 배지 + 진단 메시지)
+        function renderReocrResults(matched, source, datePrefix, stats, bldgFilter) {
             const summaryDiv = document.getElementById('reocrSummary');
             const resultsDiv = document.getElementById('reocrResults');
             
             const totalVacs = matched.reduce((sum, m) => sum + m.vacancies.length, 0);
+            const totalTransferred = matched.reduce((sum, m) => sum + (m.transferredCount || 0), 0);
             const dateLabel = datePrefix || '전체기간';
-            summaryDiv.innerHTML = `✅ <b>${source}</b> / <b>${dateLabel}</b> — 빌딩 <b>${matched.length}개</b>, 공실 <b>${totalVacs}건</b>`;
             
+            let summaryHtml = `✅ <b>${source}</b> / <b>${dateLabel}</b> — 빌딩 <b>${matched.length}개</b>, 공실 <b>${totalVacs}건</b>`;
+            if (totalTransferred > 0) {
+                summaryHtml += ` (이관 <b>${totalTransferred}건</b> 포함 📦)`;
+            }
+            summaryDiv.innerHTML = summaryHtml;
+            
+            // ★ v2.6: 결과 없을 때 단계별 진단 메시지 제공
             if (matched.length === 0) {
+                let diagnosis = '';
+                if (!stats || stats.totalVacancies === 0) {
+                    diagnosis = '전체 Firebase에 공실 데이터가 없습니다.';
+                } else if (stats.matchedBySource === 0) {
+                    // source가 하나도 안 맞는 경우 — 어떤 source가 있는지 상위 5개 보여주기
+                    const topSources = Object.entries(stats.bySource)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 5)
+                        .map(([s, c]) => `<code>${s}</code>(${c})`)
+                        .join(', ');
+                    diagnosis = `
+                        <b>"${source}"</b>로 저장된 공실이 Firebase에 없습니다. 발간회사 선택을 확인하세요.<br>
+                        <span style="font-size:11px; color:#64748b;">Firebase에 실제 저장된 상위 회사: ${topSources}</span>
+                    `;
+                } else if (stats.matchedByDate === 0) {
+                    const datesList = [...stats.datesForSource].filter(d => d !== '(없음)').sort().slice(0, 8);
+                    diagnosis = `
+                        <b>"${source}"</b> 공실은 <b>${stats.matchedBySource}건</b> 있지만 
+                        <b>${dateLabel}</b>에 해당하는 것이 없습니다.<br>
+                        <span style="font-size:11px; color:#64748b;">
+                            이 회사의 실제 발간연월: ${datesList.length > 0 ? datesList.map(d => `<code>${d}</code>`).join(', ') : '(날짜 정보 없음)'}
+                        </span>
+                    `;
+                } else if (bldgFilter && stats.matchedByName === 0) {
+                    const bldgsList = stats.buildingsForSourceDate.slice(0, 8).map(n => `<code>${n}</code>`).join(', ');
+                    diagnosis = `
+                        <b>${source}</b> / <b>${dateLabel}</b> 조건에 <b>${stats.matchedByDate}건</b> 있지만 
+                        "<b>${bldgFilter}</b>"에 해당하는 빌딩이 없습니다.<br>
+                        <span style="font-size:11px; color:#64748b;">해당 조건의 빌딩명: ${bldgsList}</span>
+                        <br><span style="font-size:11px; color:#0284c7;">💡 검색어를 비우고 다시 조회하거나, 다른 키워드를 시도하세요.</span>
+                    `;
+                } else {
+                    diagnosis = '조회된 결과가 없습니다.';
+                }
+                
                 resultsDiv.innerHTML = `
-                    <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted); background: white; border-radius: 8px;">
-                        조회된 결과가 없습니다.
+                    <div style="grid-column: 1 / -1; padding: 32px; background: white; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <div style="font-size: 36px; text-align: center; margin-bottom: 12px;">🔍</div>
+                        <div style="text-align: center; color: var(--text-primary); font-size: 14px; line-height: 1.6;">${diagnosis}</div>
                     </div>`;
                 return;
             }
@@ -2586,15 +2715,24 @@
             resultsDiv.innerHTML = matched.map((b, idx) => {
                 const vacancyPreview = b.vacancies.slice(0, 5).map(v => {
                     const towerLabel = v.tower ? ` [${v.tower}]` : '';
+                    const transferMark = v.transferredFrom ? ' 📦' : '';
                     const areaLabel = v.exclusiveArea 
                         ? `전용${v.exclusiveArea}/임대${v.rentArea || '-'}평` 
                         : '면적정보없음';
                     return `<div style="font-size: 11px; color: #475569; padding: 2px 0; border-bottom: 1px dashed #e5e7eb;">
-                        <b>${v.floor || '?'}</b>${towerLabel} ${areaLabel} · ${v.rentPy || '-'}원/평
+                        <b>${v.floor || '?'}</b>${towerLabel}${transferMark} ${areaLabel} · ${v.rentPy || '-'}원/평
                     </div>`;
                 }).join('');
                 
                 const moreCount = b.vacancies.length > 5 ? `<div style="font-size: 11px; color: #9ca3af; padding: 4px 0;">+${b.vacancies.length - 5}건 더...</div>` : '';
+                
+                // ★ v2.6: 이관 배지 (빌딩 카드 상단)
+                let transferBadge = '';
+                if (b.allTransferred) {
+                    transferBadge = `<span style="display:inline-block; padding:2px 8px; background:#fef3c7; color:#92400e; border-radius:10px; font-size:10px; font-weight:600;">📦 전체 이관됨</span>`;
+                } else if (b.hasTransferred) {
+                    transferBadge = `<span style="display:inline-block; padding:2px 8px; background:#e0e7ff; color:#3730a3; border-radius:10px; font-size:10px; font-weight:600;">📦 ${b.transferredCount}건 이관</span>`;
+                }
                 
                 const thumbnail = b.pageImageUrl 
                     ? `<img src="${b.pageImageUrl}" style="width: 100%; height: 140px; object-fit: cover; background: #f3f4f6; border-radius: 4px; cursor: zoom-in;" onclick="openReocrImageZoom('${b.pageImageUrl}')" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
@@ -2605,7 +2743,10 @@
                 <div class="reocr-card" style="background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
                     ${thumbnail}
                     <div style="padding: 4px 0;">
-                        <div style="font-weight: 700; font-size: 14px; color: var(--text-primary);">${b.buildingName}</div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+                            <div style="font-weight: 700; font-size: 14px; color: var(--text-primary); flex: 1;">${b.buildingName}</div>
+                            ${transferBadge}
+                        </div>
                         <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${b.address || '주소 미상'}</div>
                         <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
                             📅 ${b.publishDate || '?'}
@@ -2643,6 +2784,9 @@
         };
         
         // 재OCR 실행 (placeholder — 다음 단계에서 구현)
+        // ═══════════════════════════════════════════════════════════════════
+        // ★ v2.6: 재OCR 실행 — 백엔드 API 호출 + 비교 모달 + 덮어쓰기
+        // ═══════════════════════════════════════════════════════════════════
         window.reocrRerunBuilding = async function(idx) {
             const building = reocrState.buildings[idx];
             if (!building) return;
@@ -2652,18 +2796,359 @@
                 return;
             }
             
+            // ★ v2.6: 이관 데이터 경고
+            let transferWarning = '';
+            if (building.allTransferred) {
+                transferWarning = `\n\n⚠️ 이 빌딩의 공실 ${building.vacancies.length}건은 전부 다른 빌딩에서 이관된 데이터입니다.\n` +
+                                  `재OCR 결과는 원본 빌딩이 아닌 현재 빌딩(${building.buildingName})에 저장됩니다.`;
+            } else if (building.hasTransferred) {
+                transferWarning = `\n\n⚠️ ${building.transferredCount}건은 이관된 데이터입니다. 재OCR로 덮어쓰면 이관 흔적(transferredFrom)이 사라집니다.`;
+            }
+            
             const proceed = confirm(
                 `[${building.buildingName}] 재OCR을 실행합니다.\n\n` +
                 `원본 페이지: P${building.pageNum || '?'}\n` +
-                `현재 저장된 공실: ${building.vacancies.length}건\n\n` +
-                `AI가 해당 페이지를 다시 분석합니다. 결과를 확인하고 덮어쓰기 여부를 결정할 수 있습니다.\n\n` +
+                `현재 저장된 공실: ${building.vacancies.length}건\n` +
+                `발간회사/일자: ${building.vacancies[0]?.source || '?'} / ${building.publishDate || '?'}` +
+                transferWarning +
+                `\n\nAI가 해당 페이지를 다시 분석합니다. 결과를 확인하고 덮어쓰기 여부를 결정할 수 있습니다.\n\n` +
                 `계속하시겠습니까?`
             );
             if (!proceed) return;
             
-            // 다음 턴에 구현 예정 - 백엔드 API 호출
-            showToast('재OCR 실행 로직은 다음 단계에서 연결됩니다', 'info');
-            console.log('재OCR 대상:', building);
+            // 로딩 모달 표시
+            showReocrLoadingModal(building.buildingName);
+            
+            try {
+                // 대표 공실에서 source/publishDate 추출
+                const sampleVac = building.vacancies[0] || {};
+                
+                const response = await fetch(`${API_BASE_URL}/api/ocr/reparse-page`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        pageImageUrl: building.pageImageUrl,
+                        source: sampleVac.source || '',
+                        publishDate: building.publishDate || sampleVac.publishDate || '',
+                        pageNum: building.pageNum || 0,
+                        buildingHint: {
+                            name: building.buildingName,
+                            address: building.address,
+                            addressJibun: buildingsCache?.[building.buildingId]?.addressJibun || ''
+                        }
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errText.slice(0, 200)}`);
+                }
+                
+                const result = await response.json();
+                hideReocrLoadingModal();
+                
+                if (!result.success) {
+                    throw new Error(result.error || '파싱 실패');
+                }
+                
+                // 비교 모달 표시
+                showReocrCompareModal(idx, building, result.parsed, result.stats);
+                
+            } catch (err) {
+                hideReocrLoadingModal();
+                console.error('재OCR 실패:', err);
+                showToast('재OCR 실패: ' + err.message, 'error');
+            }
+        };
+        
+        // ─────────────────────────────────────────────────────────────────
+        // 로딩 모달
+        // ─────────────────────────────────────────────────────────────────
+        function showReocrLoadingModal(buildingName) {
+            const existing = document.getElementById('reocrLoadingModal');
+            if (existing) existing.remove();
+            
+            const modal = document.createElement('div');
+            modal.id = 'reocrLoadingModal';
+            modal.style.cssText = `
+                position: fixed; inset: 0; background: rgba(0,0,0,0.5); 
+                display: flex; align-items: center; justify-content: center; z-index: 10000;
+            `;
+            modal.innerHTML = `
+                <div style="background: white; padding: 32px 48px; border-radius: 12px; text-align: center; min-width: 320px;">
+                    <div style="font-size: 48px; margin-bottom: 16px; animation: spin 1.2s linear infinite;">🔄</div>
+                    <div style="font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">재OCR 진행 중</div>
+                    <div style="font-size: 13px; color: var(--text-muted);">${buildingName || ''}</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 12px;">이미지 다운로드 → AI 파싱 (약 10~30초 소요)</div>
+                </div>
+                <style>
+                    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                </style>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        function hideReocrLoadingModal() {
+            const m = document.getElementById('reocrLoadingModal');
+            if (m) m.remove();
+        }
+        
+        // ─────────────────────────────────────────────────────────────────
+        // 비교 모달: 기존 공실 vs 새로 추출된 공실
+        // ─────────────────────────────────────────────────────────────────
+        function showReocrCompareModal(idx, building, parsed, stats) {
+            // 임시 저장 (확정 버튼에서 사용)
+            window._reocrPendingCompare = { idx, building, parsed, stats };
+            
+            const existing = document.getElementById('reocrCompareModal');
+            if (existing) existing.remove();
+            
+            const oldVacs = building.vacancies || [];
+            const newVacs = parsed?.vacancies || [];
+            
+            // 빌딩 정보 차이
+            const oldName = building.buildingName;
+            const newName = parsed?.buildingName || '(추출안됨)';
+            const oldAddr = building.address || '';
+            const newAddr = parsed?.address || '';
+            const nameChanged = oldName !== newName;
+            const addrChanged = oldAddr !== newAddr;
+            
+            // 공실 개수 차이
+            const diff = newVacs.length - oldVacs.length;
+            const diffStr = diff > 0 ? `<span style="color:#059669;">+${diff}</span>` : 
+                            diff < 0 ? `<span style="color:#dc2626;">${diff}</span>` : 
+                            `<span style="color:#64748b;">±0</span>`;
+            
+            // basePricing 정보
+            const bp = parsed?.basePricing || {};
+            const bpSingle = bp.single || {};
+            const hasBasePricing = !!(bpSingle.rentPy || bpSingle.depositPy);
+            
+            // vacancy 렌더링 (왼쪽=기존, 오른쪽=신규)
+            const renderVac = (v, isNew) => {
+                const tower = v.tower ? `<span style="padding:1px 5px; background:${isNew ? '#dbeafe' : '#e5e7eb'}; color:${isNew ? '#1e40af' : '#475569'}; border-radius:3px; font-size:10px; margin-right:4px;">${v.tower}</span>` : '';
+                const transferMark = v.transferredFrom ? ' 📦' : '';
+                const price = v.rentPy ? `${v.rentPy}/평` : '-';
+                const deposit = v.depositPy ? `보증${v.depositPy}` : '';
+                const maint = v.maintenancePy ? `관리${v.maintenancePy}` : '';
+                const move = v.moveInDate || '-';
+                return `<div style="padding: 6px 8px; border-bottom: 1px solid #f1f5f9; font-size: 11px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <div>${tower}<b>${v.floor || '?'}</b>${transferMark} · 전용${v.exclusiveArea || '-'}평 / 임대${v.rentArea || '-'}평</div>
+                        <div style="color: #64748b; font-size: 10px;">${move}</div>
+                    </div>
+                    <div style="color: #64748b; font-size: 10px; margin-top: 2px;">${price} ${deposit} ${maint}</div>
+                </div>`;
+            };
+            
+            const oldVacsHtml = oldVacs.map(v => renderVac(v, false)).join('') || 
+                '<div style="padding: 16px; text-align: center; color: #9ca3af; font-size: 12px;">(없음)</div>';
+            const newVacsHtml = newVacs.map(v => renderVac(v, true)).join('') || 
+                '<div style="padding: 16px; text-align: center; color: #9ca3af; font-size: 12px;">(없음)</div>';
+            
+            const basePricingHtml = hasBasePricing ? `
+                <div style="padding: 8px 12px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; margin-bottom: 8px; font-size: 12px;">
+                    <b style="color: #059669;">🆕 공통 가격 감지</b> — 보증금 ${bpSingle.depositPy || '-'} / 임대료 ${bpSingle.rentPy || '-'} / 관리비 ${bpSingle.maintenancePy || '-'}
+                    ${bp.sharedMoveInDate ? `/ 입주 ${bp.sharedMoveInDate}` : ''}
+                </div>` : '';
+            
+            const modal = document.createElement('div');
+            modal.id = 'reocrCompareModal';
+            modal.style.cssText = `
+                position: fixed; inset: 0; background: rgba(0,0,0,0.6); 
+                display: flex; align-items: center; justify-content: center; z-index: 10000;
+                padding: 20px; overflow: auto;
+            `;
+            modal.innerHTML = `
+                <div style="background: white; border-radius: 12px; width: 100%; max-width: 1200px; max-height: 92vh; overflow: hidden; display: flex; flex-direction: column;">
+                    <!-- 헤더 -->
+                    <div style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); background: #f8fafc;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 16px; font-weight: 700;">🔄 재OCR 결과 비교</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">${stats?.elapsedMs ? (stats.elapsedMs / 1000).toFixed(1) + '초 소요' : ''}</div>
+                            </div>
+                            <button onclick="closeReocrCompareModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #64748b;">×</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 본문 -->
+                    <div style="padding: 16px 24px; overflow-y: auto; flex: 1;">
+                        <!-- 빌딩 정보 비교 -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                            <div style="padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;">
+                                <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">기존 빌딩 정보</div>
+                                <div style="font-weight: 600; font-size: 13px;">${oldName}</div>
+                                <div style="font-size: 11px; color: #64748b;">${oldAddr || '-'}</div>
+                            </div>
+                            <div style="padding: 12px; background: ${nameChanged || addrChanged ? '#fef3c7' : '#ecfdf5'}; border: 1px solid ${nameChanged || addrChanged ? '#fde68a' : '#a7f3d0'}; border-radius: 8px;">
+                                <div style="font-size: 11px; color: #64748b; margin-bottom: 4px;">재OCR 결과 ${nameChanged || addrChanged ? '⚠️ 차이 있음' : '✓ 동일'}</div>
+                                <div style="font-weight: 600; font-size: 13px; ${nameChanged ? 'color: #d97706;' : ''}">${newName}</div>
+                                <div style="font-size: 11px; color: #64748b; ${addrChanged ? 'color: #d97706;' : ''}">${newAddr || '-'}</div>
+                            </div>
+                        </div>
+                        
+                        ${basePricingHtml}
+                        
+                        <!-- 공실 수 -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f1f5f9; border-radius: 6px; margin-bottom: 12px;">
+                            <div style="font-size: 13px;">
+                                기존 <b>${oldVacs.length}</b>건 → 재OCR <b>${newVacs.length}</b>건 (${diffStr})
+                            </div>
+                            ${building.hasTransferred ? `<div style="font-size: 11px; color: #92400e;">📦 기존 이관 ${building.transferredCount}건 포함</div>` : ''}
+                        </div>
+                        
+                        <!-- 공실 side-by-side -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                            <div style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                                <div style="padding: 8px 12px; background: #f9fafb; font-size: 12px; font-weight: 600; border-bottom: 1px solid #e5e7eb;">
+                                    📋 기존 공실 (${oldVacs.length}건)
+                                </div>
+                                <div style="max-height: 400px; overflow-y: auto;">${oldVacsHtml}</div>
+                            </div>
+                            <div style="border: 1px solid #bfdbfe; border-radius: 8px; overflow: hidden;">
+                                <div style="padding: 8px 12px; background: #dbeafe; font-size: 12px; font-weight: 600; color: #1e40af; border-bottom: 1px solid #bfdbfe;">
+                                    🆕 재OCR 결과 (${newVacs.length}건)
+                                </div>
+                                <div style="max-height: 400px; overflow-y: auto;">${newVacsHtml}</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 안내 -->
+                        <div style="padding: 10px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; font-size: 11px; color: #92400e; line-height: 1.5;">
+                            <b>덮어쓰기 실행 시:</b> 기존 ${oldVacs.length}건이 전부 삭제되고 재OCR 결과 ${newVacs.length}건이 새로 저장됩니다. 
+                            ${building.hasTransferred ? '<br>📦 기존 이관 흔적(transferredFrom)은 유지되지 않습니다.' : ''}
+                            ${nameChanged || addrChanged ? '<br>⚠️ 빌딩명/주소 차이 발견 — 빌딩 자체는 덮어쓰지 않고 공실만 갱신합니다.' : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- 액션 -->
+                    <div style="padding: 12px 24px; border-top: 1px solid var(--border-color); background: #f8fafc; display: flex; gap: 8px; justify-content: flex-end;">
+                        <button onclick="closeReocrCompareModal()" style="padding: 8px 16px; background: white; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                            취소
+                        </button>
+                        <button onclick="executeReocrOverwrite()" style="padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;">
+                            ⚠️ 전체 삭제 후 덮어쓰기 (${newVacs.length}건)
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        window.closeReocrCompareModal = function() {
+            const m = document.getElementById('reocrCompareModal');
+            if (m) m.remove();
+            window._reocrPendingCompare = null;
+        };
+        
+        // ─────────────────────────────────────────────────────────────────
+        // 덮어쓰기 실행: 기존 vacancies 전부 삭제 + 새 데이터 삽입
+        // ─────────────────────────────────────────────────────────────────
+        window.executeReocrOverwrite = async function() {
+            const pending = window._reocrPendingCompare;
+            if (!pending) return;
+            
+            const { building, parsed } = pending;
+            const newVacs = parsed?.vacancies || [];
+            
+            if (newVacs.length === 0) {
+                if (!confirm('재OCR 결과가 0건입니다. 그래도 기존 공실을 전부 삭제하시겠습니까?')) return;
+            }
+            
+            // 최종 확인
+            const finalConfirm = confirm(
+                `[${building.buildingName}]\n\n` +
+                `기존 ${building.vacancies.length}건 삭제 → 재OCR 결과 ${newVacs.length}건 삽입\n\n` +
+                `이 작업은 되돌릴 수 없습니다. 진행하시겠습니까?`
+            );
+            if (!finalConfirm) return;
+            
+            const buildingId = building.buildingId;
+            const sampleVac = building.vacancies[0] || {};
+            const source = sampleVac.source || '';
+            const publishDate = building.publishDate || sampleVac.publishDate || '';
+            
+            try {
+                // 1. 기존 vacancies 전부 삭제 (vacancies/{buildingId}/{vacId})
+                const deleteUpdates = {};
+                for (const vac of building.vacancies) {
+                    deleteUpdates[`vacancies/${buildingId}/${vac.vacId}`] = null;
+                }
+                await db.ref().update(deleteUpdates);
+                console.log(`✅ 기존 ${building.vacancies.length}건 삭제`);
+                
+                // 2. basePricing이 있으면 공실에 전파된 상태일 것 (ai_parser.py의 post_process에서 이미 처리됨)
+                //    그래도 혹시 몰라서 빈 값이면 basePricing.single에서 채움
+                const bp = parsed?.basePricing || {};
+                const bpSingle = bp.single || {};
+                const sharedMove = bp.sharedMoveInDate || '';
+                
+                // 3. 새 vacancies 일괄 삽입
+                const insertUpdates = {};
+                let insertedCount = 0;
+                for (const v of newVacs) {
+                    const newKey = db.ref(`vacancies/${buildingId}`).push().key;
+                    if (!newKey) continue;
+                    
+                    const newVacData = {
+                        ...v,
+                        source: source,
+                        publishDate: publishDate,
+                        pageNum: v.pageNum || building.pageNum || 0,
+                        pageImageUrl: building.pageImageUrl || '',
+                        // AI 결과에 비어있으면 basePricing에서 채움 (이중 안전장치)
+                        depositPy: v.depositPy || bpSingle.depositPy || '',
+                        rentPy: v.rentPy || bpSingle.rentPy || '',
+                        maintenancePy: v.maintenancePy || bpSingle.maintenancePy || '',
+                        moveInDate: v.moveInDate || sharedMove || '협의',
+                        // 빌딩명은 힌트/기존 유지 (AI 추출 이름은 aliases 용도)
+                        buildingName: building.buildingName,
+                        // 재OCR 메타데이터
+                        reparsedAt: new Date().toISOString(),
+                        reparsedVia: 'reocr-admin',
+                    };
+                    
+                    // undefined 필드 제거 (Firebase가 싫어함)
+                    Object.keys(newVacData).forEach(k => {
+                        if (newVacData[k] === undefined) delete newVacData[k];
+                    });
+                    
+                    insertUpdates[`vacancies/${buildingId}/${newKey}`] = newVacData;
+                    insertedCount++;
+                }
+                
+                if (insertedCount > 0) {
+                    await db.ref().update(insertUpdates);
+                }
+                console.log(`✅ 새 ${insertedCount}건 삽입`);
+                
+                // 4. AI 추출 빌딩명이 기존과 다르면 aliases에 추가 (매칭 개선용)
+                if (parsed?.buildingName && parsed.buildingName !== building.buildingName) {
+                    try {
+                        const currentBldgSnap = await db.ref(`buildings/${buildingId}`).once('value');
+                        const currentBldg = currentBldgSnap.val() || {};
+                        const aliases = new Set(currentBldg.aliases || []);
+                        aliases.add(parsed.buildingName);
+                        await db.ref(`buildings/${buildingId}/aliases`).set([...aliases]);
+                        console.log(`✅ aliases에 "${parsed.buildingName}" 추가`);
+                    } catch (e) {
+                        console.warn('aliases 업데이트 실패 (무시 가능):', e);
+                    }
+                }
+                
+                // 완료
+                closeReocrCompareModal();
+                showToast(`✅ ${building.buildingName}: 재OCR 덮어쓰기 완료 (${insertedCount}건)`, 'success');
+                
+                // 재조회
+                setTimeout(() => { searchExistingOcr(); }, 500);
+                
+            } catch (err) {
+                console.error('덮어쓰기 실패:', err);
+                showToast('덮어쓰기 실패: ' + err.message, 'error');
+            }
         };
         
         // 특정 빌딩의 해당 추출물만 삭제
@@ -2671,18 +3156,30 @@
             const building = reocrState.buildings[idx];
             if (!building) return;
             
+            // ★ v2.6: 이관된 데이터 삭제 시 추가 경고
+            let warningMsg = '';
+            if (building.allTransferred) {
+                warningMsg = `\n\n⚠️ 이 빌딩의 공실은 ${building.transferredCount}건 모두 "이관된" 데이터입니다.\n` +
+                             `삭제 시 원본 빌딩으로 되돌아가지 않고 영구 삭제되니 신중히 결정하세요.`;
+            } else if (building.hasTransferred) {
+                warningMsg = `\n\n⚠️ 이 중 ${building.transferredCount}건은 "이관된" 데이터입니다.\n` +
+                             `삭제 시 원본으로 복구되지 않습니다.`;
+            }
+            
             const proceed = confirm(
                 `[${building.buildingName}]\n\n` +
                 `이 빌딩의 해당 추출물(${building.vacancies.length}건)만 삭제합니다.\n` +
-                `(빌딩 자체와 다른 추출물은 유지됩니다)\n\n` +
-                `삭제하시겠습니까?`
+                `(빌딩 자체와 다른 추출물은 유지됩니다)` +
+                warningMsg +
+                `\n\n삭제하시겠습니까?`
             );
             if (!proceed) return;
             
             try {
+                // ★ v2.6: 독립 vacancies 컬렉션 경로로 수정 (vacancies/{buildingId}/{vacId})
                 const updates = {};
                 for (const vac of building.vacancies) {
-                    updates[`buildings/${building.buildingId}/vacancies/${vac.vacId}`] = null;
+                    updates[`vacancies/${building.buildingId}/${vac.vacId}`] = null;
                 }
                 await db.ref().update(updates);
                 showToast(`${building.vacancies.length}건 삭제 완료`, 'success');
