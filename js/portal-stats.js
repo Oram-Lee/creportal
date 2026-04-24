@@ -4029,7 +4029,10 @@ const _srCompareState = {
     compareQuarter:    '',   // 비교 대상 분기 (드롭다운)
     includeDraft:      true,
     lastPayload:       null, // raw 데이터 표시용
+    quarterMetaCache:  {},   // 분기별 편집 저장 정보 캐시 {quarter: {totalBuildings, excludedCount, repMonthsCount, mainRepMonth, ...}}
 };
+// HTML 인라인 onchange 에서 접근 가능하도록 window 에 노출
+window._srCompareState = _srCompareState;
 
 /**
  * statsFilter 루트를 스캔해 분기 목록 로드
@@ -4052,6 +4055,69 @@ async function _srLoadAvailableQuarters() {
         console.error('[compare] 분기 목록 로드 실패:', err);
         return [];
     }
+}
+
+/**
+ * 분기별 편집 상태 요약 (모달 UI 표시용)
+ * - 대상 빌딩 수
+ * - 제외 빌딩/공실 수
+ * - 대표월 지정 개수 + 가장 많이 지정된 월
+ */
+async function _srFetchQuarterMeta(quarter) {
+    if (_srCompareState.quarterMetaCache[quarter]) {
+        return _srCompareState.quarterMetaCache[quarter];
+    }
+    try {
+        const { db, ref, get } = await import('./portal-firebase.js');
+        const snap = await get(ref(db, `statsFilter/${quarter}`));
+        const data = snap.val() || {};
+
+        // 대표월 통계
+        const repMonths = data.repMonths || {};
+        const repMoMap = {};
+        Object.values(repMonths).forEach(rm => {
+            const y = (rm && typeof rm === 'object') ? rm.yyyymm
+                    : (typeof rm === 'string' ? rm : null);
+            if (y) repMoMap[y] = (repMoMap[y] || 0) + 1;
+        });
+        const topRepMo = Object.entries(repMoMap)
+            .sort((a,b) => b[1] - a[1])[0];
+
+        const meta = {
+            quarter,
+            status:            data.status || 'draft',
+            filters:           data.filters || {},
+            excludedBuildings: Object.keys(data.excludedBuildings || {}).length,
+            excludedVacancies: Object.keys(data.excludedVacancies || {}).length,
+            verifiedBuildings: Object.keys(data.verifiedBuildings || {}).length,
+            verifiedRegions:   Object.keys(data.verifiedRegions || {}).length,
+            repMonthsCount:    Object.keys(repMonths).length,
+            mainRepMonth:      topRepMo ? topRepMo[0] : null,
+            mainRepMonthCount: topRepMo ? topRepMo[1] : 0,
+        };
+        _srCompareState.quarterMetaCache[quarter] = meta;
+        return meta;
+    } catch (err) {
+        console.warn(`[compare] 메타 로드 실패 ${quarter}:`, err);
+        return null;
+    }
+}
+
+/**
+ * 메타 정보를 사람 읽기 좋게 포맷
+ */
+function _srFormatQuarterMetaLabel(meta) {
+    if (!meta) return '(로딩 실패)';
+    const parts = [];
+    if (meta.mainRepMonth) {
+        const [yyyy, mm] = meta.mainRepMonth.split('-');
+        parts.push(`${yyyy}년 ${Number(mm)}월분 기준`);
+    }
+    if (meta.verifiedBuildings) parts.push(`검수 ${meta.verifiedBuildings}개`);
+    if (meta.excludedBuildings) parts.push(`빌딩제외 ${meta.excludedBuildings}개`);
+    if (meta.excludedVacancies) parts.push(`공실제외 ${meta.excludedVacancies}건`);
+    if (meta.filters?.grades?.length) parts.push(meta.filters.grades.join('/') + '등급');
+    return parts.length ? parts.join(' · ') : '(편집 내역 없음)';
 }
 
 /**
@@ -4398,9 +4464,18 @@ window._srOpenCompareModal = async function() {
         return;
     }
 
-    // 비교 대상 기본값: baseline 바로 앞(또는 뒤) 분기
+    // 모든 분기의 메타 정보 병렬 프리로드 (드롭다운 라벨용)
+    await Promise.all(quarters.map(q => _srFetchQuarterMeta(q.q)));
+
+    // 비교 대상 기본값: baseline 제외하고 "검수 빌딩이 가장 많은" 분기 (실질 데이터 있는 곳)
     if (!_srCompareState.compareQuarter || _srCompareState.compareQuarter === _srCompareState.baselineQuarter) {
         const others = quarters.filter(x => x.q !== _srCompareState.baselineQuarter);
+        // 메타 기준 정렬: verifiedBuildings 내림차순 → 가장 풍부한 분기 우선
+        others.sort((a, b) => {
+            const ma = _srCompareState.quarterMetaCache[a.q]?.verifiedBuildings || 0;
+            const mb = _srCompareState.quarterMetaCache[b.q]?.verifiedBuildings || 0;
+            return mb - ma;
+        });
         _srCompareState.compareQuarter = others[0]?.q || '';
     }
 
@@ -4419,17 +4494,28 @@ function _srRenderCompareForm() {
     const body = document.getElementById('sr-cmp-body');
     if (!body) return;
 
-    const baselineQ = _srCompareState.baselineQuarter;
-    const baselineInfo = _srCompareState.quartersAvailable.find(x => x.q === baselineQ);
-    const baselineBadge = baselineInfo?.status === 'finalized' ? '✅' : '📝';
+    const baselineQ     = _srCompareState.baselineQuarter;
+    const compareQ      = _srCompareState.compareQuarter;
+    const baselineMeta  = _srCompareState.quarterMetaCache[baselineQ];
+    const compareMeta   = _srCompareState.quarterMetaCache[compareQ];
+    const baselineBadge = baselineMeta?.status === 'finalized' ? '✅' : '📝';
 
+    // HTML 인라인 onchange 에서 접근 가능하도록 window 에도 노출
+    window._srRenderCompareForm = _srRenderCompareForm;
+
+    // 드롭다운 옵션에 메타 정보 포함
     const compareOpts = _srCompareState.quartersAvailable
         .filter(q => q.q !== baselineQ)
         .filter(q => _srCompareState.includeDraft || q.status === 'finalized')
         .map(q => {
+            const meta = _srCompareState.quarterMetaCache[q.q];
             const badge = q.status === 'finalized' ? '✅' : '📝';
-            const sel = q.q === _srCompareState.compareQuarter ? 'selected' : '';
-            return `<option value="${q.q}" ${sel}>${q.q} ${badge} ${q.status}</option>`;
+            const sel   = q.q === compareQ ? 'selected' : '';
+            const monthInfo = meta?.mainRepMonth
+                ? ` (${meta.mainRepMonth.slice(0,4)}년 ${Number(meta.mainRepMonth.slice(5,7))}월분)`
+                : '';
+            const bldCnt = meta?.verifiedBuildings ? ` · ${meta.verifiedBuildings}개 검수` : '';
+            return `<option value="${q.q}" ${sel}>${q.q} ${badge}${monthInfo}${bldCnt}</option>`;
         }).join('');
 
     body.innerHTML = `
@@ -4445,8 +4531,8 @@ function _srRenderCompareForm() {
           <div style="font-size:18px; font-weight:700; color:var(--text-primary);">
             ${baselineQ} ${baselineBadge}
           </div>
-          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
-            편집 모달 저장된 빌딩셋 · 제외목록 · 대표월 적용
+          <div style="font-size:11px; color:var(--text-muted); margin-top:4px; line-height:1.5;">
+            ${_srFormatQuarterMetaLabel(baselineMeta)}
           </div>
         </div>
 
@@ -4460,13 +4546,13 @@ function _srRenderCompareForm() {
                         display:block; letter-spacing:0.5px;">
             비교 대상 분기
           </label>
-          <select id="sr-cmp-qB" onchange="_srCompareState.compareQuarter=this.value"
+          <select id="sr-cmp-qB" onchange="window._srOnCompareSelect(this.value)"
             style="width:100%; padding:6px 10px; border:1px solid var(--border-color); border-radius:6px;
                    background:var(--bg-primary); color:var(--text-primary); font-size:14px; font-weight:600;">
             ${compareOpts}
           </select>
-          <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
-            동일 빌딩셋 · 동일 제외목록 · 대응월 매칭
+          <div id="sr-cmp-qB-meta" style="font-size:11px; color:var(--text-muted); margin-top:4px; line-height:1.5;">
+            ${_srFormatQuarterMetaLabel(compareMeta)}
           </div>
         </div>
       </div>
@@ -4475,7 +4561,7 @@ function _srRenderCompareForm() {
                   border-top:1px dashed var(--border-color);">
         <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
           <input type="checkbox" id="sr-cmp-draft" ${_srCompareState.includeDraft?'checked':''}
-            onchange="_srCompareState.includeDraft=this.checked; _srRenderCompareForm()">
+            onchange="window._srCompareState.includeDraft=this.checked; window._srRenderCompareForm()">
           작업중(draft) 분기 포함
         </label>
         <button onclick="_srRunCompareAnalysis()" id="sr-cmp-run-btn"
@@ -4511,6 +4597,20 @@ function _srRenderCompareForm() {
     </details>
     `;
 }
+
+/**
+ * 비교 대상 드롭다운 변경 핸들러
+ * - 상태 업데이트 + 메타 정보 박스 즉시 갱신
+ */
+window._srOnCompareSelect = function(q) {
+    _srCompareState.compareQuarter = q;
+    const metaEl = document.getElementById('sr-cmp-qB-meta');
+    if (metaEl) {
+        const meta = _srCompareState.quarterMetaCache[q];
+        metaEl.textContent = _srFormatQuarterMetaLabel(meta);
+    }
+    console.log(`[compare] 비교 대상 변경: ${q}`);
+};
 
 /**
  * "AI 분석하기" 핸들러
