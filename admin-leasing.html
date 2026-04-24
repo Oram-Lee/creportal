@@ -2497,13 +2497,32 @@
                 return;
             }
             
-            // publishDate 필터 패턴
-            let datePrefix = '';
-            if (year && month) {
-                datePrefix = `${year}.${month}`;
-            } else if (year) {
-                datePrefix = year;
+            // publishDate 필터 패턴 (★ v2.6.1: 2자리/4자리 연도 및 구분자 차이 모두 허용)
+            // Firebase 실데이터가 "26.04" 형식이고 프론트가 "2026.04"로 검색하면 매칭 실패하므로
+            // 가능한 모든 형식을 배열로 생성
+            let datePrefixes = null;
+            if (year) {
+                const fullYear = year.length === 2 ? `20${year}` : year;      // "26" → "2026"
+                const shortYear = year.length === 4 ? year.slice(-2) : year;  // "2026" → "26"
+                datePrefixes = [];
+                if (month) {
+                    const mm = String(month).padStart(2, '0');
+                    // 4자리 연도 + 2자리 월 (구분자 ./-/공백)
+                    datePrefixes.push(`${fullYear}.${mm}`);
+                    datePrefixes.push(`${fullYear}-${mm}`);
+                    datePrefixes.push(`${fullYear}/${mm}`);
+                    // 2자리 연도 + 2자리 월
+                    datePrefixes.push(`${shortYear}.${mm}`);
+                    datePrefixes.push(`${shortYear}-${mm}`);
+                    datePrefixes.push(`${shortYear}/${mm}`);
+                } else {
+                    // 연도만
+                    datePrefixes.push(fullYear);
+                    datePrefixes.push(shortYear);
+                }
             }
+            // ★ datePrefix는 디버깅/UI 표시용 대표값 (내부 매칭은 datePrefixes 배열 사용)
+            const datePrefix = datePrefixes ? (year && month ? `${year}.${String(month).padStart(2, '0')}` : year) : '';
             
             summaryDiv.style.display = 'block';
             summaryDiv.innerHTML = '🔄 조회 중...';
@@ -2578,8 +2597,8 @@
                         stats.matchedBySource++;
                         stats.datesForSource.add(vacDate || '(없음)');
                         
-                        // 2) 날짜 매칭
-                        if (datePrefix && !vacDate.startsWith(datePrefix)) continue;
+                        // 2) 날짜 매칭 (★ v2.6.1: 2자리/4자리 연도 구분자 모두 수용)
+                        if (datePrefixes && !datePrefixes.some(p => vacDate.startsWith(p))) continue;
                         stats.matchedByDate++;
                         bldgPassesDate = true;
                         
