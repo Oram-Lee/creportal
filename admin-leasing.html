@@ -2824,38 +2824,82 @@
                 transferWarning = `\n\n⚠️ ${building.transferredCount}건은 이관된 데이터입니다. 재OCR로 덮어쓰면 이관 흔적(transferredFrom)이 사라집니다.`;
             }
             
+            // ★ v2.6.2: 빌딩의 모든 페이지 이미지 수집 (unique pageImageUrl+pageNum 조합)
+            // 기존: pageImageUrl 하나만 처리 → 매트릭스가 다른 페이지에 있으면 놓침
+            // 수정: building.vacancies 전체에서 페이지 정보 수집 → 멀티페이지 재OCR
+            const pageMap = new Map();
+            for (const v of building.vacancies) {
+                const url = v.pageImageUrl || '';
+                const num = v.pageNum || 0;
+                if (!url) continue;
+                const key = `${num}|${url}`;
+                if (!pageMap.has(key)) {
+                    pageMap.set(key, { pageImageUrl: url, pageNum: num });
+                }
+            }
+            // 빌딩 대표 pageImageUrl도 폴백으로 추가
+            if (pageMap.size === 0 && building.pageImageUrl) {
+                pageMap.set('fallback', {
+                    pageImageUrl: building.pageImageUrl,
+                    pageNum: building.pageNum || 0
+                });
+            }
+            const pages = [...pageMap.values()].sort((a, b) => a.pageNum - b.pageNum);
+            
+            if (pages.length === 0) {
+                hideReocrLoadingModal();
+                showToast('원본 페이지 이미지가 없어 재OCR 불가', 'error');
+                return;
+            }
+            
+            const isMultiPage = pages.length > 1;
+            console.log(`[재OCR] ${pages.length}개 페이지 처리:`, pages.map(p => `P${p.pageNum}`));
+            
             const proceed = confirm(
                 `[${building.buildingName}] 재OCR을 실행합니다.\n\n` +
-                `원본 페이지: P${building.pageNum || '?'}\n` +
+                `처리 페이지: ${pages.map(p => 'P' + p.pageNum).join(', ')} (${pages.length}장)\n` +
                 `현재 저장된 공실: ${building.vacancies.length}건\n` +
                 `발간회사/일자: ${building.vacancies[0]?.source || '?'} / ${building.publishDate || '?'}` +
                 transferWarning +
-                `\n\nAI가 해당 페이지를 다시 분석합니다. 결과를 확인하고 덮어쓰기 여부를 결정할 수 있습니다.\n\n` +
+                `\n\nAI가 해당 페이지들을 다시 분석합니다. 결과를 확인하고 덮어쓰기 여부를 결정할 수 있습니다.\n\n` +
+                (isMultiPage ? `⏱️ 페이지가 ${pages.length}개라 ${pages.length * 15}초 내외 소요됩니다.\n\n` : '') +
                 `계속하시겠습니까?`
             );
             if (!proceed) return;
             
             // 로딩 모달 표시
-            showReocrLoadingModal(building.buildingName);
+            showReocrLoadingModal(building.buildingName + (isMultiPage ? ` (${pages.length}페이지)` : ''));
             
             try {
-                // 대표 공실에서 source/publishDate 추출
                 const sampleVac = building.vacancies[0] || {};
                 
-                const response = await fetch(`${API_BASE_URL}/api/ocr/reparse-page`, {
+                // ★ v2.6.2: 멀티페이지면 /reparse-building, 단일이면 /reparse-page 사용
+                const endpoint = isMultiPage ? '/api/ocr/reparse-building' : '/api/ocr/reparse-page';
+                const body = isMultiPage ? {
+                    pages: pages,
+                    source: sampleVac.source || '',
+                    publishDate: building.publishDate || sampleVac.publishDate || '',
+                    buildingHint: {
+                        name: building.buildingName,
+                        address: building.address,
+                        addressJibun: buildingsCache?.[building.buildingId]?.addressJibun || ''
+                    }
+                } : {
+                    pageImageUrl: pages[0].pageImageUrl,
+                    source: sampleVac.source || '',
+                    publishDate: building.publishDate || sampleVac.publishDate || '',
+                    pageNum: pages[0].pageNum || 0,
+                    buildingHint: {
+                        name: building.buildingName,
+                        address: building.address,
+                        addressJibun: buildingsCache?.[building.buildingId]?.addressJibun || ''
+                    }
+                };
+                
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        pageImageUrl: building.pageImageUrl,
-                        source: sampleVac.source || '',
-                        publishDate: building.publishDate || sampleVac.publishDate || '',
-                        pageNum: building.pageNum || 0,
-                        buildingHint: {
-                            name: building.buildingName,
-                            address: building.address,
-                            addressJibun: buildingsCache?.[building.buildingId]?.addressJibun || ''
-                        }
-                    })
+                    body: JSON.stringify(body)
                 });
                 
                 if (!response.ok) {
@@ -2870,8 +2914,13 @@
                     throw new Error(result.error || '파싱 실패');
                 }
                 
-                // 비교 모달 표시
-                showReocrCompareModal(idx, building, result.parsed, result.stats);
+                // ★ v2.6.2: 멀티페이지 응답은 perPage 요약도 포함 — 콘솔에 디버그 로그
+                if (result.perPage) {
+                    console.log('[재OCR] 페이지별 결과:', result.perPage);
+                }
+                
+                // 비교 모달 표시 (single/building 엔드포인트 둘 다 parsed 필드 사용)
+                showReocrCompareModal(idx, building, result.parsed, result.stats, result.perPage);
                 
             } catch (err) {
                 hideReocrLoadingModal();
@@ -2960,7 +3009,7 @@
         // ─────────────────────────────────────────────────────────────────
         // 비교 모달: 기존 공실 vs 새로 추출된 공실
         // ─────────────────────────────────────────────────────────────────
-        function showReocrCompareModal(idx, building, parsed, stats) {
+        function showReocrCompareModal(idx, building, parsed, stats, perPage) {
             // 임시 저장 (확정 버튼에서 사용)
             window._reocrPendingCompare = { idx, building, parsed, stats };
             
@@ -2988,6 +3037,25 @@
             const bp = parsed?.basePricing || {};
             const bpSingle = bp.single || {};
             const hasBasePricing = !!(bpSingle.rentPy || bpSingle.depositPy);
+            
+            // ★ v2.6.2: 페이지별 결과 요약 (멀티페이지일 때만)
+            let perPageHtml = '';
+            if (perPage && perPage.length > 0) {
+                const rows = perPage.map(p => {
+                    const statusIcon = p.status === 'ok' ? '✅' : '❌';
+                    const detail = p.status === 'ok' 
+                        ? `${p.vacancyCount}건 추출${p.hasBasePricing ? ' + 기준가' : ''}`
+                        : (p.error || p.reason || '실패');
+                    return `<tr><td style="padding:4px 8px;">${statusIcon} P${p.pageNum}</td><td style="padding:4px 8px; color:#64748b;">${detail}</td></tr>`;
+                }).join('');
+                perPageHtml = `
+                    <div style="margin-bottom: 10px; padding: 8px 12px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 6px; font-size: 11px;">
+                        <b style="color: #4338ca;">📄 페이지별 결과 (${perPage.length}장 처리)</b>
+                        <table style="margin-top: 4px; width: 100%; font-size: 11px;">
+                            ${rows}
+                        </table>
+                    </div>`;
+            }
             
             // vacancy 렌더링 (왼쪽=기존, 오른쪽=신규)
             const renderVac = (v, isNew) => {
@@ -3053,6 +3121,7 @@
                             </div>
                         </div>
                         
+                        ${perPageHtml}
                         ${basePricingHtml}
                         
                         <!-- 공실 수 -->
