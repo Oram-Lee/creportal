@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>임대안내문 업데이트 v2.2 - CRE PORTAL 관리</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>임대안내문 업데이트 v2.6.3 - CRE PORTAL 관리</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -862,8 +865,10 @@
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <span style="font-size: 18px;">🔄</span>
                     <div>
-                        <div style="font-weight: 700; color: #0c4a6e; font-size: 15px;">기존 OCR 재처리 (빌딩 단위)</div>
-                        <div style="font-size: 11px; color: #475569; margin-top: 2px;">회사·발행연월 선택 → 잘못 추출된 특정 빌딩만 재OCR 후 덮어쓰기</div>
+                        <div style="font-weight: 700; color: #0c4a6e; font-size: 15px;">기존 OCR 재처리 (빌딩 단위) 
+                            <span style="font-size: 10px; background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 600;">v2.6.3</span>
+                        </div>
+                        <div style="font-size: 11px; color: #475569; margin-top: 2px;">회사·발행연월 선택 → 잘못 추출된 특정 빌딩만 재OCR 후 덮어쓰기 · 멀티페이지/인접페이지 자동 처리</div>
                     </div>
                 </div>
                 <span id="reocrToggleIcon" style="font-size: 18px; color: #64748b;">▼</span>
@@ -2806,6 +2811,77 @@
         // ═══════════════════════════════════════════════════════════════════
         // ★ v2.6: 재OCR 실행 — 백엔드 API 호출 + 비교 모달 + 덮어쓰기
         // ═══════════════════════════════════════════════════════════════════
+        
+        /**
+         * ★ v2.6.3: 인접 페이지 URL 추정
+         * 기존 DB에 page 59만 저장되어 있어도 URL 패턴에서 "59"를 찾아 "60" URL 생성 시도.
+         * 서버는 404 만나면 perPage에 실패 기록만 남기고 계속 진행하므로 안전.
+         * 
+         * 지원 패턴:
+         *   .../page_59.png, .../page59.png, .../p59.png
+         *   .../pages/59.png, .../59_thumbnail.png (선택적)
+         *   .../something_59.png (숫자가 확장자 앞에 붙는 경우)
+         */
+        function inferAdjacentPages(pageImageUrl, pageNum) {
+            if (!pageImageUrl) return [];
+            const guessed = [];
+            
+            // 시도할 패턴들 (가장 구체적인 것부터)
+            const patterns = [
+                /(page[_-]?)(\d+)(\.)/i,          // page_59. / page59.
+                /(\/p)(\d+)(\.)/i,                 // /p59.
+                /(pages?%2F)(\d+)(\.)/i,           // pages%2F59.  (URL encoded /)
+                /(pages?\/)(\d+)(\.)/i,            // pages/59.
+                /([_-])(\d+)(\.(?:png|jpg|jpeg|webp))/i,  // _59.png — 쿼리스트링 앞에서 자연 종료
+            ];
+            
+            for (const pat of patterns) {
+                const m = pageImageUrl.match(pat);
+                if (!m) continue;
+                
+                const [full, prefix, numStr, suffix] = m;
+                const foundNum = parseInt(numStr);
+                
+                // URL의 숫자가 pageNum과 일치 또는 근접해야 신뢰
+                if (Math.abs(foundNum - pageNum) > 2 && pageNum > 0) {
+                    continue;  // 엉뚱한 숫자 매칭 방지 (예: 타임스탬프)
+                }
+                
+                // 다음 페이지 번호 (pageNum 기준 +1)
+                // 만약 URL 숫자와 pageNum이 다르면 URL 숫자 기준 +1 시도
+                const base = foundNum;
+                const nextNum = base + 1;
+                const nextNumStr = String(nextNum).padStart(numStr.length, '0');
+                
+                // URL의 첫 매칭 위치만 치환 (replace with function)
+                const nextUrl = pageImageUrl.replace(pat, prefix + nextNumStr + suffix);
+                
+                if (nextUrl !== pageImageUrl) {
+                    guessed.push({
+                        pageImageUrl: nextUrl,
+                        pageNum: pageNum + 1,
+                        _guessed: true,
+                    });
+                    
+                    // 이전 페이지도 하나 추가 시도 (요약표가 앞에 있을 수도)
+                    if (base > 1) {
+                        const prevNumStr = String(base - 1).padStart(numStr.length, '0');
+                        const prevUrl = pageImageUrl.replace(pat, prefix + prevNumStr + suffix);
+                        if (prevUrl !== pageImageUrl && prevUrl !== nextUrl) {
+                            guessed.unshift({
+                                pageImageUrl: prevUrl,
+                                pageNum: Math.max(1, pageNum - 1),
+                                _guessed: true,
+                            });
+                        }
+                    }
+                }
+                break;  // 첫 매칭 패턴에서 중단
+            }
+            
+            return guessed;
+        }
+        
         window.reocrRerunBuilding = async function(idx) {
             const building = reocrState.buildings[idx];
             if (!building) return;
@@ -2844,7 +2920,23 @@
                     pageNum: building.pageNum || 0
                 });
             }
-            const pages = [...pageMap.values()].sort((a, b) => a.pageNum - b.pageNum);
+            let pages = [...pageMap.values()].sort((a, b) => a.pageNum - b.pageNum);
+            
+            // ★ v2.6.3: 단일 페이지만 수집된 경우 인접 페이지 URL 자동 추정
+            // 기존 DB에 page 59만 저장됐어도 page 60 URL을 추정해서 함께 파싱
+            // (서버가 404 만나면 perPage에 실패 기록만 하고 계속 진행하도록 설계됨)
+            if (pages.length === 1) {
+                const basePage = pages[0];
+                const guessed = inferAdjacentPages(basePage.pageImageUrl, basePage.pageNum);
+                if (guessed.length > 0) {
+                    console.log(`[재OCR] 인접 페이지 추정 추가:`, guessed.map(g => `P${g.pageNum}`));
+                    pages = [...pages, ...guessed].sort((a, b) => a.pageNum - b.pageNum);
+                }
+            }
+            
+            console.log(`[재OCR v2.6.3] 처리 대상: ${pages.length}개 페이지 —`, pages.map(p => 
+                p._guessed ? `P${p.pageNum}(추정)` : `P${p.pageNum}`
+            ));
             
             if (pages.length === 0) {
                 hideReocrLoadingModal();
@@ -2853,7 +2945,6 @@
             }
             
             const isMultiPage = pages.length > 1;
-            console.log(`[재OCR] ${pages.length}개 페이지 처리:`, pages.map(p => `P${p.pageNum}`));
             
             const proceed = confirm(
                 `[${building.buildingName}] 재OCR을 실행합니다.\n\n` +
