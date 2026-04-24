@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>임대안내문 업데이트 v2.6.5 - CRE PORTAL 관리</title>
+    <title>임대안내문 업데이트 v2.6.4 - CRE PORTAL 관리</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -866,9 +866,9 @@
                     <span style="font-size: 18px;">🔄</span>
                     <div>
                         <div style="font-weight: 700; color: #0c4a6e; font-size: 15px;">기존 OCR 재처리 (빌딩 단위) 
-                            <span style="font-size: 10px; background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 600;">v2.6.5</span>
+                            <span style="font-size: 10px; background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 600;">v2.6.4</span>
                         </div>
-                        <div style="font-size: 11px; color: #475569; margin-top: 2px;">회사·발행연월 선택 → 잘못 추출된 특정 빌딩만 재OCR 후 덮어쓰기 · 멀티페이지/인접페이지 자동 처리 · pageImageUrl 차용</div>
+                        <div style="font-size: 11px; color: #475569; margin-top: 2px;">회사·발행연월 선택 → 잘못 추출된 특정 빌딩만 재OCR 후 덮어쓰기 · 멀티페이지/인접페이지 자동 처리</div>
                     </div>
                 </div>
                 <span id="reocrToggleIcon" style="font-size: 18px; color: #64748b;">▼</span>
@@ -2645,11 +2645,8 @@
                     
                     // 이관된 공실 개수 계산 (빌딩 단위 통계용)
                     const transferredInThisBldg = matchingVacs.filter(v => v.transferredFrom).length;
-                    // ★ v2.6.5: pageImageUrl과 pageNum을 같은 공실에서 뽑아 일관성 보장
-                    // 기존: URL은 첫 유효 공실에서, pageNum은 matchingVacs[0]에서 → 불일치 시 inferAdjacentPages가 엉뚱한 숫자 매칭
-                    const vacWithPage = matchingVacs.find(v => v.pageImageUrl) || matchingVacs[0] || {};
-                    const pageImageUrl = vacWithPage.pageImageUrl || null;
-                    const pageNum = vacWithPage.pageNum || null;
+                    const pageImageUrl = matchingVacs.find(v => v.pageImageUrl)?.pageImageUrl || null;
+                    const pageNum = matchingVacs[0].pageNum || null;
                     const publishDate = matchingVacs[0].publishDate || '';
                     
                     matched.push({
@@ -2889,32 +2886,8 @@
             const building = reocrState.buildings[idx];
             if (!building) return;
             
-            // ★ v2.6.5: pageImageUrl이 없거나 공실 중 유효 URL이 없는 경우
-            // 같은 buildingId + 같은 source의 다른 기간 공실에서 URL을 차용해서라도 재OCR 시도
-            // (같은 빌딩을 매월 똑같은 PDF로 업로드하는 경우가 많아 타 기간 이미지도 그대로 유효함)
-            // 덮어쓰기 대상은 여전히 선택된 source+publishDate로만 한정되므로 안전
-            if (!building.pageImageUrl && typeof vacanciesCache !== 'undefined' && vacanciesCache?.[building.buildingId]) {
-                const allBldgVacs = Object.values(vacanciesCache[building.buildingId] || {});
-                const targetSource = (building.vacancies[0]?.source || '').toLowerCase().trim();
-                const donorVac = allBldgVacs.find(v => 
-                    v && v.pageImageUrl && 
-                    (v.source || '').toLowerCase().trim() === targetSource
-                );
-                if (donorVac) {
-                    console.log('[재OCR v2.6.5] pageImageUrl 타 기간에서 차용:', {
-                        from_publishDate: donorVac.publishDate,
-                        to_publishDate: building.publishDate,
-                        source: targetSource,
-                        url: (donorVac.pageImageUrl || '').slice(0, 80) + '...'
-                    });
-                    building.pageImageUrl = donorVac.pageImageUrl;
-                    building.pageNum = donorVac.pageNum || 0;
-                    building._borrowedFromDate = donorVac.publishDate || '?';
-                }
-            }
-            
             if (!building.pageImageUrl) {
-                showToast('원본 페이지 이미지가 없어 재OCR할 수 없습니다. 같은 빌딩의 동일 발간회사 다른 기간에도 페이지 이미지가 없습니다. 해당 임대안내문을 다시 업로드해주세요.', 'error');
+                showToast('원본 페이지 이미지가 없어 재OCR할 수 없습니다. 해당 임대안내문을 다시 업로드해주세요.', 'error');
                 return;
             }
             
@@ -2949,49 +2922,35 @@
             }
             let pages = [...pageMap.values()].sort((a, b) => a.pageNum - b.pageNum);
             
-            // ★ v2.6.5: 인접 페이지 추정을 단일뿐 아니라 페이지 적을 때 폭넓게 적용
-            // 기존: pages.length === 1에서만 작동 → 2페이지 잡혔는데 둘 다 요약표인 케이스 놓침
-            // 수정: pages.length <= 2일 때 추정하되, 이미 존재하는 (pageNum|URL) 조합은 중복 제거
+            // ★ v2.6.4: 단일 페이지만 수집된 경우 인접 페이지 URL 자동 추정
+            // 기존 DB에 page 59만 저장됐어도 page 60 URL을 추정해서 함께 파싱
             // (서버가 404 만나면 perPage에 실패 기록만 하고 계속 진행하도록 설계됨)
-            if (pages.length > 0 && pages.length <= 2) {
+            if (pages.length === 1) {
                 const basePage = pages[0];
                 const guessed = inferAdjacentPages(basePage.pageImageUrl, basePage.pageNum);
                 if (guessed.length > 0) {
-                    const existingKeys = new Set(pages.map(p => `${p.pageNum}|${p.pageImageUrl}`));
-                    const dedupedGuessed = guessed.filter(g => !existingKeys.has(`${g.pageNum}|${g.pageImageUrl}`));
-                    if (dedupedGuessed.length > 0) {
-                        console.log(`[재OCR v2.6.5] 인접 페이지 추정 추가:`, dedupedGuessed.map(g => `P${g.pageNum}`));
-                        pages = [...pages, ...dedupedGuessed].sort((a, b) => a.pageNum - b.pageNum);
-                    }
+                    console.log(`[재OCR] 인접 페이지 추정 추가:`, guessed.map(g => `P${g.pageNum}`));
+                    pages = [...pages, ...guessed].sort((a, b) => a.pageNum - b.pageNum);
                 }
             }
             
-            console.log(`[재OCR v2.6.5] 처리 대상: ${pages.length}개 페이지 —`, pages.map(p => 
+            console.log(`[재OCR v2.6.4] 처리 대상: ${pages.length}개 페이지 —`, pages.map(p => 
                 p._guessed ? `P${p.pageNum}(추정)` : `P${p.pageNum}`
             ));
             
             if (pages.length === 0) {
                 hideReocrLoadingModal();
-                showToast('원본 페이지 이미지가 없어 재OCR 불가 — vacancies와 building 양쪽 모두 pageImageUrl이 비어있음', 'error');
+                showToast('원본 페이지 이미지가 없어 재OCR 불가', 'error');
                 return;
             }
             
             const isMultiPage = pages.length > 1;
-            
-            // ★ v2.6.5: 타 기간에서 URL을 차용한 경우 사용자에게 명시
-            let borrowNote = '';
-            if (building._borrowedFromDate) {
-                borrowNote = `\n\n🔁 [URL 차용] 선택한 기간(${building.publishDate || '?'})에 페이지 이미지가 없어,\n` +
-                             `동일 빌딩의 ${building._borrowedFromDate} 이미지로 재OCR을 시도합니다.\n` +
-                             `(덮어쓰기는 ${building.publishDate || '선택 기간'} 공실에만 한정됩니다)`;
-            }
             
             const proceed = confirm(
                 `[${building.buildingName}] 재OCR을 실행합니다.\n\n` +
                 `처리 페이지: ${pages.map(p => 'P' + p.pageNum).join(', ')} (${pages.length}장)\n` +
                 `현재 저장된 공실: ${building.vacancies.length}건\n` +
                 `발간회사/일자: ${building.vacancies[0]?.source || '?'} / ${building.publishDate || '?'}` +
-                borrowNote +
                 transferWarning +
                 `\n\nAI가 해당 페이지들을 다시 분석합니다. 결과를 확인하고 덮어쓰기 여부를 결정할 수 있습니다.\n\n` +
                 (isMultiPage ? `⏱️ 페이지가 ${pages.length}개라 ${pages.length * 15}초 내외 소요됩니다.\n\n` : '') +
@@ -3005,34 +2964,12 @@
             try {
                 const sampleVac = building.vacancies[0] || {};
                 
-                // ★ v2.6.5: sampleVac.source가 비어있으면 다른 공실에서 찾아봄
-                // (백엔드는 'source is required' 400 반환해 사용자에게 원인 불투명)
-                let effectiveSource = sampleVac.source || '';
-                if (!effectiveSource) {
-                    const vacWithSource = building.vacancies.find(v => v.source);
-                    effectiveSource = vacWithSource?.source || '';
-                    if (effectiveSource) {
-                        console.log('[재OCR v2.6.5] source를 다른 공실에서 차용:', effectiveSource);
-                    }
-                }
-                if (!effectiveSource) {
-                    hideReocrLoadingModal();
-                    showToast('공실에 발간회사(source) 정보가 저장되어 있지 않아 재OCR 불가', 'error');
-                    return;
-                }
-                
-                let effectivePublishDate = building.publishDate || sampleVac.publishDate || '';
-                if (!effectivePublishDate) {
-                    const vacWithDate = building.vacancies.find(v => v.publishDate);
-                    effectivePublishDate = vacWithDate?.publishDate || '';
-                }
-                
                 // ★ v2.6.2: 멀티페이지면 /reparse-building, 단일이면 /reparse-page 사용
                 const endpoint = isMultiPage ? '/api/ocr/reparse-building' : '/api/ocr/reparse-page';
                 const body = isMultiPage ? {
                     pages: pages,
-                    source: effectiveSource,
-                    publishDate: effectivePublishDate,
+                    source: sampleVac.source || '',
+                    publishDate: building.publishDate || sampleVac.publishDate || '',
                     buildingHint: {
                         name: building.buildingName,
                         address: building.address,
@@ -3040,8 +2977,8 @@
                     }
                 } : {
                     pageImageUrl: pages[0].pageImageUrl,
-                    source: effectiveSource,
-                    publishDate: effectivePublishDate,
+                    source: sampleVac.source || '',
+                    publishDate: building.publishDate || sampleVac.publishDate || '',
                     pageNum: pages[0].pageNum || 0,
                     buildingHint: {
                         name: building.buildingName,
@@ -3049,14 +2986,6 @@
                         addressJibun: buildingsCache?.[building.buildingId]?.addressJibun || ''
                     }
                 };
-                
-                console.log('[재OCR v2.6.5] API 요청:', {
-                    endpoint,
-                    source: effectiveSource,
-                    publishDate: effectivePublishDate,
-                    pageCount: pages.length,
-                    borrowedFromDate: building._borrowedFromDate || null
-                });
                 
                 const response = await fetch(`${API_BASE_URL}${endpoint}`, {
                     method: 'POST',
