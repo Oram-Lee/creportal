@@ -856,61 +856,6 @@
             <span class="badge">OCR 자동 추출</span>
         </div>
         
-        <!-- ★ v2.3: 재OCR 관리 패널 (기존 OCR 추출물 재처리) -->
-        <div class="reocr-panel" id="reocrPanel" style="margin-bottom: 24px; border: 1px solid var(--border-color); border-radius: 10px; background: white; overflow: hidden;">
-            <div class="reocr-header" onclick="toggleReocrPanel()" style="padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: linear-gradient(90deg, #f0f9ff 0%, #eff6ff 100%); border-bottom: 1px solid transparent;">
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <span style="font-size: 18px;">🔄</span>
-                    <div>
-                        <div style="font-weight: 700; color: #0c4a6e; font-size: 15px;">기존 OCR 재처리 (빌딩 단위)</div>
-                        <div style="font-size: 11px; color: #475569; margin-top: 2px;">회사·발행연월 선택 → 잘못 추출된 특정 빌딩만 재OCR 후 덮어쓰기</div>
-                    </div>
-                </div>
-                <span id="reocrToggleIcon" style="font-size: 18px; color: #64748b;">▼</span>
-            </div>
-            
-            <div class="reocr-body" id="reocrBody" style="padding: 20px; display: none; background: #fafafa;">
-                <!-- 필터 영역 -->
-                <div style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 160px;">
-                        <label style="font-size: 12px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">발간회사</label>
-                        <select id="reocrSource" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
-                            <option value="">선택하세요</option>
-                        </select>
-                    </div>
-                    <div style="flex: 1; min-width: 120px;">
-                        <label style="font-size: 12px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">발간연도</label>
-                        <select id="reocrYear" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
-                            <option value="">전체</option>
-                        </select>
-                    </div>
-                    <div style="flex: 1; min-width: 120px;">
-                        <label style="font-size: 12px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">발간월</label>
-                        <select id="reocrMonth" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
-                            <option value="">전체</option>
-                            <option value="01">1월</option><option value="02">2월</option>
-                            <option value="03">3월</option><option value="04">4월</option>
-                            <option value="05">5월</option><option value="06">6월</option>
-                            <option value="07">7월</option><option value="08">8월</option>
-                            <option value="09">9월</option><option value="10">10월</option>
-                            <option value="11">11월</option><option value="12">12월</option>
-                        </select>
-                    </div>
-                    <div style="flex: 2; min-width: 200px;">
-                        <label style="font-size: 12px; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">빌딩명 검색 (선택)</label>
-                        <input type="text" id="reocrBuildingFilter" placeholder="빌딩명 일부 입력..." style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
-                    </div>
-                    <button onclick="searchExistingOcr()" style="padding: 8px 20px; background: #0284c7; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; white-space: nowrap;">
-                        🔍 조회
-                    </button>
-                </div>
-                
-                <!-- 결과 영역 -->
-                <div id="reocrSummary" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px; display: none;"></div>
-                <div id="reocrResults" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; max-height: 560px; overflow-y: auto; padding: 4px;"></div>
-            </div>
-        </div>
-        
         <!-- STEP 1: 기본 정보 -->
         <div class="step-card" id="step1">
             <div class="step-header">
@@ -1723,190 +1668,6 @@
         }
         
         // 문자열 유사도 (0~1)
-        // ═══════════════════════════════════════════════════════════════════
-        // ★ v2.4: 빌딩명 매칭 강화 (영한 음차 + 토큰 정렬 + 공통 지명)
-        // ═══════════════════════════════════════════════════════════════════
-        
-        // 영문 → 한글 음차 변환 매핑 (실무에서 자주 쓰이는 것 위주)
-        const ROMAN_TO_KOREAN_MAP = [
-            // 지역/브랜드 (가장 흔한 것부터)
-            ['K-SQUARE',   '케이스퀘어'],
-            ['KSQUARE',    '케이스퀘어'],
-            ['SQUARE',     '스퀘어'],
-            ['TOWER',      '타워'],
-            ['PLAZA',      '플라자'],
-            ['CENTER',     '센터'],
-            ['CENTRE',     '센터'],
-            ['PARK',       '파크'],
-            ['CITY',       '시티'],
-            ['HILL',       '힐'],
-            ['HILLS',      '힐즈'],
-            ['VIEW',       '뷰'],
-            ['GARDEN',     '가든'],
-            ['CASTLE',     '캐슬'],
-            ['PALACE',     '팰리스'],
-            ['HOUSE',      '하우스'],
-            ['HOME',       '홈'],
-            ['VILLA',      '빌라'],
-            ['PLACE',      '플레이스'],
-            ['STATION',    '스테이션'],
-            ['CUBE',       '큐브'],
-            ['OFFICE',     '오피스'],
-            ['BUILDING',   '빌딩'],
-            ['SMART',      '스마트'],
-            ['DIGITAL',    '디지털'],
-            ['TECH',       '테크'],
-            ['BIO',        '바이오'],
-            ['MEDIA',      '미디어'],
-            ['PRIME',      '프라임'],
-            ['GRAND',      '그랜드'],
-            ['ROYAL',      '로얄'],
-            ['PREMIUM',    '프리미엄'],
-            // 숫자
-            ['ONE',        '원'],
-            ['TWO',        '투'],
-            ['THREE',      '쓰리'],
-            // 기타 자주 쓰이는 어휘
-            ['ROAD',       '로'],
-            ['STREET',     '스트리트'],
-            ['GATE',       '게이트'],
-            ['NORTH',      '노스'],
-            ['SOUTH',      '사우스'],
-            ['EAST',       '이스트'],
-            ['WEST',       '웨스트'],
-        ];
-        
-        // 한글 → 영문 역방향 맵 (매칭에서 양방향 처리)
-        const KOREAN_TO_ROMAN_MAP = ROMAN_TO_KOREAN_MAP.map(([en, ko]) => [ko, en]);
-        
-        // 서울/경기 주요 지명 키워드 (공통 지명 보너스용)
-        const LOCATION_KEYWORDS = [
-            // 서울 주요 오피스 지구
-            '마곡', '상암', '여의도', '광화문', '종로', '을지로', '명동', '충무로',
-            '강남', '역삼', '삼성', '테헤란', '서초', '반포', '방배', '양재',
-            '잠실', '송파', '천호', '문정',
-            '용산', '한남', '이태원',
-            '성수', '건대', '왕십리', '성북',
-            '홍대', '합정', '마포', '공덕',
-            '구로', '가산', '독산', '신도림', '영등포',
-            '여의도', '목동',
-            // 경기 주요 지역
-            '판교', '분당', '수지', '성남', '일산', '광교',
-            '동탄', '안양', '과천',
-            // 블록/지구 번호 (마곡 특유)
-            'CP1', 'CP2', 'CP3', 'CP4', 'CP5',
-            'D1', 'D2', 'DMC',
-        ];
-        
-        // 빌딩명 정규화 (매칭 전처리)
-        function normalizeBuildingName(name) {
-            if (!name) return '';
-            let norm = String(name).trim();
-            
-            // 괄호 + 내용 제거 (예: "K-SQUARE(CP3-2)" → "K-SQUARE")
-            // ★ 단, CP3-2 같은 구획번호는 별도 보존용으로 추출해 두고 나중에 사용
-            norm = norm.replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ');
-            
-            // 하이픈/언더스코어/중점/앰퍼샌드 → 공백
-            norm = norm.replace(/[-_·&~]/g, ' ');
-            
-            // 건물 일반 접미사 제거 (빌딩/타워/센터/오피스 등)
-            norm = norm.replace(/빌딩|타워|센터|오피스|building|tower|center|centre|office/gi, ' ');
-            
-            // 공백 정규화 + 소문자
-            norm = norm.replace(/\s+/g, ' ').trim().toLowerCase();
-            
-            return norm;
-        }
-        
-        // 양방향 음차 변환 — 입력 문자열의 영문 토큰을 한글로 바꾼 버전 생성
-        function toKoreanTranslit(str) {
-            if (!str) return '';
-            let result = String(str).toUpperCase();
-            // 긴 단어부터 치환 (SQUARE보다 K-SQUARE를 먼저)
-            for (const [en, ko] of ROMAN_TO_KOREAN_MAP) {
-                result = result.replace(new RegExp(en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), ko);
-            }
-            return result.toLowerCase();
-        }
-        
-        // 한글 → 영문 음차 변환 (역방향)
-        function toEnglishTranslit(str) {
-            if (!str) return '';
-            let result = String(str);
-            // 긴 한글부터 치환
-            const sortedMap = [...KOREAN_TO_ROMAN_MAP].sort((a, b) => b[0].length - a[0].length);
-            for (const [ko, en] of sortedMap) {
-                result = result.replace(new RegExp(ko, 'g'), ' ' + en + ' ');
-            }
-            return result.replace(/\s+/g, ' ').trim().toLowerCase();
-        }
-        
-        // 빌딩명의 모든 비교 가능한 variant 생성 (원본/정규화/영한변환/한영변환)
-        function getBuildingNameVariants(name) {
-            if (!name) return new Set();
-            
-            const normalized = normalizeBuildingName(name);
-            const toKoreanized = normalizeBuildingName(toKoreanTranslit(name));
-            const toEnglishized = normalizeBuildingName(toEnglishTranslit(name));
-            
-            // 공백 제거 버전도 포함 (한국어는 띄어쓰기가 유동적)
-            const nospaceKo = toKoreanized.replace(/\s/g, '');
-            const nospaceEn = toEnglishized.replace(/\s/g, '');
-            const nospaceNorm = normalized.replace(/\s/g, '');
-            
-            // 토큰 정렬 버전 (순서 무관 매칭용)
-            const sortTokens = (s) => s.split(/\s+/).filter(Boolean).sort().join(' ');
-            
-            const variants = new Set([
-                normalized,
-                toKoreanized,
-                toEnglishized,
-                nospaceKo,
-                nospaceEn,
-                nospaceNorm,
-                sortTokens(normalized),
-                sortTokens(toKoreanized),
-                sortTokens(toEnglishized),
-            ].filter(Boolean));
-            
-            return variants;
-        }
-        
-        // 두 이름의 variant 세트 전수 비교 → 최고 유사도 반환
-        function nameSimilarityAdvanced(name1, name2) {
-            if (!name1 || !name2) return 0;
-            
-            const variants1 = getBuildingNameVariants(name1);
-            const variants2 = getBuildingNameVariants(name2);
-            
-            let maxSim = 0;
-            for (const v1 of variants1) {
-                for (const v2 of variants2) {
-                    const sim = stringSimilarity(v1, v2);
-                    if (sim > maxSim) maxSim = sim;
-                    if (maxSim >= 0.99) return 1; // 조기 종료
-                }
-            }
-            
-            // ★ 공통 지명 보너스 - 양쪽에 같은 지역 키워드가 있으면 보너스
-            const upper1 = String(name1).toUpperCase();
-            const upper2 = String(name2).toUpperCase();
-            const commonLocations = LOCATION_KEYWORDS.filter(kw => {
-                const kwUp = kw.toUpperCase();
-                return upper1.includes(kwUp) && upper2.includes(kwUp);
-            });
-            
-            if (commonLocations.length > 0) {
-                // 공통 지명 1개 → +0.2, 2개 → +0.3 (최대 0.35)
-                const bonus = Math.min(0.35, 0.15 + commonLocations.length * 0.1);
-                maxSim = Math.max(maxSim, maxSim + bonus);
-                maxSim = Math.min(maxSim, 1.0); // 상한 1.0
-            }
-            
-            return maxSim;
-        }
-        
         function stringSimilarity(str1, str2) {
             if (!str1 || !str2) return 0;
             const s1 = str1.toLowerCase();
@@ -1966,12 +1727,13 @@
         
         // 빌딩 매칭 (프론트엔드)
         // 빌딩 매칭 (프론트엔드)
-        // ★ v2.4: 영한 음차/토큰정렬/공통지명 보너스 포함한 이름 유사도 + threshold 완화
-        async function matchBuilding(buildingName, address, threshold = 0.4, inputCoords = null) {
+        // ★ v2.3: 좌표 거리 검증 + 가중치 재조정 (주소 80 / 이름 20) + 반자동 승인
+        async function matchBuilding(buildingName, address, threshold = 0.7, inputCoords = null) {
             const buildings = await loadBuildings();
             const candidates = [];
             
             const inputAddrKey = extractAddressKey(address);
+            const inputNameNorm = (buildingName || '').replace(/빌딩|타워|센터|오피스/g, '').trim().toLowerCase();
             
             // ★ v2.3: 좌표 거리 임계값 (m) — "동일 건물" 확신 거리
             const COORD_SAME_BUILDING_M = 100;
@@ -1981,6 +1743,7 @@
                 
                 const bldgAddr = bldg.address || '';
                 const bldgAddrJibun = bldg.addressJibun || '';
+                const bldgName = (bldg.name || '').replace(/빌딩|타워|센터|오피스/g, '').trim().toLowerCase();
                 
                 // 주소 유사도
                 const addrKey = extractAddressKey(bldgAddr);
@@ -2005,32 +1768,28 @@
                     }
                 }
                 
-                // ★ v2.4: 이름 유사도 — 영한 음차 + 토큰 정렬 + 공통 지명 보너스
-                let nameSim = nameSimilarityAdvanced(buildingName, bldg.name);
+                // 이름 유사도
+                let nameSim = stringSimilarity(inputNameNorm, bldgName);
                 
-                // ★ #13 + v2.4: aliases 비교 — 각 별칭에도 동일 로직 적용
+                // ★ #13: aliases 비교 — 별칭 중 가장 높은 유사도 적용
                 const aliases = bldg.aliases || [];
                 if (aliases.length > 0) {
-                    const aliasSims = aliases.map(al => nameSimilarityAdvanced(buildingName, al));
+                    const aliasSims = aliases.map(al => {
+                        const aliasNorm = (al || '').replace(/빌딩|타워|센터|오피스/g, '').trim().toLowerCase();
+                        return stringSimilarity(inputNameNorm, aliasNorm);
+                    });
                     const bestAliasSim = Math.max(...aliasSims);
                     nameSim = Math.max(nameSim, bestAliasSim);
                 }
                 
-                // ★ v2.4: 가중치 재조정 — 주소가 빈약한 경우(예: "마곡동 CP3-2") 이름 가중치 상향
-                // 주소 유사도가 0.3 미만이고 이름 유사도가 높으면 이름 기반 판정 (60/40)
-                let totalScore;
-                if (bestAddrSim < 0.3 && nameSim >= 0.6) {
-                    // 비정형 주소 + 강한 이름 매칭 → 이름 우선
-                    totalScore = nameSim * 0.6 + bestAddrSim * 0.4;
-                } else {
-                    // 일반 케이스 — 주소 80% + 이름 20%
-                    totalScore = bestAddrSim * 0.8 + nameSim * 0.2;
-                }
+                // ★ v2.3: 가중치 재조정 (주소 80% + 이름 20%)
+                // 이유: 빌딩명은 임대안내문마다 천차만별이지만 주소는 비교적 안정적
+                const totalScore = bestAddrSim * 0.8 + nameSim * 0.2;
                 
                 // ★ v2.3: 좌표가 100m 이내인데 이름이 많이 다른 경우 → 확인 필요 플래그
                 const needsCoordConfirmation = coordBoosted && nameSim < 0.4;
                 
-                if (totalScore >= threshold || coordBoosted || nameSim >= 0.7) {
+                if (totalScore >= threshold || coordBoosted) {
                     candidates.push({
                         buildingId: bldgId,
                         name: bldg.name,
@@ -2041,34 +1800,27 @@
                         nameScore: nameSim,
                         coordDistance: coordDistance,
                         coordBoosted: coordBoosted,
-                        needsCoordConfirmation: needsCoordConfirmation,
-                        // ★ v2.4: 이름만으로 강하게 매칭된 후보 표시
-                        isNameStrongMatch: nameSim >= 0.7 && bestAddrSim < 0.5,
+                        needsCoordConfirmation: needsCoordConfirmation
                     });
                 }
             }
             
-            // 점수 순 정렬 — 좌표 부스트 최우선, 다음 이름 강매칭, 마지막 점수
+            // 점수 순 정렬 — 좌표 부스트된 후보는 최우선
             candidates.sort((a, b) => {
                 if (a.coordBoosted && !b.coordBoosted) return -1;
                 if (!a.coordBoosted && b.coordBoosted) return 1;
-                // 이름 강매칭 (영한 변환으로 찾은 경우) 우선
-                if (a.isNameStrongMatch && !b.isNameStrongMatch && a.nameScore > b.score) return -1;
-                if (!a.isNameStrongMatch && b.isNameStrongMatch && b.nameScore > a.score) return 1;
                 return b.score - a.score;
             });
             
             const bestMatch = candidates.length > 0 ? candidates[0] : null;
             
-            // ★ v2.4: 자동 매칭 판정 완화
+            // ★ v2.3: 자동 매칭 판정
             // - 일반: 점수 >= 0.85
             // - 좌표 100m 이내 + 이름 유사도 0.4+ : 자동 매칭
             // - 좌표 100m 이내 + 이름 유사도 0.4 미만: 확인 필요 (반자동)
-            // - 이름 유사도 >= 0.85인 경우도 자동 매칭 (영한 변환 성공한 강매칭)
             const isAutoMatch = bestMatch && (
                 bestMatch.score >= 0.85 ||
-                (bestMatch.coordBoosted && !bestMatch.needsCoordConfirmation) ||
-                bestMatch.nameScore >= 0.85
+                (bestMatch.coordBoosted && !bestMatch.needsCoordConfirmation)
             );
             
             return {
@@ -2273,286 +2025,7 @@
             if (currentValue) {
                 select.value = currentValue;
             }
-            
-            // ★ v2.3: 재OCR 패널의 select도 함께 갱신
-            updateReocrSourceSelect();
         }
-        
-        // ═══════════════════════════════════════════════════════════════════════
-        // ★ v2.3: 재OCR 관리 (기존 OCR 추출물 빌딩 단위 재처리)
-        // ═══════════════════════════════════════════════════════════════════════
-        
-        // 상태 저장
-        const reocrState = {
-            buildings: [],       // 조회된 빌딩 리스트
-            yearOptionsInited: false,
-        };
-        
-        // 재OCR 패널 토글
-        window.toggleReocrPanel = function() {
-            const body = document.getElementById('reocrBody');
-            const icon = document.getElementById('reocrToggleIcon');
-            const isOpen = body.style.display !== 'none';
-            body.style.display = isOpen ? 'none' : 'block';
-            icon.textContent = isOpen ? '▼' : '▲';
-            
-            // 처음 열 때 연도 목록 초기화
-            if (!isOpen && !reocrState.yearOptionsInited) {
-                initReocrYearOptions();
-                reocrState.yearOptionsInited = true;
-            }
-        };
-        
-        // 재OCR 패널의 발간회사 select 갱신
-        function updateReocrSourceSelect() {
-            const select = document.getElementById('reocrSource');
-            if (!select) return; // 패널이 아직 로드 안 된 경우
-            
-            const currentValue = select.value;
-            select.innerHTML = '<option value="">선택하세요</option>';
-            
-            (state.sourceCompanies || []).forEach(company => {
-                const option = document.createElement('option');
-                option.value = company.id;
-                option.textContent = company.name;
-                select.appendChild(option);
-            });
-            
-            if (currentValue) select.value = currentValue;
-        }
-        
-        // 연도 옵션 초기화 (현재 연도부터 5년 전까지)
-        function initReocrYearOptions() {
-            const select = document.getElementById('reocrYear');
-            if (!select) return;
-            
-            const thisYear = new Date().getFullYear();
-            for (let y = thisYear; y >= thisYear - 5; y--) {
-                const option = document.createElement('option');
-                option.value = String(y);
-                option.textContent = y + '년';
-                select.appendChild(option);
-            }
-        }
-        
-        // 기존 OCR 추출물 조회 (source + year + month 필터)
-        window.searchExistingOcr = async function() {
-            const source = document.getElementById('reocrSource').value;
-            const year = document.getElementById('reocrYear').value;
-            const month = document.getElementById('reocrMonth').value;
-            const bldgFilter = document.getElementById('reocrBuildingFilter').value.trim().toLowerCase();
-            
-            const summaryDiv = document.getElementById('reocrSummary');
-            const resultsDiv = document.getElementById('reocrResults');
-            
-            if (!source) {
-                showToast('발간회사를 선택해주세요', 'warning');
-                return;
-            }
-            
-            // publishDate 필터 패턴 생성
-            // year만: "2026", year+month: "2026.04"
-            let datePrefix = '';
-            if (year && month) {
-                datePrefix = `${year}.${month}`;
-            } else if (year) {
-                datePrefix = year;
-            }
-            
-            summaryDiv.style.display = 'block';
-            summaryDiv.innerHTML = '🔄 조회 중...';
-            resultsDiv.innerHTML = '';
-            
-            try {
-                const buildings = await loadBuildings(true); // 최신 데이터
-                const matched = [];
-                
-                for (const [bldgId, bldg] of Object.entries(buildings)) {
-                    if (!bldg || typeof bldg !== 'object') continue;
-                    
-                    // 빌딩명 필터
-                    if (bldgFilter) {
-                        const name = (bldg.name || '').toLowerCase();
-                        const addr = (bldg.address || '').toLowerCase();
-                        if (!name.includes(bldgFilter) && !addr.includes(bldgFilter)) continue;
-                    }
-                    
-                    // 해당 빌딩의 vacancies를 source + date 조건으로 필터
-                    const vacanciesObj = bldg.vacancies || {};
-                    const matchingVacs = [];
-                    
-                    for (const [vacId, vac] of Object.entries(vacanciesObj)) {
-                        if (!vac || typeof vac !== 'object') continue;
-                        
-                        const vacSource = vac.source || '';
-                        const vacDate = vac.publishDate || '';
-                        
-                        // source 매칭 (대소문자 무시)
-                        if (vacSource.toLowerCase() !== source.toLowerCase()) continue;
-                        
-                        // 날짜 매칭
-                        if (datePrefix && !vacDate.startsWith(datePrefix)) continue;
-                        
-                        matchingVacs.push({ vacId, ...vac });
-                    }
-                    
-                    if (matchingVacs.length > 0) {
-                        // 대표 페이지 이미지 URL (있는 경우)
-                        const pageImageUrl = matchingVacs.find(v => v.pageImageUrl)?.pageImageUrl || null;
-                        const pageNum = matchingVacs[0].pageNum || null;
-                        const publishDate = matchingVacs[0].publishDate || '';
-                        
-                        matched.push({
-                            buildingId: bldgId,
-                            buildingName: bldg.name || '(이름없음)',
-                            address: bldg.address || bldg.addressJibun || '',
-                            vacancies: matchingVacs,
-                            pageImageUrl,
-                            pageNum,
-                            publishDate,
-                        });
-                    }
-                }
-                
-                // 빌딩명 가나다 정렬
-                matched.sort((a, b) => a.buildingName.localeCompare(b.buildingName, 'ko'));
-                
-                reocrState.buildings = matched;
-                renderReocrResults(matched, source, datePrefix);
-                
-            } catch (err) {
-                console.error('재OCR 조회 실패:', err);
-                summaryDiv.innerHTML = `❌ 조회 실패: ${err.message}`;
-                resultsDiv.innerHTML = '';
-            }
-        };
-        
-        // 조회 결과 렌더링
-        function renderReocrResults(matched, source, datePrefix) {
-            const summaryDiv = document.getElementById('reocrSummary');
-            const resultsDiv = document.getElementById('reocrResults');
-            
-            const totalVacs = matched.reduce((sum, m) => sum + m.vacancies.length, 0);
-            const dateLabel = datePrefix || '전체기간';
-            summaryDiv.innerHTML = `✅ <b>${source}</b> / <b>${dateLabel}</b> — 빌딩 <b>${matched.length}개</b>, 공실 <b>${totalVacs}건</b>`;
-            
-            if (matched.length === 0) {
-                resultsDiv.innerHTML = `
-                    <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted); background: white; border-radius: 8px;">
-                        조회된 결과가 없습니다.
-                    </div>`;
-                return;
-            }
-            
-            resultsDiv.innerHTML = matched.map((b, idx) => {
-                const vacancyPreview = b.vacancies.slice(0, 5).map(v => {
-                    const towerLabel = v.tower ? ` [${v.tower}]` : '';
-                    const areaLabel = v.exclusiveArea 
-                        ? `전용${v.exclusiveArea}/임대${v.rentArea || '-'}평` 
-                        : '면적정보없음';
-                    return `<div style="font-size: 11px; color: #475569; padding: 2px 0; border-bottom: 1px dashed #e5e7eb;">
-                        <b>${v.floor || '?'}</b>${towerLabel} ${areaLabel} · ${v.rentPy || '-'}원/평
-                    </div>`;
-                }).join('');
-                
-                const moreCount = b.vacancies.length > 5 ? `<div style="font-size: 11px; color: #9ca3af; padding: 4px 0;">+${b.vacancies.length - 5}건 더...</div>` : '';
-                
-                const thumbnail = b.pageImageUrl 
-                    ? `<img src="${b.pageImageUrl}" style="width: 100%; height: 140px; object-fit: cover; background: #f3f4f6; border-radius: 4px; cursor: zoom-in;" onclick="openReocrImageZoom('${b.pageImageUrl}')" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                       <div style="width: 100%; height: 140px; background: #f3f4f6; border-radius: 4px; display: none; align-items: center; justify-content: center; color: #9ca3af; font-size: 12px;">이미지 로드 실패</div>`
-                    : `<div style="width: 100%; height: 140px; background: #f3f4f6; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 12px;">원본 이미지 없음</div>`;
-                
-                return `
-                <div class="reocr-card" style="background: white; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-                    ${thumbnail}
-                    <div style="padding: 4px 0;">
-                        <div style="font-weight: 700; font-size: 14px; color: var(--text-primary);">${b.buildingName}</div>
-                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">${b.address || '주소 미상'}</div>
-                        <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
-                            📅 ${b.publishDate || '?'}
-                            ${b.pageNum ? ` · P${b.pageNum}` : ''}
-                            · 공실 ${b.vacancies.length}건
-                        </div>
-                    </div>
-                    <div style="background: #f9fafb; padding: 8px; border-radius: 4px; min-height: 80px;">
-                        ${vacancyPreview}
-                        ${moreCount}
-                    </div>
-                    <div style="display: flex; gap: 6px;">
-                        <button onclick="reocrRerunBuilding(${idx})" style="flex: 1; padding: 8px; background: #0284c7; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600;">
-                            🔄 재OCR
-                        </button>
-                        <button onclick="reocrDeleteVacancies(${idx})" style="padding: 8px 12px; background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; border-radius: 4px; cursor: pointer; font-size: 12px;" title="이 빌딩의 해당 추출물 삭제">
-                            🗑
-                        </button>
-                    </div>
-                </div>
-                `;
-            }).join('');
-        }
-        
-        // 이미지 확대 보기
-        window.openReocrImageZoom = function(imageUrl) {
-            const overlay = document.createElement('div');
-            overlay.style.cssText = 'position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 10000; display: flex; align-items: center; justify-content: center; cursor: zoom-out;';
-            overlay.onclick = () => overlay.remove();
-            overlay.innerHTML = `
-                <img src="${imageUrl}" style="max-width: 95vw; max-height: 95vh; object-fit: contain; box-shadow: 0 4px 40px rgba(0,0,0,0.5);">
-                <div style="position: absolute; top: 16px; right: 20px; color: white; font-size: 14px; background: rgba(0,0,0,0.4); padding: 6px 12px; border-radius: 20px;">클릭하여 닫기</div>
-            `;
-            document.body.appendChild(overlay);
-        };
-        
-        // 재OCR 실행 (placeholder — 다음 단계에서 구현)
-        window.reocrRerunBuilding = async function(idx) {
-            const building = reocrState.buildings[idx];
-            if (!building) return;
-            
-            if (!building.pageImageUrl) {
-                showToast('원본 페이지 이미지가 없어 재OCR할 수 없습니다. 해당 임대안내문을 다시 업로드해주세요.', 'error');
-                return;
-            }
-            
-            const proceed = confirm(
-                `[${building.buildingName}] 재OCR을 실행합니다.\n\n` +
-                `원본 페이지: P${building.pageNum || '?'}\n` +
-                `현재 저장된 공실: ${building.vacancies.length}건\n\n` +
-                `AI가 해당 페이지를 다시 분석합니다. 결과를 확인하고 덮어쓰기 여부를 결정할 수 있습니다.\n\n` +
-                `계속하시겠습니까?`
-            );
-            if (!proceed) return;
-            
-            // 다음 턴에 구현 예정 - 백엔드 API 호출
-            showToast('재OCR 실행 로직은 다음 단계에서 연결됩니다', 'info');
-            console.log('재OCR 대상:', building);
-        };
-        
-        // 특정 빌딩의 해당 추출물만 삭제
-        window.reocrDeleteVacancies = async function(idx) {
-            const building = reocrState.buildings[idx];
-            if (!building) return;
-            
-            const proceed = confirm(
-                `[${building.buildingName}]\n\n` +
-                `이 빌딩의 해당 추출물(${building.vacancies.length}건)만 삭제합니다.\n` +
-                `(빌딩 자체와 다른 추출물은 유지됩니다)\n\n` +
-                `삭제하시겠습니까?`
-            );
-            if (!proceed) return;
-            
-            try {
-                const updates = {};
-                for (const vac of building.vacancies) {
-                    updates[`buildings/${building.buildingId}/vacancies/${vac.vacId}`] = null;
-                }
-                await db.ref().update(updates);
-                showToast(`${building.vacancies.length}건 삭제 완료`, 'success');
-                await searchExistingOcr(); // 재조회
-            } catch (err) {
-                console.error('삭제 실패:', err);
-                showToast('삭제 실패: ' + err.message, 'error');
-            }
-        };
         
         // 파일 선택 처리
         async function handleFileSelect(e) {
@@ -3627,14 +3100,12 @@
                 return pages;
             }
             
-            // ★ v4-b: 복합키 기반 dedup (floor + tower + rentArea + exclusiveArea)
-            // tower 추가로 복합 빌딩(Tower 1~4 매트릭스)의 같은 층 공실도 보존
+            // ★ v4: 복합키 기반 dedup (floor + rentArea + exclusiveArea)
             const makeVacancyKey = (v) => {
                 const floor = String(v?.floor || '').trim().toUpperCase();
-                const tower = String(v?.tower || '').trim();
                 const ra = (v?.rentArea != null) ? Math.round(Number(v.rentArea) * 10) / 10 : null;
                 const ea = (v?.exclusiveArea != null) ? Math.round(Number(v.exclusiveArea) * 10) / 10 : null;
-                return `${floor}|${tower}|${ra}|${ea}`;
+                return `${floor}|${ra}|${ea}`;
             };
             
             // ★ Step 2: 각 경계 구간의 페이지를 그룹으로 묶기
@@ -4059,14 +3530,12 @@
                         <div class="value">${pageData.address || '-'}</div>
                     </div>
                     <h4 style="margin-top:16px;">공실 정보</h4>
-                    ${pageData.vacancies?.map(v => {
-                        const towerBadge = v.tower ? `<span style="display:inline-block; padding:2px 6px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:600; margin-left:6px;">${v.tower}</span>` : '';
-                        return `
+                    ${pageData.vacancies?.map(v => `
                         <div class="preview-field">
-                            <label>${v.floor}${towerBadge}</label>
+                            <label>${v.floor}</label>
                             <div class="value">전용 ${v.exclusiveArea}평 / 임대 ${v.rentArea}평<br>임대료 ${v.rentPy}/평</div>
                         </div>
-                    `;}).join('') || '<div class="preview-field"><div class="value">공실 없음</div></div>'}
+                    `).join('') || '<div class="preview-field"><div class="value">공실 없음</div></div>'}
                 `;
             } else {
                 dataDiv.innerHTML = '<div class="preview-field"><div class="value">추출된 데이터 없음</div></div>';
@@ -4251,27 +3720,6 @@
                     <div style="max-height: 400px; overflow-y: auto;">
                         ${noMatch.map((r, idx) => {
                             const globalIdx = matchResults.indexOf(r);
-                            // ★ v2.4: 후보가 있으면 참고 후보로 표시 (threshold 0.4 ~ 0.7 사이)
-                            const refCandidates = (r.result.candidates || []).slice(0, 3);
-                            const refCandidatesHtml = refCandidates.length > 0 ? `
-                                <div style="margin-bottom: 10px; padding: 10px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 6px;">
-                                    <div style="font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 6px;">💡 유사 후보 (참고) — 영한 음차/공통 지명 기반</div>
-                                    ${refCandidates.map(c => {
-                                        const nameMark = c.isNameStrongMatch ? ' 🔤' : '';
-                                        const distMark = c.coordDistance && isFinite(c.coordDistance) ? ` [📍 ${Math.round(c.coordDistance)}m]` : '';
-                                        return `
-                                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed #fef3c7;">
-                                            <div style="flex: 1; font-size: 12px;">
-                                                <b>${c.name}${nameMark}</b>${distMark}
-                                                <div style="font-size: 11px; color: #64748b;">${c.address || ''}</div>
-                                            </div>
-                                            <button onclick="selectBuildingFromSearch(${globalIdx}, '${c.buildingId}', '${escapeHtml(c.name)}', '${escapeHtml(c.address || '')}')"
-                                                    style="padding: 4px 10px; background: #0284c7; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                                                이 빌딩으로 매칭
-                                            </button>
-                                        </div>`;
-                                    }).join('')}
-                                </div>` : '';
                             return `
                             <div class="nomatch-item" style="padding: 16px; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 12px; background: #fef2f2;" data-idx="${globalIdx}">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
@@ -4284,14 +3732,12 @@
                                     </span>
                                 </div>
                                 
-                                ${refCandidatesHtml}
-                                
                                 <!-- 검색 영역 -->
                                 <div style="background: white; border-radius: 6px; padding: 12px; border: 1px solid var(--border-color);">
                                     <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                                         <input type="text" 
                                                id="searchInput_${globalIdx}" 
-                                               placeholder="빌딩명 또는 주소로 검색 (영한 변환 자동 적용)..." 
+                                               placeholder="빌딩명 또는 주소로 검색..." 
                                                value="${r.input.buildingName || ''}"
                                                style="flex: 1; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px;"
                                                onkeypress="if(event.key==='Enter') searchBuildingForMatch(${globalIdx})">
@@ -4383,9 +3829,6 @@
                 const queryLower = query.toLowerCase();
                 const queryNormalized = normalizeAddress(query);
                 
-                // ★ v2.4: 쿼리 자체의 영한 변환 variant 생성
-                const queryVariants = getBuildingNameVariants(query);
-                
                 for (const [bldgId, bldg] of Object.entries(buildings)) {
                     if (!bldg || typeof bldg !== 'object') continue;
                     
@@ -4393,17 +3836,8 @@
                     const address = (bldg.address || '').toLowerCase();
                     const addressJibun = (bldg.addressJibun || '').toLowerCase();
                     
-                    // 기본 이름 매칭
+                    // 이름 매칭
                     const nameMatch = name.includes(queryLower) || queryLower.includes(name.replace(/빌딩|타워|센터/g, ''));
-                    
-                    // ★ v2.4: 영한 음차 고려한 이름 유사도
-                    const nameAdvSim = nameSimilarityAdvanced(query, bldg.name);
-                    // 별칭도 체크
-                    const aliasMaxSim = (bldg.aliases || []).reduce(
-                        (max, al) => Math.max(max, nameSimilarityAdvanced(query, al)), 0
-                    );
-                    const nameSimScore = Math.max(nameAdvSim, aliasMaxSim);
-                    const nameAdvMatch = nameSimScore >= 0.5;  // 0.5 이상이면 유의미한 매칭
                     
                     // 주소 매칭
                     const addrMatch = address.includes(queryLower) || 
@@ -4411,14 +3845,12 @@
                                       queryLower.includes(address) ||
                                       stringSimilarity(queryNormalized, bldg.address) > 0.5;
                     
-                    if (nameMatch || nameAdvMatch || addrMatch) {
-                        // 유사도 점수 계산 — 영한 매칭 점수도 반영
+                    if (nameMatch || addrMatch) {
+                        // 유사도 점수 계산
                         let score = 0;
                         if (name === queryLower) score = 1.0;
-                        else if (nameSimScore >= 0.85) score = nameSimScore;  // ★ 강한 영한 매칭
                         else if (name.includes(queryLower)) score = 0.8;
                         else if (queryLower.includes(name)) score = 0.7;
-                        else if (nameAdvMatch) score = Math.max(0.55, nameSimScore);  // ★ 중간 수준 영한 매칭
                         else if (addrMatch) score = 0.6;
                         else score = 0.5;
                         
@@ -4427,9 +3859,7 @@
                             name: bldg.name,
                             address: bldg.address || bldg.addressJibun || '',
                             region: bldg.region || '',
-                            score: score,
-                            // ★ v2.4: 영한 매칭 표시용
-                            translitMatched: nameAdvMatch && !name.includes(queryLower) && !queryLower.includes(name.replace(/빌딩|타워|센터/g, '')),
+                            score: score
                         });
                     }
                 }
@@ -4449,23 +3879,18 @@
                         </div>
                     `;
                 } else {
-                    resultsDiv.innerHTML = topResults.map(r => {
-                        const translitBadge = r.translitMatched 
-                            ? `<span style="display:inline-block; padding:1px 6px; background:#fef3c7; color:#92400e; border-radius:4px; font-size:10px; font-weight:600; margin-left:6px;">🔤 영한매칭</span>` 
-                            : '';
-                        const scoreBadge = `<span style="color:#64748b; font-size:11px; margin-left:6px;">(${Math.round(r.score * 100)}%)</span>`;
-                        return `
+                    resultsDiv.innerHTML = topResults.map(r => `
                         <div class="search-result-item" 
                              onclick="selectBuildingFromSearch(${idx}, '${r.buildingId}', '${escapeHtml(r.name)}', '${escapeHtml(r.address)}')"
                              style="padding: 10px 12px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background 0.2s;"
                              onmouseover="this.style.background='var(--accent-light)'" 
                              onmouseout="this.style.background='white'">
-                            <div style="font-weight: 500;">${r.name}${translitBadge}${scoreBadge}</div>
+                            <div style="font-weight: 500;">${r.name}</div>
                             <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
                                 ${r.address} ${r.region ? `• ${r.region}` : ''}
                             </div>
                         </div>
-                    `;}).join('');
+                    `).join('');
                 }
                 
             } catch (error) {
@@ -4864,15 +4289,10 @@
                     
                     for (const vacancy of vacancies) {
                         const floor = (vacancy.floor || 'UNK').replace(/[\/\s]/g, '_');
-                        // ★ v2.3: tower 포함해서 복합 빌딩(Tower 1~4)의 같은 층 덮어쓰기 방지
-                        const towerSegment = vacancy.tower 
-                            ? `_${String(vacancy.tower).replace(/[\/\s]/g, '_')}` 
-                            : '';
-                        const vacancyId = `${vacancySource}_${vacancyPublishDate.replace('.', '_')}_${floor}${towerSegment}`;
+                        const vacancyId = `${vacancySource}_${vacancyPublishDate.replace('.', '_')}_${floor}`;
                         
                         const vacancyData = {
                             floor: vacancy.floor,
-                            tower: vacancy.tower || null,  // ★ v2.3: 동/Tower 필드
                             rentArea: vacancy.rentArea || vacancy.area || null,
                             exclusiveArea: vacancy.exclusiveArea || null,
                             depositPy: vacancy.depositPy || vacancy.deposit || null,
