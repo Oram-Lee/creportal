@@ -3133,16 +3133,33 @@
             let perPageHtml = '';
             if (perPage && perPage.length > 0) {
                 const rows = perPage.map(p => {
-                    const statusIcon = p.status === 'ok' ? '✅' : '❌';
-                    const detail = p.status === 'ok' 
-                        ? `${p.vacancyCount}건 추출${p.hasBasePricing ? ' + 기준가' : ''}`
-                        : (p.error || p.reason || '실패');
-                    return `<tr><td style="padding:4px 8px;">${statusIcon} P${p.pageNum}</td><td style="padding:4px 8px; color:#64748b;">${detail}</td></tr>`;
+                    let statusIcon = '❓';
+                    let detail = '';
+                    if (p.status === 'ok') {
+                        statusIcon = '✅';
+                        detail = `${p.vacancyCount}건 추출${p.hasBasePricing ? ' + 기준가' : ''}`;
+                        if (p.usedModel && p.usedModel !== 'unknown') {
+                            detail += ` <span style="color:#94a3b8; font-size:10px;">[${p.usedModel}]</span>`;
+                        }
+                    } else if (p.status === 'vision_failed') {
+                        statusIcon = '⚠️';
+                        detail = `<span style="color:#b91c1c;">Vision AI 실패: ${(p.visionError || '').slice(0, 120)}</span>`;
+                    } else if (p.status === 'download_failed') {
+                        statusIcon = '❌';
+                        detail = `<span style="color:#92400e;">${p.error || '다운로드 실패'}</span>`;
+                    } else if (p.status === 'parse_failed') {
+                        statusIcon = '❌';
+                        detail = `<span style="color:#b91c1c;">파싱 실패: ${(p.error || '').slice(0, 80)}</span>`;
+                    } else {
+                        statusIcon = '⏭️';
+                        detail = p.reason || p.error || '스킵';
+                    }
+                    return `<tr><td style="padding:4px 8px; white-space: nowrap;">${statusIcon} P${p.pageNum}</td><td style="padding:4px 8px; color:#64748b; word-break:break-word;">${detail}</td></tr>`;
                 }).join('');
                 perPageHtml = `
                     <div style="margin-bottom: 10px; padding: 8px 12px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 6px; font-size: 11px;">
                         <b style="color: #4338ca;">📄 페이지별 결과 (${perPage.length}장 처리)</b>
-                        <table style="margin-top: 4px; width: 100%; font-size: 11px;">
+                        <table style="margin-top: 4px; width: 100%; font-size: 11px; border-collapse: collapse;">
                             ${rows}
                         </table>
                     </div>`;
