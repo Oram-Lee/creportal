@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>임대안내문 업데이트 v2.6.5 - CRE PORTAL 관리</title>
+    <title>임대안내문 업데이트 v2.7 - CRE PORTAL 관리</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -866,9 +866,9 @@
                     <span style="font-size: 18px;">🔄</span>
                     <div>
                         <div style="font-weight: 700; color: #0c4a6e; font-size: 15px;">기존 OCR 재처리 (빌딩 단위) 
-                            <span style="font-size: 10px; background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 600;">v2.6.5</span>
+                            <span style="font-size: 10px; background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 10px; margin-left: 4px; font-weight: 600;">v2.7</span>
                         </div>
-                        <div style="font-size: 11px; color: #475569; margin-top: 2px;">회사·발행연월 선택 → 잘못 추출된 특정 빌딩만 재OCR 후 덮어쓰기 · 멀티페이지/인접페이지 자동 처리 · pageImageUrl 차용</div>
+                        <div style="font-size: 11px; color: #475569; margin-top: 2px;">회사·발행연월 선택 → 잘못 추출된 특정 빌딩만 재OCR 후 덮어쓰기 · 멀티페이지/인접페이지 자동 처리 · pageImageUrl 차용 · 일시정지/이어서</div>
                     </div>
                 </div>
                 <span id="reocrToggleIcon" style="font-size: 18px; color: #64748b;">▼</span>
@@ -1226,7 +1226,11 @@
             </div>
             <div class="action-bar">
                 <button class="btn btn-secondary" onclick="cancelOCR()">취소</button>
-                <button class="btn btn-secondary" onclick="saveIntermediateJson()" style="margin-left: auto; margin-right: 10px;">
+                <!-- ★ v2.7: 즉시 일시정지/계속 토글 버튼 -->
+                <button id="pauseResumeBtn" onclick="togglePauseResume()" style="margin-left: auto; margin-right: 10px; padding: 10px 18px; background: #f59e0b; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; display: none;">
+                    ⏸️ 일시정지
+                </button>
+                <button class="btn btn-secondary" onclick="saveIntermediateJson()" style="margin-right: 10px;">
                     💾 중간 저장
                 </button>
                 <button class="btn btn-primary" id="viewResultsBtn" onclick="goToStep(4)" disabled>
@@ -4209,6 +4213,15 @@
         async function executeOCR() {
             goToStep(3);
             state.isProcessing = true;
+            state.userPaused = false;  // ★ v2.7: 사용자가 누른 즉시 정지 플래그
+            
+            // ★ v2.7: 일시정지 버튼 표시
+            const pauseBtn = document.getElementById('pauseResumeBtn');
+            if (pauseBtn) {
+                pauseBtn.style.display = 'inline-block';
+                pauseBtn.textContent = '⏸️ 일시정지';
+                pauseBtn.style.background = '#f59e0b';
+            }
             
             // ★ v2.4: 백엔드 웜업 먼저 실행
             addLog('시작', '🔄 백엔드 서버 연결 확인 중...', 'info');
@@ -4282,6 +4295,7 @@
             
             while (state.batchState.remainingPages.length > 0) {
                 if (!state.isProcessing) break;
+                if (state.userPaused) break;  // ★ v2.7: 일시정지 시 외부 루프도 탈출
                 
                 currentBatchNum++;
                 state.batchState.currentBatch = currentBatchNum;
@@ -4301,6 +4315,19 @@
                 // 배치 내 페이지 처리
                 for (const pageNum of batchPages) {
                     if (!state.isProcessing) break;
+                    
+                    // ★ v2.7: 사용자가 일시정지 누른 즉시 멈춤
+                    // 처리 중인 페이지는 끝내고, 다음 페이지로 넘어가기 전에 대기
+                    if (state.userPaused) {
+                        // 처리하지 않은 페이지를 다시 remainingPages 앞쪽에 되돌림
+                        const notYetProcessed = batchPages.slice(batchPages.indexOf(pageNum));
+                        state.batchState.remainingPages = [...notYetProcessed, ...state.batchState.remainingPages];
+                        addLog('일시정지', `사용자 요청으로 일시정지 (${notYetProcessed.length}페이지 대기 중)`, 'warning');
+                        savePauseSnapshot();  // localStorage 백업
+                        await waitForResume();  // 사용자 resume까지 대기
+                        // resume되면 remainingPages를 다시 확인해야 하므로 루프 탈출
+                        break;
+                    }
                     
                     try {
                         addLog(pageNum, `페이지 ${pageNum} 처리 시작...`);
@@ -4341,6 +4368,10 @@
                     document.getElementById('statBuildings').textContent = buildings;
                     document.getElementById('statVacancies').textContent = vacancies;
                     document.getElementById('statWarnings').textContent = warnings;
+                    
+                    // ★ v2.7: 매 페이지 완료마다 localStorage에 자동 백업
+                    // 네트워크 끊김, 브라우저 크래시, 강제 종료에 대비
+                    autoBackupProgress();
                 }
                 
                 addLog('배치', `━━━ 배치 ${currentBatchNum} 완료 ━━━`, 'success');
@@ -4366,6 +4397,12 @@
                 }
             }
             
+            // ★ v2.7: 일시정지로 빠져나온 경우 완료 처리 건너뜀 (재개 시 다시 처리)
+            if (state.userPaused) {
+                addLog('대기', '⏸️ 일시정지 상태입니다. "▶ 계속 진행" 버튼을 누르면 이어서 처리됩니다.', 'warning');
+                return;
+            }
+            
             // ★ 멀티페이지 빌딩 병합 ★
             state.extractedData = mergeMultiPageBuildings(state.extractedData);
             
@@ -4377,10 +4414,16 @@
             document.getElementById('statVacancies').textContent = vacancies;
             
             state.isProcessing = false;
+            state.userPaused = false;  // ★ v2.7
             state.resumeData = null; // 이어서 처리 데이터 초기화
             document.getElementById('viewResultsBtn').disabled = false;
             document.getElementById('batchPausePanel').style.display = 'none';
             batchBadge.style.display = 'none';
+            
+            // ★ v2.7: 정상 완료 시 일시정지 버튼 숨김 + localStorage 정리
+            const pauseBtnDone = document.getElementById('pauseResumeBtn');
+            if (pauseBtnDone) pauseBtnDone.style.display = 'none';
+            clearPauseSnapshot();
             
             addLog('완료', `총 ${buildings}개 빌딩, ${vacancies}건 공실 추출 완료`, 'success');
             
@@ -4410,8 +4453,303 @@
             }
             document.getElementById('batchPausePanel').style.display = 'none';
             document.getElementById('viewResultsBtn').disabled = false;
+            // ★ v2.7: 중단 시 일시정지 버튼 숨김 + 백업 정리
+            const pauseBtnCancel = document.getElementById('pauseResumeBtn');
+            if (pauseBtnCancel) pauseBtnCancel.style.display = 'none';
+            clearPauseSnapshot();
             addLog('중단', 'OCR 처리가 중단되었습니다. 현재까지의 결과를 확인할 수 있습니다.', 'warning');
         }
+        
+        // ═══════════════════════════════════════════════════════════════
+        // ★ v2.7: 즉시 일시정지/재개 + localStorage 자동 백업/복원 ★
+        // ═══════════════════════════════════════════════════════════════
+        
+        const PAUSE_STORAGE_KEY = 'oram_ocr_pause_snapshot_v1';
+        
+        // 일시정지/재개 토글
+        window.togglePauseResume = function() {
+            const btn = document.getElementById('pauseResumeBtn');
+            if (!btn) return;
+            
+            if (!state.userPaused) {
+                // 일시정지로 전환
+                state.userPaused = true;
+                btn.textContent = '⏳ 현재 페이지 완료 후 일시정지...';
+                btn.style.background = '#94a3b8';
+                btn.disabled = true;
+                addLog('일시정지', '현재 처리 중인 페이지가 끝나는 대로 일시정지됩니다...', 'warning');
+                // 실제 정지는 페이지 루프의 if (state.userPaused) 분기에서 처리
+            } else {
+                // 재개로 전환
+                resumePausedOCR();
+            }
+        };
+        
+        // 일시정지 후 사용자 입력 대기
+        function waitForResume() {
+            return new Promise(resolve => {
+                state.batchState.continueResolve = resolve;
+                
+                // 일시정지 버튼을 "▶ 계속 진행"으로 변경
+                const btn = document.getElementById('pauseResumeBtn');
+                if (btn) {
+                    btn.textContent = '▶ 계속 진행';
+                    btn.style.background = '#16a34a';
+                    btn.disabled = false;
+                }
+                
+                addLog('일시정지', '⏸️ 일시정지됨. 진행 상황이 자동 저장되었습니다. 페이지를 닫아도 다시 열면 그대로 복원됩니다.', 'warning');
+            });
+        }
+        
+        // 재개
+        function resumePausedOCR() {
+            state.userPaused = false;
+            
+            const btn = document.getElementById('pauseResumeBtn');
+            if (btn) {
+                btn.textContent = '⏸️ 일시정지';
+                btn.style.background = '#f59e0b';
+                btn.disabled = false;
+            }
+            
+            addLog('재개', '▶ 처리를 재개합니다...', 'success');
+            
+            if (state.batchState.continueResolve) {
+                state.batchState.continueResolve();
+                state.batchState.continueResolve = null;
+            } else {
+                // 재접속 후 복원된 상태에서 재개를 누른 경우 → 새로 executeOCR 시작
+                executeOCR().catch(err => {
+                    console.error('재개 중 오류:', err);
+                    addLog('오류', `재개 중 오류: ${err.message}`, 'error');
+                });
+            }
+        }
+        
+        // 매 페이지 완료마다 자동 백업
+        function autoBackupProgress() {
+            try {
+                const company = getSelectedCompany();
+                const year = document.getElementById('publishYear')?.value || '';
+                const month = document.getElementById('publishMonth')?.value || '';
+                const publishDate = state.currentPublishDate || (year && month ? `${year.slice(2)}.${month}` : '');
+                
+                const snapshot = {
+                    version: '2.7',
+                    savedAt: new Date().toISOString(),
+                    isPausedSnapshot: false,  // 자동 백업 (일시정지 아님)
+                    source: company,
+                    publishDate: publishDate,
+                    publishYear: year,
+                    publishMonth: month,
+                    pdfFileName: state.pdfFile?.name || 'unknown',
+                    pdfFileSize: state.pdfFile?.size || 0,
+                    selectedPages: Array.from(state.selectedPages),
+                    processedPages: state.batchState.processedPagesList,
+                    remainingPages: state.batchState.remainingPages,
+                    pageTypes: state.pageTypes,
+                    extractedData: state.extractedData,
+                    failedPages: state.failedPages,
+                    batchState: {
+                        currentBatch: state.batchState.currentBatch,
+                        totalBatches: state.batchState.totalBatches
+                    }
+                };
+                
+                localStorage.setItem(PAUSE_STORAGE_KEY, JSON.stringify(snapshot));
+            } catch (e) {
+                // localStorage 용량 초과 등 — 조용히 실패 (작업은 계속)
+                console.warn('[v2.7] 자동 백업 실패:', e.message);
+            }
+        }
+        
+        // 일시정지 시 명시적 스냅샷 (isPausedSnapshot: true)
+        function savePauseSnapshot() {
+            autoBackupProgress();
+            try {
+                const cur = JSON.parse(localStorage.getItem(PAUSE_STORAGE_KEY) || '{}');
+                cur.isPausedSnapshot = true;
+                cur.pausedAt = new Date().toISOString();
+                localStorage.setItem(PAUSE_STORAGE_KEY, JSON.stringify(cur));
+            } catch (e) {
+                console.warn('[v2.7] 일시정지 스냅샷 실패:', e.message);
+            }
+        }
+        
+        // 백업 정리 (정상 완료, 중단, 명시적 폐기 시)
+        function clearPauseSnapshot() {
+            try {
+                localStorage.removeItem(PAUSE_STORAGE_KEY);
+            } catch (e) {}
+        }
+        
+        // 페이지 로드 시 미완료 작업 확인 → 일시정지 상태 그대로 복원
+        function checkAndRestorePausedWork() {
+            try {
+                const raw = localStorage.getItem(PAUSE_STORAGE_KEY);
+                if (!raw) return;
+                
+                const snapshot = JSON.parse(raw);
+                if (!snapshot || !snapshot.processedPages) return;
+                
+                const remaining = (snapshot.remainingPages || []).length;
+                const processed = (snapshot.processedPages || []).length;
+                const total = processed + remaining;
+                
+                if (remaining === 0) {
+                    // 완료된 작업 → 백업 정리
+                    clearPauseSnapshot();
+                    return;
+                }
+                
+                // 복원 모달 표시
+                showRestorePausedModal(snapshot, processed, total);
+            } catch (e) {
+                console.warn('[v2.7] 복원 확인 실패:', e.message);
+            }
+        }
+        
+        // 복원 모달 — 사용자가 PDF를 다시 첨부하면 일시정지 상태로 복귀
+        function showRestorePausedModal(snapshot, processed, total) {
+            const modal = document.createElement('div');
+            modal.id = 'restorePausedModal';
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+            
+            const pausedTime = snapshot.pausedAt 
+                ? new Date(snapshot.pausedAt).toLocaleString('ko-KR') 
+                : (snapshot.savedAt ? new Date(snapshot.savedAt).toLocaleString('ko-KR') : '알 수 없음');
+            
+            modal.innerHTML = `
+                <div style="background: white; padding: 32px; border-radius: 16px; max-width: 560px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);">
+                    <h2 style="margin: 0 0 16px 0; color: #b45309; display: flex; align-items: center; gap: 10px;">
+                        ⏸️ 일시정지된 작업 발견
+                    </h2>
+                    <div style="background: #fef3c7; padding: 16px; border-radius: 10px; margin-bottom: 20px; border-left: 4px solid #f59e0b;">
+                        <div style="font-size: 14px; color: #78350f; line-height: 1.7;">
+                            <div><strong>📄 PDF:</strong> ${snapshot.pdfFileName || '알 수 없음'}</div>
+                            <div><strong>🏢 회사 / 발행:</strong> ${snapshot.source || '?'} / ${snapshot.publishDate || '?'}</div>
+                            <div><strong>📊 진행:</strong> ${processed}/${total} 페이지 처리됨 (${total > 0 ? Math.round(processed/total*100) : 0}%)</div>
+                            <div><strong>🏗️ 추출:</strong> ${(snapshot.extractedData||[]).length}개 빌딩</div>
+                            <div><strong>⏰ 일시정지 시각:</strong> ${pausedTime}</div>
+                        </div>
+                    </div>
+                    <div style="background: #dbeafe; padding: 14px; border-radius: 8px; margin-bottom: 20px; font-size: 13px; color: #1e40af; line-height: 1.6;">
+                        💡 <strong>이어서 처리하려면</strong> 같은 PDF 파일을 다시 첨부해주세요.<br>
+                        선택한 페이지, 처리한 결과, 일시정지 상태가 그대로 복원됩니다.
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button onclick="discardPausedWork()" style="padding: 10px 18px; background: white; color: #64748b; border: 1px solid #cbd5e1; border-radius: 8px; cursor: pointer; font-weight: 500;">
+                            🗑️ 작업 폐기
+                        </button>
+                        <button onclick="downloadPausedAsJson()" style="padding: 10px 18px; background: #0ea5e9; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            💾 JSON 다운로드
+                        </button>
+                        <button onclick="restorePausedWork()" style="padding: 10px 18px; background: #16a34a; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            ▶ 이어서 처리
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        // 복원 — 백업을 state에 적용 + PDF 첨부 안내
+        window.restorePausedWork = function() {
+            try {
+                const snapshot = JSON.parse(localStorage.getItem(PAUSE_STORAGE_KEY) || '{}');
+                if (!snapshot || !snapshot.extractedData) {
+                    showToast('복원할 데이터가 없습니다', 'error');
+                    return;
+                }
+                
+                // resumeData에 주입 → 기존 loadResumeJson 흐름 활용
+                state.resumeData = snapshot;
+                state.extractedData = snapshot.extractedData || [];
+                state.failedPages = snapshot.failedPages || [];
+                state.selectedPages = new Set(snapshot.selectedPages || []);
+                state.pageTypes = snapshot.pageTypes || {};
+                state.currentPublishDate = snapshot.publishDate || null;
+                state.batchState = {
+                    isPaused: true,  // 복원 직후는 일시정지 상태
+                    currentBatch: snapshot.batchState?.currentBatch || 0,
+                    totalBatches: snapshot.batchState?.totalBatches || 0,
+                    processedPagesList: snapshot.processedPages || [],
+                    remainingPages: snapshot.remainingPages || [],
+                    continueResolve: null
+                };
+                state.userPaused = true;  // 복원 시점에는 정지 상태로 시작
+                
+                // 회사/연월 UI 자동 채움
+                if (snapshot.source) {
+                    const sc = document.getElementById('sourceCompany');
+                    if (sc) sc.value = snapshot.source;
+                }
+                if (snapshot.publishYear) {
+                    const py = document.getElementById('publishYear');
+                    if (py) py.value = snapshot.publishYear;
+                }
+                if (snapshot.publishMonth) {
+                    const pm = document.getElementById('publishMonth');
+                    if (pm) pm.value = snapshot.publishMonth;
+                }
+                
+                // 모달 닫기
+                const modal = document.getElementById('restorePausedModal');
+                if (modal) modal.remove();
+                
+                // PDF 재첨부 안내
+                showToast(`📄 같은 PDF 파일(${snapshot.pdfFileName})을 다시 첨부하면 ${snapshot.processedPages.length}페이지부터 이어서 처리됩니다`, 'info', 8000);
+                
+                // STEP 1으로 이동해 PDF 첨부 유도
+                if (typeof goToStep === 'function') goToStep(1);
+            } catch (e) {
+                console.error('복원 실패:', e);
+                showToast('복원 중 오류: ' + e.message, 'error');
+            }
+        };
+        
+        // 폐기
+        window.discardPausedWork = function() {
+            if (!confirm('일시정지된 작업을 폐기하시겠습니까?\n현재까지 처리된 결과도 함께 사라집니다.')) return;
+            clearPauseSnapshot();
+            const modal = document.getElementById('restorePausedModal');
+            if (modal) modal.remove();
+            showToast('일시정지된 작업을 폐기했습니다', 'info');
+        };
+        
+        // JSON 다운로드 (다른 PC로 옮길 때)
+        window.downloadPausedAsJson = function() {
+            try {
+                const raw = localStorage.getItem(PAUSE_STORAGE_KEY);
+                if (!raw) {
+                    showToast('저장된 데이터가 없습니다', 'error');
+                    return;
+                }
+                const snapshot = JSON.parse(raw);
+                const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ocr_paused_${snapshot.source || 'unknown'}_${(snapshot.publishDate || '').replace('.', '')}_${new Date().toISOString().slice(0,10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('JSON 다운로드 완료', 'success');
+            } catch (e) {
+                showToast('다운로드 실패: ' + e.message, 'error');
+            }
+        };
+        
+        // 페이지 로드 시 자동 실행
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => setTimeout(checkAndRestorePausedWork, 500));
+        } else {
+            setTimeout(checkAndRestorePausedWork, 500);
+        }
+        
+        // ═══════════════════════════════════════════════════════════════
+        // ★ v2.7 끝 ★
+        // ═══════════════════════════════════════════════════════════════
         
         // ★ v2.3: 중간 결과 JSON 저장
         function saveIntermediateJson() {
