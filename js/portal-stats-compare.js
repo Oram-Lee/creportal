@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.6  (Step 3+4+5 — 회사·공실 선택 + 공통 셋 + 결과 카드 / MVP)
+ * portal-stats-compare.js  v1.7.2  (입주시기 컬럼 추가)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -361,6 +361,18 @@ function _scInjectModal() {
 
 // ── 4-A. 매칭용 정규화 헬퍼 (v1.2) ───────────────────────────────
 
+// v1.7.1: srNormBuilding 이 채우지 않는 필드 안전 액세스 헬퍼
+//   srNormBuilding 은 _region, _subCategory, _gradeAuto, _sizeBand 만 채움
+//   → grossFloorPy(원본) 와 _subCategory(서브권역) 를 직접 사용
+function _scGrossPy(b) {
+    if (!b) return 0;
+    return parseFloat(b.grossFloorPy) || parseFloat(b._grossPy) || 0;
+}
+function _scSubRegion(b) {
+    if (!b) return '';
+    // srDetectReportRegion 결과의 subCategory (예: '마포/공덕', 'DMC', '서울기타')
+    return b._subCategory || b._subRegion || '';
+}
 /**
  * 빌딩명 정규화 — 공백·구두점·괄호·접미어 제거 후 lowercase
  * "미래에셋 센터원" → "미래에셋센터원"
@@ -1424,7 +1436,7 @@ function _scGetCandidates(side) {
         if (f.regions.length    && !f.regions.includes(b._region))      continue;
         if (f.grades.length     && !f.grades.includes(b._gradeAuto))    continue;
         if (f.sizeBands.length  && !f.sizeBands.includes(b._sizeBand))  continue;
-        if (f.subRegions.length && !f.subRegions.includes(b._subRegion)) continue;
+        if (f.subRegions.length && !f.subRegions.includes(_scSubRegion(b))) continue;
 
         cands.push({ building: b, sources, raw: popMap.get(String(b.id)) });
     }
@@ -1456,8 +1468,8 @@ function _scBuildingCardHtml(side, item) {
     const region    = b._region    || '-';
     const grade     = b._gradeAuto || '-';
     const sizeBand  = b._sizeBand  || '-';
-    const subRegion = b._subRegion || '';
-    const grossPy   = b._grossPy   || 0;
+    const subRegion = _scSubRegion(b);
+    const grossPy   = _scGrossPy(b);
 
     const regionColor = SR_REGION_COLOR[region] || '#94a3b8';
     const gradeColor  = SR_GRADE_COLOR[grade]   || '#94a3b8';
@@ -1615,6 +1627,31 @@ function _scVacPrices(v) {
     };
 }
 
+// ── v1.7.2: 입주시기 판정 ────────────────────────────────────────
+// editor.js 의 _seIsImmediateMoveIn 과 동일 키워드 (브리프 §4 원칙)
+
+/** 즉시입주 키워드 — 단독 또는 결합형 */
+const SC_IMMEDIATE_KEYWORDS = ['즉시', '즉시입주', '즉시가능', '바로입주', '바로가능'];
+
+/**
+ * 입주시기를 3분류로 판정:
+ *   - 'immediate' 🟢 즉시입주 (자동 공실 포함 권장)
+ *   - 'future'    🟡 미래 날짜 또는 텍스트 (사용자 판단)
+ *   - 'empty'     ⚪ 미기재
+ * @returns {{kind: 'immediate'|'future'|'empty', label: string, color: string, raw: string}}
+ */
+function _scClassifyMoveIn(vacancy) {
+    const raw = String(vacancy?.moveInDate || '').trim();
+    if (!raw) {
+        return { kind: 'empty', label: '미기재', color: '#9ca3af', raw: '' };
+    }
+    const norm = raw.replace(/[\s\-()[\]【】·.,/]/g, '').toLowerCase();
+    if (SC_IMMEDIATE_KEYWORDS.some(k => norm === k || norm.includes(k))) {
+        return { kind: 'immediate', label: '즉시', color: '#16a34a', raw };
+    }
+    return { kind: 'future', label: raw, color: '#ea580c', raw };
+}
+
 /** floorPricing 폴백 — yyyymm 시점 또는 그 이전의 가장 최신값 */
 function _scFloorFallback(building, yyyymm) {
     const fps = (building.floorPricing || []).slice();
@@ -1666,8 +1703,8 @@ function _scRenderBuildingDetail() {
             </div>
             <div style="font-size:10px; color:var(--text-muted); margin-top:3px;">
                 ${b._region || '-'} · ${b._gradeAuto || '-'} · ${b._sizeBand || '-'} ·
-                ${b._grossPy ? Math.round(b._grossPy).toLocaleString() + '평' : '?'}
-                ${b._subRegion ? ' · ' + b._subRegion : ''}
+                ${_scGrossPy(b) ? Math.round(_scGrossPy(b)).toLocaleString() + '평' : '?'}
+                ${_scSubRegion(b) ? ' · ' + _scSubRegion(b) : ''}
             </div>
         </div>
 
@@ -1749,13 +1786,23 @@ function _scRenderSidePanel(side, building, yyyymm) {
     const allKeys     = chosenVacs.map(v => _scVacancyKey(v));
     const allSelected = allKeys.length > 0 && allKeys.every(k => selectedVacKeys.has(k));
 
+    // v1.7.2: 입주시기 분포
+    const miCounts = { immediate: 0, future: 0, empty: 0 };
+    chosenVacs.forEach(v => { miCounts[_scClassifyMoveIn(v).kind]++; });
+    const hasImmediate = miCounts.immediate > 0;
+
     const rows = chosenVacs.map(v => {
         const key   = _scVacancyKey(v);
         const isOn  = selectedVacKeys.has(key);
         const area  = _scVacAreaPy(v);
         const floor = v.floorText || v.floor || '-';
         const px    = _scVacPrices(v);
+        const mi    = _scClassifyMoveIn(v);
         const fmtP  = n => (n != null) ? Math.round(n / 1000).toLocaleString() : '-';
+        // 입주시기 라벨 (긴 텍스트는 자르고 title로 풀 표시)
+        const miShort = mi.kind === 'immediate' ? '즉시'
+                       : mi.kind === 'empty'    ? '-'
+                       : (mi.raw.length > 10 ? mi.raw.slice(0, 10) + '…' : mi.raw);
         return `
             <tr style="border-top:1px solid var(--border-color);
                        background:${isOn ? '#eff6ff' : 'transparent'};
@@ -1766,6 +1813,12 @@ function _scRenderSidePanel(side, building, yyyymm) {
                 </td>
                 <td style="padding:3px 4px; font-weight:600;">${floor}</td>
                 <td style="padding:3px 4px; text-align:right;">${area ? area.toFixed(1) : '-'}</td>
+                <td style="padding:3px 4px; text-align:center; color:${mi.color};
+                           font-weight:${mi.kind === 'immediate' ? 700 : 500};
+                           white-space:nowrap;"
+                    title="${mi.raw || '미기재'}">
+                    ${mi.kind === 'immediate' ? '🟢 ' : (mi.kind === 'future' ? '🟡 ' : '')}${miShort}
+                </td>
                 <td style="padding:3px 4px; text-align:right; color:#1a73e8;">${fmtP(px.rentPy)}</td>
                 <td style="padding:3px 4px; text-align:right; color:#9333ea;">${fmtP(px.depositPy)}</td>
                 <td style="padding:3px 4px; text-align:right; color:#16a34a;">${fmtP(px.maintenancePy)}</td>
@@ -1787,8 +1840,26 @@ function _scRenderSidePanel(side, building, yyyymm) {
                         : '미선택'}
                 </span>
             </div>
-            <div style="display:flex; flex-wrap:wrap; gap:3px; margin-bottom:6px;">
+            <div style="display:flex; flex-wrap:wrap; gap:3px; margin-bottom:5px;">
                 ${tabs}
+            </div>
+            <!-- v1.7.2: 입주시기 분포 + 즉시만 선택 버튼 -->
+            <div style="display:flex; justify-content:space-between; align-items:center;
+                        margin-bottom:6px; gap:6px;">
+                <span style="font-size:10px; color:var(--text-muted); white-space:nowrap;">
+                    입주시기:
+                    ${miCounts.immediate > 0 ? `<span style="color:#16a34a; font-weight:700;">🟢 즉시 ${miCounts.immediate}</span>` : ''}
+                    ${miCounts.future > 0    ? ` <span style="color:#ea580c;">🟡 예정 ${miCounts.future}</span>` : ''}
+                    ${miCounts.empty > 0     ? ` <span style="color:#9ca3af;">⚪ 미기재 ${miCounts.empty}</span>` : ''}
+                </span>
+                ${hasImmediate ? `
+                    <button onclick="event.stopPropagation(); window._scSelectImmediate('${side}', '${String(building.id).replace(/'/g, "\\'")}')"
+                        style="padding:2px 8px; background:#dcfce7; color:#15803d;
+                               border:1px solid #86efac; border-radius:4px; cursor:pointer;
+                               font-size:10px; font-weight:600; white-space:nowrap;">
+                        ⚡ 즉시만 선택
+                    </button>
+                ` : ''}
             </div>
             <div style="max-height:180px; overflow-y:auto;
                         border:1px solid var(--border-color); border-radius:5px; background:#fff;">
@@ -1801,6 +1872,7 @@ function _scRenderSidePanel(side, building, yyyymm) {
                             </th>
                             <th style="padding:3px 4px; text-align:left;">층</th>
                             <th style="padding:3px 4px; text-align:right;">평</th>
+                            <th style="padding:3px 4px; text-align:center;" title="🟢 즉시 / 🟡 예정 / - 미기재">입주시기</th>
                             <th style="padding:3px 4px; text-align:right;" title="천원/평">임대료</th>
                             <th style="padding:3px 4px; text-align:right;" title="천원/평">보증금</th>
                             <th style="padding:3px 4px; text-align:right;" title="천원/평">관리비</th>
@@ -1825,7 +1897,7 @@ window._scChooseSource = function(side, buildingId, source) {
         chosenSource:    source,
         selectedVacKeys: new Set(),
     });
-    _scState.dirty = true;
+    _scMarkDirty();
     _scRenderBuildingDetail();
     _scRenderBuildingLists();          // 좌측 카드의 chosenSource 강조 갱신
     _scRenderResultPlaceholder();      // 결과/계산 버튼 상태 갱신
@@ -1847,7 +1919,7 @@ window._scToggleVacancy = function(side, buildingId, vacKey) {
     } else {
         cur.selectedVacKeys.add(vacKey);
     }
-    _scState.dirty = true;
+    _scMarkDirty();
     _scRenderBuildingDetail();
     _scRenderBuildingLists();
     _scRenderResultPlaceholder();
@@ -1870,7 +1942,29 @@ window._scToggleAllVacancies = function(side, buildingId, checkAll) {
     } else {
         st.selections.delete(String(buildingId));
     }
-    _scState.dirty = true;
+    _scMarkDirty();
+    _scRenderBuildingDetail();
+    _scRenderBuildingLists();
+    _scRenderResultPlaceholder();
+};
+
+/** v1.7.2: 즉시입주만 선택 — 현재 회사의 vacancy 중 moveInDate=즉시 만 체크 */
+window._scSelectImmediate = function(side, buildingId) {
+    side = _scSide(side);
+    const st = _scState[`point${side}`];
+    const b  = _scFindNormBuilding(buildingId);
+    if (!b || !st.yyyymm) return;
+    const cur = st.selections.get(String(buildingId));
+    const chosenSource = cur?.chosenSource;
+    if (!chosenSource) return;
+
+    const vacs = _scVacanciesByMonth(b, st.yyyymm).filter(v => _scVacancySource(v) === chosenSource);
+    const immediateVacs = vacs.filter(v => _scClassifyMoveIn(v).kind === 'immediate');
+    if (immediateVacs.length === 0) return;
+
+    const keys = new Set(immediateVacs.map(_scVacancyKey));
+    st.selections.set(String(buildingId), { chosenSource, selectedVacKeys: keys });
+    _scMarkDirty();
     _scRenderBuildingDetail();
     _scRenderBuildingLists();
     _scRenderResultPlaceholder();
@@ -2056,7 +2150,7 @@ function _scAggregateByRegion(commonIds, side) {
         const b = _scFindNormBuilding(bid);
         if (!b) return;
         const region = b._region || 'ETC';
-        const gross  = b._grossPy || 0;
+        const gross  = _scGrossPy(b);
         if (gross <= 0) return;       // 분모 0 방지
 
         const m = _scExtractBuildingMetrics(side, bid);
@@ -2208,6 +2302,11 @@ window._scCalculate = function() {
                 </span>
             </div>
             <div style="display:flex; gap:6px;">
+                <button onclick="window._scExportExcel()"
+                    style="padding:5px 12px; font-size:11px; background:#16a34a; color:#fff;
+                           border:none; border-radius:6px; cursor:pointer; font-weight:600;">
+                    📥 엑셀 다운로드
+                </button>
                 <button onclick="window._scClearResult()"
                     style="padding:5px 12px; font-size:11px; background:transparent;
                            border:1px solid var(--border-color); border-radius:6px;
@@ -2314,6 +2413,599 @@ window._scClearResult = function() {
 };
 
 // ═══════════════════════════════════════════════════════════════
+// 5G. Step 6 — 직렬화 / 역직렬화 (Set ↔ Firebase plain object)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * _scState 의 selections (Map<id, {chosenSource, selectedVacKeys:Set}>) 를
+ * Firebase 저장 가능한 plain object 로 변환:
+ *   { [bid]: { chosenSource, selectedVacKeys: { [k]: true, ... } } }
+ */
+function _scSerializeSelections(selectionsMap) {
+    const out = {};
+    selectionsMap.forEach((val, bid) => {
+        const keysObj = {};
+        if (val.selectedVacKeys && val.selectedVacKeys.size > 0) {
+            val.selectedVacKeys.forEach(k => { keysObj[k] = true; });
+        }
+        out[bid] = {
+            chosenSource:    val.chosenSource || '',
+            selectedVacKeys: keysObj,
+        };
+    });
+    return out;
+}
+
+/** Firebase plain object → Map<id, {chosenSource, selectedVacKeys:Set}> */
+function _scDeserializeSelections(plainObj) {
+    const map = new Map();
+    if (!plainObj) return map;
+    Object.keys(plainObj).forEach(bid => {
+        const v = plainObj[bid] || {};
+        const keys = new Set(Object.keys(v.selectedVacKeys || {}));
+        map.set(String(bid), {
+            chosenSource:    v.chosenSource || '',
+            selectedVacKeys: keys,
+        });
+    });
+    return map;
+}
+
+/** 현재 _scState 를 Firebase 페이로드로 변환 */
+function _scBuildPayload(title) {
+    const user = window.state?.currentUser?.email || 'unknown';
+    const now  = new Date().toISOString();
+    return {
+        title:     String(title || _scState.title || '제목없음').slice(0, 200),
+        updatedAt: now,
+        updatedBy: user,
+        version:   (_scState.version || 0) + 1,
+        pointA: {
+            yyyymm:     _scState.pointA.yyyymm || '',
+            filters:    _scNormalizeFilters(_scState.pointA.filters),
+            selections: _scSerializeSelections(_scState.pointA.selections),
+        },
+        pointB: {
+            yyyymm:     _scState.pointB.yyyymm || '',
+            filters:    _scNormalizeFilters(_scState.pointB.filters),
+            selections: _scSerializeSelections(_scState.pointB.selections),
+        },
+    };
+}
+
+/** filters 의 빈 배열은 Firebase 에서 안전하게 보존 */
+function _scNormalizeFilters(f) {
+    return {
+        regions:    Array.isArray(f.regions)    ? f.regions    : [],
+        grades:     Array.isArray(f.grades)     ? f.grades     : [],
+        sizeBands:  Array.isArray(f.sizeBands)  ? f.sizeBands  : [],
+        subRegions: Array.isArray(f.subRegions) ? f.subRegions : [],
+    };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5H. Step 6 — Firebase 저장 / 불러오기
+// ═══════════════════════════════════════════════════════════════
+
+/** [💾 저장] 버튼 핸들러 — 신규 저장 또는 덮어쓰기 */
+window._scSaveCompare = async function() {
+    const monthsOK = _scState.pointA.yyyymm && _scState.pointB.yyyymm
+                     && _scState.pointA.yyyymm !== _scState.pointB.yyyymm;
+    if (!monthsOK) {
+        alert('저장 전에 두 시점을 서로 다른 월로 선택하세요.');
+        return;
+    }
+
+    // 제목 입력 (덮어쓰기면 기존 제목 디폴트)
+    const defaultTitle = _scState.title
+        || `${_scState.pointA.yyyymm} ↔ ${_scState.pointB.yyyymm} 비교`;
+    const title = prompt(
+        _scState.compareId
+            ? '비교 세션 제목 (덮어쓰기):'
+            : '비교 세션 제목 (신규 저장):',
+        defaultTitle
+    );
+    if (title == null) return;     // 취소
+    if (!title.trim()) {
+        alert('제목을 입력하세요.');
+        return;
+    }
+
+    try {
+        const { db, ref, get, set, push, update, serverTimestamp } =
+            await import('./portal-firebase.js');
+
+        // 신규 저장
+        if (!_scState.compareId) {
+            const newRef = push(ref(db, 'statsCompare'));
+            const payload = _scBuildPayload(title);
+            payload.createdAt = payload.updatedAt;
+            payload.createdBy = payload.updatedBy;
+            await set(newRef, payload);
+            _scState.compareId = newRef.key;
+            _scState.title     = payload.title;
+            _scState.version   = payload.version;
+            _scState.dirty     = false;
+            await _scLogCompareAction('create', newRef.key, payload.version);
+            alert(`✅ 저장 완료\n제목: ${payload.title}\nID: ${newRef.key}`);
+        }
+        // 덮어쓰기 (낙관적 락)
+        else {
+            const snap = await get(ref(db, `statsCompare/${_scState.compareId}`));
+            if (!snap.exists()) {
+                if (!confirm('원본이 삭제된 상태입니다. 신규 ID 로 다시 저장할까요?')) return;
+                _scState.compareId = '';
+                _scState.version   = 0;
+                return window._scSaveCompare();
+            }
+            const remote = snap.val() || {};
+            if ((remote.version || 0) !== (_scState.version || 0)) {
+                if (!confirm(
+                    `다른 사용자가 먼저 수정한 것 같습니다.\n` +
+                    `원격 version: ${remote.version || 0}, 내 version: ${_scState.version || 0}\n\n` +
+                    `[확인] 강제 덮어쓰기 / [취소] 중단`
+                )) return;
+            }
+            const payload = _scBuildPayload(title);
+            // createdAt/By 보존
+            payload.createdAt = remote.createdAt || payload.updatedAt;
+            payload.createdBy = remote.createdBy || payload.updatedBy;
+            await set(ref(db, `statsCompare/${_scState.compareId}`), payload);
+            _scState.title   = payload.title;
+            _scState.version = payload.version;
+            _scState.dirty   = false;
+            await _scLogCompareAction('update', _scState.compareId, payload.version);
+            alert(`✅ 덮어쓰기 완료\n제목: ${payload.title}\nversion: ${payload.version}`);
+        }
+        _scUpdateSubtitle();
+    } catch (err) {
+        console.error('[stats-compare] 저장 실패:', err);
+        alert(`❌ 저장 실패: ${err.message}`);
+    }
+};
+
+/** 변경 로그 — /statsCompareLogs/{autoKey} */
+async function _scLogCompareAction(action, compareId, version) {
+    try {
+        const { db, ref, push } = await import('./portal-firebase.js');
+        const user = window.state?.currentUser?.email || 'unknown';
+        await push(ref(db, 'statsCompareLogs'), {
+            compareId, action, user,
+            ts: new Date().toISOString(),
+            version,
+        });
+    } catch (e) { /* 로그 실패는 무시 */ }
+}
+
+/** [📂 불러오기] 버튼 — 세션 목록 모달 */
+window._scOpenLoadList = async function() {
+    _scInjectLoadModal();
+    const m = _scQS('sc-load-modal');
+    if (m) m.style.display = 'flex';
+    _scRenderLoadList(null);     // 로딩 상태 표시
+    try {
+        const { db, ref, get } = await import('./portal-firebase.js');
+        const snap = await get(ref(db, 'statsCompare'));
+        const all = snap.exists() ? snap.val() : {};
+        const list = Object.keys(all).map(id => ({ id, ...all[id] }));
+        // updatedAt 내림차순
+        list.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+        _scRenderLoadList(list);
+    } catch (err) {
+        console.error('[stats-compare] 목록 로드 실패:', err);
+        _scRenderLoadList([], err.message);
+    }
+};
+
+/** 불러오기 모달 DOM 주입 */
+function _scInjectLoadModal() {
+    if (_scQS('sc-load-modal')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'sc-load-modal';
+    wrap.style.cssText = `
+        display:none; position:fixed; top:50%; left:50%;
+        transform:translate(-50%,-50%); background:var(--bg-card);
+        border-radius:12px; width:720px; max-width:94vw;
+        z-index:1030; box-shadow:0 24px 60px rgba(0,0,0,0.5);
+        max-height:82vh; flex-direction:column;
+    `;
+    wrap.innerHTML = `
+        <div style="padding:14px 20px; background:linear-gradient(135deg,#0f4c81,#1a73e8);
+                    color:#fff; display:flex; justify-content:space-between;
+                    align-items:center; border-radius:12px 12px 0 0; flex-shrink:0;">
+            <div style="font-size:14px; font-weight:700;">📂 저장된 비교 세션 불러오기</div>
+            <button onclick="window._scCloseLoadModal()"
+                style="background:rgba(255,255,255,0.2); border:none; color:#fff;
+                       font-size:18px; width:30px; height:30px; border-radius:6px;
+                       cursor:pointer;">×</button>
+        </div>
+        <div id="sc-load-list" style="flex:1; overflow-y:auto; padding:14px 20px;
+                                       min-height:240px;"></div>
+        <div style="padding:10px 20px; border-top:1px solid var(--border-color);
+                    background:var(--bg-secondary); border-radius:0 0 12px 12px;
+                    display:flex; justify-content:flex-end; flex-shrink:0;">
+            <button onclick="window._scCloseLoadModal()"
+                style="padding:6px 14px; background:var(--bg-card);
+                       border:1px solid var(--border-color); color:var(--text-primary);
+                       border-radius:6px; cursor:pointer; font-size:12px;">
+                닫기
+            </button>
+        </div>
+    `;
+    document.body.appendChild(wrap);
+}
+
+/** 불러오기 모달 닫기 */
+window._scCloseLoadModal = function() {
+    const m = _scQS('sc-load-modal');
+    if (m) m.style.display = 'none';
+};
+
+/** 세션 목록 렌더 */
+function _scRenderLoadList(list, errMsg) {
+    const el = _scQS('sc-load-list');
+    if (!el) return;
+    if (list == null) {
+        el.innerHTML = `<div style="padding:40px 0; text-align:center; color:var(--text-muted);">로딩 중…</div>`;
+        return;
+    }
+    if (errMsg) {
+        el.innerHTML = `<div style="padding:30px 0; text-align:center; color:#dc2626;">❌ ${errMsg}</div>`;
+        return;
+    }
+    if (list.length === 0) {
+        el.innerHTML = `
+            <div style="padding:40px 0; text-align:center; color:var(--text-muted);">
+                저장된 비교 세션이 없습니다.<br>
+                <span style="font-size:11px; opacity:0.7;">현재 작업을 [💾 저장] 으로 첫 세션을 만들어보세요.</span>
+            </div>
+        `;
+        return;
+    }
+
+    el.innerHTML = list.map(item => {
+        const isCurrent = (item.id === _scState.compareId);
+        const aBldgs = Object.keys(item.pointA?.selections || {}).length;
+        const bBldgs = Object.keys(item.pointB?.selections || {}).length;
+        return `
+            <div style="border:1px solid ${isCurrent ? '#1a73e8' : 'var(--border-color)'};
+                        background:${isCurrent ? '#eff6ff' : 'var(--bg-primary)'};
+                        border-radius:7px; padding:10px 12px; margin-bottom:8px;
+                        display:flex; justify-content:space-between; align-items:center;
+                        gap:12px;">
+                <div style="flex:1; min-width:0; cursor:pointer;"
+                    onclick="window._scLoadCompare('${item.id}')">
+                    <div style="font-size:13px; font-weight:700; color:var(--text-primary);">
+                        ${isCurrent ? '⭐ ' : ''}${item.title || '(제목없음)'}
+                    </div>
+                    <div style="font-size:10px; color:var(--text-muted); margin-top:3px;">
+                        ${item.pointA?.yyyymm || '-'} ↔ ${item.pointB?.yyyymm || '-'}
+                        · A:${aBldgs}개 · B:${bBldgs}개
+                        · v${item.version || 0}
+                        · ${(item.updatedAt || '').slice(0, 16).replace('T', ' ')}
+                        · ${item.updatedBy || '-'}
+                    </div>
+                </div>
+                <div style="display:flex; gap:4px;">
+                    <button onclick="window._scLoadCompare('${item.id}')"
+                        style="padding:5px 11px; background:#1a73e8; color:#fff;
+                               border:none; border-radius:5px; cursor:pointer;
+                               font-size:11px; font-weight:600;">
+                        불러오기
+                    </button>
+                    <button onclick="window._scDeleteCompare('${item.id}', '${(item.title || '').replace(/'/g, '\\\\\\'')}')"
+                        style="padding:5px 9px; background:#fee2e2; color:#991b1b;
+                               border:1px solid #fca5a5; border-radius:5px;
+                               cursor:pointer; font-size:11px;">
+                        🗑️
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+/** 세션 불러오기 — 클릭한 ID 의 데이터로 _scState 복원 */
+window._scLoadCompare = async function(compareId) {
+    if (_scState.dirty
+        && !confirm('저장하지 않은 변경사항이 있습니다. 그래도 불러올까요?')) return;
+    try {
+        const { db, ref, get } = await import('./portal-firebase.js');
+        const snap = await get(ref(db, `statsCompare/${compareId}`));
+        if (!snap.exists()) {
+            alert('해당 세션이 존재하지 않습니다 (이미 삭제되었을 수 있음).');
+            return;
+        }
+        const data = snap.val() || {};
+        _scState.compareId = compareId;
+        _scState.title     = data.title || '';
+        _scState.version   = data.version || 0;
+        _scState.dirty     = false;
+        _scState.pointA.yyyymm     = data.pointA?.yyyymm || '';
+        _scState.pointA.filters    = _scNormalizeFilters(data.pointA?.filters || {});
+        _scState.pointA.selections = _scDeserializeSelections(data.pointA?.selections);
+        _scState.pointB.yyyymm     = data.pointB?.yyyymm || '';
+        _scState.pointB.filters    = _scNormalizeFilters(data.pointB?.filters || {});
+        _scState.pointB.selections = _scDeserializeSelections(data.pointB?.selections);
+
+        // UI 동기화
+        const sa = _scQS('sc-month-A'); if (sa) sa.value = _scState.pointA.yyyymm;
+        const sb = _scQS('sc-month-B'); if (sb) sb.value = _scState.pointB.yyyymm;
+        _scRenderFilters('A');
+        _scRenderFilters('B');
+        _scRenderBuildingLists();
+        _scState.selectedBuildingId = null;
+        _scRenderBuildingDetail();
+        _scUpdateProgressBanner();
+        _scRenderResultPlaceholder();
+        _scUpdateSubtitle();
+
+        window._scCloseLoadModal();
+
+        // 모집단(RAW) 미로드 시 안내
+        if (!_scState.researchMaster.loaded) {
+            setTimeout(() => alert(
+                '✅ 비교 세션을 불러왔습니다.\n\n' +
+                '⚠️ 모집단(RAW 엑셀) 이 아직 업로드되지 않았습니다.\n' +
+                '빌딩 리스트를 보려면 RAW 엑셀을 업로드하세요.\n' +
+                '(선택·계산 자체는 RAW 없이도 가능합니다)'
+            ), 100);
+        }
+    } catch (err) {
+        console.error('[stats-compare] 불러오기 실패:', err);
+        alert(`❌ 불러오기 실패: ${err.message}`);
+    }
+};
+
+/** 세션 삭제 */
+window._scDeleteCompare = async function(compareId, title) {
+    if (!confirm(`"${title || compareId}" 세션을 삭제하시겠습니까?\n복구할 수 없습니다.`)) return;
+    try {
+        const fb = await import('./portal-firebase.js');
+        const { db, ref } = fb;
+        const path = ref(db, `statsCompare/${compareId}`);
+        // remove() 가 export 돼있지 않은 환경 대비 폴백: set(null)
+        if (typeof fb.remove === 'function') {
+            await fb.remove(path);
+        } else if (typeof fb.set === 'function') {
+            await fb.set(path, null);
+        } else {
+            throw new Error('remove/set 함수를 찾을 수 없습니다.');
+        }
+        await _scLogCompareAction('delete', compareId, 0);
+        if (_scState.compareId === compareId) {
+            _scState.compareId = '';
+            _scState.version   = 0;
+            _scState.title     = '';
+            _scUpdateSubtitle();
+        }
+        // 목록 새로고침
+        window._scOpenLoadList();
+    } catch (err) {
+        console.error('[stats-compare] 삭제 실패:', err);
+        alert(`❌ 삭제 실패: ${err.message}`);
+    }
+};
+
+/** 헤더 부제 갱신 — 현재 세션 제목 + version 표시 */
+function _scUpdateSubtitle() {
+    const el = _scQS('sc-subtitle');
+    if (!el) return;
+    if (_scState.compareId) {
+        el.innerHTML = `📁 <strong>${_scState.title || '(제목없음)'}</strong> · v${_scState.version} ${_scState.dirty ? '<span style="color:#fde68a;">* 미저장</span>' : ''}`;
+    } else {
+        el.textContent = '두 시점의 동일 빌딩 셋 기반 공실률·임대가·보증금·관리비 비교';
+    }
+}
+
+/** [💾 저장] 버튼 활성/비활성 토글 */
+function _scUpdateSaveButton() {
+    const btn = _scQS('sc-btn-save');
+    if (!btn) return;
+    const monthsOK = _scState.pointA.yyyymm && _scState.pointB.yyyymm
+                     && _scState.pointA.yyyymm !== _scState.pointB.yyyymm;
+    const ok = !!monthsOK;
+    btn.disabled = !ok;
+    btn.style.cursor       = ok ? 'pointer' : 'not-allowed';
+    btn.style.background   = ok ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.12)';
+    btn.style.color        = ok ? '#fff' : 'rgba(255,255,255,0.6)';
+    btn.style.borderColor  = ok ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.20)';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5I. Step 6 — 엑셀 다운로드 (5시트)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 결과 카드의 [📥 엑셀] 버튼 핸들러.
+ * 시트 구성:
+ *   1) 요약       — Hero 카드 4종 + 메타데이터
+ *   2) 권역별     — 권역×4지표 비교표
+ *   3) 시점A선택  — 선택된 vacancy 행 상세
+ *   4) 시점B선택  — 선택된 vacancy 행 상세
+ *   5) 공통빌딩  — 공통 빌딩 리스트 + 권역/등급/연면적
+ */
+window._scExportExcel = function() {
+    if (!window.XLSX) {
+        alert('SheetJS(XLSX) 가 로드되지 않았습니다.');
+        return;
+    }
+    const { common } = _scGetCommonBuildingIds();
+    if (common.length === 0) {
+        alert('공통 빌딩이 없습니다.');
+        return;
+    }
+
+    const aMonth = _scState.pointA.yyyymm;
+    const bMonth = _scState.pointB.yyyymm;
+    const aggA = _scAggregateByRegion(common, 'A');
+    const aggB = _scAggregateByRegion(common, 'B');
+
+    const wb = window.XLSX.utils.book_new();
+
+    // ── 시트 1: 요약 ──
+    const T_A = aggA.get('TOTAL'), T_B = aggB.get('TOTAL');
+    const meta = [
+        ['항목', '값'],
+        ['세션 제목', _scState.title || '(제목없음)'],
+        ['시점 A', aMonth],
+        ['시점 B', bMonth],
+        ['공통 빌딩 수', common.length],
+        ['생성일시', new Date().toLocaleString('ko-KR')],
+        ['생성자', window.state?.currentUser?.email || 'unknown'],
+        [],
+        ['지표', '시점 A', '시점 B', '증감(B-A)', '단위'],
+        ['공실률', (T_A.vacRate || 0).toFixed(2), (T_B.vacRate || 0).toFixed(2),
+         ((T_B.vacRate || 0) - (T_A.vacRate || 0)).toFixed(2), '%'],
+        ['평균임대료', _scExcelKW(T_A.rentAvg), _scExcelKW(T_B.rentAvg),
+         _scExcelDelta(T_B.rentAvg, T_A.rentAvg), '천원/평/月'],
+        ['평균보증금', _scExcelKW(T_A.depAvg), _scExcelKW(T_B.depAvg),
+         _scExcelDelta(T_B.depAvg, T_A.depAvg), '천원/평'],
+        ['평균관리비', _scExcelKW(T_A.mntAvg), _scExcelKW(T_B.mntAvg),
+         _scExcelDelta(T_B.mntAvg, T_A.mntAvg), '천원/평/月'],
+        [],
+        ['※ 산식'],
+        ['공실률', '= Σ공실면적 ÷ Σ연면적 × 100 (가중평균)'],
+        ['평균값', '= Σ(빌딩값 × 연면적) ÷ Σ(연면적, 값 있는 빌딩 한정) — 연면적 가중평균'],
+        ['vacancy 가격 누락 시', 'floorPricing 동시점 또는 이전 최신값으로 폴백'],
+    ];
+    const ws1 = window.XLSX.utils.aoa_to_sheet(meta);
+    ws1['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
+    window.XLSX.utils.book_append_sheet(wb, ws1, '요약');
+
+    // ── 시트 2: 권역별 ──
+    const regList = ['TOTAL', ...SR_REGIONS.filter(r =>
+        (aggA.get(r)?.bldgCount || 0) + (aggB.get(r)?.bldgCount || 0) > 0)];
+    const regHeader = [
+        '권역', '빌딩수',
+        '공실률A(%)', '공실률B(%)', '공실률Δ(%p)',
+        '임대료A', '임대료B', '임대료Δ',
+        '보증금A', '보증금B', '보증금Δ',
+        '관리비A', '관리비B', '관리비Δ',
+    ];
+    const regRows = regList.map(r => {
+        const a = aggA.get(r) || {}, b = aggB.get(r) || {};
+        return [
+            r === 'TOTAL' ? '전체' : r,
+            a.bldgCount || 0,
+            +(a.vacRate || 0).toFixed(2),
+            +(b.vacRate || 0).toFixed(2),
+            +(((b.vacRate || 0) - (a.vacRate || 0))).toFixed(2),
+            _scExcelKW(a.rentAvg), _scExcelKW(b.rentAvg), _scExcelDelta(b.rentAvg, a.rentAvg),
+            _scExcelKW(a.depAvg),  _scExcelKW(b.depAvg),  _scExcelDelta(b.depAvg,  a.depAvg),
+            _scExcelKW(a.mntAvg),  _scExcelKW(b.mntAvg),  _scExcelDelta(b.mntAvg,  a.mntAvg),
+        ];
+    });
+    const ws2 = window.XLSX.utils.aoa_to_sheet([regHeader, ...regRows]);
+    ws2['!cols'] = [{ wch: 10 }, { wch: 8 }, ...Array(12).fill({ wch: 12 })];
+    window.XLSX.utils.book_append_sheet(wb, ws2, '권역별 비교');
+
+    // ── 시트 3, 4: 시점 A·B 선택 상세 ──
+    ['A', 'B'].forEach(side => {
+        const yyyymm = _scState[`point${side}`].yyyymm;
+        const header = [
+            'buildingId', '빌딩명', '권역', '등급', '규모', '연면적(평)',
+            '회사', '층', '면적(평)', '입주시기', '입주분류',
+            '임대료(원/평)', '보증금(원/평)', '관리비(원/평)',
+            '공통셋포함',
+        ];
+        const rows = [];
+        const sels = _scState[`point${side}`].selections;
+        sels.forEach((sel, bid) => {
+            const b = _scFindNormBuilding(bid);
+            if (!b) return;
+            const vacs = _scVacanciesByMonth(b, yyyymm)
+                .filter(v => _scVacancySource(v) === sel.chosenSource)
+                .filter(v => sel.selectedVacKeys.has(_scVacancyKey(v)));
+            vacs.forEach(v => {
+                const px = _scVacPrices(v);
+                const mi = _scClassifyMoveIn(v);
+                rows.push([
+                    bid,
+                    b.name || b.buildingName || '',
+                    b._region || '',
+                    b._gradeAuto || '',
+                    b._sizeBand || '',
+                    _scGrossPy(b),
+                    sel.chosenSource || '',
+                    v.floorText || v.floor || '',
+                    _scVacAreaPy(v),
+                    mi.raw || '',
+                    mi.kind === 'immediate' ? '즉시' : (mi.kind === 'future' ? '예정' : '미기재'),
+                    px.rentPy || '',
+                    px.depositPy || '',
+                    px.maintenancePy || '',
+                    common.includes(String(bid)) ? 'Y' : 'N',
+                ]);
+            });
+        });
+        const ws = window.XLSX.utils.aoa_to_sheet([header, ...rows]);
+        ws['!cols'] = [{ wch: 14 }, { wch: 22 }, { wch: 8 }, { wch: 6 }, { wch: 8 },
+                       { wch: 10 }, { wch: 12 }, { wch: 8 }, { wch: 9 },
+                       { wch: 14 }, { wch: 8 },
+                       { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 8 }];
+        window.XLSX.utils.book_append_sheet(wb, ws, `시점${side} 선택`);
+    });
+
+    // ── 시트 5: 공통 빌딩 ──
+    const cHeader = [
+        'buildingId', '빌딩명', '주소', '권역', '세부권역', '등급', '규모', '연면적(평)',
+        'A_회사', 'A_공실면적(평)', 'A_임대료', 'A_보증금', 'A_관리비',
+        'B_회사', 'B_공실면적(평)', 'B_임대료', 'B_보증금', 'B_관리비',
+    ];
+    const cRows = common.map(bid => {
+        const b = _scFindNormBuilding(bid);
+        if (!b) return null;
+        const mA = _scExtractBuildingMetrics('A', bid);
+        const mB = _scExtractBuildingMetrics('B', bid);
+        const selA = _scState.pointA.selections.get(String(bid));
+        const selB = _scState.pointB.selections.get(String(bid));
+        return [
+            bid,
+            b.name || b.buildingName || '',
+            b.address || b.roadAddress || '',
+            b._region || '',
+            _scSubRegion(b),
+            b._gradeAuto || '',
+            b._sizeBand || '',
+            _scGrossPy(b),
+            selA?.chosenSource || '',
+            mA.vacancyAreaPy || 0,
+            _scExcelRaw(mA.rentPy), _scExcelRaw(mA.depositPy), _scExcelRaw(mA.maintenancePy),
+            selB?.chosenSource || '',
+            mB.vacancyAreaPy || 0,
+            _scExcelRaw(mB.rentPy), _scExcelRaw(mB.depositPy), _scExcelRaw(mB.maintenancePy),
+        ];
+    }).filter(Boolean);
+    const ws5 = window.XLSX.utils.aoa_to_sheet([cHeader, ...cRows]);
+    ws5['!cols'] = [{ wch: 14 }, { wch: 22 }, { wch: 30 }, { wch: 8 }, { wch: 14 },
+                    { wch: 6 }, { wch: 8 }, { wch: 10 },
+                    ...Array(10).fill({ wch: 12 })];
+    window.XLSX.utils.book_append_sheet(wb, ws5, '공통 빌딩');
+
+    // 파일명: 비교_2025-12_2026-01_20260428.xlsx
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const fname = `비교_${aMonth}_${bMonth}_${today}.xlsx`;
+    window.XLSX.writeFile(wb, fname);
+};
+
+/** 천원 단위 변환 — null/0 = 빈칸 */
+function _scExcelKW(v) {
+    if (v == null) return '';
+    return Math.round(v / 1000);
+}
+/** 증감 (천원 단위) */
+function _scExcelDelta(cur, prev) {
+    if (cur == null || prev == null) return '';
+    return Math.round((cur - prev) / 1000);
+}
+/** 원/평 그대로 */
+function _scExcelRaw(v) {
+    if (v == null) return '';
+    return Math.round(v);
+}
+
+// ═══════════════════════════════════════════════════════════════
 // 5C. Step 2B — 필터 멀티픽커 모달
 // ═══════════════════════════════════════════════════════════════
 
@@ -2368,12 +3060,12 @@ function _scRenderFilterPicker(side) {
     side = _scSide(side);
     const f = _scState[`point${side}`].filters;
 
-    // 세부권역 옵션 — 모집단 빌딩의 _subRegion 들에서 unique 추출
+    // 세부권역 옵션 — 모집단 빌딩의 _subCategory 들에서 unique 추출
     const norm = (window.srLib?.srGetNormBuildings?.() || srGetNormBuildings()) || [];
     const popIds = new Set(_scState.researchMaster.matched.map(m => String(m.building.id)));
     const subRegions = [...new Set(
         norm.filter(b => popIds.has(String(b.id)))
-            .map(b => b._subRegion).filter(Boolean)
+            .map(b => _scSubRegion(b)).filter(Boolean)
     )].sort();
 
     const chipGroup = (label, options, selected, key, colorMap) => `
@@ -2529,6 +3221,8 @@ window.openCompareModal = function() {
     _scRenderBuildingLists();
     _scRenderBuildingDetail();          // Step 3
     _scRenderResultPlaceholder();       // Step 4·5
+    _scUpdateSubtitle();                // Step 6
+    _scUpdateSaveButton();              // Step 6
     const modal = _scQS('sc-modal');
     if (modal) modal.style.display = 'flex';
     console.log('[stats-compare] modal opened');
@@ -2548,11 +3242,13 @@ window._scOnMonthChange = function(side, yyyymm) {
         st.selections.clear();
     }
     st.yyyymm = yyyymm || '';
-    _scState.dirty = true;
+    _scMarkDirty();
     _scRenderBuildingLists();
     _scRenderBuildingDetail();
     _scUpdateProgressBanner();
-    _scRenderResultPlaceholder();   // 결과 영역 + 계산 버튼 동시 갱신
+    _scRenderResultPlaceholder();
+    _scUpdateSaveButton();
+    _scUpdateSubtitle();
 };
 
 /** 진행 상태 배너 업데이트 */
@@ -2596,15 +3292,14 @@ window._scOpenFilterPicker = function(side) {
     if (m) m.style.display = 'flex';
 };
 
-/** 비교 세션 불러오기 — Step 6 에서 구현 */
-window._scOpenLoadList = function() {
-    alert('저장된 비교 세션 불러오기는 Step 6 에서 구현 예정');
-};
+/** dirty 표시 + 부제·저장버튼 즉시 갱신 (선택 변경 시 사용) */
+function _scMarkDirty() {
+    _scState.dirty = true;
+    _scUpdateSubtitle();
+    _scUpdateSaveButton();
+}
 
-/** 비교 세션 저장 — Step 6 에서 구현 */
-window._scSaveCompare = function() {
-    alert('비교 세션 저장은 Step 6 에서 구현 예정');
-};
+/** _scOpenLoadList / _scSaveCompare 는 Step 6 (5H 섹션) 에 실구현됨 */
 
 /** _scCalculate 는 Step 5 (5F 섹션)에 실구현됨 */
 
@@ -2628,6 +3323,12 @@ if (!window._scEscRegistered) {
             window._scCloseFilterPicker();
             return;
         }
+        // v1.7: 불러오기 모달이 떠 있으면 그걸 먼저 닫음
+        const ld = document.getElementById('sc-load-modal');
+        if (ld && ld.style.display !== 'none' && ld.style.display !== '') {
+            window._scCloseLoadModal();
+            return;
+        }
         const modal = _scQS('sc-modal');
         if (modal && modal.style.display !== 'none' && modal.style.display !== '') {
             // 다른 모달이 위에 떠 있으면 양보 (편집 모달 등)
@@ -2644,4 +3345,32 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.6 (Step 3+4+5 — 회사·공실 선택 + 공통 셋 + 결과 카드 / MVP) 로드 완료');
+console.log('[portal-stats-compare] v1.7.2 (입주시기 컬럼 + 즉시만 선택) 로드 완료');
+
+// v1.7.1: 분류 기준 검증을 위한 콘솔 진단
+//   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
+window._scDiagFields = function() {
+    const norm = (window.srLib?.srGetNormBuildings?.() || srGetNormBuildings()) || [];
+    if (norm.length === 0) {
+        console.log('[stats-compare] 빌딩 데이터가 아직 로드되지 않음');
+        return;
+    }
+    console.group('%c[stats-compare] 자동 분류 검증 — 처음 5개 빌딩',
+                  'color:#0284c7; font-weight:bold;');
+    console.table(norm.slice(0, 5).map(b => ({
+        id:           b.id,
+        name:         b.name || b.buildingName || '',
+        address:      (b.address || '').slice(0, 30),
+        '_region(자동)':      b._region,
+        '_subCategory(자동)': b._subCategory,
+        '_gradeAuto(자동)':   b._gradeAuto,
+        '_sizeBand(자동)':    b._sizeBand,
+        'grossFloorPy(원본)': b.grossFloorPy,
+        '_grossPy헬퍼':       _scGrossPy(b),
+    })));
+    console.log('%c💡 권역/등급/규모는 모두 portal-stats.js 의 srNormBuilding 이 ' +
+                '주소·연면적 기반으로 자동 계산합니다 (Firebase 저장값 의존 X)',
+                'color:#16a34a;');
+    console.groupEnd();
+};
+console.log('[stats-compare] 자동분류 검증: 콘솔에 _scDiagFields() 입력');
