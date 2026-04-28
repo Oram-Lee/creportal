@@ -51,6 +51,7 @@
                 <a href="admin-research.html" class="nav-item"><span class="nav-icon">🔬</span> 리서치관리</a>
                 <div class="nav-item" onclick="openDuplicateManager()" title="동일주소 빌딩 통합 관리"><span class="nav-icon">🔗</span> 중복관리</div>
                 <div class="nav-item" onclick="openVacancyContamModal()" title="이관된 공실의 buildingName 오염 진단·정정"><span class="nav-icon">🧹</span> 오염정정</div>
+                <div class="nav-item" onclick="openCompareModal()" title="두 시점(월) 간 동일 빌딩 셋 기반 공실률·임대가 비교"><span class="nav-icon">📊</span> 공실률 비교</div>
                 <div class="nav-item" onclick="openStatResearchModal()" title="권역별 공실·임대가 통계 및 리서치 분석" style="display:none;"><span class="nav-icon">📈</span> 통계/리서치</div>
             </nav>
             <div class="header-right">
@@ -1184,6 +1185,11 @@
         sEdit.type = 'module';
         sEdit.src = `js/portal-stats-editor.js?v=${_v}`;
         document.currentScript.after(sEdit);
+        // ★ 두 시점 비교 모듈 (portal-stats-compare.js) — 2026-04
+        const sCmp = document.createElement('script');
+        sCmp.type = 'module';
+        sCmp.src = `js/portal-stats-compare.js?v=${_v}`;
+        document.currentScript.after(sCmp);
     </script>
 
     
