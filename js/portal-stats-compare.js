@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.3  (SyntaxError 핫픽스)
+ * portal-stats-compare.js  v1.7.4  (필터 단순화: 권역 + 등급 두 축만)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -1431,12 +1431,11 @@ function _scGetCandidates(side) {
         const sources = _scSourcesByMonth(b, st.yyyymm);
         if (sources.length === 0) continue;               // 해당 월 OCR 없음
 
-        // 필터
+        // 필터 (v1.7.4: 권역+등급 두 축만 — 등급=규모는 redundant 라 통합)
         const f = st.filters;
-        if (f.regions.length    && !f.regions.includes(b._region))      continue;
-        if (f.grades.length     && !f.grades.includes(b._gradeAuto))    continue;
-        if (f.sizeBands.length  && !f.sizeBands.includes(b._sizeBand))  continue;
-        if (f.subRegions.length && !f.subRegions.includes(_scSubRegion(b))) continue;
+        if (f.regions.length && !f.regions.includes(b._region))   continue;
+        if (f.grades.length  && !f.grades.includes(b._gradeAuto)) continue;
+        // sizeBands / subRegions 는 v1.7.4 부터 비활성 (UI 에서 제거)
 
         cands.push({ building: b, sources, raw: popMap.get(String(b.id)) });
     }
@@ -1467,8 +1466,6 @@ function _scBuildingCardHtml(side, item) {
 
     const region    = b._region    || '-';
     const grade     = b._gradeAuto || '-';
-    const sizeBand  = b._sizeBand  || '-';
-    const subRegion = _scSubRegion(b);
     const grossPy   = _scGrossPy(b);
 
     const regionColor = SR_REGION_COLOR[region] || '#94a3b8';
@@ -1510,12 +1507,9 @@ function _scBuildingCardHtml(side, item) {
                     ${grade}
                 </span>
                 <span style="font-size:10px; color:var(--text-muted);">
-                    ${sizeBand} · ${grossPy ? Math.round(grossPy).toLocaleString() + '평' : '?'}
+                    ${grossPy ? Math.round(grossPy).toLocaleString() + '평' : '?'}
                 </span>
             </div>
-            ${subRegion
-                ? `<div style="font-size:10px; color:var(--text-muted); margin-bottom:2px;">${subRegion}</div>`
-                : ''}
             <div style="line-height:1.4;">${sourceChips}</div>
         </div>
     `;
@@ -1702,9 +1696,8 @@ function _scRenderBuildingDetail() {
                 ${b.name || b.buildingName || '-'}
             </div>
             <div style="font-size:10px; color:var(--text-muted); margin-top:3px;">
-                ${b._region || '-'} · ${b._gradeAuto || '-'} · ${b._sizeBand || '-'} ·
+                ${b._region || '-'} · ${b._gradeAuto || '-'} ·
                 ${_scGrossPy(b) ? Math.round(_scGrossPy(b)).toLocaleString() + '평' : '?'}
-                ${_scSubRegion(b) ? ' · ' + _scSubRegion(b) : ''}
             </div>
         </div>
 
@@ -3062,18 +3055,10 @@ function _scInjectFilterModal() {
     document.body.appendChild(wrap);
 }
 
-/** 필터 모달 본체 렌더 (4개 그룹: 권역·등급·규모·세부권역) */
+/** 필터 모달 본체 렌더 (v1.7.4: 권역·등급 두 그룹만 — 규모는 등급과 redundant) */
 function _scRenderFilterPicker(side) {
     side = _scSide(side);
     const f = _scState[`point${side}`].filters;
-
-    // 세부권역 옵션 — 모집단 빌딩의 _subCategory 들에서 unique 추출
-    const norm = (window.srLib?.srGetNormBuildings?.() || srGetNormBuildings()) || [];
-    const popIds = new Set(_scState.researchMaster.matched.map(m => String(m.building.id)));
-    const subRegions = [...new Set(
-        norm.filter(b => popIds.has(String(b.id)))
-            .map(b => _scSubRegion(b)).filter(Boolean)
-    )].sort();
 
     const chipGroup = (label, options, selected, key, colorMap) => `
         <div style="margin-bottom:14px;">
@@ -3119,11 +3104,12 @@ function _scRenderFilterPicker(side) {
     if (body) {
         body.innerHTML = `
             ${chipGroup('권역', SR_REGIONS, f.regions, 'regions', SR_REGION_COLOR)}
-            ${chipGroup('등급', SR_GRADES,  f.grades,  'grades',  SR_GRADE_COLOR)}
-            ${chipGroup('규모', SR_SIZE_BANDS_FULL, f.sizeBands, 'sizeBands', null)}
-            ${subRegions.length > 0
-                ? chipGroup('세부권역', subRegions, f.subRegions, 'subRegions', null)
-                : ''}
+            ${chipGroup('등급 (연면적 기반 자동 분류)', SR_GRADES, f.grades, 'grades', SR_GRADE_COLOR)}
+            <div style="font-size:10px; color:var(--text-muted); padding:8px 0 0;
+                        border-top:1px dashed var(--border-color); line-height:1.6;">
+                💡 등급은 연면적으로 자동 결정됩니다:<br>
+                &nbsp;&nbsp;Prime ≥ 20,000평 · A ≥ 10,000 · B ≥ 5,000 · C ≥ 3,000 · D ≥ 1,000 · E &lt; 1,000
+            </div>
         `;
     }
 }
@@ -3187,9 +3173,8 @@ function _scRenderFilters(side) {
     if (!el) return;
     const f = _scState[`point${side}`].filters;
     const summary = [];
-    if (f.grades.length)     summary.push(`등급: ${f.grades.join(',')}`);
-    if (f.regions.length)    summary.push(`권역: ${f.regions.join(',')}`);
-    if (f.sizeBands.length)  summary.push(`규모: ${f.sizeBands.join(',')}`);
+    if (f.grades.length)  summary.push(`등급: ${f.grades.join(',')}`);
+    if (f.regions.length) summary.push(`권역: ${f.regions.join(',')}`);
     const txt = summary.length ? summary.join(' | ') : '필터: 전체';
     el.innerHTML = `
         <span style="opacity:0.7;">${txt}</span>
@@ -3352,7 +3337,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.3 (입주시기 + SyntaxError 핫픽스) 로드 완료');
+console.log('[portal-stats-compare] v1.7.4 (필터 단순화: 권역+등급 두 축만) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
