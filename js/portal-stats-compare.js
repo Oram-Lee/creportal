@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.7  (RAW 확장 모드 — portal 전체에서 양시점 OCR 빌딩 보강)
+ * portal-stats-compare.js  v1.7.8  (결과 카드 레이아웃 재정비)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -2558,7 +2558,7 @@ window._scCalculate = function() {
     // 헤더 카드 (TOTAL 의 4지표를 큰 글씨로)
     const T_A = aggA.get('TOTAL'), T_B = aggB.get('TOTAL');
     const heroCards = `
-        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:14px;">
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;">
             ${_scHeroCard('📉 공실률', `${(T_A.vacRate||0).toFixed(2)}%`, `${(T_B.vacRate||0).toFixed(2)}%`,
                           _scDeltaBadge(T_B.vacRate, T_A.vacRate, 'vacRate'))}
             ${_scHeroCard('💰 평균임대가', `${_scFmtKW(T_A.rentAvg)}`, `${_scFmtKW(T_B.rentAvg)}`,
@@ -2570,43 +2570,65 @@ window._scCalculate = function() {
         </div>
     `;
 
-    area.style.padding   = '16px 18px';
-    area.style.textAlign = 'left';
-    area.style.color     = 'var(--text-primary)';
-    area.style.minHeight = '180px';
+    // ★ v1.7.8: sc-result-area 가 display:flex 로 초기화돼 있으므로 명시적 block 으로 재설정
+    area.style.cssText = `
+        background: var(--bg-card);
+        border-radius: 8px;
+        padding: 16px 18px;
+        text-align: left;
+        color: var(--text-primary);
+        min-height: 180px;
+        display: block;
+    `;
+
     area.innerHTML = `
+        <!-- 1행: 헤더 (제목·메타·액션 버튼) -->
         <div style="display:flex; justify-content:space-between; align-items:center;
-                    margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-            <div style="font-size:13px; font-weight:700; color:var(--text-primary);">
-                📊 비교 결과 — 공통 빌딩 ${common.length}개
-                <span style="font-size:11px; color:var(--text-muted); font-weight:500; margin-left:8px;">
-                    시점 A: ${aMonth} (기준) · 시점 B: ${bMonth} (비교) · 연면적 가중평균
-                </span>
+                    margin-bottom:14px; flex-wrap:wrap; gap:10px;
+                    padding-bottom:12px; border-bottom:1px solid var(--border-color);">
+            <div>
+                <div style="font-size:14px; font-weight:700; color:var(--text-primary);">
+                    📊 비교 결과 — 공통 빌딩 ${common.length}개
+                </div>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:3px;">
+                    시점 A: <strong style="color:#0284c7;">${aMonth}</strong> (기준)
+                    · 시점 B: <strong style="color:#ea580c;">${bMonth}</strong> (비교)
+                    · 연면적 가중평균
+                </div>
             </div>
             <div style="display:flex; gap:6px;">
                 <button onclick="window._scExportExcel()"
-                    style="padding:5px 12px; font-size:11px; background:#16a34a; color:#fff;
-                           border:none; border-radius:6px; cursor:pointer; font-weight:600;">
+                    style="padding:7px 14px; font-size:12px; background:#16a34a; color:#fff;
+                           border:none; border-radius:6px; cursor:pointer; font-weight:600;
+                           white-space:nowrap;">
                     📥 엑셀 다운로드
                 </button>
                 <button onclick="window._scClearResult()"
-                    style="padding:5px 12px; font-size:11px; background:transparent;
+                    style="padding:7px 14px; font-size:12px; background:transparent;
                            border:1px solid var(--border-color); border-radius:6px;
-                           color:var(--text-primary); cursor:pointer;">
+                           color:var(--text-primary); cursor:pointer; white-space:nowrap;">
                     결과 닫기
                 </button>
             </div>
         </div>
-        ${heroCards}
+
+        <!-- 2행: Hero 카드 4종 (전체 풀폭, 4분할) -->
+        <div style="margin-bottom:14px;">
+            ${heroCards}
+        </div>
+
+        <!-- 3행: 권역별 비교표 (전체 풀폭, 가로 스크롤) -->
         <div style="background:#fff; border:1px solid var(--border-color);
                     border-radius:8px; overflow:hidden;">
             <div style="overflow-x:auto;">
-                <table style="width:100%; min-width:1100px; font-size:11px;
+                <table style="width:100%; min-width:1080px; font-size:11px;
                               border-collapse:collapse;">
                     <thead style="background:var(--bg-secondary);">
                         <tr>
-                            <th rowspan="2" style="padding:8px; text-align:left; vertical-align:bottom;">권역</th>
-                            <th rowspan="2" style="padding:8px; text-align:right; vertical-align:bottom;">빌딩수</th>
+                            <th rowspan="2" style="padding:8px 10px; text-align:left; vertical-align:bottom;
+                                width:80px; white-space:nowrap;">권역</th>
+                            <th rowspan="2" style="padding:8px 10px; text-align:right; vertical-align:bottom;
+                                width:60px;">빌딩수</th>
                             <th colspan="3" style="padding:6px 8px; text-align:center;
                                 background:#f0f9ff; color:#0c4a6e; border-bottom:1px solid #bae6fd;">
                                 📉 공실률 (%)
@@ -2625,18 +2647,18 @@ window._scCalculate = function() {
                             </th>
                         </tr>
                         <tr style="font-size:10px; color:var(--text-muted);">
-                            <th style="padding:4px 6px; text-align:right;">A</th>
-                            <th style="padding:4px 6px; text-align:right;">B</th>
-                            <th style="padding:4px 6px; text-align:right;">Δ</th>
-                            <th style="padding:4px 6px; text-align:right;">A</th>
-                            <th style="padding:4px 6px; text-align:right;">B</th>
-                            <th style="padding:4px 6px; text-align:right;">Δ</th>
-                            <th style="padding:4px 6px; text-align:right;">A</th>
-                            <th style="padding:4px 6px; text-align:right;">B</th>
-                            <th style="padding:4px 6px; text-align:right;">Δ</th>
-                            <th style="padding:4px 6px; text-align:right;">A</th>
-                            <th style="padding:4px 6px; text-align:right;">B</th>
-                            <th style="padding:4px 6px; text-align:right;">Δ</th>
+                            <th style="padding:4px 6px; text-align:right; width:70px;">A</th>
+                            <th style="padding:4px 6px; text-align:right; width:70px;">B</th>
+                            <th style="padding:4px 6px; text-align:right; width:60px;">Δ</th>
+                            <th style="padding:4px 6px; text-align:right; width:70px;">A</th>
+                            <th style="padding:4px 6px; text-align:right; width:70px;">B</th>
+                            <th style="padding:4px 6px; text-align:right; width:60px;">Δ</th>
+                            <th style="padding:4px 6px; text-align:right; width:70px;">A</th>
+                            <th style="padding:4px 6px; text-align:right; width:70px;">B</th>
+                            <th style="padding:4px 6px; text-align:right; width:60px;">Δ</th>
+                            <th style="padding:4px 6px; text-align:right; width:70px;">A</th>
+                            <th style="padding:4px 6px; text-align:right; width:70px;">B</th>
+                            <th style="padding:4px 6px; text-align:right; width:60px;">Δ</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2645,8 +2667,11 @@ window._scCalculate = function() {
                 </table>
             </div>
         </div>
-        <div style="margin-top:8px; font-size:10px; color:var(--text-muted); line-height:1.6;">
-            💡 산식: 공실률 = Σ공실면적 ÷ Σ연면적 × 100 ·
+
+        <!-- 4행: 산식 안내 -->
+        <div style="margin-top:10px; padding:8px 12px; background:var(--bg-secondary);
+                    border-radius:5px; font-size:10px; color:var(--text-muted); line-height:1.7;">
+            💡 <strong>산식</strong>: 공실률 = Σ공실면적 ÷ Σ연면적 × 100 ·
                 평균값 = Σ(빌딩값 × 연면적) ÷ Σ(연면적, 값 있는 빌딩 한정) ·
                 Δ = 시점 B − 시점 A · 가격 단위 = 천원/평/月.
                 vacancy 에 가격이 누락된 빌딩은 floorPricing 의 동시점 또는 최신값으로 폴백.
@@ -2686,10 +2711,19 @@ function _scHeroCard(label, valA, valB, deltaHtml, unit = '%') {
 window._scClearResult = function() {
     const area = _scQS('sc-result-area');
     if (area) {
-        area.style.padding   = '24px';
-        area.style.textAlign = 'center';
-        area.style.color     = 'var(--text-muted)';
-        area.style.minHeight = '120px';
+        // v1.7.8: 결과 카드 cssText를 모두 덮어썼으므로 placeholder 스타일로 명시 복귀
+        area.style.cssText = `
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
     }
     _scRenderResultPlaceholder();
 };
@@ -3649,7 +3683,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.7 (RAW 확장 모드 — portal 양시점 OCR 빌딩 자동 보강) 로드 완료');
+console.log('[portal-stats-compare] v1.7.8 (결과 카드 레이아웃 재정비) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
