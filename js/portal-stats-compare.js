@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.6  (_meta 공실없음 후보 빌딩 자동 표시)
+ * portal-stats-compare.js  v1.7.7  (RAW 확장 모드 — portal 전체에서 양시점 OCR 빌딩 보강)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -65,6 +65,7 @@ const _scState = {
         showUnmatch:  false,                 // 미매칭 목록 펼침 토글
         showMatched:  false,                 // 매칭 목록 펼침 토글 (v1.4)
         matchSearch:  '',                    // 매칭 테이블 검색어 (v1.4)
+        expandMode:   false,                 // v1.7.7: portal 확장 모드 (양시점 OCR 빌딩 자동 포함)
     },
 
     // 수동 매칭 모달의 현재 타겟 (v1.4)
@@ -635,6 +636,7 @@ function _scProcessRawRows(fileName, rows) {
         showUnmatch: false,
         showMatched: false,
         matchSearch: '',
+        expandMode:  _scState.researchMaster.expandMode || false,   // v1.7.7: 기존 토글 유지
     };
 
     _scRenderRawStatus();
@@ -773,7 +775,18 @@ function _scRenderRawStatus() {
                     </span>
                 </div>
                 ${rm.matched.length > 0 || rm.unmatched.length > 0 ? `
-                    <div style="display:flex; gap:6px;">
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button onclick="window._scToggleExpandMode()"
+                            style="padding:4px 10px;
+                                   background:${rm.expandMode ? '#9d174d' : '#fce7f3'};
+                                   color:${rm.expandMode ? '#fff' : '#9d174d'};
+                                   border:1px solid ${rm.expandMode ? '#9d174d' : '#fbcfe8'};
+                                   border-radius:5px;
+                                   font-size:11px; font-weight:700; cursor:pointer;
+                                   white-space:nowrap;"
+                            title="RAW에 없지만 양 시점 모두 OCR 데이터가 있는 portal 빌딩을 자동 포함합니다.">
+                            📊 portal 확장 ${rm.expandMode ? 'ON' : 'OFF'}
+                        </button>
                         ${rm.matched.length > 0 ? `
                             <button onclick="window._scToggleMatched()"
                                 style="padding:4px 10px; background:#dbeafe; color:#1e40af;
@@ -1016,6 +1029,23 @@ window._scToggleMatched = function() {
 window._scOnMatchSearch = function(q) {
     _scState.researchMaster.matchSearch = q || '';
     _scRenderRawStatus();
+};
+
+/** v1.7.7: portal 확장 모드 토글 */
+window._scToggleExpandMode = function() {
+    const rm = _scState.researchMaster;
+    rm.expandMode = !rm.expandMode;
+    _scRenderRawStatus();
+    _scRenderBuildingLists();          // 후보 리스트 즉시 갱신
+    _scRenderResultPlaceholder();      // 결과 카운트 갱신
+    _scMarkDirty();
+    if (rm.expandMode) {
+        const aYM = _scState.pointA.yyyymm;
+        const bYM = _scState.pointB.yyyymm;
+        if (!aYM || !bYM) {
+            console.log('[stats-compare] 확장 모드는 양 시점 모두 선택돼야 효과를 봅니다');
+        }
+    }
 };
 
 // ── 4-D. 수동 매칭/편집 (v1.4) ────────────────────────────────────
@@ -1332,7 +1362,7 @@ window._scClearRaw = function() {
     if (!confirm('RAW 엑셀을 초기화하시겠습니까? 진행 중인 시점·필터·선택이 모두 사라집니다.')) return;
     _scState.researchMaster = {
         loaded: false, fileName: '', rawRows: [], matched: [], unmatched: [],
-        showUnmatch: false, showMatched: false, matchSearch: '',
+        showUnmatch: false, showMatched: false, matchSearch: '', expandMode: false,
     };
     // 시점·선택 상태도 함께 리셋 (모집단 변경 = 모든 후속 단계 무효)
     _scState.pointA.yyyymm = '';
@@ -1405,10 +1435,12 @@ function _scSourcesByMonth(building, yyyymm) {
 /**
  * 시점(side)에 대한 후보 빌딩 산출 파이프라인:
  *   1) 모집단 = researchMaster.matched 의 portal 빌딩 (Map<id, raw>)
+ *      + (v1.7.7 expandMode) portal 전체에서 양 시점 모두 OCR 있는 빌딩
  *   2) 해당 월에 OCR 임대안내문이 있는 빌딩만
- *   3) 필터(권역/등급/규모/세부권역) 적용
+ *      + (v1.7.6) _meta 공실없음 선언만 있는 빌딩도 포함
+ *   3) 필터(권역/등급) 적용
  *
- * @returns {Array<{building, sources, raw}>}
+ * @returns {Array<{building, sources, raw, hasNoVacDecl, isExpand}>}
  */
 function _scGetCandidates(side) {
     side = _scSide(side);
@@ -1425,21 +1457,46 @@ function _scGetCandidates(side) {
     // 정규화된 빌딩 배열 — portal-stats.js 의 srLib 재사용
     const norm = (window.srLib?.srGetNormBuildings?.() || srGetNormBuildings()) || [];
 
+    // v1.7.7: 확장 모드 — portal 전체에서 양 시점 모두 OCR 있는 빌딩 셋 (RAW 매칭 안 된 것만)
+    let expandIds = null;
+    if (rm.expandMode) {
+        const otherYM = _scState[`point${side === 'A' ? 'B' : 'A'}`].yyyymm;
+        if (otherYM) {
+            // 양 시점 모두 OCR 또는 _meta noVacancy 있는 portal 빌딩
+            expandIds = new Set();
+            for (const b of norm) {
+                if (popMap.has(String(b.id))) continue;  // 이미 RAW 매칭됨
+                const hasOnThis  = _scSourcesByMonth(b, st.yyyymm).length > 0
+                                  || _scHasNoVacancyDeclaration(b, st.yyyymm);
+                const hasOnOther = _scSourcesByMonth(b, otherYM).length > 0
+                                  || _scHasNoVacancyDeclaration(b, otherYM);
+                if (hasOnThis && hasOnOther) expandIds.add(String(b.id));
+            }
+        }
+    }
+
     const cands = [];
     for (const b of norm) {
-        if (!popMap.has(String(b.id))) continue;          // 모집단 제약
+        const isInRaw    = popMap.has(String(b.id));
+        const isInExpand = expandIds && expandIds.has(String(b.id));
+        if (!isInRaw && !isInExpand) continue;            // 모집단 제약
+
         const sources = _scSourcesByMonth(b, st.yyyymm);
-        // v1.7.6: vacancy 없어도 _meta 공실없음 선언이 있으면 후보에 포함
         const hasNoVacDecl = _scHasNoVacancyDeclaration(b, st.yyyymm);
         if (sources.length === 0 && !hasNoVacDecl) continue;
 
-        // 필터 (v1.7.4: 권역+등급 두 축만 — 등급=규모는 redundant 라 통합)
+        // 필터 (v1.7.4: 권역+등급 두 축만)
         const f = st.filters;
         if (f.regions.length && !f.regions.includes(b._region))   continue;
         if (f.grades.length  && !f.grades.includes(b._gradeAuto)) continue;
-        // sizeBands / subRegions 는 v1.7.4 부터 비활성 (UI 에서 제거)
 
-        cands.push({ building: b, sources, raw: popMap.get(String(b.id)), hasNoVacDecl });
+        cands.push({
+            building:    b,
+            sources,
+            raw:         popMap.get(String(b.id)) || null,
+            hasNoVacDecl,
+            isExpand:    !isInRaw && isInExpand,           // v1.7.7: 확장 빌딩 표식
+        });
     }
 
     // 정렬: 권역 → 등급 → 빌딩명
@@ -1467,6 +1524,7 @@ function _scBuildingCardHtml(side, item) {
     const isSelected    = !!sel && (isNoVacancy || (sel.selectedVacKeys && sel.selectedVacKeys.size > 0));
     const chosenSource  = sel?.chosenSource || '';
     const isNoVacCand   = !!item.hasNoVacDecl && !isNoVacancy;   // v1.7.6: 후보(자동 마크 X)
+    const isExpand      = !!item.isExpand;                       // v1.7.7: 확장 빌딩
 
     const region    = b._region    || '-';
     const grade     = b._gradeAuto || '-';
@@ -1524,6 +1582,14 @@ function _scBuildingCardHtml(side, item) {
                                  border-radius:8px; font-size:9px; font-weight:600;"
                           title="이 빌딩은 ${st.yyyymm} 에 '공실 없음' 으로 선언되어 있습니다. 우측 패널에서 [✅ 공실 없음 확정] 클릭으로 통계에 포함하세요.">
                         🔒 0공실 후보
+                    </span>
+                ` : ''}
+                ${isExpand ? `
+                    <span style="padding:1px 6px; background:#fce7f3; color:#9d174d;
+                                 border:1px solid #fbcfe8;
+                                 border-radius:8px; font-size:9px; font-weight:600;"
+                          title="RAW 엑셀에 없지만 양 시점 모두 OCR 데이터가 있어 확장 모드로 자동 포함된 빌딩입니다.">
+                        📊 portal
                     </span>
                 ` : ''}
             </div>
@@ -2161,14 +2227,18 @@ function _scRenderResultPlaceholder() {
 
     // v1.7.6: 0공실 후보(_meta 선언) 빌딩 수 — 사용자가 아직 클릭 안 한 것
     let candA = 0, candB = 0;
+    // v1.7.7: 확장 모드로 추가된 빌딩 수 (선택 여부와 무관, 후보 단계)
+    let expA = 0, expB = 0;
     if (_scState.pointA.yyyymm) {
         for (const c of _scGetCandidates('A')) {
             if (c.hasNoVacDecl && !_scState.pointA.selections.get(String(c.building.id))?.noVacancy) candA++;
+            if (c.isExpand) expA++;
         }
     }
     if (_scState.pointB.yyyymm) {
         for (const c of _scGetCandidates('B')) {
             if (c.hasNoVacDecl && !_scState.pointB.selections.get(String(c.building.id))?.noVacancy) candB++;
+            if (c.isExpand) expB++;
         }
     }
 
@@ -2222,6 +2292,14 @@ function _scRenderResultPlaceholder() {
                     🔒 통계 편집에서 0공실 선언된 빌딩이 있습니다 —
                     시점 A: <strong>${candA}개</strong> · 시점 B: <strong>${candB}개</strong>
                     (좌측 리스트에서 보라색 칩 빌딩 클릭 → [✅ 0공실 확정] 으로 통계 포함)
+                </div>
+            ` : ''}
+            ${_scState.researchMaster.expandMode && (expA + expB) > 0 ? `
+                <div style="margin-top:8px; padding:6px 10px; background:#fce7f3;
+                            border-left:3px solid #9d174d; border-radius:5px;
+                            font-size:11px; color:#9d174d;">
+                    📊 portal 확장 모드 ON — RAW에 없지만 양 시점 OCR 있는 빌딩 자동 포함:
+                    시점 A: <strong>${expA}개</strong> · 시점 B: <strong>${expB}개</strong>
                 </div>
             ` : ''}
             ${warn}
@@ -2666,6 +2744,7 @@ function _scBuildPayload(title) {
         updatedAt: now,
         updatedBy: user,
         version:   (_scState.version || 0) + 1,
+        expandMode: !!_scState.researchMaster.expandMode,   // v1.7.7
         pointA: {
             yyyymm:     _scState.pointA.yyyymm || '',
             filters:    _scNormalizeFilters(_scState.pointA.filters),
@@ -2927,6 +3006,7 @@ window._scLoadCompare = async function(compareId) {
         _scState.title     = data.title || '';
         _scState.version   = data.version || 0;
         _scState.dirty     = false;
+        _scState.researchMaster.expandMode = !!data.expandMode;     // v1.7.7
         _scState.pointA.yyyymm     = data.pointA?.yyyymm || '';
         _scState.pointA.filters    = _scNormalizeFilters(data.pointA?.filters || {});
         _scState.pointA.selections = _scDeserializeSelections(data.pointA?.selections);
@@ -3569,7 +3649,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.6 (_meta 0공실 선언 빌딩 후보 표시) 로드 완료');
+console.log('[portal-stats-compare] v1.7.7 (RAW 확장 모드 — portal 양시점 OCR 빌딩 자동 보강) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
