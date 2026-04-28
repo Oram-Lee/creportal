@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.4  (필터 단순화: 권역 + 등급 두 축만)
+ * portal-stats-compare.js  v1.7.5  (✅ 공실 없음 확정 플래그)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -1461,7 +1461,8 @@ function _scBuildingCardHtml(side, item) {
     const b   = item.building;
     const st  = _scState[`point${side}`];
     const sel = st.selections.get(String(b.id));
-    const isSelected   = !!sel;
+    const isNoVacancy  = !!(sel && sel.noVacancy);
+    const isSelected   = !!sel && (isNoVacancy || (sel.selectedVacKeys && sel.selectedVacKeys.size > 0));
     const chosenSource = sel?.chosenSource || '';
 
     const region    = b._region    || '-';
@@ -1496,7 +1497,7 @@ function _scBuildingCardHtml(side, item) {
             onmouseout="this.style.background='${cardBg}';">
             <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-bottom:3px;">
                 <span style="font-weight:700; font-size:12px; color:var(--text-primary);">
-                    ${isSelected ? '✅ ' : ''}${b.name || b.buildingName || '-'}
+                    ${isNoVacancy ? '✅ ' : (isSelected ? '✅ ' : '')}${b.name || b.buildingName || '-'}
                 </span>
                 <span style="padding:1px 5px; background:${regionColor}; color:#fff;
                              border-radius:8px; font-size:9px; font-weight:600;">
@@ -1509,6 +1510,12 @@ function _scBuildingCardHtml(side, item) {
                 <span style="font-size:10px; color:var(--text-muted);">
                     ${grossPy ? Math.round(grossPy).toLocaleString() + '평' : '?'}
                 </span>
+                ${isNoVacancy ? `
+                    <span style="padding:1px 6px; background:#7c3aed; color:#fff;
+                                 border-radius:8px; font-size:9px; font-weight:700;">
+                        0공실
+                    </span>
+                ` : ''}
             </div>
             <div style="line-height:1.4;">${sourceChips}</div>
         </div>
@@ -1753,6 +1760,7 @@ function _scRenderSidePanel(side, building, yyyymm) {
     const sel = st.selections.get(String(building.id));
     const chosenSource    = sel?.chosenSource || sources[0];     // 기본값: 첫 번째 회사
     const selectedVacKeys = sel?.selectedVacKeys || new Set();
+    const isNoVacancy     = !!(sel && sel.noVacancy);            // v1.7.5: 0공실 확정 플래그
 
     const tabs = sources.map(s => {
         const isOn  = (s === chosenSource);
@@ -1783,6 +1791,18 @@ function _scRenderSidePanel(side, building, yyyymm) {
     const miCounts = { immediate: 0, future: 0, empty: 0 };
     chosenVacs.forEach(v => { miCounts[_scClassifyMoveIn(v).kind]++; });
     const hasImmediate = miCounts.immediate > 0;
+
+    // v1.7.5: 상단 상태 라벨 — 3가지 상태 (공실 N개 선택 / 0공실 확정 / 미선택)
+    let statusLabel;
+    if (isNoVacancy) {
+        statusLabel = `<strong style="color:#7c3aed;">✅ 0공실 확정</strong>`;
+    } else if (selectedVacKeys.size > 0) {
+        statusLabel = `<strong style="color:${accent};">선택 ${selectedVacKeys.size}개 · ${totalSelArea.toFixed(1)}평</strong>`;
+    } else {
+        statusLabel = '미선택';
+    }
+
+    const bidEsc = String(building.id).replace(/'/g, "\\'");
 
     const rows = chosenVacs.map(v => {
         const key   = _scVacancyKey(v);
@@ -1828,40 +1848,51 @@ function _scRenderSidePanel(side, building, yyyymm) {
                     시점 ${side} · ${yyyymm}
                 </span>
                 <span style="font-size:10px; color:var(--text-muted);">
-                    ${selectedVacKeys.size > 0
-                        ? `<strong style="color:${accent};">선택 ${selectedVacKeys.size}개 · ${totalSelArea.toFixed(1)}평</strong>`
-                        : '미선택'}
+                    ${statusLabel}
                 </span>
             </div>
             <div style="display:flex; flex-wrap:wrap; gap:3px; margin-bottom:5px;">
                 ${tabs}
             </div>
-            <!-- v1.7.2: 입주시기 분포 + 즉시만 선택 버튼 -->
+            <!-- v1.7.2: 입주시기 분포 + 즉시만 / v1.7.5: 공실 없음 버튼 -->
             <div style="display:flex; justify-content:space-between; align-items:center;
-                        margin-bottom:6px; gap:6px;">
+                        margin-bottom:6px; gap:6px; flex-wrap:wrap;">
                 <span style="font-size:10px; color:var(--text-muted); white-space:nowrap;">
                     입주시기:
                     ${miCounts.immediate > 0 ? `<span style="color:#16a34a; font-weight:700;">🟢 즉시 ${miCounts.immediate}</span>` : ''}
                     ${miCounts.future > 0    ? ` <span style="color:#ea580c;">🟡 예정 ${miCounts.future}</span>` : ''}
                     ${miCounts.empty > 0     ? ` <span style="color:#9ca3af;">⚪ 미기재 ${miCounts.empty}</span>` : ''}
                 </span>
-                ${hasImmediate ? `
-                    <button onclick="event.stopPropagation(); window._scSelectImmediate('${side}', '${String(building.id).replace(/'/g, "\\'")}')"
-                        style="padding:2px 8px; background:#dcfce7; color:#15803d;
-                               border:1px solid #86efac; border-radius:4px; cursor:pointer;
-                               font-size:10px; font-weight:600; white-space:nowrap;">
-                        ⚡ 즉시만 선택
+                <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                    ${hasImmediate && !isNoVacancy ? `
+                        <button onclick="event.stopPropagation(); window._scSelectImmediate('${side}', '${bidEsc}')"
+                            style="padding:2px 8px; background:#dcfce7; color:#15803d;
+                                   border:1px solid #86efac; border-radius:4px; cursor:pointer;
+                                   font-size:10px; font-weight:600; white-space:nowrap;">
+                            ⚡ 즉시만 선택
+                        </button>
+                    ` : ''}
+                    <button onclick="event.stopPropagation(); window._scToggleNoVacancy('${side}', '${bidEsc}')"
+                        style="padding:2px 8px;
+                               background:${isNoVacancy ? '#7c3aed' : '#f3e8ff'};
+                               color:${isNoVacancy ? '#fff' : '#6b21a8'};
+                               border:1px solid ${isNoVacancy ? '#7c3aed' : '#d8b4fe'};
+                               border-radius:4px; cursor:pointer;
+                               font-size:10px; font-weight:700; white-space:nowrap;">
+                        ${isNoVacancy ? '✅ 0공실 확정 (해제)' : '✅ 공실 없음 확정'}
                     </button>
-                ` : ''}
+                </div>
             </div>
             <div style="max-height:180px; overflow-y:auto;
-                        border:1px solid var(--border-color); border-radius:5px; background:#fff;">
+                        border:1px solid var(--border-color); border-radius:5px; background:#fff;
+                        ${isNoVacancy ? 'opacity:0.45; pointer-events:none;' : ''}">
                 <table style="width:100%; font-size:10px; border-collapse:collapse;">
                     <thead style="position:sticky; top:0; background:var(--bg-secondary); z-index:1;">
                         <tr style="color:#6b7280;">
                             <th style="padding:3px 4px; width:24px;">
                                 <input type="checkbox" ${allSelected ? 'checked' : ''}
-                                    onclick="event.stopPropagation(); window._scToggleAllVacancies('${side}', '${String(building.id).replace(/'/g, "\\'")}', this.checked)">
+                                    ${isNoVacancy ? 'disabled' : ''}
+                                    onclick="event.stopPropagation(); window._scToggleAllVacancies('${side}', '${bidEsc}', this.checked)">
                             </th>
                             <th style="padding:3px 4px; text-align:left;">층</th>
                             <th style="padding:3px 4px; text-align:right;">평</th>
@@ -1874,6 +1905,14 @@ function _scRenderSidePanel(side, building, yyyymm) {
                     <tbody>${rows}</tbody>
                 </table>
             </div>
+            ${isNoVacancy ? `
+                <div style="margin-top:5px; padding:5px 8px; background:#faf5ff;
+                            border-left:3px solid #7c3aed; border-radius:3px;
+                            font-size:10px; color:#6b21a8;">
+                    💡 이 빌딩은 공실 0으로 처리되며 분모(연면적)에는 포함됩니다.
+                    가격 데이터는 floorPricing 폴백을 사용합니다.
+                </div>
+            ` : ''}
         </div>
     `;
 }
@@ -1886,9 +1925,11 @@ window._scChooseSource = function(side, buildingId, source) {
     if (cur && cur.chosenSource === source) return;  // 동일 회사면 no-op
 
     // 회사가 바뀌면 vacancy 선택 초기화 (다른 회사의 vacancy 키와 섞이지 않도록)
+    // v1.7.5: noVacancy 플래그는 회사와 무관하므로 보존
     st.selections.set(String(buildingId), {
         chosenSource:    source,
         selectedVacKeys: new Set(),
+        noVacancy:       !!cur?.noVacancy,
     });
     _scMarkDirty();
     _scRenderBuildingDetail();
@@ -1902,11 +1943,13 @@ window._scToggleVacancy = function(side, buildingId, vacKey) {
     const st = _scState[`point${side}`];
     const cur = st.selections.get(String(buildingId));
     if (!cur) return;
+    if (cur.noVacancy) return;        // v1.7.5: 0공실 확정 상태에선 vacancy 토글 무시 (UI도 비활성)
 
     if (cur.selectedVacKeys.has(vacKey)) {
         cur.selectedVacKeys.delete(vacKey);
-        // vacancy 모두 해제되면 selections 자체를 제거 (= 빌딩 미선택 상태)
-        if (cur.selectedVacKeys.size === 0) {
+        // v1.7.5: vacancy 모두 해제되면 selections 자체 제거
+        // 단 noVacancy 플래그가 있으면 보존 (이미 위에서 return 했으므로 여기 도달 X)
+        if (cur.selectedVacKeys.size === 0 && !cur.noVacancy) {
             st.selections.delete(String(buildingId));
         }
     } else {
@@ -1927,11 +1970,12 @@ window._scToggleAllVacancies = function(side, buildingId, checkAll) {
     const cur = st.selections.get(String(buildingId));
     const chosenSource = cur?.chosenSource;
     if (!chosenSource) return;
+    if (cur?.noVacancy) return;       // v1.7.5: 0공실 확정 시 무시
 
     const vacs = _scVacanciesByMonth(b, st.yyyymm).filter(v => _scVacancySource(v) === chosenSource);
     if (checkAll) {
         const keys = new Set(vacs.map(_scVacancyKey));
-        st.selections.set(String(buildingId), { chosenSource, selectedVacKeys: keys });
+        st.selections.set(String(buildingId), { chosenSource, selectedVacKeys: keys, noVacancy: false });
     } else {
         st.selections.delete(String(buildingId));
     }
@@ -1950,13 +1994,52 @@ window._scSelectImmediate = function(side, buildingId) {
     const cur = st.selections.get(String(buildingId));
     const chosenSource = cur?.chosenSource;
     if (!chosenSource) return;
+    if (cur?.noVacancy) return;       // v1.7.5: 0공실 확정 시 무시
 
     const vacs = _scVacanciesByMonth(b, st.yyyymm).filter(v => _scVacancySource(v) === chosenSource);
     const immediateVacs = vacs.filter(v => _scClassifyMoveIn(v).kind === 'immediate');
     if (immediateVacs.length === 0) return;
 
     const keys = new Set(immediateVacs.map(_scVacancyKey));
-    st.selections.set(String(buildingId), { chosenSource, selectedVacKeys: keys });
+    st.selections.set(String(buildingId), { chosenSource, selectedVacKeys: keys, noVacancy: false });
+    _scMarkDirty();
+    _scRenderBuildingDetail();
+    _scRenderBuildingLists();
+    _scRenderResultPlaceholder();
+};
+
+/** v1.7.5: 0공실 확정 토글 — 분모는 포함, 분자=0 */
+window._scToggleNoVacancy = function(side, buildingId) {
+    side = _scSide(side);
+    const st  = _scState[`point${side}`];
+    const cur = st.selections.get(String(buildingId));
+    const b   = _scFindNormBuilding(buildingId);
+    if (!b || !st.yyyymm) return;
+
+    // 토글 OFF → selections 제거 (selectedVacKeys 도 비어있으니)
+    if (cur?.noVacancy) {
+        if (cur.selectedVacKeys && cur.selectedVacKeys.size > 0) {
+            // vacancy 도 선택돼있으면 noVacancy만 푸는 게 아니라 충돌 → vacancy 우선
+            cur.noVacancy = false;
+        } else {
+            st.selections.delete(String(buildingId));
+        }
+    }
+    // 토글 ON → vacancy 선택 비우고 noVacancy 플래그
+    else {
+        // chosenSource 결정: 기존 선택 → 그대로 / 없으면 첫 회사
+        let chosenSource = cur?.chosenSource;
+        if (!chosenSource) {
+            const vacs = _scVacanciesByMonth(b, st.yyyymm);
+            const sources = [...new Set(vacs.map(_scVacancySource))].sort();
+            chosenSource = sources[0] || '미상';
+        }
+        st.selections.set(String(buildingId), {
+            chosenSource,
+            selectedVacKeys: new Set(),
+            noVacancy:       true,
+        });
+    }
     _scMarkDirty();
     _scRenderBuildingDetail();
     _scRenderBuildingLists();
@@ -1969,17 +2052,14 @@ window._scSelectImmediate = function(side, buildingId) {
 
 /**
  * 양 시점 모두 selections 에 등록된 buildingId 셋 반환.
- * 각 시점의 selections는 chosenSource + selectedVacKeys.size > 0 인 경우만 유효로 간주.
+ * 유효 조건: selectedVacKeys.size > 0  OR  noVacancy === true (v1.7.5)
  */
 function _scGetCommonBuildingIds() {
+    const isValid = v => (v.selectedVacKeys && v.selectedVacKeys.size > 0) || v.noVacancy === true;
     const aSet = new Set();
-    _scState.pointA.selections.forEach((v, k) => {
-        if (v.selectedVacKeys && v.selectedVacKeys.size > 0) aSet.add(k);
-    });
+    _scState.pointA.selections.forEach((v, k) => { if (isValid(v)) aSet.add(k); });
     const bSet = new Set();
-    _scState.pointB.selections.forEach((v, k) => {
-        if (v.selectedVacKeys && v.selectedVacKeys.size > 0) bSet.add(k);
-    });
+    _scState.pointB.selections.forEach((v, k) => { if (isValid(v)) bSet.add(k); });
     const common = [...aSet].filter(id => bSet.has(id));
     const onlyA  = [...aSet].filter(id => !bSet.has(id));
     const onlyB  = [...bSet].filter(id => !aSet.has(id));
@@ -1992,6 +2072,11 @@ function _scRenderResultPlaceholder() {
     if (!area) return;
 
     const { aSet, bSet, common, onlyA, onlyB } = _scGetCommonBuildingIds();
+
+    // v1.7.5: 0공실 확정 카운트 (디버깅·검증용)
+    let noVacA = 0, noVacB = 0;
+    _scState.pointA.selections.forEach(v => { if (v.noVacancy) noVacA++; });
+    _scState.pointB.selections.forEach(v => { if (v.noVacancy) noVacB++; });
 
     const aOK = !!_scState.pointA.yyyymm;
     const bOK = !!_scState.pointB.yyyymm;
@@ -2021,10 +2106,12 @@ function _scRenderResultPlaceholder() {
                 <span style="padding:4px 10px; background:#dbeafe; color:#1e40af;
                              border-radius:14px; font-weight:600;">
                     시점 A 선택: ${aSet.size}개
+                    ${noVacA > 0 ? `<span style="color:#7c3aed; font-size:10px;"> · 0공실 ${noVacA}</span>` : ''}
                 </span>
                 <span style="padding:4px 10px; background:#ffedd5; color:#9a3412;
                              border-radius:14px; font-weight:600;">
                     시점 B 선택: ${bSet.size}개
+                    ${noVacB > 0 ? `<span style="color:#7c3aed; font-size:10px;"> · 0공실 ${noVacB}</span>` : ''}
                 </span>
                 <span style="padding:4px 10px;
                              background:${common.length > 0 ? '#dcfce7' : 'var(--bg-card)'};
@@ -2074,11 +2161,32 @@ function _scExtractBuildingMetrics(side, buildingId) {
     side = _scSide(side);
     const st = _scState[`point${side}`];
     const sel = st.selections.get(String(buildingId));
-    if (!sel || !sel.selectedVacKeys || sel.selectedVacKeys.size === 0) {
+    if (!sel) {
         return { vacancyAreaPy: 0, rentPy: null, depositPy: null, maintenancePy: null, missing: ['no-selection'] };
     }
     const b = _scFindNormBuilding(buildingId);
     if (!b) return { vacancyAreaPy: 0, rentPy: null, depositPy: null, maintenancePy: null, missing: ['no-building'] };
+
+    // v1.7.5: 0공실 확정 → 분자 0, 가격은 floorPricing 폴백만
+    if (sel.noVacancy) {
+        const fb = _scFloorFallback(b, st.yyyymm);
+        const missing = [];
+        if (fb.rentPy        == null) missing.push('rent');
+        if (fb.depositPy     == null) missing.push('deposit');
+        if (fb.maintenancePy == null) missing.push('maintenance');
+        return {
+            vacancyAreaPy: 0,
+            rentPy:        fb.rentPy,
+            depositPy:     fb.depositPy,
+            maintenancePy: fb.maintenancePy,
+            missing,
+            isNoVacancy:   true,
+        };
+    }
+
+    if (!sel.selectedVacKeys || sel.selectedVacKeys.size === 0) {
+        return { vacancyAreaPy: 0, rentPy: null, depositPy: null, maintenancePy: null, missing: ['no-selection'] };
+    }
 
     const vacs = _scVacanciesByMonth(b, st.yyyymm)
         .filter(v => _scVacancySource(v) === sel.chosenSource)
@@ -2424,12 +2532,13 @@ function _scSerializeSelections(selectionsMap) {
         out[bid] = {
             chosenSource:    val.chosenSource || '',
             selectedVacKeys: keysObj,
+            noVacancy:       !!val.noVacancy,   // v1.7.5
         };
     });
     return out;
 }
 
-/** Firebase plain object → Map<id, {chosenSource, selectedVacKeys:Set}> */
+/** Firebase plain object → Map<id, {chosenSource, selectedVacKeys:Set, noVacancy}> */
 function _scDeserializeSelections(plainObj) {
     const map = new Map();
     if (!plainObj) return map;
@@ -2439,6 +2548,7 @@ function _scDeserializeSelections(plainObj) {
         map.set(String(bid), {
             chosenSource:    v.chosenSource || '',
             selectedVacKeys: keys,
+            noVacancy:       !!v.noVacancy,    // v1.7.5
         });
     });
     return map;
@@ -2914,6 +3024,25 @@ window._scExportExcel = function() {
         sels.forEach((sel, bid) => {
             const b = _scFindNormBuilding(bid);
             if (!b) return;
+            // v1.7.5: 0공실 확정 빌딩은 vacancy 0행이지만 한 줄로 기록
+            if (sel.noVacancy) {
+                rows.push([
+                    bid,
+                    b.name || b.buildingName || '',
+                    b._region || '',
+                    b._gradeAuto || '',
+                    b._sizeBand || '',
+                    _scGrossPy(b),
+                    sel.chosenSource || '',
+                    '-',
+                    0,
+                    '0공실 확정',
+                    '0공실',
+                    '', '', '',
+                    common.includes(String(bid)) ? 'Y' : 'N',
+                ]);
+                return;
+            }
             const vacs = _scVacanciesByMonth(b, yyyymm)
                 .filter(v => _scVacancySource(v) === sel.chosenSource)
                 .filter(v => sel.selectedVacKeys.has(_scVacancyKey(v)));
@@ -3337,7 +3466,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.4 (필터 단순화: 권역+등급 두 축만) 로드 완료');
+console.log('[portal-stats-compare] v1.7.5 (✅ 공실 없음 확정 플래그) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
