@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.2  (입주시기 컬럼 추가)
+ * portal-stats-compare.js  v1.7.3  (SyntaxError 핫픽스)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -2693,7 +2693,7 @@ function _scRenderLoadList(list, errMsg) {
                                font-size:11px; font-weight:600;">
                         불러오기
                     </button>
-                    <button onclick="window._scDeleteCompare('${item.id}', '${(item.title || '').replace(/'/g, '\\\\\\'')}')"
+                    <button onclick="window._scDeleteCompare('${item.id}')"
                         style="padding:5px 9px; background:#fee2e2; color:#991b1b;
                                border:1px solid #fca5a5; border-radius:5px;
                                cursor:pointer; font-size:11px;">
@@ -2758,8 +2758,15 @@ window._scLoadCompare = async function(compareId) {
 };
 
 /** 세션 삭제 */
-window._scDeleteCompare = async function(compareId, title) {
-    if (!confirm(`"${title || compareId}" 세션을 삭제하시겠습니까?\n복구할 수 없습니다.`)) return;
+window._scDeleteCompare = async function(compareId) {
+    let title = compareId;
+    try {
+        const { db, ref, get } = await import('./portal-firebase.js');
+        const snap = await get(ref(db, `statsCompare/${compareId}/title`));
+        if (snap.exists()) title = String(snap.val() || compareId);
+    } catch (e) { /* lookup 실패 시 id 로 표기 */ }
+
+    if (!confirm(`"${title}" 세션을 삭제하시겠습니까?\n복구할 수 없습니다.`)) return;
     try {
         const fb = await import('./portal-firebase.js');
         const { db, ref } = fb;
@@ -3345,7 +3352,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.2 (입주시기 컬럼 + 즉시만 선택) 로드 완료');
+console.log('[portal-stats-compare] v1.7.3 (입주시기 + SyntaxError 핫픽스) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
