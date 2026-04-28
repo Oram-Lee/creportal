@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.0  (Step 1: 골격)
+ * portal-stats-compare.js  v1.1  (Step 2A: RAW 엑셀 업로드 + 모집단 매칭)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -11,6 +11,7 @@
  *   - portal-stats.js (srLib)         — 정규화·필터·날짜 유틸 import
  *   - window.state.allBuildings        — 빌딩 마스터
  *   - window.state.currentUser         — 사용자 (Step 6 Firebase 저장 시)
+ *   - window.XLSX (SheetJS)            — RAW 엑셀 파싱 (portal.html 에 이미 로드됨)
  *
  * 결정사항 (2026-04 합의):
  *   · 시점 단위:                       월 단위 (YYYY-MM)
@@ -18,14 +19,16 @@
  *   · 평균 계산:                        연면적 가중평균
  *   · 한쪽만 자료 있는 빌딩:            경고만 + 사용자 수동 제외
  *   · Firebase 저장:                    /statsCompare/{compareId}
+ *   · 모집단:                           RAW 엑셀 매번 업로드 (옵션 B)
  *
  * 작업 단계:
- *   Step 1 (현재): 골격 — 모달, 두 시점 month 셀렉트, 필터 UI
- *   Step 2: 빌딩 리스트 (시점별 OCR 매칭)
- *   Step 3: 빌딩별 회사·공실 선택
- *   Step 4: 공통 빌딩 셋 검출
- *   Step 5: 계산 + 결과 카드
- *   Step 6: Firebase 저장 + 엑셀
+ *   Step 1  : 골격 — 모달, 두 시점 month 셀렉트, 필터 UI                       ✅ 완료
+ *   Step 2A (현재): RAW 엑셀 업로드 + portal 빌딩 매칭 + 모집단 정의
+ *   Step 2B : 권역/등급/규모 필터 멀티픽커 + 시점별 OCR 매칭 빌딩 리스트
+ *   Step 3  : 빌딩별 회사·공실 선택
+ *   Step 4  : 공통 빌딩 셋 검출
+ *   Step 5  : 계산 + 결과 카드
+ *   Step 6  : Firebase 저장 + 엑셀
  *
  * 자료구조 / Firebase 스키마는 STATS_COMPARE_HANDOFF.md 참조.
  * ═══════════════════════════════════════════════════════════════
@@ -46,6 +49,17 @@ import {
 // ═══════════════════════════════════════════════════════════════
 
 const _scState = {
+    // ── 모집단 (RAW 엑셀 업로드 결과) ─────────────────────────
+    // Step 2A: RAW 엑셀의 빌딩 리스트 + portal 빌딩 매칭 결과
+    researchMaster: {
+        loaded:      false,                 // 업로드 완료 여부
+        fileName:    '',                    // 업로드한 파일명
+        rawRows:     [],                    // RAW 엑셀 원본 행 배열
+        matched:     [],                    // [{ raw, building, matchedBy }] 매칭 성공
+        unmatched:   [],                    // [{ raw, reason }] 매칭 실패
+        showUnmatch: false,                 // 미매칭 목록 펼침 토글
+    },
+
     // 시점 A·B 각각 독립 (월 단위 YYYY-MM)
     pointA: {
         yyyymm:     '',
@@ -150,9 +164,66 @@ function _scInjectModal() {
         <!-- 본체 (스크롤) -->
         <div style="overflow-y:auto; flex:1; min-height:0;">
 
-            <!-- 시점 선택 섹션 -->
-            <div style="padding:18px 24px 12px; border-bottom:1px solid var(--border-color);
-                        background:var(--bg-secondary);">
+            <!-- ━━━ STEP 2A: RAW 엑셀 업로드 / 모집단 정의 ━━━ -->
+            <div id="sc-raw-section"
+                 style="padding:16px 24px; border-bottom:1px solid var(--border-color);
+                        background:linear-gradient(90deg, #fef3c7 0%, #fef9e7 100%);">
+                <div style="display:flex; align-items:center; justify-content:space-between;
+                            gap:12px; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:13px; font-weight:700; color:#92400e;">
+                            📁 1단계 — 모집단(RAW 엑셀) 업로드
+                        </span>
+                        <span style="font-size:11px; color:#92400e; opacity:0.75;">
+                            조사 대상 빌딩 마스터 리스트
+                        </span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="file" id="sc-raw-file" accept=".xlsx,.xls"
+                            onchange="window._scOnRawUpload(this)"
+                            style="display:none;">
+                        <button onclick="document.getElementById('sc-raw-file').click()"
+                            style="padding:7px 14px; background:#f59e0b; color:#fff;
+                                   border:none; border-radius:7px; cursor:pointer;
+                                   font-size:12px; font-weight:700; white-space:nowrap;">
+                            📂 RAW 엑셀 선택
+                        </button>
+                        <button id="sc-raw-clear"
+                            onclick="window._scClearRaw()"
+                            disabled
+                            style="padding:7px 12px; background:transparent;
+                                   color:#92400e; border:1px solid #f59e0b;
+                                   border-radius:7px; cursor:not-allowed; opacity:0.4;
+                                   font-size:11px; font-weight:600;">
+                            초기화
+                        </button>
+                    </div>
+                </div>
+                <div id="sc-raw-status"
+                     style="margin-top:10px; padding:10px 14px; background:#fff;
+                            border-radius:6px; border:1px dashed #f59e0b;
+                            font-size:12px; color:#92400e;">
+                    아직 RAW 엑셀이 업로드되지 않았습니다. 위 버튼을 눌러 파일을 선택하세요.
+                </div>
+                <div id="sc-raw-unmatch-area" style="display:none; margin-top:8px;"></div>
+            </div>
+
+            <!-- ━━━ STEP 1: 시점 선택 섹션 (모집단 로드 전엔 비활성화) ━━━ -->
+            <div id="sc-point-section"
+                 style="padding:18px 24px 12px; border-bottom:1px solid var(--border-color);
+                        background:var(--bg-secondary); position:relative;">
+                <div id="sc-point-overlay"
+                     style="position:absolute; top:0; left:0; right:0; bottom:0;
+                            background:rgba(248,250,252,0.85); z-index:1;
+                            display:flex; align-items:center; justify-content:center;
+                            font-size:12px; color:var(--text-muted);
+                            backdrop-filter:blur(1px);">
+                    🔒 먼저 RAW 엑셀을 업로드해야 시점 선택이 활성화됩니다.
+                </div>
+                <div style="font-size:11px; font-weight:700; color:var(--text-muted);
+                            margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                    📅 2단계 — 비교 시점 선택
+                </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
                     <!-- 시점 A -->
                     <div style="border-left:4px solid #0284c7; padding-left:12px;">
@@ -210,7 +281,7 @@ function _scInjectModal() {
                             font-size:11px; color:var(--text-muted);
                             border:1px dashed var(--border-color);">
                     💡 두 시점을 모두 선택하면 빌딩 리스트가 표시됩니다.
-                    <span style="color:#9ca3af;">(Step 2 진행 중)</span>
+                    <span style="color:#9ca3af;">(Step 2B 진행 예정)</span>
                 </div>
             </div>
 
@@ -276,7 +347,289 @@ function _scInjectModal() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 4. 초기화 / 셀렉트박스 채우기 / 필터 UI
+// 4. RAW 엑셀 업로드 / 모집단 매칭 (Step 2A)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * RAW 엑셀의 행과 portal 빌딩을 매칭한다.
+ * 3단계 매칭:
+ *   1차: ID번호 정확 매칭 (b.id === row['ID번호'])
+ *   2차: 빌딩명 + 도로명+건물번호 부분 매칭
+ *   3차: 빌딩명 정확 매칭 (단독)
+ *
+ * @param {Object} rawRow  엑셀 한 행 (객체 키 = 헤더명)
+ * @param {Array}  portalBuildings  window.state.allBuildings
+ * @returns {{building, matchedBy}|null}
+ */
+function _scMatchRawRow(rawRow, portalBuildings) {
+    const norm  = v => String(v == null ? '' : v).trim();
+    const rawId = norm(rawRow['ID번호']);
+
+    // 1차: ID번호
+    if (rawId && rawId !== 'New' && rawId !== 'NaN' && !isNaN(parseInt(rawId, 10))) {
+        const hit = portalBuildings.find(b => norm(b.id) === rawId);
+        if (hit) return { building: hit, matchedBy: 'id' };
+    }
+
+    const rawName = norm(rawRow['빌딩명']);
+    const rawRoad = norm(rawRow['도로명']);
+    const rawNum  = norm(rawRow['건물번호']);
+
+    // 2차: 빌딩명 + 도로명+건물번호
+    if (rawName && rawRoad && rawNum) {
+        const addrKey = `${rawRoad} ${rawNum}`;
+        const hit = portalBuildings.find(b => {
+            const bName = norm(b.name || b.buildingName);
+            const bAddr = norm(b.address);
+            return bName === rawName && bAddr.includes(addrKey);
+        });
+        if (hit) return { building: hit, matchedBy: 'name+addr' };
+    }
+
+    // 3차: 빌딩명 단독
+    if (rawName) {
+        const candidates = portalBuildings.filter(b =>
+            norm(b.name || b.buildingName) === rawName);
+        if (candidates.length === 1) {
+            return { building: candidates[0], matchedBy: 'name' };
+        } else if (candidates.length > 1) {
+            return null;  // 동명이 빌딩 다수 → 매칭 보류 (안전)
+        }
+    }
+
+    return null;
+}
+
+/** RAW 매칭 실패 사유 분류 */
+function _scUnmatchReason(rawRow, portalBuildings) {
+    const norm  = v => String(v == null ? '' : v).trim();
+    const rawName = norm(rawRow['빌딩명']);
+    if (!rawName) return '빌딩명 없음';
+    const sameName = portalBuildings.filter(b =>
+        norm(b.name || b.buildingName) === rawName);
+    if (sameName.length > 1) return `동명 빌딩 ${sameName.length}개 — 주소 불일치`;
+    return 'portal 에 등록되지 않음';
+}
+
+/** RAW 엑셀 업로드 핸들러 — 파일 input 의 onchange 에서 호출 */
+window._scOnRawUpload = function(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    if (!window.XLSX) {
+        _scShowRawStatus('error', 'SheetJS(XLSX) 가 로드되지 않았습니다. portal.html line 11 의 SheetJS 로드 확인 필요');
+        return;
+    }
+    _scShowRawStatus('loading', `📥 ${file.name} 읽는 중…`);
+
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            const wb    = window.XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            const rows  = window.XLSX.utils.sheet_to_json(sheet, { defval: '' });
+            _scProcessRawRows(file.name, rows);
+        } catch (err) {
+            console.error('[stats-compare] RAW 엑셀 파싱 실패:', err);
+            _scShowRawStatus('error', `❌ 엑셀 파싱 실패: ${err.message}`);
+        }
+    };
+    reader.onerror = () => _scShowRawStatus('error', '❌ 파일 읽기 실패');
+    reader.readAsArrayBuffer(file);
+
+    // 같은 파일 재선택 가능하도록 input 값 리셋
+    input.value = '';
+};
+
+/** 파싱된 행들을 portal 빌딩과 매칭하여 _scState.researchMaster 에 저장 */
+function _scProcessRawRows(fileName, rows) {
+    const portalBuildings = window.state?.allBuildings || [];
+    if (portalBuildings.length === 0) {
+        _scShowRawStatus('error', '❌ portal 빌딩 데이터가 아직 로드되지 않았습니다. 페이지 새로고침 후 다시 시도하세요.');
+        return;
+    }
+
+    const matched   = [];
+    const unmatched = [];
+
+    rows.forEach(raw => {
+        // 빌딩명 없는 행은 헤더 잔재 또는 빈 줄 → 무시
+        if (!raw['빌딩명'] || String(raw['빌딩명']).trim() === '') return;
+        const m = _scMatchRawRow(raw, portalBuildings);
+        if (m) matched.push({ raw, building: m.building, matchedBy: m.matchedBy });
+        else   unmatched.push({ raw, reason: _scUnmatchReason(raw, portalBuildings) });
+    });
+
+    _scState.researchMaster = {
+        loaded:      true,
+        fileName,
+        rawRows:     rows,
+        matched,
+        unmatched,
+        showUnmatch: false,
+    };
+
+    _scRenderRawStatus();
+    _scLockUnlockPointSection(true);
+};
+
+/** RAW 매칭 결과 표시 */
+function _scRenderRawStatus() {
+    const rm = _scState.researchMaster;
+    if (!rm.loaded) {
+        _scShowRawStatus('idle', '아직 RAW 엑셀이 업로드되지 않았습니다. 위 버튼을 눌러 파일을 선택하세요.');
+        return;
+    }
+
+    const totalRaw = rm.matched.length + rm.unmatched.length;
+    const matchPct = totalRaw > 0 ? (rm.matched.length / totalRaw * 100).toFixed(1) : '0.0';
+
+    // 매칭 방식별 카운트
+    const byId    = rm.matched.filter(m => m.matchedBy === 'id').length;
+    const byAddr  = rm.matched.filter(m => m.matchedBy === 'name+addr').length;
+    const byName  = rm.matched.filter(m => m.matchedBy === 'name').length;
+
+    const statusEl = _scQS('sc-raw-status');
+    if (statusEl) {
+        statusEl.style.background    = '#fff';
+        statusEl.style.borderStyle   = 'solid';
+        statusEl.style.borderColor   = '#16a34a';
+        statusEl.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+                    <span style="font-weight:700; color:#15803d;">
+                        ✅ ${rm.fileName}
+                    </span>
+                    <span style="color:#374151;">
+                        RAW <strong>${totalRaw.toLocaleString()}</strong>개 ·
+                        매칭 <strong style="color:#16a34a;">${rm.matched.length.toLocaleString()}</strong>개 (${matchPct}%) ·
+                        미매칭 <strong style="color:#dc2626;">${rm.unmatched.length.toLocaleString()}</strong>개
+                    </span>
+                </div>
+                ${rm.unmatched.length > 0 ? `
+                    <button onclick="window._scToggleUnmatch()"
+                        style="padding:4px 10px; background:#fef2f2; color:#991b1b;
+                               border:1px solid #fca5a5; border-radius:5px;
+                               font-size:11px; font-weight:600; cursor:pointer;">
+                        ${rm.showUnmatch ? '미매칭 접기' : '미매칭 보기'}
+                    </button>
+                ` : ''}
+            </div>
+            <div style="margin-top:6px; font-size:11px; color:#6b7280;">
+                매칭 내역: ID번호 ${byId}개 · 빌딩명+주소 ${byAddr}개 · 빌딩명단독 ${byName}개
+            </div>
+        `;
+    }
+
+    // 미매칭 영역
+    const unmatchEl = _scQS('sc-raw-unmatch-area');
+    if (unmatchEl) {
+        if (rm.showUnmatch && rm.unmatched.length > 0) {
+            unmatchEl.style.display = 'block';
+            unmatchEl.innerHTML = `
+                <div style="background:#fff; border:1px solid #fca5a5; border-radius:6px;
+                            padding:10px 14px; max-height:220px; overflow-y:auto;">
+                    <div style="font-size:11px; font-weight:700; color:#991b1b; margin-bottom:6px;">
+                        ⚠️ 미매칭 ${rm.unmatched.length}개 (분모에서 제외됩니다)
+                    </div>
+                    <table style="width:100%; font-size:11px; border-collapse:collapse;">
+                        <thead>
+                            <tr style="color:#6b7280; text-align:left;">
+                                <th style="padding:3px 6px; width:50px;">ID</th>
+                                <th style="padding:3px 6px;">빌딩명</th>
+                                <th style="padding:3px 6px;">주소</th>
+                                <th style="padding:3px 6px; width:140px;">사유</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rm.unmatched.slice(0, 200).map(u => `
+                                <tr style="border-top:1px solid #fee2e2;">
+                                    <td style="padding:3px 6px; color:#9ca3af;">${u.raw['ID번호'] || '-'}</td>
+                                    <td style="padding:3px 6px; font-weight:600;">${u.raw['빌딩명'] || '-'}</td>
+                                    <td style="padding:3px 6px; color:#6b7280;">
+                                        ${(u.raw['도로명'] || '') + ' ' + (u.raw['건물번호'] || '')}
+                                    </td>
+                                    <td style="padding:3px 6px; color:#dc2626;">${u.reason}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                    ${rm.unmatched.length > 200
+                        ? `<div style="font-size:10px; color:#9ca3af; margin-top:6px; text-align:center;">
+                             ※ 처음 200개만 표시 — 전체는 미매칭 ${rm.unmatched.length}개</div>`
+                        : ''}
+                </div>
+            `;
+        } else {
+            unmatchEl.style.display = 'none';
+            unmatchEl.innerHTML = '';
+        }
+    }
+
+    // 초기화 버튼 활성화
+    const clearBtn = _scQS('sc-raw-clear');
+    if (clearBtn) {
+        clearBtn.disabled = false;
+        clearBtn.style.cursor = 'pointer';
+        clearBtn.style.opacity = '1';
+    }
+}
+
+/** 상태 메시지 표시 (idle / loading / error / success) */
+function _scShowRawStatus(kind, msg) {
+    const el = _scQS('sc-raw-status');
+    if (!el) return;
+    const palette = {
+        idle:    { bg: '#fff',    border: '#f59e0b', color: '#92400e' },
+        loading: { bg: '#eff6ff', border: '#3b82f6', color: '#1e40af' },
+        error:   { bg: '#fef2f2', border: '#dc2626', color: '#991b1b' },
+        success: { bg: '#f0fdf4', border: '#16a34a', color: '#15803d' },
+    };
+    const p = palette[kind] || palette.idle;
+    el.style.background  = p.bg;
+    el.style.borderColor = p.border;
+    el.style.borderStyle = (kind === 'idle') ? 'dashed' : 'solid';
+    el.style.color       = p.color;
+    el.innerHTML         = msg;
+}
+
+/** 미매칭 목록 펼침/접기 */
+window._scToggleUnmatch = function() {
+    _scState.researchMaster.showUnmatch = !_scState.researchMaster.showUnmatch;
+    _scRenderRawStatus();
+};
+
+/** RAW 엑셀 초기화 (재업로드 준비) */
+window._scClearRaw = function() {
+    if (!confirm('RAW 엑셀을 초기화하시겠습니까? 진행 중인 시점·필터·선택이 모두 사라집니다.')) return;
+    _scState.researchMaster = {
+        loaded: false, fileName: '', rawRows: [], matched: [], unmatched: [], showUnmatch: false,
+    };
+    // 시점·선택 상태도 함께 리셋 (모집단 변경 = 모든 후속 단계 무효)
+    _scState.pointA.yyyymm = '';
+    _scState.pointB.yyyymm = '';
+    _scState.pointA.selections.clear();
+    _scState.pointB.selections.clear();
+    const sa = _scQS('sc-month-A'); if (sa) sa.value = '';
+    const sb = _scQS('sc-month-B'); if (sb) sb.value = '';
+    _scRenderRawStatus();
+    _scLockUnlockPointSection(false);
+    _scUpdateProgressBanner();
+    const clearBtn = _scQS('sc-raw-clear');
+    if (clearBtn) {
+        clearBtn.disabled = true;
+        clearBtn.style.cursor = 'not-allowed';
+        clearBtn.style.opacity = '0.4';
+    }
+};
+
+/** 시점 선택 섹션 락/언락 (모집단 로드 전엔 잠금) */
+function _scLockUnlockPointSection(unlocked) {
+    const overlay = _scQS('sc-point-overlay');
+    if (overlay) overlay.style.display = unlocked ? 'none' : 'flex';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5. 초기화 / 셀렉트박스 채우기 / 필터 UI
 // ═══════════════════════════════════════════════════════════════
 
 /** 두 시점 month 셀렉트 박스 옵션 채우기 */
@@ -327,7 +680,7 @@ function _scUpdateCount(side, n) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 5. 진입점 / 이벤트 핸들러 (window 노출)
+// 6. 진입점 / 이벤트 핸들러 (window 노출)
 // ═══════════════════════════════════════════════════════════════
 
 /** 모달 열기 — Top 메뉴 nav-item 에서 호출 */
@@ -338,6 +691,10 @@ window.openCompareModal = function() {
     _scRenderFilters('B');
     _scUpdateCount('A', null);
     _scUpdateCount('B', null);
+    // 모집단(RAW) 상태 반영 — 이전 세션에서 업로드한 게 메모리에 남아있으면 그대로
+    _scRenderRawStatus();
+    _scLockUnlockPointSection(_scState.researchMaster.loaded);
+    _scUpdateProgressBanner();
     const modal = _scQS('sc-modal');
     if (modal) modal.style.display = 'flex';
     console.log('[stats-compare] modal opened');
@@ -418,7 +775,7 @@ window._scCalculate = function() {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 6. ESC 키 닫기
+// 7. ESC 키 닫기
 // ═══════════════════════════════════════════════════════════════
 
 if (!window._scEscRegistered) {
@@ -438,7 +795,7 @@ if (!window._scEscRegistered) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 7. 로드 완료 로그
+// 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.0 (Step 1: 골격) 로드 완료');
+console.log('[portal-stats-compare] v1.1 (Step 2A: RAW 엑셀 업로드 + 모집단 매칭) 로드 완료');
