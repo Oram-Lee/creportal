@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.4  (Step 2A 매칭 v3 + 수동 매칭/편집 UI)
+ * portal-stats-compare.js  v1.6  (Step 3+4+5 — 회사·공실 선택 + 공통 셋 + 결과 카드 / MVP)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -38,6 +38,11 @@ import {
     srGetNormBuildings,
     srGetAllPublishDates,
     srNormalizeDate,
+    srActiveVacancies,
+    srGradeFromPy,
+    srSizeBand,
+    srGetRegion,
+    srParsePrice,
     SR_REGIONS,
     SR_GRADES,
     SR_REGION_COLOR,
@@ -286,7 +291,6 @@ function _scInjectModal() {
                             font-size:11px; color:var(--text-muted);
                             border:1px dashed var(--border-color);">
                     💡 두 시점을 모두 선택하면 빌딩 리스트가 표시됩니다.
-                    <span style="color:#9ca3af;">(Step 2B 진행 예정)</span>
                 </div>
             </div>
 
@@ -623,6 +627,7 @@ function _scProcessRawRows(fileName, rows) {
 
     _scRenderRawStatus();
     _scLockUnlockPointSection(true);
+    _scRenderBuildingLists();   // Step 2B: 모집단 변경 시 리스트 갱신
 
     // 미매칭 진단을 콘솔에 자동 출력 — 사용자가 어느 필드가 다른지 한눈에 확인
     _scLogUnmatchDiag(unmatched, portalBuildings);
@@ -1287,6 +1292,7 @@ window._scConfirmManualMatch = function(buildingId) {
     _scState._mmTarget = null;
     window._scCloseManualMatch();
     _scRenderRawStatus();
+    _scRenderBuildingLists();   // Step 2B: 모집단 변경 반영
 };
 
 /** 매칭 해제 — 매칭 → 미매칭으로 되돌림 */
@@ -1299,6 +1305,7 @@ window._scUnmatchEntry = function(matchedIndex) {
     const removed = rm.matched.splice(matchedIndex, 1)[0];
     rm.unmatched.push({ raw: removed.raw, reason: '수동 해제' });
     _scRenderRawStatus();
+    _scRenderBuildingLists();   // Step 2B: 모집단 변경 반영
 };
 
 /** 수동 매칭 모달 닫기 */
@@ -1340,8 +1347,1121 @@ function _scLockUnlockPointSection(unlocked) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 5. 초기화 / 셀렉트박스 채우기 / 필터 UI
+// 5B. Step 2B — 시점별 후보 빌딩 산출 + 빌딩 리스트 렌더
 // ═══════════════════════════════════════════════════════════════
+
+const SR_SIZE_BANDS_FULL = ['Prime급', '대형', '중대형', '중형', '소형'];
+
+/**
+ * vacancy 의 출처(회사명) 추출 — OCR 임대안내문 source 필드
+ * 필드 우선순위: source → company → originSource → publisher
+ */
+function _scVacancySource(vacancy) {
+    return String(
+        vacancy?.source ||
+        vacancy?.company ||
+        vacancy?.originSource ||
+        vacancy?.publisher ||
+        ''
+    ).trim() || '미상';
+}
+
+/**
+ * 빌딩의 특정 월(yyyymm) 발행 vacancy 만 추출.
+ * srActiveVacancies 로 deleted/hidden 제외 후 publishDate 정규화 비교.
+ */
+function _scVacanciesByMonth(building, yyyymm) {
+    if (!yyyymm) return [];
+    const all = srActiveVacancies(building);
+    return all.filter(v => srNormalizeDate(v.publishDate) === yyyymm);
+}
+
+/**
+ * 빌딩의 특정 월 발행 vacancy 의 회사 목록 (중복 제거, 카운트 포함).
+ * @returns {Array<{source, count}>}
+ */
+function _scSourcesByMonth(building, yyyymm) {
+    const vacs = _scVacanciesByMonth(building, yyyymm);
+    const map  = new Map();
+    vacs.forEach(v => {
+        const s = _scVacancySource(v);
+        map.set(s, (map.get(s) || 0) + 1);
+    });
+    return [...map.entries()].map(([source, count]) => ({ source, count }));
+}
+
+/**
+ * 시점(side)에 대한 후보 빌딩 산출 파이프라인:
+ *   1) 모집단 = researchMaster.matched 의 portal 빌딩 (Map<id, raw>)
+ *   2) 해당 월에 OCR 임대안내문이 있는 빌딩만
+ *   3) 필터(권역/등급/규모/세부권역) 적용
+ *
+ * @returns {Array<{building, sources, raw}>}
+ */
+function _scGetCandidates(side) {
+    side = _scSide(side);
+    const st = _scState[`point${side}`];
+    if (!st.yyyymm) return [];
+
+    const rm = _scState.researchMaster;
+    if (!rm.loaded) return [];
+
+    // 모집단 맵: portal building.id → RAW row
+    const popMap = new Map();
+    rm.matched.forEach(m => popMap.set(String(m.building.id), m.raw));
+
+    // 정규화된 빌딩 배열 — portal-stats.js 의 srLib 재사용
+    const norm = (window.srLib?.srGetNormBuildings?.() || srGetNormBuildings()) || [];
+
+    const cands = [];
+    for (const b of norm) {
+        if (!popMap.has(String(b.id))) continue;          // 모집단 제약
+        const sources = _scSourcesByMonth(b, st.yyyymm);
+        if (sources.length === 0) continue;               // 해당 월 OCR 없음
+
+        // 필터
+        const f = st.filters;
+        if (f.regions.length    && !f.regions.includes(b._region))      continue;
+        if (f.grades.length     && !f.grades.includes(b._gradeAuto))    continue;
+        if (f.sizeBands.length  && !f.sizeBands.includes(b._sizeBand))  continue;
+        if (f.subRegions.length && !f.subRegions.includes(b._subRegion)) continue;
+
+        cands.push({ building: b, sources, raw: popMap.get(String(b.id)) });
+    }
+
+    // 정렬: 권역 → 등급 → 빌딩명
+    const regionOrder = Object.fromEntries(SR_REGIONS.map((r, i) => [r, i]));
+    const gradeOrder  = Object.fromEntries(SR_GRADES.map((g, i)  => [g, i]));
+    cands.sort((a, b) => {
+        const ra = regionOrder[a.building._region] ?? 99;
+        const rb = regionOrder[b.building._region] ?? 99;
+        if (ra !== rb) return ra - rb;
+        const ga = gradeOrder[a.building._gradeAuto] ?? 99;
+        const gb = gradeOrder[b.building._gradeAuto] ?? 99;
+        if (ga !== gb) return ga - gb;
+        return String(a.building.name || '').localeCompare(String(b.building.name || ''));
+    });
+    return cands;
+}
+
+/** 빌딩 카드 1개 HTML 생성 */
+function _scBuildingCardHtml(side, item) {
+    side = _scSide(side);
+    const b   = item.building;
+    const st  = _scState[`point${side}`];
+    const sel = st.selections.get(String(b.id));
+    const isSelected   = !!sel;
+    const chosenSource = sel?.chosenSource || '';
+
+    const region    = b._region    || '-';
+    const grade     = b._gradeAuto || '-';
+    const sizeBand  = b._sizeBand  || '-';
+    const subRegion = b._subRegion || '';
+    const grossPy   = b._grossPy   || 0;
+
+    const regionColor = SR_REGION_COLOR[region] || '#94a3b8';
+    const gradeColor  = SR_GRADE_COLOR[grade]   || '#94a3b8';
+
+    // 회사 칩 (chosenSource 와 일치하면 선택 상태 강조)
+    const sourceChips = item.sources.map(s => {
+        const isChosen = (s.source === chosenSource);
+        return `<span style="
+            display:inline-block; padding:1px 7px; border-radius:9px;
+            font-size:10px; margin:1px 2px 1px 0; white-space:nowrap;
+            background:${isChosen ? '#1e40af' : '#e0e7ff'};
+            color:${isChosen ? '#fff' : '#3730a3'};
+            border:1px solid ${isChosen ? '#1e40af' : '#c7d2fe'};
+            ${isChosen ? 'font-weight:700;' : ''}
+        ">${s.source} ${s.count}</span>`;
+    }).join('');
+
+    const cardBg     = isSelected ? '#eff6ff' : '#fff';
+    const cardBorder = isSelected ? '#1e40af' : 'var(--border-color)';
+
+    return `
+        <div onclick="window._scOnBuildingClick('${side}', '${String(b.id).replace(/'/g, "\\'")}')"
+            style="padding:8px 10px; border:1px solid ${cardBorder}; border-radius:7px;
+                   margin-bottom:5px; cursor:pointer; background:${cardBg};
+                   transition:background 0.12s;"
+            onmouseover="this.style.background='${isSelected ? '#dbeafe' : '#f8fafc'}';"
+            onmouseout="this.style.background='${cardBg}';">
+            <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-bottom:3px;">
+                <span style="font-weight:700; font-size:12px; color:var(--text-primary);">
+                    ${isSelected ? '✅ ' : ''}${b.name || b.buildingName || '-'}
+                </span>
+                <span style="padding:1px 5px; background:${regionColor}; color:#fff;
+                             border-radius:8px; font-size:9px; font-weight:600;">
+                    ${region}
+                </span>
+                <span style="padding:1px 5px; background:${gradeColor}; color:#fff;
+                             border-radius:8px; font-size:9px; font-weight:600;">
+                    ${grade}
+                </span>
+                <span style="font-size:10px; color:var(--text-muted);">
+                    ${sizeBand} · ${grossPy ? Math.round(grossPy).toLocaleString() + '평' : '?'}
+                </span>
+            </div>
+            ${subRegion
+                ? `<div style="font-size:10px; color:var(--text-muted); margin-bottom:2px;">${subRegion}</div>`
+                : ''}
+            <div style="line-height:1.4;">${sourceChips}</div>
+        </div>
+    `;
+}
+
+/** 시점별 빌딩 리스트 렌더 (좌측 sc-pane-list 영역에 듀얼 컬럼) */
+function _scRenderBuildingLists() {
+    const listEl = _scQS('sc-building-list');
+    if (!listEl) return;
+
+    const aMonth = _scState.pointA.yyyymm;
+    const bMonth = _scState.pointB.yyyymm;
+
+    if (!aMonth && !bMonth) {
+        listEl.innerHTML = `
+            <div style="font-size:12px; color:var(--text-muted); padding:30px 0; text-align:center;">
+                시점을 먼저 선택해주세요.
+            </div>
+        `;
+        _scUpdateCount('A', null);
+        _scUpdateCount('B', null);
+        return;
+    }
+
+    const candA = aMonth ? _scGetCandidates('A') : [];
+    const candB = bMonth ? _scGetCandidates('B') : [];
+    _scUpdateCount('A', aMonth ? candA.length : null);
+    _scUpdateCount('B', bMonth ? candB.length : null);
+
+    const renderColumn = (side, label, color, month, cands) => {
+        if (!month) {
+            return `
+                <div style="font-size:11px; color:var(--text-muted); padding:30px 4px; text-align:center;">
+                    시점 ${label} 미선택
+                </div>
+            `;
+        }
+        if (cands.length === 0) {
+            return `
+                <div style="font-size:11px; color:var(--text-muted); padding:30px 4px; text-align:center;">
+                    조건에 맞는 빌딩이 없습니다.<br>
+                    <span style="font-size:10px; opacity:0.7;">필터를 조정하거나 다른 월을 선택하세요.</span>
+                </div>
+            `;
+        }
+        return cands.map(c => _scBuildingCardHtml(side, c)).join('');
+    };
+
+    listEl.innerHTML = `
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;
+                    height:100%; min-height:0;">
+            <div style="border-right:1px solid var(--border-color); padding-right:8px;
+                        overflow-y:auto; max-height:520px;">
+                <div style="position:sticky; top:0; background:var(--bg-card); padding:4px 0 6px;
+                            font-size:11px; font-weight:700; color:#0284c7;
+                            border-bottom:1px solid #e0f2fe; margin-bottom:6px; z-index:1;">
+                    시점 A · ${aMonth || '-'} · ${candA.length}개
+                </div>
+                ${renderColumn('A', 'A', '#0284c7', aMonth, candA)}
+            </div>
+            <div style="padding-left:4px; overflow-y:auto; max-height:520px;">
+                <div style="position:sticky; top:0; background:var(--bg-card); padding:4px 0 6px;
+                            font-size:11px; font-weight:700; color:#ea580c;
+                            border-bottom:1px solid #ffedd5; margin-bottom:6px; z-index:1;">
+                    시점 B · ${bMonth || '-'} · ${candB.length}개
+                </div>
+                ${renderColumn('B', 'B', '#ea580c', bMonth, candB)}
+            </div>
+        </div>
+    `;
+}
+
+/** 빌딩 카드 클릭 → 우측 상세 패널 (Step 3 실구현) */
+window._scOnBuildingClick = function(side, buildingId) {
+    side = _scSide(side);
+    _scState.selectedBuildingId = String(buildingId);
+    _scState._lastClickedSide   = side;       // 마지막 클릭한 시점 (UI 상단 강조용)
+    _scRenderBuildingDetail();
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5D. Step 3 — 우측 상세 패널 (회사·공실 선택)
+// ═══════════════════════════════════════════════════════════════
+
+/** 빌딩의 정규화 객체 가져오기 */
+function _scFindNormBuilding(buildingId) {
+    if (!buildingId) return null;
+    const norm = (window.srLib?.srGetNormBuildings?.() || srGetNormBuildings()) || [];
+    return norm.find(b => String(b.id) === String(buildingId)) || null;
+}
+
+/** vacancy 의 고유키 — selectedVacKeys 에 저장할 식별자 */
+function _scVacancyKey(v) {
+    return String(v.id || v._id || v.vacancyId || v.key
+                  || `${_scVacancySource(v)}__${v.publishDate || ''}__${v.floorText || v.floor || ''}__${v.exclusiveArea || v.rentArea || 0}`);
+}
+
+/** vacancy 의 면적(평) 추출 */
+function _scVacAreaPy(v) {
+    return Number(v.exclusiveArea ?? v.rentArea ?? 0) || 0;
+}
+
+/** vacancy 1행에서 (rentPy, depositPy, maintenancePy) 추출 — 없으면 null */
+function _scVacPrices(v) {
+    return {
+        rentPy:        srParsePrice(v.rentPy)        ?? null,
+        depositPy:     srParsePrice(v.depositPy)     ?? null,
+        maintenancePy: srParsePrice(v.maintenancePy) ?? null,
+    };
+}
+
+/** floorPricing 폴백 — yyyymm 시점 또는 그 이전의 가장 최신값 */
+function _scFloorFallback(building, yyyymm) {
+    const fps = (building.floorPricing || []).slice();
+    if (fps.length === 0) return { rentPy: null, depositPy: null, maintenancePy: null };
+    fps.sort((a, b) => String(b.effectiveDate || '').localeCompare(String(a.effectiveDate || '')));
+    const target = fps.find(fp => {
+        const d = String(fp.effectiveDate || '').slice(0, 7);
+        return d && d <= yyyymm;
+    }) || fps[0];
+    return {
+        rentPy:        srParsePrice(target.rentPy)        ?? null,
+        depositPy:     srParsePrice(target.depositPy)     ?? null,
+        maintenancePy: srParsePrice(target.maintenancePy) ?? null,
+    };
+}
+
+/** 우측 상세 패널 렌더 */
+function _scRenderBuildingDetail() {
+    const detailEl = _scQS('sc-building-detail');
+    if (!detailEl) return;
+
+    const bid = _scState.selectedBuildingId;
+    if (!bid) {
+        detailEl.innerHTML = `
+            <div style="font-size:12px; color:var(--text-muted); padding:30px 0; text-align:center;">
+                좌측에서 빌딩을 선택해주세요.
+            </div>
+        `;
+        return;
+    }
+    const b = _scFindNormBuilding(bid);
+    if (!b) {
+        detailEl.innerHTML = `
+            <div style="font-size:12px; color:#dc2626; padding:30px 0; text-align:center;">
+                빌딩을 찾을 수 없습니다 (id=${bid}).
+            </div>
+        `;
+        return;
+    }
+
+    const aMonth = _scState.pointA.yyyymm;
+    const bMonth = _scState.pointB.yyyymm;
+
+    detailEl.innerHTML = `
+        <div style="margin-bottom:8px; padding:8px 10px; background:var(--bg-secondary);
+                    border-radius:7px; border-left:3px solid #1a73e8;">
+            <div style="font-size:13px; font-weight:700; color:var(--text-primary);">
+                ${b.name || b.buildingName || '-'}
+            </div>
+            <div style="font-size:10px; color:var(--text-muted); margin-top:3px;">
+                ${b._region || '-'} · ${b._gradeAuto || '-'} · ${b._sizeBand || '-'} ·
+                ${b._grossPy ? Math.round(b._grossPy).toLocaleString() + '평' : '?'}
+                ${b._subRegion ? ' · ' + b._subRegion : ''}
+            </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            ${_scRenderSidePanel('A', b, aMonth)}
+            ${_scRenderSidePanel('B', b, bMonth)}
+        </div>
+    `;
+}
+
+/** 한 시점 패널 (A 또는 B) HTML 생성 */
+function _scRenderSidePanel(side, building, yyyymm) {
+    side = _scSide(side);
+    const accent  = (side === 'A') ? '#0284c7' : '#ea580c';
+    const accentBg= (side === 'A') ? '#e0f2fe' : '#ffedd5';
+
+    if (!yyyymm) {
+        return `
+            <div style="border:1px solid var(--border-color); border-radius:7px; padding:10px;">
+                <div style="font-size:11px; font-weight:700; color:${accent}; margin-bottom:6px;">
+                    시점 ${side} (월 미선택)
+                </div>
+                <div style="font-size:11px; color:var(--text-muted); padding:14px 0; text-align:center;">
+                    상단에서 월을 선택하세요.
+                </div>
+            </div>
+        `;
+    }
+
+    const vacs = _scVacanciesByMonth(building, yyyymm);
+    if (vacs.length === 0) {
+        return `
+            <div style="border:1px solid var(--border-color); border-radius:7px; padding:10px;">
+                <div style="font-size:11px; font-weight:700; color:${accent}; margin-bottom:6px;">
+                    시점 ${side} · ${yyyymm}
+                </div>
+                <div style="font-size:11px; color:#dc2626; padding:14px 0; text-align:center;">
+                    이 월의 OCR 임대안내문 없음
+                </div>
+            </div>
+        `;
+    }
+
+    // 회사별 그룹핑
+    const bySource = {};
+    vacs.forEach(v => {
+        const s = _scVacancySource(v);
+        (bySource[s] = bySource[s] || []).push(v);
+    });
+    const sources = Object.keys(bySource).sort();
+
+    const st  = _scState[`point${side}`];
+    const sel = st.selections.get(String(building.id));
+    const chosenSource    = sel?.chosenSource || sources[0];     // 기본값: 첫 번째 회사
+    const selectedVacKeys = sel?.selectedVacKeys || new Set();
+
+    const tabs = sources.map(s => {
+        const isOn  = (s === chosenSource);
+        const count = bySource[s].length;
+        return `
+            <span onclick="window._scChooseSource('${side}', '${String(building.id).replace(/'/g, "\\'")}', '${s.replace(/'/g, "\\'")}')"
+                style="padding:3px 8px; font-size:10px; cursor:pointer;
+                       border:1px solid ${isOn ? accent : 'var(--border-color)'};
+                       background:${isOn ? accent : 'var(--bg-card)'};
+                       color:${isOn ? '#fff' : 'var(--text-primary)'};
+                       border-radius:10px; font-weight:${isOn ? 700 : 500};
+                       white-space:nowrap;">
+                ${s} ${count}
+            </span>
+        `;
+    }).join('');
+
+    const chosenVacs = bySource[chosenSource] || [];
+    const totalSelArea = [...selectedVacKeys]
+        .map(k => chosenVacs.find(v => _scVacancyKey(v) === k))
+        .filter(Boolean)
+        .reduce((sum, v) => sum + _scVacAreaPy(v), 0);
+
+    const allKeys     = chosenVacs.map(v => _scVacancyKey(v));
+    const allSelected = allKeys.length > 0 && allKeys.every(k => selectedVacKeys.has(k));
+
+    const rows = chosenVacs.map(v => {
+        const key   = _scVacancyKey(v);
+        const isOn  = selectedVacKeys.has(key);
+        const area  = _scVacAreaPy(v);
+        const floor = v.floorText || v.floor || '-';
+        const px    = _scVacPrices(v);
+        const fmtP  = n => (n != null) ? Math.round(n / 1000).toLocaleString() : '-';
+        return `
+            <tr style="border-top:1px solid var(--border-color);
+                       background:${isOn ? '#eff6ff' : 'transparent'};
+                       cursor:pointer;"
+                onclick="window._scToggleVacancy('${side}', '${String(building.id).replace(/'/g, "\\'")}', '${key.replace(/'/g, "\\'")}')">
+                <td style="padding:3px 4px; text-align:center;">
+                    <input type="checkbox" ${isOn ? 'checked' : ''} style="pointer-events:none;">
+                </td>
+                <td style="padding:3px 4px; font-weight:600;">${floor}</td>
+                <td style="padding:3px 4px; text-align:right;">${area ? area.toFixed(1) : '-'}</td>
+                <td style="padding:3px 4px; text-align:right; color:#1a73e8;">${fmtP(px.rentPy)}</td>
+                <td style="padding:3px 4px; text-align:right; color:#9333ea;">${fmtP(px.depositPy)}</td>
+                <td style="padding:3px 4px; text-align:right; color:#16a34a;">${fmtP(px.maintenancePy)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    return `
+        <div style="border:1px solid var(--border-color); border-radius:7px; padding:8px 10px;
+                    background:${sel ? accentBg + '40' : 'transparent'};">
+            <div style="display:flex; justify-content:space-between; align-items:center;
+                        margin-bottom:5px;">
+                <span style="font-size:11px; font-weight:700; color:${accent};">
+                    시점 ${side} · ${yyyymm}
+                </span>
+                <span style="font-size:10px; color:var(--text-muted);">
+                    ${selectedVacKeys.size > 0
+                        ? `<strong style="color:${accent};">선택 ${selectedVacKeys.size}개 · ${totalSelArea.toFixed(1)}평</strong>`
+                        : '미선택'}
+                </span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:3px; margin-bottom:6px;">
+                ${tabs}
+            </div>
+            <div style="max-height:180px; overflow-y:auto;
+                        border:1px solid var(--border-color); border-radius:5px; background:#fff;">
+                <table style="width:100%; font-size:10px; border-collapse:collapse;">
+                    <thead style="position:sticky; top:0; background:var(--bg-secondary); z-index:1;">
+                        <tr style="color:#6b7280;">
+                            <th style="padding:3px 4px; width:24px;">
+                                <input type="checkbox" ${allSelected ? 'checked' : ''}
+                                    onclick="event.stopPropagation(); window._scToggleAllVacancies('${side}', '${String(building.id).replace(/'/g, "\\'")}', this.checked)">
+                            </th>
+                            <th style="padding:3px 4px; text-align:left;">층</th>
+                            <th style="padding:3px 4px; text-align:right;">평</th>
+                            <th style="padding:3px 4px; text-align:right;" title="천원/평">임대료</th>
+                            <th style="padding:3px 4px; text-align:right;" title="천원/평">보증금</th>
+                            <th style="padding:3px 4px; text-align:right;" title="천원/평">관리비</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+/** 회사 탭 클릭 — chosenSource 변경 (선택은 유지하되, 다른 회사 선택은 비움) */
+window._scChooseSource = function(side, buildingId, source) {
+    side = _scSide(side);
+    const st = _scState[`point${side}`];
+    const cur = st.selections.get(String(buildingId));
+    if (cur && cur.chosenSource === source) return;  // 동일 회사면 no-op
+
+    // 회사가 바뀌면 vacancy 선택 초기화 (다른 회사의 vacancy 키와 섞이지 않도록)
+    st.selections.set(String(buildingId), {
+        chosenSource:    source,
+        selectedVacKeys: new Set(),
+    });
+    _scState.dirty = true;
+    _scRenderBuildingDetail();
+    _scRenderBuildingLists();          // 좌측 카드의 chosenSource 강조 갱신
+    _scRenderResultPlaceholder();      // 결과/계산 버튼 상태 갱신
+};
+
+/** vacancy 행 토글 */
+window._scToggleVacancy = function(side, buildingId, vacKey) {
+    side = _scSide(side);
+    const st = _scState[`point${side}`];
+    const cur = st.selections.get(String(buildingId));
+    if (!cur) return;
+
+    if (cur.selectedVacKeys.has(vacKey)) {
+        cur.selectedVacKeys.delete(vacKey);
+        // vacancy 모두 해제되면 selections 자체를 제거 (= 빌딩 미선택 상태)
+        if (cur.selectedVacKeys.size === 0) {
+            st.selections.delete(String(buildingId));
+        }
+    } else {
+        cur.selectedVacKeys.add(vacKey);
+    }
+    _scState.dirty = true;
+    _scRenderBuildingDetail();
+    _scRenderBuildingLists();
+    _scRenderResultPlaceholder();
+};
+
+/** 현재 회사의 모든 vacancy 일괄 토글 */
+window._scToggleAllVacancies = function(side, buildingId, checkAll) {
+    side = _scSide(side);
+    const st = _scState[`point${side}`];
+    const b  = _scFindNormBuilding(buildingId);
+    if (!b || !st.yyyymm) return;
+    const cur = st.selections.get(String(buildingId));
+    const chosenSource = cur?.chosenSource;
+    if (!chosenSource) return;
+
+    const vacs = _scVacanciesByMonth(b, st.yyyymm).filter(v => _scVacancySource(v) === chosenSource);
+    if (checkAll) {
+        const keys = new Set(vacs.map(_scVacancyKey));
+        st.selections.set(String(buildingId), { chosenSource, selectedVacKeys: keys });
+    } else {
+        st.selections.delete(String(buildingId));
+    }
+    _scState.dirty = true;
+    _scRenderBuildingDetail();
+    _scRenderBuildingLists();
+    _scRenderResultPlaceholder();
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5E. Step 4 — 공통 빌딩 셋 검출 + [계산하기] 버튼 활성화
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 양 시점 모두 selections 에 등록된 buildingId 셋 반환.
+ * 각 시점의 selections는 chosenSource + selectedVacKeys.size > 0 인 경우만 유효로 간주.
+ */
+function _scGetCommonBuildingIds() {
+    const aSet = new Set();
+    _scState.pointA.selections.forEach((v, k) => {
+        if (v.selectedVacKeys && v.selectedVacKeys.size > 0) aSet.add(k);
+    });
+    const bSet = new Set();
+    _scState.pointB.selections.forEach((v, k) => {
+        if (v.selectedVacKeys && v.selectedVacKeys.size > 0) bSet.add(k);
+    });
+    const common = [...aSet].filter(id => bSet.has(id));
+    const onlyA  = [...aSet].filter(id => !bSet.has(id));
+    const onlyB  = [...bSet].filter(id => !aSet.has(id));
+    return { aSet, bSet, common, onlyA, onlyB };
+}
+
+/** 결과 영역 placeholder 갱신 — 공통 셋·경고·계산 버튼 활성화 */
+function _scRenderResultPlaceholder() {
+    const area = _scQS('sc-result-area');
+    if (!area) return;
+
+    const { aSet, bSet, common, onlyA, onlyB } = _scGetCommonBuildingIds();
+
+    const aOK = !!_scState.pointA.yyyymm;
+    const bOK = !!_scState.pointB.yyyymm;
+    const monthsOK = aOK && bOK && (_scState.pointA.yyyymm !== _scState.pointB.yyyymm);
+    const canCalc  = monthsOK && common.length > 0;
+
+    // 경고 메시지 (한쪽만 선택된 빌딩)
+    const warn = (onlyA.length + onlyB.length) > 0
+        ? `<div style="margin-top:10px; padding:8px 12px; background:#fff7ed;
+                       border-radius:5px; border:1px solid #fed7aa; font-size:11px;
+                       color:#9a3412; text-align:left;">
+              ⚠️ 한쪽 시점에만 선택된 빌딩이 있습니다 — 분모에서 자동 제외됩니다.<br>
+              <span style="font-weight:600;">시점 A 만 선택: ${onlyA.length}개 · 시점 B 만 선택: ${onlyB.length}개</span>
+              ${(onlyA.length + onlyB.length <= 8)
+                  ? `<div style="margin-top:4px; font-size:10px; opacity:0.8;">
+                       ${[...onlyA.map(id => 'A: ' + (_scFindNormBuilding(id)?.name || id)),
+                          ...onlyB.map(id => 'B: ' + (_scFindNormBuilding(id)?.name || id))].join(' · ')}
+                     </div>`
+                  : ''}
+           </div>`
+        : '';
+
+    area.innerHTML = `
+        <div style="width:100%; text-align:left;">
+            <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+                        font-size:12px; color:var(--text-primary);">
+                <span style="padding:4px 10px; background:#dbeafe; color:#1e40af;
+                             border-radius:14px; font-weight:600;">
+                    시점 A 선택: ${aSet.size}개
+                </span>
+                <span style="padding:4px 10px; background:#ffedd5; color:#9a3412;
+                             border-radius:14px; font-weight:600;">
+                    시점 B 선택: ${bSet.size}개
+                </span>
+                <span style="padding:4px 10px;
+                             background:${common.length > 0 ? '#dcfce7' : 'var(--bg-card)'};
+                             color:${common.length > 0 ? '#15803d' : 'var(--text-muted)'};
+                             border-radius:14px; font-weight:700;
+                             border:1px solid ${common.length > 0 ? '#86efac' : 'var(--border-color)'};">
+                    ✅ 공통 빌딩: ${common.length}개
+                </span>
+            </div>
+            ${warn}
+            ${!canCalc ? `
+                <div style="margin-top:10px; font-size:11px; color:var(--text-muted);">
+                    ${!monthsOK
+                        ? '두 시점을 서로 다른 월로 선택하세요.'
+                        : '양 시점 모두 빌딩·회사·공실을 선택하면 [공실률 계산하기] 버튼이 활성화됩니다.'}
+                </div>
+            ` : `
+                <div style="margin-top:10px; font-size:11px; color:#15803d; font-weight:600;">
+                    🚀 계산 준비 완료. 우측 상단 [공실률 계산하기] 버튼을 누르세요.
+                </div>
+            `}
+        </div>
+    `;
+
+    // 계산 버튼 활성화
+    const btn = _scQS('sc-btn-calc');
+    if (btn) {
+        btn.disabled        = !canCalc;
+        btn.style.cursor    = canCalc ? 'pointer' : 'not-allowed';
+        btn.style.background= canCalc ? '#1a73e8' : 'var(--bg-secondary)';
+        btn.style.color     = canCalc ? '#fff'    : 'var(--text-muted)';
+        btn.style.borderColor = canCalc ? '#1a73e8' : 'var(--border-color)';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 5F. Step 5 — 계산 + 결과 카드
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 한 시점의 한 빌딩에 대해, 사용자 선택을 기반으로 메트릭 추출.
+ *   - vacancyAreaPy: 선택된 vacancy 들의 면적 합 (공실면적 분자)
+ *   - rentPy/depositPy/maintenancePy: 선택된 vacancy 들의 가격 평균 (없으면 floorPricing 폴백)
+ * @returns {{vacancyAreaPy, rentPy, depositPy, maintenancePy, missing}}
+ */
+function _scExtractBuildingMetrics(side, buildingId) {
+    side = _scSide(side);
+    const st = _scState[`point${side}`];
+    const sel = st.selections.get(String(buildingId));
+    if (!sel || !sel.selectedVacKeys || sel.selectedVacKeys.size === 0) {
+        return { vacancyAreaPy: 0, rentPy: null, depositPy: null, maintenancePy: null, missing: ['no-selection'] };
+    }
+    const b = _scFindNormBuilding(buildingId);
+    if (!b) return { vacancyAreaPy: 0, rentPy: null, depositPy: null, maintenancePy: null, missing: ['no-building'] };
+
+    const vacs = _scVacanciesByMonth(b, st.yyyymm)
+        .filter(v => _scVacancySource(v) === sel.chosenSource)
+        .filter(v => sel.selectedVacKeys.has(_scVacancyKey(v)));
+
+    let vacArea = 0;
+    const rentVals = [], depVals = [], mntVals = [];
+    vacs.forEach(v => {
+        vacArea += _scVacAreaPy(v);
+        const px = _scVacPrices(v);
+        if (px.rentPy)        rentVals.push(px.rentPy);
+        if (px.depositPy)     depVals.push(px.depositPy);
+        if (px.maintenancePy) mntVals.push(px.maintenancePy);
+    });
+
+    const avg = arr => arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : null;
+    let rentPy = avg(rentVals);
+    let depPy  = avg(depVals);
+    let mntPy  = avg(mntVals);
+
+    // floorPricing 폴백 (vacancy 에 가격이 없을 때만)
+    const missing = [];
+    if (rentPy == null || depPy == null || mntPy == null) {
+        const fb = _scFloorFallback(b, st.yyyymm);
+        if (rentPy == null) { rentPy = fb.rentPy; if (rentPy == null) missing.push('rent'); }
+        if (depPy  == null) { depPy  = fb.depositPy; if (depPy  == null) missing.push('deposit'); }
+        if (mntPy  == null) { mntPy  = fb.maintenancePy; if (mntPy  == null) missing.push('maintenance'); }
+    }
+
+    return {
+        vacancyAreaPy: vacArea,
+        rentPy:        rentPy,
+        depositPy:     depPy,
+        maintenancePy: mntPy,
+        missing,
+    };
+}
+
+/**
+ * 권역별 가중평균 집계.
+ * 공실률    = Σ공실면적 / Σ연면적 × 100
+ * 평균임대가 = Σ(임대료×연면적) / Σ(연면적, 임대료 있는 빌딩)   ← 연면적 가중평균
+ * 보증금/관리비 동일 방식.
+ *
+ * @returns Map<region, {bldgCount, grossPy, vacPy, vacRate,
+ *                       rentSum, rentWeight, rentAvg, depSum, depWeight, depAvg,
+ *                       mntSum, mntWeight, mntAvg}>
+ */
+function _scAggregateByRegion(commonIds, side) {
+    side = _scSide(side);
+    const init = () => ({
+        bldgCount:0, grossPy:0, vacPy:0, vacRate:0,
+        rentSum:0, rentWeight:0, rentAvg:null,
+        depSum:0,  depWeight:0,  depAvg:null,
+        mntSum:0,  mntWeight:0,  mntAvg:null,
+    });
+    const map = new Map();
+    SR_REGIONS.forEach(r => map.set(r, init()));
+    map.set('TOTAL', init());
+
+    commonIds.forEach(bid => {
+        const b = _scFindNormBuilding(bid);
+        if (!b) return;
+        const region = b._region || 'ETC';
+        const gross  = b._grossPy || 0;
+        if (gross <= 0) return;       // 분모 0 방지
+
+        const m = _scExtractBuildingMetrics(side, bid);
+
+        const buckets = [map.get(region) || map.get('ETC'), map.get('TOTAL')];
+        buckets.forEach(bk => {
+            bk.bldgCount += 1;
+            bk.grossPy   += gross;
+            bk.vacPy     += m.vacancyAreaPy;
+            if (m.rentPy        != null) { bk.rentSum += m.rentPy        * gross; bk.rentWeight += gross; }
+            if (m.depositPy     != null) { bk.depSum  += m.depositPy     * gross; bk.depWeight  += gross; }
+            if (m.maintenancePy != null) { bk.mntSum  += m.maintenancePy * gross; bk.mntWeight  += gross; }
+        });
+    });
+
+    map.forEach(bk => {
+        bk.vacRate = bk.grossPy > 0 ? (bk.vacPy / bk.grossPy * 100) : 0;
+        bk.rentAvg = bk.rentWeight > 0 ? bk.rentSum / bk.rentWeight : null;
+        bk.depAvg  = bk.depWeight  > 0 ? bk.depSum  / bk.depWeight  : null;
+        bk.mntAvg  = bk.mntWeight  > 0 ? bk.mntSum  / bk.mntWeight  : null;
+    });
+    return map;
+}
+
+/** 숫자 포맷 — 천원/평 단위 */
+function _scFmtKW(v) {
+    if (v == null) return '-';
+    return Math.round(v / 1000).toLocaleString();
+}
+
+/** 증감 배지 */
+function _scDeltaBadge(cur, prev, type) {
+    if (cur == null || prev == null) {
+        return `<span style="font-size:10px; color:#9ca3af;">-</span>`;
+    }
+    const diff = cur - prev;
+    const isVacRate = (type === 'vacRate');
+    const sign = diff > 0 ? '▲' : (diff < 0 ? '▼' : '–');
+    let color;
+    if (Math.abs(diff) < (isVacRate ? 0.05 : 50)) color = '#9ca3af';
+    else if (isVacRate) color = (diff > 0) ? '#dc2626' : '#16a34a';   // 공실률은 ↑ 나쁨
+    else                color = (diff > 0) ? '#16a34a' : '#dc2626';   // 가격은 ↑ 좋음 (관점에 따라)
+    const fmt = isVacRate ? `${diff > 0 ? '+' : ''}${diff.toFixed(2)}%p`
+                          : `${diff > 0 ? '+' : ''}${_scFmtKW(diff)}`;
+    return `<span style="font-size:10px; font-weight:700; color:${color};">
+                ${sign} ${fmt}
+            </span>`;
+}
+
+/** 결과 카드 4종 + 권역×등급 교차표 렌더 */
+window._scCalculate = function() {
+    const { common } = _scGetCommonBuildingIds();
+    if (common.length === 0) {
+        alert('공통 빌딩이 없습니다.');
+        return;
+    }
+    const aMonth = _scState.pointA.yyyymm;
+    const bMonth = _scState.pointB.yyyymm;
+
+    const aggA = _scAggregateByRegion(common, 'A');
+    const aggB = _scAggregateByRegion(common, 'B');
+
+    const area = _scQS('sc-result-area');
+    if (!area) return;
+
+    // 권역별 카드 (TOTAL 포함)
+    const orderedRegions = ['TOTAL', ...SR_REGIONS.filter(r => (aggA.get(r)?.bldgCount || 0) + (aggB.get(r)?.bldgCount || 0) > 0)];
+
+    const renderRegionRow = (r) => {
+        const a = aggA.get(r) || {};
+        const b = aggB.get(r) || {};
+        const isTotal = (r === 'TOTAL');
+        const color = isTotal ? '#0f172a' : (SR_REGION_COLOR[r] || '#64748b');
+        return `
+            <tr style="border-top:1px solid var(--border-color);
+                       ${isTotal ? 'background:#f1f5f9; font-weight:700;' : ''}">
+                <td style="padding:6px 8px; font-weight:700; color:${color};">
+                    ${isTotal ? '🌐 전체' : r}
+                </td>
+                <td style="padding:6px 8px; text-align:right; color:var(--text-muted);">
+                    ${a.bldgCount || 0}
+                </td>
+                <td style="padding:6px 8px; text-align:right;">
+                    <strong style="color:#0284c7;">${(a.vacRate || 0).toFixed(2)}%</strong>
+                </td>
+                <td style="padding:6px 8px; text-align:right;">
+                    <strong style="color:#ea580c;">${(b.vacRate || 0).toFixed(2)}%</strong>
+                </td>
+                <td style="padding:6px 8px; text-align:right;">
+                    ${_scDeltaBadge(b.vacRate, a.vacRate, 'vacRate')}
+                </td>
+                <td style="padding:6px 8px; text-align:right; color:#0284c7;">
+                    ${_scFmtKW(a.rentAvg)}
+                </td>
+                <td style="padding:6px 8px; text-align:right; color:#ea580c;">
+                    ${_scFmtKW(b.rentAvg)}
+                </td>
+                <td style="padding:6px 8px; text-align:right;">
+                    ${_scDeltaBadge(b.rentAvg, a.rentAvg, 'rent')}
+                </td>
+                <td style="padding:6px 8px; text-align:right; color:#0284c7;">
+                    ${_scFmtKW(a.depAvg)}
+                </td>
+                <td style="padding:6px 8px; text-align:right; color:#ea580c;">
+                    ${_scFmtKW(b.depAvg)}
+                </td>
+                <td style="padding:6px 8px; text-align:right;">
+                    ${_scDeltaBadge(b.depAvg, a.depAvg, 'deposit')}
+                </td>
+                <td style="padding:6px 8px; text-align:right; color:#0284c7;">
+                    ${_scFmtKW(a.mntAvg)}
+                </td>
+                <td style="padding:6px 8px; text-align:right; color:#ea580c;">
+                    ${_scFmtKW(b.mntAvg)}
+                </td>
+                <td style="padding:6px 8px; text-align:right;">
+                    ${_scDeltaBadge(b.mntAvg, a.mntAvg, 'maintenance')}
+                </td>
+            </tr>
+        `;
+    };
+
+    // 헤더 카드 (TOTAL 의 4지표를 큰 글씨로)
+    const T_A = aggA.get('TOTAL'), T_B = aggB.get('TOTAL');
+    const heroCards = `
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin-bottom:14px;">
+            ${_scHeroCard('📉 공실률', `${(T_A.vacRate||0).toFixed(2)}%`, `${(T_B.vacRate||0).toFixed(2)}%`,
+                          _scDeltaBadge(T_B.vacRate, T_A.vacRate, 'vacRate'))}
+            ${_scHeroCard('💰 평균임대가', `${_scFmtKW(T_A.rentAvg)}`, `${_scFmtKW(T_B.rentAvg)}`,
+                          _scDeltaBadge(T_B.rentAvg, T_A.rentAvg, 'rent'), '천원/평')}
+            ${_scHeroCard('🏦 평균보증금', `${_scFmtKW(T_A.depAvg)}`, `${_scFmtKW(T_B.depAvg)}`,
+                          _scDeltaBadge(T_B.depAvg, T_A.depAvg, 'deposit'), '천원/평')}
+            ${_scHeroCard('🔧 평균관리비', `${_scFmtKW(T_A.mntAvg)}`, `${_scFmtKW(T_B.mntAvg)}`,
+                          _scDeltaBadge(T_B.mntAvg, T_A.mntAvg, 'maintenance'), '천원/평')}
+        </div>
+    `;
+
+    area.style.padding   = '16px 18px';
+    area.style.textAlign = 'left';
+    area.style.color     = 'var(--text-primary)';
+    area.style.minHeight = '180px';
+    area.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;
+                    margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div style="font-size:13px; font-weight:700; color:var(--text-primary);">
+                📊 비교 결과 — 공통 빌딩 ${common.length}개
+                <span style="font-size:11px; color:var(--text-muted); font-weight:500; margin-left:8px;">
+                    시점 A: ${aMonth} (기준) · 시점 B: ${bMonth} (비교) · 연면적 가중평균
+                </span>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button onclick="window._scClearResult()"
+                    style="padding:5px 12px; font-size:11px; background:transparent;
+                           border:1px solid var(--border-color); border-radius:6px;
+                           color:var(--text-primary); cursor:pointer;">
+                    결과 닫기
+                </button>
+            </div>
+        </div>
+        ${heroCards}
+        <div style="background:#fff; border:1px solid var(--border-color);
+                    border-radius:8px; overflow:hidden;">
+            <div style="overflow-x:auto;">
+                <table style="width:100%; min-width:1100px; font-size:11px;
+                              border-collapse:collapse;">
+                    <thead style="background:var(--bg-secondary);">
+                        <tr>
+                            <th rowspan="2" style="padding:8px; text-align:left; vertical-align:bottom;">권역</th>
+                            <th rowspan="2" style="padding:8px; text-align:right; vertical-align:bottom;">빌딩수</th>
+                            <th colspan="3" style="padding:6px 8px; text-align:center;
+                                background:#f0f9ff; color:#0c4a6e; border-bottom:1px solid #bae6fd;">
+                                📉 공실률 (%)
+                            </th>
+                            <th colspan="3" style="padding:6px 8px; text-align:center;
+                                background:#fff7ed; color:#7c2d12; border-bottom:1px solid #fed7aa;">
+                                💰 임대가 (천원/평)
+                            </th>
+                            <th colspan="3" style="padding:6px 8px; text-align:center;
+                                background:#f5f3ff; color:#4c1d95; border-bottom:1px solid #ddd6fe;">
+                                🏦 보증금 (천원/평)
+                            </th>
+                            <th colspan="3" style="padding:6px 8px; text-align:center;
+                                background:#f0fdf4; color:#14532d; border-bottom:1px solid #bbf7d0;">
+                                🔧 관리비 (천원/평)
+                            </th>
+                        </tr>
+                        <tr style="font-size:10px; color:var(--text-muted);">
+                            <th style="padding:4px 6px; text-align:right;">A</th>
+                            <th style="padding:4px 6px; text-align:right;">B</th>
+                            <th style="padding:4px 6px; text-align:right;">Δ</th>
+                            <th style="padding:4px 6px; text-align:right;">A</th>
+                            <th style="padding:4px 6px; text-align:right;">B</th>
+                            <th style="padding:4px 6px; text-align:right;">Δ</th>
+                            <th style="padding:4px 6px; text-align:right;">A</th>
+                            <th style="padding:4px 6px; text-align:right;">B</th>
+                            <th style="padding:4px 6px; text-align:right;">Δ</th>
+                            <th style="padding:4px 6px; text-align:right;">A</th>
+                            <th style="padding:4px 6px; text-align:right;">B</th>
+                            <th style="padding:4px 6px; text-align:right;">Δ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${orderedRegions.map(renderRegionRow).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div style="margin-top:8px; font-size:10px; color:var(--text-muted); line-height:1.6;">
+            💡 산식: 공실률 = Σ공실면적 ÷ Σ연면적 × 100 ·
+                평균값 = Σ(빌딩값 × 연면적) ÷ Σ(연면적, 값 있는 빌딩 한정) ·
+                Δ = 시점 B − 시점 A · 가격 단위 = 천원/평/月.
+                vacancy 에 가격이 누락된 빌딩은 floorPricing 의 동시점 또는 최신값으로 폴백.
+        </div>
+    `;
+};
+
+/** Hero 카드 1개 */
+function _scHeroCard(label, valA, valB, deltaHtml, unit = '%') {
+    return `
+        <div style="background:#fff; border:1px solid var(--border-color);
+                    border-radius:8px; padding:10px 12px;">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:6px;">
+                ${label}
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                <div style="text-align:left;">
+                    <div style="font-size:9px; color:#0284c7;">시점 A</div>
+                    <div style="font-size:14px; font-weight:700; color:#0284c7;">${valA}</div>
+                </div>
+                <div style="text-align:center; font-size:14px; color:#9ca3af;">→</div>
+                <div style="text-align:right;">
+                    <div style="font-size:9px; color:#ea580c;">시점 B</div>
+                    <div style="font-size:14px; font-weight:700; color:#ea580c;">${valB}</div>
+                </div>
+            </div>
+            <div style="text-align:center; margin-top:6px; padding-top:6px;
+                        border-top:1px dashed var(--border-color);">
+                ${deltaHtml}
+                <span style="font-size:9px; color:var(--text-muted); margin-left:4px;">${unit !== '%' ? unit : ''}</span>
+            </div>
+        </div>
+    `;
+}
+
+/** 결과 영역 닫기 (placeholder 로 복귀) */
+window._scClearResult = function() {
+    const area = _scQS('sc-result-area');
+    if (area) {
+        area.style.padding   = '24px';
+        area.style.textAlign = 'center';
+        area.style.color     = 'var(--text-muted)';
+        area.style.minHeight = '120px';
+    }
+    _scRenderResultPlaceholder();
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 5C. Step 2B — 필터 멀티픽커 모달
+// ═══════════════════════════════════════════════════════════════
+
+/** 필터 모달 DOM 동적 주입 (1회) */
+function _scInjectFilterModal() {
+    if (_scQS('sc-fp-modal')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'sc-fp-modal';
+    wrap.style.cssText = `
+        display:none; position:fixed; top:50%; left:50%;
+        transform:translate(-50%,-50%); background:var(--bg-card);
+        border-radius:12px; padding:0; width:560px; max-width:92vw;
+        z-index:1030; box-shadow:0 24px 60px rgba(0,0,0,0.5);
+        max-height:82vh; display:flex; flex-direction:column;
+    `;
+    wrap.innerHTML = `
+        <div id="sc-fp-header" style="padding:14px 20px;
+                    background:linear-gradient(135deg,#1a73e8,#0f4c81);
+                    color:#fff; display:flex; justify-content:space-between;
+                    align-items:center; flex-shrink:0; border-radius:12px 12px 0 0;">
+            <div style="font-size:14px; font-weight:700;">🔧 필터 변경 — <span id="sc-fp-side">A</span></div>
+            <button onclick="window._scCloseFilterPicker()"
+                style="background:rgba(255,255,255,0.2); border:none; color:#fff;
+                       font-size:18px; width:30px; height:30px; border-radius:6px;
+                       cursor:pointer;">×</button>
+        </div>
+        <div id="sc-fp-body" style="padding:16px 20px; overflow-y:auto; flex:1;"></div>
+        <div style="padding:10px 20px; border-top:1px solid var(--border-color);
+                    background:var(--bg-secondary); display:flex;
+                    justify-content:space-between; align-items:center;
+                    border-radius:0 0 12px 12px; flex-shrink:0;">
+            <button onclick="window._scClearFilters()"
+                style="padding:6px 14px; background:transparent; border:1px solid var(--border-color);
+                       color:var(--text-primary); border-radius:6px; cursor:pointer; font-size:12px;">
+                필터 초기화
+            </button>
+            <div>
+                <button onclick="window._scCloseFilterPicker()"
+                    style="padding:6px 14px; background:#1a73e8; color:#fff;
+                           border:none; border-radius:6px; cursor:pointer; font-size:12px;
+                           font-weight:600;">
+                    적용 / 닫기
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(wrap);
+}
+
+/** 필터 모달 본체 렌더 (4개 그룹: 권역·등급·규모·세부권역) */
+function _scRenderFilterPicker(side) {
+    side = _scSide(side);
+    const f = _scState[`point${side}`].filters;
+
+    // 세부권역 옵션 — 모집단 빌딩의 _subRegion 들에서 unique 추출
+    const norm = (window.srLib?.srGetNormBuildings?.() || srGetNormBuildings()) || [];
+    const popIds = new Set(_scState.researchMaster.matched.map(m => String(m.building.id)));
+    const subRegions = [...new Set(
+        norm.filter(b => popIds.has(String(b.id)))
+            .map(b => b._subRegion).filter(Boolean)
+    )].sort();
+
+    const chipGroup = (label, options, selected, key, colorMap) => `
+        <div style="margin-bottom:14px;">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted);
+                        margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">
+                ${label} <span style="opacity:0.6;">(${selected.length}/${options.length})</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:5px;">
+                ${options.map(opt => {
+                    const isOn = selected.includes(opt);
+                    const c    = colorMap?.[opt];
+                    const bg   = isOn ? (c || '#1a73e8') : 'var(--bg-secondary)';
+                    const fg   = isOn ? '#fff'           : 'var(--text-primary)';
+                    const bd   = isOn ? (c || '#1a73e8') : 'var(--border-color)';
+                    return `
+                        <span onclick="window._scToggleFilter('${side}','${key}','${String(opt).replace(/'/g, "\\'")}')"
+                            style="padding:5px 11px; border:1px solid ${bd};
+                                   background:${bg}; color:${fg};
+                                   border-radius:14px; font-size:11px; cursor:pointer;
+                                   font-weight:${isOn ? '700' : '500'};
+                                   transition:all 0.12s;">
+                            ${opt}
+                        </span>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+
+    const sideEl = _scQS('sc-fp-side');
+    if (sideEl) {
+        sideEl.textContent = (side === 'A') ? '시점 A (기준)' : '시점 B (비교)';
+        sideEl.style.color = (side === 'A') ? '#bae6fd' : '#fed7aa';
+    }
+    const headerEl = _scQS('sc-fp-header');
+    if (headerEl) {
+        headerEl.style.background = (side === 'A')
+            ? 'linear-gradient(135deg,#0284c7,#0369a1)'
+            : 'linear-gradient(135deg,#ea580c,#c2410c)';
+    }
+
+    const body = _scQS('sc-fp-body');
+    if (body) {
+        body.innerHTML = `
+            ${chipGroup('권역', SR_REGIONS, f.regions, 'regions', SR_REGION_COLOR)}
+            ${chipGroup('등급', SR_GRADES,  f.grades,  'grades',  SR_GRADE_COLOR)}
+            ${chipGroup('규모', SR_SIZE_BANDS_FULL, f.sizeBands, 'sizeBands', null)}
+            ${subRegions.length > 0
+                ? chipGroup('세부권역', subRegions, f.subRegions, 'subRegions', null)
+                : ''}
+        `;
+    }
+}
+
+/** 필터 칩 토글 */
+window._scToggleFilter = function(side, key, value) {
+    side = _scSide(side);
+    const arr = _scState[`point${side}`].filters[key];
+    if (!arr) return;
+    const idx = arr.indexOf(value);
+    if (idx >= 0) arr.splice(idx, 1);
+    else          arr.push(value);
+    _scRenderFilterPicker(side);    // 모달 갱신
+    _scRenderFilters(side);         // 메인 헤더 요약 갱신
+    _scRenderBuildingLists();       // 빌딩 리스트 갱신
+};
+
+/** 현재 시점의 필터 모두 비우기 */
+window._scClearFilters = function() {
+    const sideEl  = _scQS('sc-fp-side');
+    const sideTxt = sideEl?.textContent || '';
+    const side    = sideTxt.includes('B') ? 'B' : 'A';
+    const f = _scState[`point${side}`].filters;
+    f.regions    = [];
+    f.grades     = [];
+    f.sizeBands  = [];
+    f.subRegions = [];
+    _scRenderFilterPicker(side);
+    _scRenderFilters(side);
+    _scRenderBuildingLists();
+};
+
+/** 필터 모달 닫기 */
+window._scCloseFilterPicker = function() {
+    const m = _scQS('sc-fp-modal');
+    if (m) m.style.display = 'none';
+};
 
 /** 두 시점 month 셀렉트 박스 옵션 채우기 */
 function _scPopulateMonthSelects() {
@@ -1402,10 +2522,13 @@ window.openCompareModal = function() {
     _scRenderFilters('B');
     _scUpdateCount('A', null);
     _scUpdateCount('B', null);
-    // 모집단(RAW) 상태 반영 — 이전 세션에서 업로드한 게 메모리에 남아있으면 그대로
+    // 모집단(RAW) 상태 반영
     _scRenderRawStatus();
     _scLockUnlockPointSection(_scState.researchMaster.loaded);
     _scUpdateProgressBanner();
+    _scRenderBuildingLists();
+    _scRenderBuildingDetail();          // Step 3
+    _scRenderResultPlaceholder();       // Step 4·5
     const modal = _scQS('sc-modal');
     if (modal) modal.style.display = 'flex';
     console.log('[stats-compare] modal opened');
@@ -1417,14 +2540,19 @@ window.closeCompareModal = function() {
     if (modal) modal.style.display = 'none';
 };
 
-/** 시점 month 변경 핸들러 */
 window._scOnMonthChange = function(side, yyyymm) {
     side = _scSide(side);
-    _scState[`point${side}`].yyyymm = yyyymm || '';
+    const st = _scState[`point${side}`];
+    if (st.yyyymm !== yyyymm) {
+        // 월이 바뀌면 해당 시점의 모든 빌딩 선택을 비움 (vacancy 키가 무효해짐)
+        st.selections.clear();
+    }
+    st.yyyymm = yyyymm || '';
     _scState.dirty = true;
-    // Step 2 에서 _scRenderBuildingList(side) 호출 자리
+    _scRenderBuildingLists();
+    _scRenderBuildingDetail();
     _scUpdateProgressBanner();
-    _scUpdateCalcButton();
+    _scRenderResultPlaceholder();   // 결과 영역 + 계산 버튼 동시 갱신
 };
 
 /** 진행 상태 배너 업데이트 */
@@ -1444,30 +2572,28 @@ function _scUpdateProgressBanner() {
         msg   = '⚠️ 두 시점이 같습니다. 비교를 위해 서로 다른 월을 선택하세요.';
         color = '#dc2626';
     } else {
-        msg   = `✅ ${a} ↔ ${b} 비교 준비 완료. 빌딩 리스트는 Step 2 에서 구현됩니다.`;
+        msg   = `✅ ${a} ↔ ${b} · 좌측에서 빌딩 카드를 클릭해 회사·공실 선택 단계로 이동하세요. <span style="opacity:0.6;">(회사·공실 선택 UI는 Step 3)</span>`;
         color = '#16a34a';
     }
     el.innerHTML = `<span style="color:${color};">${msg}</span>`;
 }
 
-/** [계산하기] 버튼 활성화 조건 — Step 4 에서 공통 빌딩 수로 보강 */
+/** [계산하기] 버튼 활성화 — Step 4·5 의 _scRenderResultPlaceholder 에 위임 */
 function _scUpdateCalcButton() {
-    const btn = _scQS('sc-btn-calc');
-    if (!btn) return;
-    const a = _scState.pointA.yyyymm;
-    const b = _scState.pointB.yyyymm;
-    // Step 1: month 만 두 시점 다르면 일단 활성화 X (계산 미구현)
-    // Step 4 에서: 공통 빌딩 ≥ 1 추가 조건
-    const ok = false;  // Step 5 에서 실제 활성화 로직 작성
-    btn.disabled = !ok;
-    btn.style.cursor = ok ? 'pointer' : 'not-allowed';
-    btn.style.background = ok ? '#1a73e8' : 'var(--bg-secondary)';
-    btn.style.color = ok ? '#fff' : 'var(--text-muted)';
+    _scRenderResultPlaceholder();
 }
 
-/** 필터 멀티픽커 모달 — Step 2 에서 구현 */
+/** 필터 멀티픽커 모달 열기 (Step 2B 구현) */
 window._scOpenFilterPicker = function(side) {
-    alert(`필터 멀티픽커는 Step 2 에서 구현 예정 (요청 시점: ${_scSide(side)})`);
+    side = _scSide(side);
+    if (!_scState.researchMaster.loaded) {
+        alert('먼저 RAW 엑셀을 업로드하세요.');
+        return;
+    }
+    _scInjectFilterModal();
+    _scRenderFilterPicker(side);
+    const m = _scQS('sc-fp-modal');
+    if (m) m.style.display = 'flex';
 };
 
 /** 비교 세션 불러오기 — Step 6 에서 구현 */
@@ -1480,10 +2606,7 @@ window._scSaveCompare = function() {
     alert('비교 세션 저장은 Step 6 에서 구현 예정');
 };
 
-/** 계산 — Step 5 에서 구현 */
-window._scCalculate = function() {
-    alert('공실률 계산은 Step 5 에서 구현 예정');
-};
+/** _scCalculate 는 Step 5 (5F 섹션)에 실구현됨 */
 
 // ═══════════════════════════════════════════════════════════════
 // 7. ESC 키 닫기
@@ -1497,6 +2620,12 @@ if (!window._scEscRegistered) {
         const mm = document.getElementById('sc-mm-modal');
         if (mm && mm.style.display !== 'none' && mm.style.display !== '') {
             window._scCloseManualMatch();
+            return;
+        }
+        // v1.5: 필터 모달이 떠 있으면 그걸 먼저 닫음
+        const fp = document.getElementById('sc-fp-modal');
+        if (fp && fp.style.display !== 'none' && fp.style.display !== '') {
+            window._scCloseFilterPicker();
             return;
         }
         const modal = _scQS('sc-modal');
@@ -1515,4 +2644,4 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.4 (Step 2A 매칭 v3 + 수동 매칭/편집) 로드 완료');
+console.log('[portal-stats-compare] v1.6 (Step 3+4+5 — 회사·공실 선택 + 공통 셋 + 결과 카드 / MVP) 로드 완료');
