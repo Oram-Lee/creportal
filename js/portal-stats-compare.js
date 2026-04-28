@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.5  (✅ 공실 없음 확정 플래그)
+ * portal-stats-compare.js  v1.7.6  (_meta 공실없음 후보 빌딩 자동 표시)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -1429,7 +1429,9 @@ function _scGetCandidates(side) {
     for (const b of norm) {
         if (!popMap.has(String(b.id))) continue;          // 모집단 제약
         const sources = _scSourcesByMonth(b, st.yyyymm);
-        if (sources.length === 0) continue;               // 해당 월 OCR 없음
+        // v1.7.6: vacancy 없어도 _meta 공실없음 선언이 있으면 후보에 포함
+        const hasNoVacDecl = _scHasNoVacancyDeclaration(b, st.yyyymm);
+        if (sources.length === 0 && !hasNoVacDecl) continue;
 
         // 필터 (v1.7.4: 권역+등급 두 축만 — 등급=규모는 redundant 라 통합)
         const f = st.filters;
@@ -1437,7 +1439,7 @@ function _scGetCandidates(side) {
         if (f.grades.length  && !f.grades.includes(b._gradeAuto)) continue;
         // sizeBands / subRegions 는 v1.7.4 부터 비활성 (UI 에서 제거)
 
-        cands.push({ building: b, sources, raw: popMap.get(String(b.id)) });
+        cands.push({ building: b, sources, raw: popMap.get(String(b.id)), hasNoVacDecl });
     }
 
     // 정렬: 권역 → 등급 → 빌딩명
@@ -1461,9 +1463,10 @@ function _scBuildingCardHtml(side, item) {
     const b   = item.building;
     const st  = _scState[`point${side}`];
     const sel = st.selections.get(String(b.id));
-    const isNoVacancy  = !!(sel && sel.noVacancy);
-    const isSelected   = !!sel && (isNoVacancy || (sel.selectedVacKeys && sel.selectedVacKeys.size > 0));
-    const chosenSource = sel?.chosenSource || '';
+    const isNoVacancy   = !!(sel && sel.noVacancy);
+    const isSelected    = !!sel && (isNoVacancy || (sel.selectedVacKeys && sel.selectedVacKeys.size > 0));
+    const chosenSource  = sel?.chosenSource || '';
+    const isNoVacCand   = !!item.hasNoVacDecl && !isNoVacancy;   // v1.7.6: 후보(자동 마크 X)
 
     const region    = b._region    || '-';
     const grade     = b._gradeAuto || '-';
@@ -1514,6 +1517,13 @@ function _scBuildingCardHtml(side, item) {
                     <span style="padding:1px 6px; background:#7c3aed; color:#fff;
                                  border-radius:8px; font-size:9px; font-weight:700;">
                         0공실
+                    </span>
+                ` : isNoVacCand ? `
+                    <span style="padding:1px 6px; background:#f3e8ff; color:#6b21a8;
+                                 border:1px solid #d8b4fe;
+                                 border-radius:8px; font-size:9px; font-weight:600;"
+                          title="이 빌딩은 ${st.yyyymm} 에 '공실 없음' 으로 선언되어 있습니다. 우측 패널에서 [✅ 공실 없음 확정] 클릭으로 통계에 포함하세요.">
+                        🔒 0공실 후보
                     </span>
                 ` : ''}
             </div>
@@ -1653,6 +1663,28 @@ function _scClassifyMoveIn(vacancy) {
     return { kind: 'future', label: raw, color: '#ea580c', raw };
 }
 
+// ── v1.7.6: 통계 편집 _meta noVacancy 선언 감지 ────────────────
+// editor.js (Phase 6 Step 3.5) 가 만든 자료구조:
+//   vacancy._key.endsWith('_meta') 이고 vacancy.noVacancy === true 면
+//   해당 월에 "공실 없음" 선언이 있는 것
+// 사용자는 이걸 자동 마크하지 않고, 후보 리스트에만 노출 (옵션 B 합의)
+
+/**
+ * 빌딩이 해당 월에 _meta 공실없음 선언을 가지는지
+ * @returns {boolean}
+ */
+function _scHasNoVacancyDeclaration(building, yyyymm) {
+    if (!yyyymm) return false;
+    const vacs = (building?.vacancies) || [];
+    for (const v of vacs) {
+        if (!v || !v._key) continue;
+        if (!String(v._key).endsWith('_meta')) continue;
+        if (v.noVacancy !== true) continue;
+        if (srNormalizeDate(v.publishDate) === yyyymm) return true;
+    }
+    return false;
+}
+
 /** floorPricing 폴백 — yyyymm 시점 또는 그 이전의 가장 최신값 */
 function _scFloorFallback(building, yyyymm) {
     const fps = (building.floorPricing || []).slice();
@@ -1735,6 +1767,45 @@ function _scRenderSidePanel(side, building, yyyymm) {
     }
 
     const vacs = _scVacanciesByMonth(building, yyyymm);
+    const hasNoVacDecl = _scHasNoVacancyDeclaration(building, yyyymm);
+
+    // v1.7.6: vacancy 가 없어도 _meta 공실없음 선언이 있으면 0공실 확정 버튼만 띄움
+    if (vacs.length === 0 && hasNoVacDecl) {
+        const sel = _scState[`point${side}`].selections.get(String(building.id));
+        const isNoVacancy = !!(sel && sel.noVacancy);
+        const bidEsc = String(building.id).replace(/'/g, "\\'");
+        return `
+            <div style="border:1px solid var(--border-color); border-radius:7px; padding:10px;
+                        background:${isNoVacancy ? '#faf5ff' : 'transparent'};">
+                <div style="display:flex; justify-content:space-between; align-items:center;
+                            margin-bottom:8px;">
+                    <span style="font-size:11px; font-weight:700; color:${accent};">
+                        시점 ${side} · ${yyyymm}
+                    </span>
+                    <span style="font-size:10px;">
+                        ${isNoVacancy
+                            ? '<strong style="color:#7c3aed;">✅ 0공실 확정</strong>'
+                            : '<span style="color:#9ca3af;">미선택</span>'}
+                    </span>
+                </div>
+                <div style="padding:8px 10px; background:#f3e8ff;
+                            border:1px solid #d8b4fe; border-radius:5px;
+                            font-size:11px; color:#6b21a8; line-height:1.5; margin-bottom:8px;">
+                    🔒 통계 편집에서 이 빌딩은 <strong>${yyyymm} 공실 없음</strong> 으로 선언되어 있습니다.<br>
+                    공실 vacancy 행은 없지만, "공실률 0%" 빌딩으로 통계에 포함할 수 있습니다.
+                </div>
+                <button onclick="event.stopPropagation(); window._scToggleNoVacancy('${side}', '${bidEsc}')"
+                    style="width:100%; padding:8px; cursor:pointer;
+                           background:${isNoVacancy ? '#7c3aed' : '#f3e8ff'};
+                           color:${isNoVacancy ? '#fff' : '#6b21a8'};
+                           border:1px solid ${isNoVacancy ? '#7c3aed' : '#d8b4fe'};
+                           border-radius:5px; font-size:12px; font-weight:700;">
+                    ${isNoVacancy ? '✅ 0공실 확정 (해제하려면 다시 클릭)' : '✅ 0공실 확정으로 통계 포함'}
+                </button>
+            </div>
+        `;
+    }
+
     if (vacs.length === 0) {
         return `
             <div style="border:1px solid var(--border-color); border-radius:7px; padding:10px;">
@@ -2027,12 +2098,22 @@ window._scToggleNoVacancy = function(side, buildingId) {
     }
     // 토글 ON → vacancy 선택 비우고 noVacancy 플래그
     else {
-        // chosenSource 결정: 기존 선택 → 그대로 / 없으면 첫 회사
+        // chosenSource 결정: 기존 선택 → 그대로 / _meta source → 그것 / 첫 회사 → 미상
         let chosenSource = cur?.chosenSource;
         if (!chosenSource) {
-            const vacs = _scVacanciesByMonth(b, st.yyyymm);
-            const sources = [...new Set(vacs.map(_scVacancySource))].sort();
-            chosenSource = sources[0] || '미상';
+            // _meta noVacancy 선언 vacancy 의 source 를 우선 사용 (v1.7.6)
+            const metaV = (b.vacancies || []).find(v =>
+                v && v._key && String(v._key).endsWith('_meta')
+                && v.noVacancy === true
+                && srNormalizeDate(v.publishDate) === st.yyyymm
+            );
+            if (metaV) {
+                chosenSource = _scVacancySource(metaV);
+            } else {
+                const vacs = _scVacanciesByMonth(b, st.yyyymm);
+                const sources = [...new Set(vacs.map(_scVacancySource))].sort();
+                chosenSource = sources[0] || '미상';
+            }
         }
         st.selections.set(String(buildingId), {
             chosenSource,
@@ -2078,6 +2159,19 @@ function _scRenderResultPlaceholder() {
     _scState.pointA.selections.forEach(v => { if (v.noVacancy) noVacA++; });
     _scState.pointB.selections.forEach(v => { if (v.noVacancy) noVacB++; });
 
+    // v1.7.6: 0공실 후보(_meta 선언) 빌딩 수 — 사용자가 아직 클릭 안 한 것
+    let candA = 0, candB = 0;
+    if (_scState.pointA.yyyymm) {
+        for (const c of _scGetCandidates('A')) {
+            if (c.hasNoVacDecl && !_scState.pointA.selections.get(String(c.building.id))?.noVacancy) candA++;
+        }
+    }
+    if (_scState.pointB.yyyymm) {
+        for (const c of _scGetCandidates('B')) {
+            if (c.hasNoVacDecl && !_scState.pointB.selections.get(String(c.building.id))?.noVacancy) candB++;
+        }
+    }
+
     const aOK = !!_scState.pointA.yyyymm;
     const bOK = !!_scState.pointB.yyyymm;
     const monthsOK = aOK && bOK && (_scState.pointA.yyyymm !== _scState.pointB.yyyymm);
@@ -2121,6 +2215,15 @@ function _scRenderResultPlaceholder() {
                     ✅ 공통 빌딩: ${common.length}개
                 </span>
             </div>
+            ${(candA + candB) > 0 ? `
+                <div style="margin-top:8px; padding:6px 10px; background:#f3e8ff;
+                            border-left:3px solid #7c3aed; border-radius:5px;
+                            font-size:11px; color:#6b21a8;">
+                    🔒 통계 편집에서 0공실 선언된 빌딩이 있습니다 —
+                    시점 A: <strong>${candA}개</strong> · 시점 B: <strong>${candB}개</strong>
+                    (좌측 리스트에서 보라색 칩 빌딩 클릭 → [✅ 0공실 확정] 으로 통계 포함)
+                </div>
+            ` : ''}
             ${warn}
             ${!canCalc ? `
                 <div style="margin-top:10px; font-size:11px; color:var(--text-muted);">
@@ -3466,7 +3569,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.5 (✅ 공실 없음 확정 플래그) 로드 완료');
+console.log('[portal-stats-compare] v1.7.6 (_meta 0공실 선언 빌딩 후보 표시) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
