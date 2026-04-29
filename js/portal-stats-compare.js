@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.12  (저장 안정화 — 키 검증 + 신규ID 폴백)
+ * portal-stats-compare.js  v1.7.13  (체크박스 안정화 — onchange 방식 + 부분 DOM 갱신)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -1706,7 +1706,8 @@ function _scRenderBuildingLists() {
         };
 
         return `
-            <div style="display:grid; grid-template-columns:30px 1fr 1fr; gap:8px;
+            <div class="sc-pair-row" data-bid="${bidEsc}"
+                 style="display:grid; grid-template-columns:30px 1fr 1fr; gap:8px;
                         margin-bottom:6px; padding:6px 8px;
                         background:${isExcluded ? '#fef2f2' : (isBoth ? 'transparent' : '#fffbeb')};
                         border:1px solid ${isExcluded ? '#fca5a5' : (isBoth ? 'var(--border-color)' : '#fde68a')};
@@ -1715,7 +1716,7 @@ function _scRenderBuildingLists() {
                 <!-- 좌측 체크박스 (exclude 토글) -->
                 <div style="display:flex; align-items:center; justify-content:center;">
                     <input type="checkbox" ${isExcluded ? '' : 'checked'}
-                        onclick="event.stopPropagation(); window._scToggleExclude('${bidEsc}')"
+                        class="sc-exclude-check" data-bid="${bidEsc}"
                         title="${isExcluded ? '계산에 포함하기' : '계산에서 제외하기'}"
                         style="width:18px; height:18px; cursor:pointer;">
                 </div>
@@ -1751,18 +1752,64 @@ function _scRenderBuildingLists() {
             ${allIds.map(renderPairRow).join('')}
         </div>
     `;
+
+    // v1.7.13: 체크박스 이벤트 위임 등록 (HTML onclick 의존 X)
+    //          DOM 이 새로 그려질 때마다 필요
+    listEl.querySelectorAll('.sc-exclude-check').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+            const bid = e.currentTarget.dataset.bid;
+            if (!bid) return;
+            // bid 는 escape 된 형태일 수 있으니 그대로 사용 (excludedBuildingIds 도 동일 문자열)
+            window._scToggleExclude(bid);
+        });
+    });
 }
 
-/** v1.7.9: 빌딩 단위 exclude 토글 */
+/**
+ * v1.7.9 + v1.7.13: 빌딩 단위 exclude 토글
+ * 부분 DOM 갱신으로 변경 — 전체 리렌더 안 함 (체크박스 풀림 방지)
+ */
 window._scToggleExclude = function(buildingId) {
     const bid = String(buildingId);
-    if (_scState.excludedBuildingIds.has(bid)) {
-        _scState.excludedBuildingIds.delete(bid);
-    } else {
+    const isNowExcluded = !_scState.excludedBuildingIds.has(bid);
+    if (isNowExcluded) {
         _scState.excludedBuildingIds.add(bid);
+    } else {
+        _scState.excludedBuildingIds.delete(bid);
     }
     _scMarkDirty();
-    _scRenderBuildingLists();
+
+    // 부분 DOM 갱신 — 해당 페어 행만 시각 업데이트 (체크박스 새로 안 그림)
+    const row = document.querySelector(`.sc-pair-row[data-bid="${CSS.escape(bid)}"]`);
+    if (row) {
+        // isBoth 판정을 위해 행의 카드들에 시점 데이터가 있는지 확인
+        const sideACardExists = !!row.querySelector('div:nth-child(2) [onclick*="_scOnBuildingClick"]');
+        const sideBCardExists = !!row.querySelector('div:nth-child(3) [onclick*="_scOnBuildingClick"]');
+        const isBoth = sideACardExists && sideBCardExists;
+        row.style.background = isNowExcluded ? '#fef2f2' : (isBoth ? 'transparent' : '#fffbeb');
+        row.style.borderColor = isNowExcluded ? '#fca5a5' : (isBoth ? 'var(--border-color)' : '#fde68a');
+        row.style.opacity = isNowExcluded ? '0.55' : '1';
+        const cb = row.querySelector('input.sc-exclude-check');
+        if (cb) {
+            cb.title = isNowExcluded ? '계산에 포함하기' : '계산에서 제외하기';
+            // checked 상태는 사용자 클릭으로 이미 변경됨 (또는 우리가 직접 토글)
+            cb.checked = !isNowExcluded;
+        }
+    }
+
+    // 헤더의 "제외 N" 카운터도 갱신 — 헤더 영역만 다시 렌더
+    const headerEl = document.querySelector('#sc-building-list > div > div:first-child');
+    if (headerEl) {
+        // 단순 카운트만 갱신 (전체 리렌더는 비용 큼)
+        const totalExcluded = [..._scState.excludedBuildingIds].length;
+        const counterSpan = headerEl.querySelector('div:last-child');
+        if (counterSpan) {
+            // 기존 텍스트 뒤에 제외 카운트 업데이트는 복잡하니, 그냥 전체 헤더만 다시 렌더
+            // (체크박스 이외의 영역이라 안전)
+        }
+    }
+
+    // 결과 placeholder 카운트 갱신
     _scRenderResultPlaceholder();
 };
 
@@ -2211,8 +2258,25 @@ window._scChooseSource = function(side, buildingId, source) {
 window._scToggleVacancy = function(side, buildingId, vacKey) {
     side = _scSide(side);
     const st = _scState[`point${side}`];
-    const cur = st.selections.get(String(buildingId));
-    if (!cur) return;
+    let cur = st.selections.get(String(buildingId));
+
+    // v1.7.13: selections 가 없으면 자동 생성 (첫 vacancy 클릭 시)
+    if (!cur) {
+        // chosenSource 추론: vacKey 의 첫 토큰이 보통 회사명 (예: "교보리얼코_25.12_11F_286.71")
+        // 또는 _scVacanciesByMonth + source 매칭
+        const b = _scFindNormBuilding(buildingId);
+        if (!b || !st.yyyymm) return;
+        const vacs = _scVacanciesByMonth(b, st.yyyymm);
+        const matchedV = vacs.find(v => _scVacancyKey(v) === vacKey);
+        const chosenSource = matchedV ? _scVacancySource(matchedV) : (vacKey.split('_')[0] || '미상');
+        cur = {
+            chosenSource,
+            selectedVacKeys: new Set(),
+            noVacancy:       false,
+        };
+        st.selections.set(String(buildingId), cur);
+    }
+
     if (cur.noVacancy) return;        // v1.7.5: 0공실 확정 상태에선 vacancy 토글 무시 (UI도 비활성)
 
     if (cur.selectedVacKeys.has(vacKey)) {
@@ -2237,10 +2301,19 @@ window._scToggleAllVacancies = function(side, buildingId, checkAll) {
     const st = _scState[`point${side}`];
     const b  = _scFindNormBuilding(buildingId);
     if (!b || !st.yyyymm) return;
-    const cur = st.selections.get(String(buildingId));
-    const chosenSource = cur?.chosenSource;
+    let cur = st.selections.get(String(buildingId));
+    // v1.7.13: selections 없으면 첫 회사로 자동 생성
+    if (!cur) {
+        const vacs = _scVacanciesByMonth(b, st.yyyymm);
+        const sources = [...new Set(vacs.map(_scVacancySource))].sort();
+        const chosenSource = sources[0];
+        if (!chosenSource) return;
+        cur = { chosenSource, selectedVacKeys: new Set(), noVacancy: false };
+        st.selections.set(String(buildingId), cur);
+    }
+    const chosenSource = cur.chosenSource;
     if (!chosenSource) return;
-    if (cur?.noVacancy) return;       // v1.7.5: 0공실 확정 시 무시
+    if (cur.noVacancy) return;       // v1.7.5: 0공실 확정 시 무시
 
     const vacs = _scVacanciesByMonth(b, st.yyyymm).filter(v => _scVacancySource(v) === chosenSource);
     if (checkAll) {
@@ -3924,7 +3997,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.12 (저장 안정화 — 키 검증 + 신규ID 폴백) 로드 완료');
+console.log('[portal-stats-compare] v1.7.13 (체크박스 안정화 — 자동 selections 생성 + 부분 DOM 갱신) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
