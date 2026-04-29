@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.13  (체크박스 안정화 — onchange 방식 + 부분 DOM 갱신)
+ * portal-stats-compare.js  v1.7.14  (공실면적=임대면적 우선 적용 + 면적 동일 시 표시 개선)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -1839,8 +1839,9 @@ function _scVacancyKey(v) {
 }
 
 /** vacancy 의 면적(평) 추출 */
+/** vacancy 의 면적(평) 추출 — v1.7.14: 부서 관행 = 임대면적(rentArea) 우선, 폴백 전용면적 */
 function _scVacAreaPy(v) {
-    return Number(v.exclusiveArea ?? v.rentArea ?? 0) || 0;
+    return Number(v.rentArea ?? v.exclusiveArea ?? 0) || 0;
 }
 
 /** v1.7.10: 전용면적 별도 추출 (UI 표시용) */
@@ -2117,13 +2118,13 @@ function _scRenderSidePanel(side, building, yyyymm) {
     const rows = chosenVacs.map(v => {
         const key   = _scVacancyKey(v);
         const isOn  = selectedVacKeys.has(key);
-        const area  = _scVacAreaPy(v);          // v1.7.10: 임대면적
-        const excl  = _scVacExclusivePy(v);     // v1.7.10: 전용면적
+        const area  = _scVacAreaPy(v);          // 임대면적 (계산 기준)
+        const excl  = _scVacExclusivePy(v);     // 전용면적 (참고용)
+        const sameArea = area > 0 && excl > 0 && Math.abs(area - excl) < 0.01;  // v1.7.14: 동일 여부
         const floor = v.floorText || v.floor || '-';
         const px    = _scVacPrices(v);
         const mi    = _scClassifyMoveIn(v);
         const fmtP  = n => (n != null) ? Math.round(n / 1000).toLocaleString() : '-';
-        // 입주시기 라벨 (긴 텍스트는 자르고 title로 풀 표시)
         const miShort = mi.kind === 'immediate' ? '즉시'
                        : mi.kind === 'empty'    ? '-'
                        : (mi.raw.length > 10 ? mi.raw.slice(0, 10) + '…' : mi.raw);
@@ -2140,8 +2141,11 @@ function _scRenderSidePanel(side, building, yyyymm) {
                 <td style="padding:3px 4px; font-weight:600;">${floor}</td>
                 <td style="padding:3px 4px; text-align:right; font-weight:600;"
                     title="임대면적 (계산에 사용)">${area ? area.toFixed(1) : '-'}</td>
-                <td style="padding:3px 4px; text-align:right; color:#9ca3af; font-size:9px;"
-                    title="전용면적 (참고용)">${excl ? excl.toFixed(1) : '-'}</td>
+                <td style="padding:3px 4px; text-align:right;
+                           color:${sameArea ? '#cbd5e1' : '#9ca3af'};
+                           font-size:9px;
+                           font-style:${sameArea ? 'italic' : 'normal'};"
+                    title="${sameArea ? '임대면적과 동일 (OCR에 전용면적 별도 입력 안 됨)' : '전용면적 (참고용)'}">${excl ? (sameArea ? '〃' : excl.toFixed(1)) : '-'}</td>
                 <td style="padding:3px 4px; text-align:center; color:${mi.color};
                            font-weight:${mi.kind === 'immediate' ? 700 : 500};
                            white-space:nowrap;"
@@ -3997,7 +4001,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.13 (체크박스 안정화 — 자동 selections 생성 + 부분 DOM 갱신) 로드 완료');
+console.log('[portal-stats-compare] v1.7.14 (공실면적=임대면적 우선 + 동일면적 표시 개선) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
