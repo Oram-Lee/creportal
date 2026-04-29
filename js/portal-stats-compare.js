@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.10  (다중 회사 vacancy 동시 선택)
+ * portal-stats-compare.js  v1.7.11  (체크박스 회귀 버그 수정 — 엔트리 자동 생성)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -1874,6 +1874,31 @@ function _scMigrateSel(oldSel) {
     return newSel;
 }
 
+/**
+ * v1.7.11: selection 엔트리를 보장. 없으면 즉석 생성하고 chosenSource 는
+ * 해당 시점 vacancies 의 첫 회사로 설정. 토글 핸들러에서 사용자가 회사 탭을
+ * 한 번도 안 눌렀더라도 vacancy 체크박스가 동작하도록 함.
+ * @returns {object|null} 셀렉션 엔트리 또는 (월 미선택/빌딩 미존재 시) null
+ */
+function _scEnsureSelection(side, buildingId) {
+    side = _scSide(side);
+    const st = _scState[`point${side}`];
+    let cur = st.selections.get(String(buildingId));
+    if (cur) return cur;
+
+    const b = _scFindNormBuilding(buildingId);
+    if (!b || !st.yyyymm) return null;
+    const vacs = _scVacanciesByMonth(b, st.yyyymm);
+    const sources = [...new Set(vacs.map(_scVacancySource))].sort();
+    cur = {
+        chosenSource:            sources[0] || '',
+        selectedVacKeysBySource: {},
+        noVacancy:               false,
+    };
+    st.selections.set(String(buildingId), cur);
+    return cur;
+}
+
 /** vacancy 의 고유키 — 회사별 Set<vacKey> 에 저장할 식별자 */
 function _scVacancyKey(v) {
     return String(v.id || v._id || v.vacancyId || v.key
@@ -2330,16 +2355,24 @@ window._scChooseSource = function(side, buildingId, source) {
     _scRenderResultPlaceholder();      // 결과/계산 버튼 상태 갱신
 };
 
-/** vacancy 행 토글 — 현재 활성 탭(chosenSource) 의 Set 에서 토글 (v1.7.10) */
+/** vacancy 행 토글 — 엔트리 자동 생성, source 는 vacancy 자체에서 도출 (v1.7.11) */
 window._scToggleVacancy = function(side, buildingId, vacKey) {
     side = _scSide(side);
     const st = _scState[`point${side}`];
-    const cur = st.selections.get(String(buildingId));
-    if (!cur) return;
-    if (cur.noVacancy) return;        // v1.7.5: 0공실 확정 상태에선 vacancy 토글 무시 (UI도 비활성)
+    const b  = _scFindNormBuilding(buildingId);
+    if (!b || !st.yyyymm) return;
 
-    const src = cur.chosenSource;
-    if (!src) return;
+    // v1.7.11: vacKey 의 실제 source 를 vacancy 에서 직접 도출
+    // (chosenSource 의존 X — 사용자가 탭 안 눌렀어도 정상 동작)
+    const v = _scVacanciesByMonth(b, st.yyyymm).find(vv => _scVacancyKey(vv) === vacKey);
+    if (!v) return;
+    const src = _scVacancySource(v);
+
+    // 셀렉션 엔트리 보장 (없으면 즉석 생성)
+    const cur = _scEnsureSelection(side, buildingId);
+    if (!cur) return;
+    if (cur.noVacancy) return;        // v1.7.5: 0공실 확정 상태에선 vacancy 토글 무시
+
     if (!cur.selectedVacKeysBySource) cur.selectedVacKeysBySource = {};
     let bag = cur.selectedVacKeysBySource[src];
     if (!bag) {
@@ -2359,16 +2392,20 @@ window._scToggleVacancy = function(side, buildingId, vacKey) {
     _scRenderResultPlaceholder();
 };
 
-/** 현재 회사의 모든 vacancy 일괄 토글 — 다른 회사 선택은 보존 (v1.7.10) */
+/** 현재 회사의 모든 vacancy 일괄 토글 — 엔트리 자동 생성 (v1.7.11) */
 window._scToggleAllVacancies = function(side, buildingId, checkAll) {
     side = _scSide(side);
     const st = _scState[`point${side}`];
     const b  = _scFindNormBuilding(buildingId);
     if (!b || !st.yyyymm) return;
-    const cur = st.selections.get(String(buildingId));
-    const chosenSource = cur?.chosenSource;
+
+    // v1.7.11: 엔트리 보장 (사용자가 탭 안 눌러도 sources[0] 으로 진입 가능)
+    const cur = _scEnsureSelection(side, buildingId);
+    if (!cur) return;
+    if (cur.noVacancy) return;       // v1.7.5: 0공실 확정 시 무시
+
+    const chosenSource = cur.chosenSource;
     if (!chosenSource) return;
-    if (cur?.noVacancy) return;       // v1.7.5: 0공실 확정 시 무시
 
     if (!cur.selectedVacKeysBySource) cur.selectedVacKeysBySource = {};
 
@@ -2385,16 +2422,19 @@ window._scToggleAllVacancies = function(side, buildingId, checkAll) {
     _scRenderResultPlaceholder();
 };
 
-/** v1.7.2: 즉시입주만 선택 — 현재 회사 vacancy 중 즉시 입주만 체크 (v1.7.10: 다른 회사 보존) */
+/** v1.7.2: 즉시입주만 선택 — 엔트리 자동 생성 (v1.7.11) */
 window._scSelectImmediate = function(side, buildingId) {
     side = _scSide(side);
     const st = _scState[`point${side}`];
     const b  = _scFindNormBuilding(buildingId);
     if (!b || !st.yyyymm) return;
-    const cur = st.selections.get(String(buildingId));
-    const chosenSource = cur?.chosenSource;
+
+    const cur = _scEnsureSelection(side, buildingId);
+    if (!cur) return;
+    if (cur.noVacancy) return;       // v1.7.5: 0공실 확정 시 무시
+
+    const chosenSource = cur.chosenSource;
     if (!chosenSource) return;
-    if (cur?.noVacancy) return;       // v1.7.5: 0공실 확정 시 무시
 
     const vacs = _scVacanciesByMonth(b, st.yyyymm).filter(v => _scVacancySource(v) === chosenSource);
     const immediateVacs = vacs.filter(v => _scClassifyMoveIn(v).kind === 'immediate');
