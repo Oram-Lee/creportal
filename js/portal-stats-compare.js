@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.8  (결과 카드 레이아웃 재정비)
+ * portal-stats-compare.js  v1.7.10  (다중 회사 vacancy 동시 선택)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -75,7 +75,12 @@ const _scState = {
     pointA: {
         yyyymm:     '',
         filters:    { grades: [], regions: [], sizeBands: [], subRegions: [] },
-        // Map<buildingId, { chosenSource, selectedVacKeys: Set<string> }>
+        // v1.7.10: 다중 회사 동시 선택 지원
+        // Map<buildingId, {
+        //     chosenSource: string,                              // UI 현재 활성 탭
+        //     selectedVacKeysBySource: { [source]: Set<vacKey> }, // 회사별 선택 키
+        //     noVacancy: boolean,
+        // }>
         selections: new Map(),
     },
     pointB: {
@@ -86,6 +91,9 @@ const _scState = {
 
     // UI 상태
     selectedBuildingId: null,   // Step 3에서 사용
+
+    // v1.7.9: 빌딩 단위 exclude (페어 행 좌측 체크박스, 기본은 모두 포함=빈 셋)
+    excludedBuildingIds: new Set(),
 
     // Firebase
     compareId: '',              // 새 세션이면 ''
@@ -1521,8 +1529,12 @@ function _scBuildingCardHtml(side, item) {
     const st  = _scState[`point${side}`];
     const sel = st.selections.get(String(b.id));
     const isNoVacancy   = !!(sel && sel.noVacancy);
-    const isSelected    = !!sel && (isNoVacancy || (sel.selectedVacKeys && sel.selectedVacKeys.size > 0));
+    // v1.7.10: 다중 회사 구조 — 어떤 회사든 선택이 있으면 isSelected = true
+    const totalSel      = _scTotalSelectedCount(sel);
+    const isSelected    = !!sel && (isNoVacancy || totalSel > 0);
     const chosenSource  = sel?.chosenSource || '';
+    // v1.7.10: 선택이 있는 source 셋 (강조용)
+    const selectedSrcSet = new Set(_scSelectedSources(sel));
     const isNoVacCand   = !!item.hasNoVacDecl && !isNoVacancy;   // v1.7.6: 후보(자동 마크 X)
     const isExpand      = !!item.isExpand;                       // v1.7.7: 확장 빌딩
 
@@ -1533,17 +1545,21 @@ function _scBuildingCardHtml(side, item) {
     const regionColor = SR_REGION_COLOR[region] || '#94a3b8';
     const gradeColor  = SR_GRADE_COLOR[grade]   || '#94a3b8';
 
-    // 회사 칩 (chosenSource 와 일치하면 선택 상태 강조)
+    // v1.7.10: 회사 칩 — 선택이 있으면 진한 배경, chosenSource 는 추가로 외곽선 강조
     const sourceChips = item.sources.map(s => {
+        const hasSel   = selectedSrcSet.has(s.source);
         const isChosen = (s.source === chosenSource);
+        const selCount = sel?.selectedVacKeysBySource?.[s.source]?.size || 0;
+        const bg       = hasSel ? '#1e40af' : '#e0e7ff';
+        const fg       = hasSel ? '#fff'    : '#3730a3';
+        const bd       = hasSel ? '#1e40af' : (isChosen ? '#6366f1' : '#c7d2fe');
         return `<span style="
             display:inline-block; padding:1px 7px; border-radius:9px;
             font-size:10px; margin:1px 2px 1px 0; white-space:nowrap;
-            background:${isChosen ? '#1e40af' : '#e0e7ff'};
-            color:${isChosen ? '#fff' : '#3730a3'};
-            border:1px solid ${isChosen ? '#1e40af' : '#c7d2fe'};
-            ${isChosen ? 'font-weight:700;' : ''}
-        ">${s.source} ${s.count}</span>`;
+            background:${bg}; color:${fg};
+            border:${isChosen ? '2px' : '1px'} solid ${bd};
+            ${hasSel ? 'font-weight:700;' : ''}
+        ">${s.source} ${s.count}${selCount > 0 ? ' ✓' + selCount : ''}</span>`;
     }).join('');
 
     const cardBg     = isSelected ? '#eff6ff' : '#fff';
@@ -1599,6 +1615,12 @@ function _scBuildingCardHtml(side, item) {
 }
 
 /** 시점별 빌딩 리스트 렌더 (좌측 sc-pane-list 영역에 듀얼 컬럼) */
+/**
+ * v1.7.9: 좌측 빌딩 리스트를 페어 레이아웃으로 재구성.
+ *   - 같은 buildingId 의 A 후보 + B 후보를 한 행에 좌우 배치
+ *   - 행 좌측에 exclude 체크박스 (기본 ON, 끄면 계산 제외)
+ *   - A 또는 B 한쪽만 있는 빌딩도 명확히 표시 (반대쪽은 회색 placeholder)
+ */
 function _scRenderBuildingLists() {
     const listEl = _scQS('sc-building-list');
     if (!listEl) return;
@@ -1622,48 +1644,140 @@ function _scRenderBuildingLists() {
     _scUpdateCount('A', aMonth ? candA.length : null);
     _scUpdateCount('B', bMonth ? candB.length : null);
 
-    const renderColumn = (side, label, color, month, cands) => {
-        if (!month) {
-            return `
-                <div style="font-size:11px; color:var(--text-muted); padding:30px 4px; text-align:center;">
-                    시점 ${label} 미선택
+    if (candA.length === 0 && candB.length === 0) {
+        listEl.innerHTML = `
+            <div style="font-size:12px; color:var(--text-muted); padding:30px 0; text-align:center;">
+                조건에 맞는 빌딩이 없습니다.<br>
+                <span style="font-size:10px; opacity:0.7;">필터를 조정하거나 다른 월을 선택하세요.</span>
+            </div>
+        `;
+        return;
+    }
+
+    // 빌딩 ID 별로 A·B 후보 매핑
+    const aById = new Map(candA.map(c => [String(c.building.id), c]));
+    const bById = new Map(candB.map(c => [String(c.building.id), c]));
+
+    // 모든 빌딩 ID (A ∪ B), 정렬 키는 (양쪽=0/한쪽=1, 권역, 등급, 이름) — 양쪽 있는 빌딩 먼저
+    const allIds = [...new Set([...aById.keys(), ...bById.keys()])];
+    const regionOrder = Object.fromEntries(SR_REGIONS.map((r, i) => [r, i]));
+    const gradeOrder  = Object.fromEntries(SR_GRADES.map((g, i)  => [g, i]));
+    allIds.sort((id1, id2) => {
+        const c1 = aById.get(id1) || bById.get(id1);
+        const c2 = aById.get(id2) || bById.get(id2);
+        const both1 = (aById.has(id1) && bById.has(id1)) ? 0 : 1;
+        const both2 = (aById.has(id2) && bById.has(id2)) ? 0 : 1;
+        if (both1 !== both2) return both1 - both2;       // 양쪽 있는 게 먼저
+        const r1 = regionOrder[c1.building._region] ?? 99;
+        const r2 = regionOrder[c2.building._region] ?? 99;
+        if (r1 !== r2) return r1 - r2;
+        const g1 = gradeOrder[c1.building._gradeAuto] ?? 99;
+        const g2 = gradeOrder[c2.building._gradeAuto] ?? 99;
+        if (g1 !== g2) return g1 - g2;
+        return String(c1.building.name || '').localeCompare(String(c2.building.name || ''));
+    });
+
+    // 통계: 양쪽 있는 빌딩 / 한쪽만 있는 빌딩 / exclude 된 빌딩
+    let bothCount = 0, onlyACount = 0, onlyBCount = 0;
+    allIds.forEach(id => {
+        if (aById.has(id) && bById.has(id)) bothCount++;
+        else if (aById.has(id)) onlyACount++;
+        else onlyBCount++;
+    });
+    const excludedCount = [..._scState.excludedBuildingIds].filter(id => allIds.includes(id)).length;
+
+    // 페어 행 렌더
+    const renderPairRow = (bid) => {
+        const aItem  = aById.get(bid);
+        const bItem  = bById.get(bid);
+        const refItem = aItem || bItem;
+        const b      = refItem.building;
+        const isBoth = !!aItem && !!bItem;
+        const isExcluded = _scState.excludedBuildingIds.has(String(bid));
+
+        const region    = b._region    || '-';
+        const grade     = b._gradeAuto || '-';
+        const grossPy   = _scGrossPy(b);
+        const regionColor = SR_REGION_COLOR[region] || '#94a3b8';
+        const gradeColor  = SR_GRADE_COLOR[grade]   || '#94a3b8';
+
+        const bidEsc = String(bid).replace(/'/g, "\\'");
+
+        // A·B 카드 영역 — 한쪽만 있으면 placeholder
+        const renderSideCard = (side, item, accent, monthLabel) => {
+            if (!item) {
+                return `
+                    <div style="border:1px dashed var(--border-color); border-radius:6px;
+                                padding:8px 10px; background:#f8fafc;
+                                font-size:11px; color:#9ca3af; text-align:center;
+                                min-height:54px; display:flex; align-items:center; justify-content:center;">
+                        ${monthLabel} 데이터 없음
+                    </div>
+                `;
+            }
+            return _scBuildingCardHtml(side, item);
+        };
+
+        return `
+            <div style="display:grid; grid-template-columns:30px 1fr 1fr; gap:8px;
+                        margin-bottom:6px; padding:6px 8px;
+                        background:${isExcluded ? '#fef2f2' : (isBoth ? 'transparent' : '#fffbeb')};
+                        border:1px solid ${isExcluded ? '#fca5a5' : (isBoth ? 'var(--border-color)' : '#fde68a')};
+                        border-radius:7px;
+                        opacity:${isExcluded ? '0.55' : '1'};">
+                <!-- 좌측 체크박스 (exclude 토글) -->
+                <div style="display:flex; align-items:center; justify-content:center;">
+                    <input type="checkbox" ${isExcluded ? '' : 'checked'}
+                        onclick="event.stopPropagation(); window._scToggleExclude('${bidEsc}')"
+                        title="${isExcluded ? '계산에 포함하기' : '계산에서 제외하기'}"
+                        style="width:18px; height:18px; cursor:pointer;">
                 </div>
-            `;
-        }
-        if (cands.length === 0) {
-            return `
-                <div style="font-size:11px; color:var(--text-muted); padding:30px 4px; text-align:center;">
-                    조건에 맞는 빌딩이 없습니다.<br>
-                    <span style="font-size:10px; opacity:0.7;">필터를 조정하거나 다른 월을 선택하세요.</span>
-                </div>
-            `;
-        }
-        return cands.map(c => _scBuildingCardHtml(side, c)).join('');
+                <!-- A 카드 -->
+                <div>${renderSideCard('A', aItem, '#0284c7', '시점 A')}</div>
+                <!-- B 카드 -->
+                <div>${renderSideCard('B', bItem, '#ea580c', '시점 B')}</div>
+            </div>
+        `;
     };
 
-    listEl.innerHTML = `
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;
-                    height:100%; min-height:0;">
-            <div style="border-right:1px solid var(--border-color); padding-right:8px;
-                        overflow-y:auto; max-height:520px;">
-                <div style="position:sticky; top:0; background:var(--bg-card); padding:4px 0 6px;
-                            font-size:11px; font-weight:700; color:#0284c7;
-                            border-bottom:1px solid #e0f2fe; margin-bottom:6px; z-index:1;">
-                    시점 A · ${aMonth || '-'} · ${candA.length}개
-                </div>
-                ${renderColumn('A', 'A', '#0284c7', aMonth, candA)}
+    // 헤더 (sticky)
+    const headerHtml = `
+        <div style="position:sticky; top:0; background:var(--bg-card); z-index:2;
+                    padding:6px 8px; border-bottom:1px solid var(--border-color);
+                    margin-bottom:6px;">
+            <div style="display:grid; grid-template-columns:30px 1fr 1fr; gap:8px;
+                        font-size:11px; font-weight:700;">
+                <div style="text-align:center; color:var(--text-muted);" title="체크 = 계산 포함 / 해제 = 제외">✓</div>
+                <div style="color:#0284c7;">시점 A · ${aMonth || '-'} · ${candA.length}개</div>
+                <div style="color:#ea580c;">시점 B · ${bMonth || '-'} · ${candB.length}개</div>
             </div>
-            <div style="padding-left:4px; overflow-y:auto; max-height:520px;">
-                <div style="position:sticky; top:0; background:var(--bg-card); padding:4px 0 6px;
-                            font-size:11px; font-weight:700; color:#ea580c;
-                            border-bottom:1px solid #ffedd5; margin-bottom:6px; z-index:1;">
-                    시점 B · ${bMonth || '-'} · ${candB.length}개
-                </div>
-                ${renderColumn('B', 'B', '#ea580c', bMonth, candB)}
+            <div style="margin-top:4px; font-size:10px; color:var(--text-muted);">
+                전체 ${allIds.length}개 · 양시점 ${bothCount} · 시점A만 ${onlyACount} · 시점B만 ${onlyBCount}
+                ${excludedCount > 0 ? ` · <span style="color:#dc2626; font-weight:700;">제외 ${excludedCount}</span>` : ''}
             </div>
         </div>
     `;
+
+    listEl.innerHTML = `
+        <div style="overflow-y:auto; max-height:560px;">
+            ${headerHtml}
+            ${allIds.map(renderPairRow).join('')}
+        </div>
+    `;
 }
+
+/** v1.7.9: 빌딩 단위 exclude 토글 */
+window._scToggleExclude = function(buildingId) {
+    const bid = String(buildingId);
+    if (_scState.excludedBuildingIds.has(bid)) {
+        _scState.excludedBuildingIds.delete(bid);
+    } else {
+        _scState.excludedBuildingIds.add(bid);
+    }
+    _scMarkDirty();
+    _scRenderBuildingLists();
+    _scRenderResultPlaceholder();
+};
 
 /** 빌딩 카드 클릭 → 우측 상세 패널 (Step 3 실구현) */
 window._scOnBuildingClick = function(side, buildingId) {
@@ -1684,7 +1798,83 @@ function _scFindNormBuilding(buildingId) {
     return norm.find(b => String(b.id) === String(buildingId)) || null;
 }
 
-/** vacancy 의 고유키 — selectedVacKeys 에 저장할 식별자 */
+// ── v1.7.10: 다중 회사 vacancy 동시 선택 헬퍼 ───────────────────
+// 자료구조: selectedVacKeysBySource = { [source]: Set<vacKey> }
+// 한 빌딩에 여러 회사가 임대안내문을 발행할 때 회사별 선택을 독립적으로 보존.
+// 직렬화 시 Set → {[k]:true}, 역직렬화 시 v1.7.x 구버전 (selectedVacKeys + chosenSource)
+// 형식을 자동으로 새 구조로 변환.
+
+/** 모든 회사의 선택 키 합산 → Set<vacKey> */
+function _scAllSelectedKeys(sel) {
+    const all = new Set();
+    if (!sel || !sel.selectedVacKeysBySource) return all;
+    Object.values(sel.selectedVacKeysBySource).forEach(s => {
+        if (s && typeof s.forEach === 'function') s.forEach(k => all.add(k));
+    });
+    return all;
+}
+
+/** 모든 회사 선택 키의 총 개수 */
+function _scTotalSelectedCount(sel) {
+    if (!sel || !sel.selectedVacKeysBySource) return 0;
+    let n = 0;
+    Object.values(sel.selectedVacKeysBySource).forEach(s => { n += (s?.size || 0); });
+    return n;
+}
+
+/** 선택된 회사 목록 (size > 0 인 source 만) */
+function _scSelectedSources(sel) {
+    if (!sel || !sel.selectedVacKeysBySource) return [];
+    return Object.entries(sel.selectedVacKeysBySource)
+        .filter(([, s]) => s && s.size > 0)
+        .map(([src]) => src);
+}
+
+/** 특정 회사의 선택 키 Set (없으면 빈 Set) */
+function _scKeysOfSource(sel, source) {
+    return sel?.selectedVacKeysBySource?.[source] || new Set();
+}
+
+/**
+ * 빈 source 슬롯 정리 + 빈 selection Map 엔트리 정리.
+ * - selectedVacKeysBySource 안의 size 0 인 source 슬롯 제거
+ * - 모든 source 가 비고 noVacancy 도 false 면 selections 자체에서 삭제
+ */
+function _scCleanupSelection(side, buildingId) {
+    side = _scSide(side);
+    const st = _scState[`point${side}`];
+    const cur = st.selections.get(String(buildingId));
+    if (!cur) return;
+    if (cur.selectedVacKeysBySource) {
+        Object.keys(cur.selectedVacKeysBySource).forEach(src => {
+            const s = cur.selectedVacKeysBySource[src];
+            if (!s || s.size === 0) delete cur.selectedVacKeysBySource[src];
+        });
+    }
+    if (_scTotalSelectedCount(cur) === 0 && !cur.noVacancy) {
+        st.selections.delete(String(buildingId));
+    }
+}
+
+/**
+ * 구버전 (v1.7.x) selection 객체를 새 구조로 변환.
+ * 이미 새 구조면 그대로 반환. 호출부 어디서든 안전하게 사용 가능.
+ */
+function _scMigrateSel(oldSel) {
+    if (!oldSel) return oldSel;
+    if (oldSel.selectedVacKeysBySource) return oldSel;   // 이미 새 구조
+    const newSel = {
+        chosenSource:            oldSel.chosenSource || '',
+        selectedVacKeysBySource: {},
+        noVacancy:               !!oldSel.noVacancy,
+    };
+    if (oldSel.selectedVacKeys && oldSel.selectedVacKeys.size > 0 && oldSel.chosenSource) {
+        newSel.selectedVacKeysBySource[oldSel.chosenSource] = new Set(oldSel.selectedVacKeys);
+    }
+    return newSel;
+}
+
+/** vacancy 의 고유키 — 회사별 Set<vacKey> 에 저장할 식별자 */
 function _scVacancyKey(v) {
     return String(v.id || v._id || v.vacancyId || v.key
                   || `${_scVacancySource(v)}__${v.publishDate || ''}__${v.floorText || v.floor || ''}__${v.exclusiveArea || v.rentArea || 0}`);
@@ -1796,14 +1986,24 @@ function _scRenderBuildingDetail() {
 
     detailEl.innerHTML = `
         <div style="margin-bottom:8px; padding:8px 10px; background:var(--bg-secondary);
-                    border-radius:7px; border-left:3px solid #1a73e8;">
-            <div style="font-size:13px; font-weight:700; color:var(--text-primary);">
-                ${b.name || b.buildingName || '-'}
+                    border-radius:7px; border-left:3px solid #1a73e8;
+                    display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:13px; font-weight:700; color:var(--text-primary);">
+                    ${b.name || b.buildingName || '-'}
+                </div>
+                <div style="font-size:10px; color:var(--text-muted); margin-top:3px;">
+                    ${b._region || '-'} · ${b._gradeAuto || '-'} ·
+                    ${_scGrossPy(b) ? Math.round(_scGrossPy(b)).toLocaleString() + '평' : '?'}
+                </div>
             </div>
-            <div style="font-size:10px; color:var(--text-muted); margin-top:3px;">
-                ${b._region || '-'} · ${b._gradeAuto || '-'} ·
-                ${_scGrossPy(b) ? Math.round(_scGrossPy(b)).toLocaleString() + '평' : '?'}
-            </div>
+            <button onclick="event.stopPropagation(); window._scRefreshBuildingDetail()"
+                title="portal 의 최신 임대안내문 데이터를 다시 읽어 우측 패널을 갱신합니다"
+                style="padding:4px 10px; background:#fff; border:1px solid var(--border-color);
+                       border-radius:5px; font-size:10px; color:var(--text-primary);
+                       cursor:pointer; white-space:nowrap; flex-shrink:0;">
+                🔄 새로고침
+            </button>
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
@@ -1812,6 +2012,16 @@ function _scRenderBuildingDetail() {
         </div>
     `;
 }
+
+/** v1.7.9: 빌딩 상세 새로고침 — 좌측 리스트와 우측 패널 모두 다시 렌더 */
+window._scRefreshBuildingDetail = function() {
+    // portal-data.js 의 onValue 리스너가 실시간 업데이트하므로
+    // window.state.allBuildings 가 항상 최신. 단순히 다시 렌더만 해도 새 데이터 반영됨.
+    _scRenderBuildingLists();
+    _scRenderBuildingDetail();
+    _scRenderResultPlaceholder();
+    console.log('[stats-compare] 빌딩 상세 새로고침 완료');
+};
 
 /** 한 시점 패널 (A 또는 B) HTML 생성 */
 function _scRenderSidePanel(side, building, yyyymm) {
@@ -1895,46 +2105,86 @@ function _scRenderSidePanel(side, building, yyyymm) {
 
     const st  = _scState[`point${side}`];
     const sel = st.selections.get(String(building.id));
-    const chosenSource    = sel?.chosenSource || sources[0];     // 기본값: 첫 번째 회사
-    const selectedVacKeys = sel?.selectedVacKeys || new Set();
-    const isNoVacancy     = !!(sel && sel.noVacancy);            // v1.7.5: 0공실 확정 플래그
+    const chosenSource     = sel?.chosenSource || sources[0];     // 기본값: 첫 번째 회사
+    // v1.7.10: 현재 활성 탭의 선택 키만 표 렌더링에 사용
+    const curSourceKeys    = _scKeysOfSource(sel, chosenSource);
+    const totalSelectedAll = _scTotalSelectedCount(sel);
+    const isNoVacancy      = !!(sel && sel.noVacancy);            // v1.7.5: 0공실 확정 플래그
+
+    // v1.7.10: 회사별 선택 카운트 → 탭 배지 + 상태 라벨용
+    const selCountBySrc = {};
+    sources.forEach(s => { selCountBySrc[s] = _scKeysOfSource(sel, s).size; });
 
     const tabs = sources.map(s => {
-        const isOn  = (s === chosenSource);
-        const count = bySource[s].length;
+        const isOn    = (s === chosenSource);
+        const count   = bySource[s].length;
+        const selN    = selCountBySrc[s] || 0;
+        const hasSel  = selN > 0;
+        // 활성 탭이 아니어도 선택이 있으면 강조 (배경 살짝 다르게)
+        const bg      = isOn   ? accent
+                       : hasSel ? '#dbeafe'
+                                : 'var(--bg-card)';
+        const fg      = isOn   ? '#fff'
+                       : hasSel ? '#1e40af'
+                                : 'var(--text-primary)';
+        const bd      = isOn ? accent : (hasSel ? '#1e40af' : 'var(--border-color)');
         return `
             <span onclick="window._scChooseSource('${side}', '${String(building.id).replace(/'/g, "\\'")}', '${s.replace(/'/g, "\\'")}')"
                 style="padding:3px 8px; font-size:10px; cursor:pointer;
-                       border:1px solid ${isOn ? accent : 'var(--border-color)'};
-                       background:${isOn ? accent : 'var(--bg-card)'};
-                       color:${isOn ? '#fff' : 'var(--text-primary)'};
-                       border-radius:10px; font-weight:${isOn ? 700 : 500};
+                       border:1px solid ${bd};
+                       background:${bg}; color:${fg};
+                       border-radius:10px; font-weight:${(isOn || hasSel) ? 700 : 500};
                        white-space:nowrap;">
-                ${s} ${count}
+                ${s} ${count}${selN > 0 ? ` <span style="background:${isOn ? '#fff' : '#1e40af'}; color:${isOn ? accent : '#fff'}; padding:0 5px; border-radius:7px; margin-left:2px;">✓${selN}</span>` : ''}
             </span>
         `;
     }).join('');
 
     const chosenVacs = bySource[chosenSource] || [];
-    const totalSelArea = [...selectedVacKeys]
+    // 활성 탭의 선택 면적 (탭 별 표시용)
+    const curTabSelArea = [...curSourceKeys]
         .map(k => chosenVacs.find(v => _scVacancyKey(v) === k))
         .filter(Boolean)
         .reduce((sum, v) => sum + _scVacAreaPy(v), 0);
+    // 모든 회사 합산 면적 (상단 상태 라벨)
+    const totalSelArea = (() => {
+        if (!sel || !sel.selectedVacKeysBySource) return 0;
+        let sum = 0;
+        Object.entries(sel.selectedVacKeysBySource).forEach(([src, keys]) => {
+            const list = bySource[src] || [];
+            keys.forEach(k => {
+                const v = list.find(x => _scVacancyKey(x) === k);
+                if (v) sum += _scVacAreaPy(v);
+            });
+        });
+        return sum;
+    })();
 
     const allKeys     = chosenVacs.map(v => _scVacancyKey(v));
-    const allSelected = allKeys.length > 0 && allKeys.every(k => selectedVacKeys.has(k));
+    const allSelected = allKeys.length > 0 && allKeys.every(k => curSourceKeys.has(k));
 
     // v1.7.2: 입주시기 분포
     const miCounts = { immediate: 0, future: 0, empty: 0 };
     chosenVacs.forEach(v => { miCounts[_scClassifyMoveIn(v).kind]++; });
     const hasImmediate = miCounts.immediate > 0;
 
-    // v1.7.5: 상단 상태 라벨 — 3가지 상태 (공실 N개 선택 / 0공실 확정 / 미선택)
+    // v1.7.5/v1.7.10: 상단 상태 라벨 — 3가지 상태
+    //   · 0공실 확정
+    //   · 다중 회사: 미래에셋 1 + 에이커트리 2 = 총 3개 · 면적
+    //   · 단일 회사: 선택 N개 · 면적
+    //   · 미선택
     let statusLabel;
     if (isNoVacancy) {
         statusLabel = `<strong style="color:#7c3aed;">✅ 0공실 확정</strong>`;
-    } else if (selectedVacKeys.size > 0) {
-        statusLabel = `<strong style="color:${accent};">선택 ${selectedVacKeys.size}개 · ${totalSelArea.toFixed(1)}평</strong>`;
+    } else if (totalSelectedAll > 0) {
+        const breakdown = sources
+            .filter(s => (selCountBySrc[s] || 0) > 0)
+            .map(s => `${s} ${selCountBySrc[s]}`)
+            .join(' + ');
+        const showBreakdown = sources.filter(s => (selCountBySrc[s] || 0) > 0).length > 1;
+        statusLabel = showBreakdown
+            ? `<strong style="color:${accent};">${breakdown} = 총 ${totalSelectedAll}개 · ${totalSelArea.toFixed(1)}평</strong>`
+            : `<strong style="color:${accent};">선택 ${totalSelectedAll}개 · ${totalSelArea.toFixed(1)}평</strong>`;
     } else {
         statusLabel = '미선택';
     }
@@ -1943,7 +2193,7 @@ function _scRenderSidePanel(side, building, yyyymm) {
 
     const rows = chosenVacs.map(v => {
         const key   = _scVacancyKey(v);
-        const isOn  = selectedVacKeys.has(key);
+        const isOn  = curSourceKeys.has(key);
         const area  = _scVacAreaPy(v);
         const floor = v.floorText || v.floor || '-';
         const px    = _scVacPrices(v);
@@ -1959,7 +2209,9 @@ function _scRenderSidePanel(side, building, yyyymm) {
                        cursor:pointer;"
                 onclick="window._scToggleVacancy('${side}', '${String(building.id).replace(/'/g, "\\'")}', '${key.replace(/'/g, "\\'")}')">
                 <td style="padding:3px 4px; text-align:center;">
-                    <input type="checkbox" ${isOn ? 'checked' : ''} style="pointer-events:none;">
+                    <input type="checkbox" ${isOn ? 'checked' : ''}
+                        onclick="event.stopPropagation(); window._scToggleVacancy('${side}', '${String(building.id).replace(/'/g, "\\'")}', '${key.replace(/'/g, "\\'")}')"
+                        style="cursor:pointer;">
                 </td>
                 <td style="padding:3px 4px; font-weight:600;">${floor}</td>
                 <td style="padding:3px 4px; text-align:right;">${area ? area.toFixed(1) : '-'}</td>
@@ -2054,27 +2306,31 @@ function _scRenderSidePanel(side, building, yyyymm) {
     `;
 }
 
-/** 회사 탭 클릭 — chosenSource 변경 (선택은 유지하되, 다른 회사 선택은 비움) */
+/** 회사 탭 클릭 — chosenSource 만 전환 (다른 회사의 선택 보존, v1.7.10) */
 window._scChooseSource = function(side, buildingId, source) {
     side = _scSide(side);
     const st = _scState[`point${side}`];
     const cur = st.selections.get(String(buildingId));
     if (cur && cur.chosenSource === source) return;  // 동일 회사면 no-op
 
-    // 회사가 바뀌면 vacancy 선택 초기화 (다른 회사의 vacancy 키와 섞이지 않도록)
-    // v1.7.5: noVacancy 플래그는 회사와 무관하므로 보존
-    st.selections.set(String(buildingId), {
-        chosenSource:    source,
-        selectedVacKeys: new Set(),
-        noVacancy:       !!cur?.noVacancy,
-    });
+    // v1.7.10: 회사가 바뀌어도 다른 회사의 vacancy 선택은 유지.
+    // chosenSource 는 UI 상 어떤 탭이 활성인지의 의미.
+    if (cur) {
+        cur.chosenSource = source;
+    } else {
+        st.selections.set(String(buildingId), {
+            chosenSource:            source,
+            selectedVacKeysBySource: {},
+            noVacancy:               false,
+        });
+    }
     _scMarkDirty();
     _scRenderBuildingDetail();
-    _scRenderBuildingLists();          // 좌측 카드의 chosenSource 강조 갱신
+    _scRenderBuildingLists();          // 좌측 카드의 source 칩 강조 갱신
     _scRenderResultPlaceholder();      // 결과/계산 버튼 상태 갱신
 };
 
-/** vacancy 행 토글 */
+/** vacancy 행 토글 — 현재 활성 탭(chosenSource) 의 Set 에서 토글 (v1.7.10) */
 window._scToggleVacancy = function(side, buildingId, vacKey) {
     side = _scSide(side);
     const st = _scState[`point${side}`];
@@ -2082,23 +2338,28 @@ window._scToggleVacancy = function(side, buildingId, vacKey) {
     if (!cur) return;
     if (cur.noVacancy) return;        // v1.7.5: 0공실 확정 상태에선 vacancy 토글 무시 (UI도 비활성)
 
-    if (cur.selectedVacKeys.has(vacKey)) {
-        cur.selectedVacKeys.delete(vacKey);
-        // v1.7.5: vacancy 모두 해제되면 selections 자체 제거
-        // 단 noVacancy 플래그가 있으면 보존 (이미 위에서 return 했으므로 여기 도달 X)
-        if (cur.selectedVacKeys.size === 0 && !cur.noVacancy) {
-            st.selections.delete(String(buildingId));
-        }
-    } else {
-        cur.selectedVacKeys.add(vacKey);
+    const src = cur.chosenSource;
+    if (!src) return;
+    if (!cur.selectedVacKeysBySource) cur.selectedVacKeysBySource = {};
+    let bag = cur.selectedVacKeysBySource[src];
+    if (!bag) {
+        bag = new Set();
+        cur.selectedVacKeysBySource[src] = bag;
     }
+
+    if (bag.has(vacKey)) {
+        bag.delete(vacKey);
+    } else {
+        bag.add(vacKey);
+    }
+    _scCleanupSelection(side, buildingId);
     _scMarkDirty();
     _scRenderBuildingDetail();
     _scRenderBuildingLists();
     _scRenderResultPlaceholder();
 };
 
-/** 현재 회사의 모든 vacancy 일괄 토글 */
+/** 현재 회사의 모든 vacancy 일괄 토글 — 다른 회사 선택은 보존 (v1.7.10) */
 window._scToggleAllVacancies = function(side, buildingId, checkAll) {
     side = _scSide(side);
     const st = _scState[`point${side}`];
@@ -2109,20 +2370,22 @@ window._scToggleAllVacancies = function(side, buildingId, checkAll) {
     if (!chosenSource) return;
     if (cur?.noVacancy) return;       // v1.7.5: 0공실 확정 시 무시
 
+    if (!cur.selectedVacKeysBySource) cur.selectedVacKeysBySource = {};
+
     const vacs = _scVacanciesByMonth(b, st.yyyymm).filter(v => _scVacancySource(v) === chosenSource);
     if (checkAll) {
-        const keys = new Set(vacs.map(_scVacancyKey));
-        st.selections.set(String(buildingId), { chosenSource, selectedVacKeys: keys, noVacancy: false });
+        cur.selectedVacKeysBySource[chosenSource] = new Set(vacs.map(_scVacancyKey));
     } else {
-        st.selections.delete(String(buildingId));
+        delete cur.selectedVacKeysBySource[chosenSource];
     }
+    _scCleanupSelection(side, buildingId);
     _scMarkDirty();
     _scRenderBuildingDetail();
     _scRenderBuildingLists();
     _scRenderResultPlaceholder();
 };
 
-/** v1.7.2: 즉시입주만 선택 — 현재 회사의 vacancy 중 moveInDate=즉시 만 체크 */
+/** v1.7.2: 즉시입주만 선택 — 현재 회사 vacancy 중 즉시 입주만 체크 (v1.7.10: 다른 회사 보존) */
 window._scSelectImmediate = function(side, buildingId) {
     side = _scSide(side);
     const st = _scState[`point${side}`];
@@ -2137,15 +2400,16 @@ window._scSelectImmediate = function(side, buildingId) {
     const immediateVacs = vacs.filter(v => _scClassifyMoveIn(v).kind === 'immediate');
     if (immediateVacs.length === 0) return;
 
-    const keys = new Set(immediateVacs.map(_scVacancyKey));
-    st.selections.set(String(buildingId), { chosenSource, selectedVacKeys: keys, noVacancy: false });
+    if (!cur.selectedVacKeysBySource) cur.selectedVacKeysBySource = {};
+    cur.selectedVacKeysBySource[chosenSource] = new Set(immediateVacs.map(_scVacancyKey));
+    _scCleanupSelection(side, buildingId);
     _scMarkDirty();
     _scRenderBuildingDetail();
     _scRenderBuildingLists();
     _scRenderResultPlaceholder();
 };
 
-/** v1.7.5: 0공실 확정 토글 — 분모는 포함, 분자=0 */
+/** v1.7.5: 0공실 확정 토글 — 분모는 포함, 분자=0 (v1.7.10: 다중 회사 구조 호환) */
 window._scToggleNoVacancy = function(side, buildingId) {
     side = _scSide(side);
     const st  = _scState[`point${side}`];
@@ -2153,16 +2417,14 @@ window._scToggleNoVacancy = function(side, buildingId) {
     const b   = _scFindNormBuilding(buildingId);
     if (!b || !st.yyyymm) return;
 
-    // 토글 OFF → selections 제거 (selectedVacKeys 도 비어있으니)
+    // 토글 OFF → noVacancy 해제. vacancy 도 없으면 selections 자체 제거
     if (cur?.noVacancy) {
-        if (cur.selectedVacKeys && cur.selectedVacKeys.size > 0) {
-            // vacancy 도 선택돼있으면 noVacancy만 푸는 게 아니라 충돌 → vacancy 우선
-            cur.noVacancy = false;
-        } else {
+        cur.noVacancy = false;
+        if (_scTotalSelectedCount(cur) === 0) {
             st.selections.delete(String(buildingId));
         }
     }
-    // 토글 ON → vacancy 선택 비우고 noVacancy 플래그
+    // 토글 ON → 모든 회사 vacancy 선택 비우고 noVacancy 플래그
     else {
         // chosenSource 결정: 기존 선택 → 그대로 / _meta source → 그것 / 첫 회사 → 미상
         let chosenSource = cur?.chosenSource;
@@ -2183,8 +2445,8 @@ window._scToggleNoVacancy = function(side, buildingId) {
         }
         st.selections.set(String(buildingId), {
             chosenSource,
-            selectedVacKeys: new Set(),
-            noVacancy:       true,
+            selectedVacKeysBySource: {},
+            noVacancy:               true,
         });
     }
     _scMarkDirty();
@@ -2199,14 +2461,20 @@ window._scToggleNoVacancy = function(side, buildingId) {
 
 /**
  * 양 시점 모두 selections 에 등록된 buildingId 셋 반환.
- * 유효 조건: selectedVacKeys.size > 0  OR  noVacancy === true (v1.7.5)
+ * 유효 조건: 어느 회사든 선택이 있거나(_scTotalSelectedCount > 0) noVacancy === true (v1.7.10)
+ * v1.7.9: excludedBuildingIds 에 있는 빌딩은 제외
  */
 function _scGetCommonBuildingIds() {
-    const isValid = v => (v.selectedVacKeys && v.selectedVacKeys.size > 0) || v.noVacancy === true;
+    const isValid = v => _scTotalSelectedCount(v) > 0 || v.noVacancy === true;
+    const excluded = _scState.excludedBuildingIds || new Set();
     const aSet = new Set();
-    _scState.pointA.selections.forEach((v, k) => { if (isValid(v)) aSet.add(k); });
+    _scState.pointA.selections.forEach((v, k) => {
+        if (isValid(v) && !excluded.has(String(k))) aSet.add(k);
+    });
     const bSet = new Set();
-    _scState.pointB.selections.forEach((v, k) => { if (isValid(v)) bSet.add(k); });
+    _scState.pointB.selections.forEach((v, k) => {
+        if (isValid(v) && !excluded.has(String(k))) bSet.add(k);
+    });
     const common = [...aSet].filter(id => bSet.has(id));
     const onlyA  = [...aSet].filter(id => !bSet.has(id));
     const onlyB  = [...bSet].filter(id => !aSet.has(id));
@@ -2365,13 +2633,19 @@ function _scExtractBuildingMetrics(side, buildingId) {
         };
     }
 
-    if (!sel.selectedVacKeys || sel.selectedVacKeys.size === 0) {
+    // v1.7.10: 모든 source 의 선택 키를 합산 (다중 회사 동시 선택 지원)
+    const totalKeys = _scAllSelectedKeys(sel);
+    if (totalKeys.size === 0) {
         return { vacancyAreaPy: 0, rentPy: null, depositPy: null, maintenancePy: null, missing: ['no-selection'] };
     }
 
+    // 각 vacancy 가 어느 회사 set 에 속해있는지 확인하면서 필터
     const vacs = _scVacanciesByMonth(b, st.yyyymm)
-        .filter(v => _scVacancySource(v) === sel.chosenSource)
-        .filter(v => sel.selectedVacKeys.has(_scVacancyKey(v)));
+        .filter(v => {
+            const src = _scVacancySource(v);
+            const bag = sel.selectedVacKeysBySource?.[src];
+            return bag && bag.has(_scVacancyKey(v));
+        });
 
     let vacArea = 0;
     const rentVals = [], depVals = [], mntVals = [];
@@ -2733,38 +3007,65 @@ window._scClearResult = function() {
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * _scState 의 selections (Map<id, {chosenSource, selectedVacKeys:Set}>) 를
+ * _scState 의 selections (Map<id, {chosenSource, selectedVacKeysBySource:{src:Set}, noVacancy}>) 을
  * Firebase 저장 가능한 plain object 로 변환:
- *   { [bid]: { chosenSource, selectedVacKeys: { [k]: true, ... } } }
+ *   {
+ *     [bid]: {
+ *       chosenSource,
+ *       selectedVacKeysBySource: { [source]: { [k]: true, ... } },
+ *       noVacancy,
+ *     }
+ *   }
+ * v1.7.10: 다중 회사 vacancy 동시 선택 지원.
  */
 function _scSerializeSelections(selectionsMap) {
     const out = {};
     selectionsMap.forEach((val, bid) => {
-        const keysObj = {};
-        if (val.selectedVacKeys && val.selectedVacKeys.size > 0) {
-            val.selectedVacKeys.forEach(k => { keysObj[k] = true; });
+        const bySrcObj = {};
+        if (val.selectedVacKeysBySource) {
+            Object.entries(val.selectedVacKeysBySource).forEach(([src, keys]) => {
+                if (!keys || keys.size === 0) return;
+                const keysObj = {};
+                keys.forEach(k => { keysObj[k] = true; });
+                bySrcObj[src] = keysObj;
+            });
         }
         out[bid] = {
-            chosenSource:    val.chosenSource || '',
-            selectedVacKeys: keysObj,
-            noVacancy:       !!val.noVacancy,   // v1.7.5
+            chosenSource:            val.chosenSource || '',
+            selectedVacKeysBySource: bySrcObj,
+            noVacancy:               !!val.noVacancy,   // v1.7.5
         };
     });
     return out;
 }
 
-/** Firebase plain object → Map<id, {chosenSource, selectedVacKeys:Set, noVacancy}> */
+/**
+ * Firebase plain object → Map<id, {chosenSource, selectedVacKeysBySource:{src:Set}, noVacancy}>
+ * v1.7.10: 다중 회사 구조로 역직렬화. 구버전 (v1.7.x: selectedVacKeys 단일 셋) 호환 처리.
+ */
 function _scDeserializeSelections(plainObj) {
     const map = new Map();
     if (!plainObj) return map;
     Object.keys(plainObj).forEach(bid => {
         const v = plainObj[bid] || {};
-        const keys = new Set(Object.keys(v.selectedVacKeys || {}));
-        map.set(String(bid), {
-            chosenSource:    v.chosenSource || '',
-            selectedVacKeys: keys,
-            noVacancy:       !!v.noVacancy,    // v1.7.5
-        });
+        const newSel = {
+            chosenSource:            v.chosenSource || '',
+            selectedVacKeysBySource: {},
+            noVacancy:               !!v.noVacancy,
+        };
+        // 새 구조 (v1.7.10)
+        if (v.selectedVacKeysBySource && typeof v.selectedVacKeysBySource === 'object') {
+            Object.entries(v.selectedVacKeysBySource).forEach(([src, keysObj]) => {
+                const keys = new Set(Object.keys(keysObj || {}));
+                if (keys.size > 0) newSel.selectedVacKeysBySource[src] = keys;
+            });
+        }
+        // 구버전 (v1.7.x) 호환: selectedVacKeys + chosenSource
+        else if (v.selectedVacKeys && v.chosenSource) {
+            const keys = new Set(Object.keys(v.selectedVacKeys || {}));
+            if (keys.size > 0) newSel.selectedVacKeysBySource[v.chosenSource] = keys;
+        }
+        map.set(String(bid), newSel);
     });
     return map;
 }
@@ -2773,12 +3074,16 @@ function _scDeserializeSelections(plainObj) {
 function _scBuildPayload(title) {
     const user = window.state?.currentUser?.email || 'unknown';
     const now  = new Date().toISOString();
+    // v1.7.9: excludedBuildingIds Set → object {id:true}
+    const excludedObj = {};
+    (_scState.excludedBuildingIds || new Set()).forEach(id => { excludedObj[id] = true; });
     return {
         title:     String(title || _scState.title || '제목없음').slice(0, 200),
         updatedAt: now,
         updatedBy: user,
         version:   (_scState.version || 0) + 1,
         expandMode: !!_scState.researchMaster.expandMode,   // v1.7.7
+        excludedBuildingIds: excludedObj,                   // v1.7.9
         pointA: {
             yyyymm:     _scState.pointA.yyyymm || '',
             filters:    _scNormalizeFilters(_scState.pointA.filters),
@@ -3041,6 +3346,7 @@ window._scLoadCompare = async function(compareId) {
         _scState.version   = data.version || 0;
         _scState.dirty     = false;
         _scState.researchMaster.expandMode = !!data.expandMode;     // v1.7.7
+        _scState.excludedBuildingIds = new Set(Object.keys(data.excludedBuildingIds || {}));  // v1.7.9
         _scState.pointA.yyyymm     = data.pointA?.yyyymm || '';
         _scState.pointA.filters    = _scNormalizeFilters(data.pointA?.filters || {});
         _scState.pointA.selections = _scDeserializeSelections(data.pointA?.selections);
@@ -3261,11 +3567,16 @@ window._scExportExcel = function() {
                 return;
             }
             const vacs = _scVacanciesByMonth(b, yyyymm)
-                .filter(v => _scVacancySource(v) === sel.chosenSource)
-                .filter(v => sel.selectedVacKeys.has(_scVacancyKey(v)));
+                .filter(v => {
+                    // v1.7.10: 모든 회사 set 에서 일치 여부 확인
+                    const src = _scVacancySource(v);
+                    const bag = sel.selectedVacKeysBySource?.[src];
+                    return bag && bag.has(_scVacancyKey(v));
+                });
             vacs.forEach(v => {
-                const px = _scVacPrices(v);
-                const mi = _scClassifyMoveIn(v);
+                const px  = _scVacPrices(v);
+                const mi  = _scClassifyMoveIn(v);
+                const src = _scVacancySource(v);    // v1.7.10: vacancy 가 속한 실제 회사로 기록
                 rows.push([
                     bid,
                     b.name || b.buildingName || '',
@@ -3273,7 +3584,7 @@ window._scExportExcel = function() {
                     b._gradeAuto || '',
                     b._sizeBand || '',
                     _scGrossPy(b),
-                    sel.chosenSource || '',
+                    src,                                // v1.7.10: vacancy 가 속한 실제 회사
                     v.floorText || v.floor || '',
                     _scVacAreaPy(v),
                     mi.raw || '',
@@ -3306,6 +3617,13 @@ window._scExportExcel = function() {
         const mB = _scExtractBuildingMetrics('B', bid);
         const selA = _scState.pointA.selections.get(String(bid));
         const selB = _scState.pointB.selections.get(String(bid));
+        // v1.7.10: 다중 회사 선택이면 콤마로 묶어서 표기. 0공실 확정은 chosenSource 사용.
+        const srcLabel = (sel) => {
+            if (!sel) return '';
+            if (sel.noVacancy) return sel.chosenSource || '';
+            const used = _scSelectedSources(sel);
+            return used.length ? used.join(', ') : (sel.chosenSource || '');
+        };
         return [
             bid,
             b.name || b.buildingName || '',
@@ -3315,10 +3633,10 @@ window._scExportExcel = function() {
             b._gradeAuto || '',
             b._sizeBand || '',
             _scGrossPy(b),
-            selA?.chosenSource || '',
+            srcLabel(selA),
             mA.vacancyAreaPy || 0,
             _scExcelRaw(mA.rentPy), _scExcelRaw(mA.depositPy), _scExcelRaw(mA.maintenancePy),
-            selB?.chosenSource || '',
+            srcLabel(selB),
             mB.vacancyAreaPy || 0,
             _scExcelRaw(mB.rentPy), _scExcelRaw(mB.depositPy), _scExcelRaw(mB.maintenancePy),
         ];
@@ -3683,7 +4001,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.8 (결과 카드 레이아웃 재정비) 로드 완료');
+console.log('[portal-stats-compare] v1.7.9 (페어 레이아웃 + exclude 체크박스 + 새로고침 버튼) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
