@@ -1,5 +1,5 @@
 /**
- * portal-stats-compare.js  v1.7.11  (Firebase 키 escape 핫픽스 — vacancy 키의 점/슬래시 등)
+ * portal-stats-compare.js  v1.7.12  (저장 안정화 — 키 검증 + 신규ID 폴백)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -2968,6 +2968,30 @@ function _scBuildPayload(title) {
     };
 }
 
+/**
+ * v1.7.12: payload 의 모든 객체 키를 재귀 검사.
+ * Firebase 금지 문자(. # $ / [ ])가 포함된 키가 있으면 경로와 함께 반환.
+ * 저장 직전 안전 검증용.
+ * @returns {string[]} 발견된 위반 경로 목록 (없으면 빈 배열)
+ */
+function _scValidateFirebaseKeys(obj, path = '$') {
+    const violations = [];
+    if (obj == null || typeof obj !== 'object') return violations;
+    if (Array.isArray(obj)) {
+        obj.forEach((v, i) => {
+            violations.push(..._scValidateFirebaseKeys(v, `${path}[${i}]`));
+        });
+        return violations;
+    }
+    Object.keys(obj).forEach(k => {
+        if (/[.#$/[\]]/.test(k)) {
+            violations.push(`${path}.${k}`);
+        }
+        violations.push(..._scValidateFirebaseKeys(obj[k], `${path}.${k}`));
+    });
+    return violations;
+}
+
 /** filters 의 빈 배열은 Firebase 에서 안전하게 보존 */
 function _scNormalizeFilters(f) {
     return {
@@ -3006,6 +3030,19 @@ window._scSaveCompare = async function() {
         return;
     }
 
+    // v1.7.12: payload 빌드 후 Firebase 키 사전 검증
+    const payload = _scBuildPayload(title);
+    const violations = _scValidateFirebaseKeys(payload);
+    if (violations.length > 0) {
+        console.error('[stats-compare] Firebase 금지 문자 키 발견:', violations);
+        alert(
+            '저장 전 검증 실패: Firebase 금지 문자(. # $ / [ ])가 포함된 키가 있습니다.\n' +
+            '콘솔에 상세 위치가 출력됐습니다. 새로고침 후 다시 시도하세요.\n\n' +
+            `위반 경로 ${violations.length}개 (첫 3개):\n` + violations.slice(0, 3).join('\n')
+        );
+        return;
+    }
+
     try {
         const { db, ref, get, set, push, update, serverTimestamp } =
             await import('./portal-firebase.js');
@@ -3013,7 +3050,6 @@ window._scSaveCompare = async function() {
         // 신규 저장
         if (!_scState.compareId) {
             const newRef = push(ref(db, 'statsCompare'));
-            const payload = _scBuildPayload(title);
             payload.createdAt = payload.updatedAt;
             payload.createdBy = payload.updatedBy;
             await set(newRef, payload);
@@ -3041,11 +3077,34 @@ window._scSaveCompare = async function() {
                     `[확인] 강제 덮어쓰기 / [취소] 중단`
                 )) return;
             }
-            const payload = _scBuildPayload(title);
             // createdAt/By 보존
             payload.createdAt = remote.createdAt || payload.updatedAt;
             payload.createdBy = remote.createdBy || payload.updatedBy;
-            await set(ref(db, `statsCompare/${_scState.compareId}`), payload);
+
+            try {
+                await set(ref(db, `statsCompare/${_scState.compareId}`), payload);
+            } catch (setErr) {
+                // v1.7.12: 기존 노드에 호환 안 되는 자식 키가 있을 때
+                // → 신규 ID 로 강제 분기 (사용자 데이터 보호)
+                console.warn('[stats-compare] 덮어쓰기 실패, 신규 ID 폴백:', setErr.message);
+                if (confirm(
+                    '기존 저장 노드에 호환 안 되는 데이터가 있어 덮어쓰기 실패했습니다.\n' +
+                    '[확인] 신규 ID 로 다시 저장 (안전) / [취소] 중단'
+                )) {
+                    const fallbackRef = push(ref(db, 'statsCompare'));
+                    await set(fallbackRef, payload);
+                    _scState.compareId = fallbackRef.key;
+                    _scState.title     = payload.title;
+                    _scState.version   = payload.version;
+                    _scState.dirty     = false;
+                    await _scLogCompareAction('create-fallback', fallbackRef.key, payload.version);
+                    alert(`✅ 신규 ID 로 저장 완료\n제목: ${payload.title}\nID: ${fallbackRef.key}\n\n` +
+                          `(기존 ID: ${_scState.compareId} 의 호환 문제로 새 노드 생성)`);
+                    _scUpdateSubtitle();
+                    return;
+                }
+                throw setErr;
+            }
             _scState.title   = payload.title;
             _scState.version = payload.version;
             _scState.dirty   = false;
@@ -3055,7 +3114,8 @@ window._scSaveCompare = async function() {
         _scUpdateSubtitle();
     } catch (err) {
         console.error('[stats-compare] 저장 실패:', err);
-        alert(`❌ 저장 실패: ${err.message}`);
+        alert(`❌ 저장 실패: ${err.message}\n\n` +
+              `콘솔에 상세 에러가 출력됐습니다. 그대로 캡쳐해서 알려주세요.`);
     }
 };
 
@@ -3864,7 +3924,7 @@ if (!window._scEscRegistered) {
 // 8. 로드 완료 로그
 // ═══════════════════════════════════════════════════════════════
 
-console.log('[portal-stats-compare] v1.7.11 (Firebase 키 escape 핫픽스) 로드 완료');
+console.log('[portal-stats-compare] v1.7.12 (저장 안정화 — 키 검증 + 신규ID 폴백) 로드 완료');
 
 // v1.7.1: 분류 기준 검증을 위한 콘솔 진단
 //   사용자가 F12 콘솔에서 첫 빌딩의 자동 분류 결과를 즉시 확인 가능
