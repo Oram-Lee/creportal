@@ -6220,27 +6220,13 @@
                     const vacancySource = buildingData.sourceCompany || company || '';
                     const vacancyPublishDate = buildingData.publishDate || publishDate || '';
                     
-                    for (let j = 0; j < vacancies.length; j++) {
-                        const vacancy = vacancies[j];
+                    for (const vacancy of vacancies) {
                         const floor = (vacancy.floor || 'UNK').replace(/[\/\s]/g, '_');
                         // ★ v2.3: tower 포함해서 복합 빌딩(Tower 1~4)의 같은 층 덮어쓰기 방지
-                        const towerSegment = vacancy.tower
-                            ? `_${String(vacancy.tower).replace(/[\/\s]/g, '_')}`
+                        const towerSegment = vacancy.tower 
+                            ? `_${String(vacancy.tower).replace(/[\/\s]/g, '_')}` 
                             : '';
-                        // ★ B2 fix (P0): 동일 층 다수 공실 분리 (exclusiveArea 우선 → rentArea → rentPy → seq 인덱스 fallback)
-                        const dedupeSegment = (() => {
-                            if (vacancy.exclusiveArea != null && vacancy.exclusiveArea !== '') {
-                                return `_${String(vacancy.exclusiveArea).replace(/\./g, 'p')}py`;
-                            }
-                            if (vacancy.rentArea != null && vacancy.rentArea !== '') {
-                                return `_${String(vacancy.rentArea).replace(/\./g, 'p')}ra`;
-                            }
-                            if (vacancy.rentPy != null && vacancy.rentPy !== '') {
-                                return `_${String(vacancy.rentPy).replace(/[\.,]/g, 'p')}rp`;
-                            }
-                            return `_idx${j}`;
-                        })();
-                        const vacancyId = `${vacancySource}_${vacancyPublishDate.replace('.', '_')}_${floor}${towerSegment}${dedupeSegment}`;
+                        const vacancyId = `${vacancySource}_${vacancyPublishDate.replace('.', '_')}_${floor}${towerSegment}`;
                         
                         const vacancyData = {
                             floor: vacancy.floor,
