@@ -3443,8 +3443,6 @@ export async function saveInlineVacancy() {
         
         renderDocumentSection();
         if (window.applyFilters) window.applyFilters();  // ★ v#5: 빌딩 리스트 공실 카운트 stale 방지
-        // ★ v#5-hotfix4: 같은 메뉴 안 stale 방지
-        setTimeout(() => { if (window.refreshVacanciesSection) window.refreshVacanciesSection(); }, 0);
         
     } catch (error) {
         console.error('공실 저장 오류:', error);
@@ -6611,8 +6609,6 @@ window.saveBuildingNote = async function(noteText) {
         // 화면 갱신
         renderInfoSection();
         if (window.applyFilters) window.applyFilters();  // ★ v#5: 빌딩 리스트 stale 방지
-        // ★ v#5-hotfix4: 같은 메뉴 안 stale 방지 — async fetch가 fresh 보장
-        setTimeout(() => { if (window.refreshInfoSection) window.refreshInfoSection(); }, 0);
         showToast('빌딩 노트가 저장되었습니다', 'success');
     } catch (e) {
         console.error('빌딩 노트 저장 오류:', e);
@@ -7303,8 +7299,6 @@ window.saveBuildingEdit = async function(formData) {
             if (typeof renderBuildingList === 'function') renderBuildingList();
             if (typeof renderTableView === 'function' && window.state?.currentViewMode === 'list') renderTableView();
         }
-        // ★ v#5-hotfix4: 같은 메뉴 안 stale 방지 — async fetch가 fresh 보장
-        setTimeout(() => { if (window.refreshInfoSection) window.refreshInfoSection(); }, 0);
         
         if (typeof showToast === 'function') {
             showToast('빌딩 정보가 저장되었습니다', 'success');
