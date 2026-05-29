@@ -46,13 +46,6 @@ function refreshAfterCrud(renderFns) {
     if (renderFns) {
         const fns = Array.isArray(renderFns) ? renderFns : [renderFns];
         fns.forEach(fn => { if (typeof fn === 'function') fn(); });
-        
-        // ★ v#5-hotfix3: 동기 호출 시점에 sectionXxx DOM이 hidden이거나
-        //   processBuildings 직후 b.xxx가 아직 결합 전이라 빈 결과를 그릴 수 있음.
-        //   모달 닫힌 후 다음 tick에서 한 번 더 호출 — 메모·렌트롤·인센티브·기준가·담당자 등 모든 메뉴 일괄 해결.
-        setTimeout(() => {
-            fns.forEach(fn => { if (typeof fn === 'function') fn(); });
-        }, 0);
     }
 }
 
