@@ -210,6 +210,8 @@ export async function saveMemo(formData) {
         }
         closeModal('memoModal');
         refreshAfterCrud(renderMemoSection);
+        // ★ v#5-hotfix4: submit 핸들러와 동일 사유 — async fetch가 진짜 fresh 보장
+        setTimeout(() => { if (window.refreshMemoSection) window.refreshMemoSection(); }, 0);
         showToast('저장되었습니다', 'success');
     } catch (e) {
         showToast('저장 실패', 'error');
@@ -2422,6 +2424,9 @@ function setupFormListeners() {
                 
                 closeModal('memoModal');
                 refreshAfterCrud(renderMemoSection);
+                // ★ v#5-hotfix4: renderMemoSection(sync)만으론 b.memos 결합 전이라 stale.
+                //   refreshMemoSection(async, Firebase 직접 fetch + render)을 명시적으로 호출해야 fresh.
+                setTimeout(() => { if (window.refreshMemoSection) window.refreshMemoSection(); }, 0);
                 showToast('저장되었습니다', 'success');
             } catch (err) {
                 console.error('메모 저장 오류:', err);
