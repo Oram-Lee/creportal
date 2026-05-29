@@ -267,31 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
 // window에 initApp 노출
 window.initApp = initApp;
 
-// ★ v#5: BFCache 복원 시 자동 데이터 reload — 신규 빌딩 누락 방지
-// building-register.html 등에서 돌아왔을 때 브라우저가 portal.html을 캐시에서 복원하면
-// initApp이 재실행 안 됨 → loadData도 재실행 안 됨 → 신규 빌딩이 state.allBuildings에 없음
-window.addEventListener('pageshow', async (event) => {
-    if (event.persisted) {
-        console.log('🔄 BFCache 복원 감지 — 데이터 새로고침');
-        try {
-            await loadData();
-            if (window.applyFilters) window.applyFilters();
-            if (window.showToast) window.showToast('🆕 데이터가 갱신되었습니다');
-        } catch (err) {
-            console.error('BFCache reload 실패:', err);
-        }
-    }
-});
-
-// ★ v#5: building-register.html에서 등록 완료 후 돌아온 경우 안내 토스트
-// (initApp 본문에서 loadData가 호출되므로 별도 reload는 불필요. 토스트만 표시)
-if (sessionStorage.getItem('cre:reloadOnReturn') === '1') {
-    sessionStorage.removeItem('cre:reloadOnReturn');
-    setTimeout(() => {
-        if (window.showToast) window.showToast('🆕 신규 빌딩이 반영되었습니다');
-    }, 1500);
-}
-
 // 필터 함수 전역 노출
 window.toggleVacancyFilter = toggleVacancyFilter;
 window.toggleLeasingGuideFilter = toggleLeasingGuideFilter;

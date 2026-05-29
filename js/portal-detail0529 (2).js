@@ -1295,7 +1295,6 @@ export async function saveEditPricing() {
         closeEditPricingModal();
         renderPricingSection();
         renderBasicInfo();
-        if (window.applyFilters) window.applyFilters();  // ★ v#5: 빌딩 리스트 기준가 stale 방지
         
     } catch (error) {
         console.error('기준가 수정 오류:', error);
@@ -1788,7 +1787,6 @@ window.saveMemo = async function() {
         
         // 화면 갱신
         renderMemoSection();
-        if (window.applyFilters) window.applyFilters();  // ★ v#5: 빌딩 리스트 메모 카운트 stale 방지
         showToast(memoId ? '메모가 수정되었습니다' : '메모가 추가되었습니다', 'success');
     } catch (e) {
         console.error('메모 저장 오류:', e);
@@ -3442,7 +3440,6 @@ export async function saveInlineVacancy() {
         }
         
         renderDocumentSection();
-        if (window.applyFilters) window.applyFilters();  // ★ v#5: 빌딩 리스트 공실 카운트 stale 방지
         
     } catch (error) {
         console.error('공실 저장 오류:', error);
@@ -6608,7 +6605,6 @@ window.saveBuildingNote = async function(noteText) {
         
         // 화면 갱신
         renderInfoSection();
-        if (window.applyFilters) window.applyFilters();  // ★ v#5: 빌딩 리스트 stale 방지
         showToast('빌딩 노트가 저장되었습니다', 'success');
     } catch (e) {
         console.error('빌딩 노트 저장 오류:', e);
