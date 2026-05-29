@@ -181,7 +181,7 @@ export async function deleteMemo(id) {
 export async function saveMemo(formData) {
     const id = formData.id;
     const data = {
-        buildingId: state.selectedBuilding.id,        // ★ v#5-hotfix: name → id (data 정합성)
+        buildingId: state.selectedBuilding.name,
         buildingName: state.selectedBuilding.name,
         content: formData.content,
         pinned: formData.pinned,
@@ -2372,7 +2372,7 @@ function setupFormListeners() {
             }
             
             const data = {
-                buildingId: state.selectedBuilding.id,        // ★ v#5-hotfix: name → id (data 정합성)
+                buildingId: state.selectedBuilding.name,
                 buildingName: state.selectedBuilding.name,
                 content: content,
                 pinned: document.getElementById('memoPinned')?.checked || false,
