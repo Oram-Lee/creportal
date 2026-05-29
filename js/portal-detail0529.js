@@ -2702,8 +2702,7 @@ export function renderStatsSection() {
     const b = state.selectedBuilding;
     if (!b) return;
     
-    const showWeighted     = state.showWeightedAvg     || false;
-    const excludeLowFloors = state.excludeLowFloors    || false;
+    const showWeighted = state.showWeightedAvg || false;
     const grossFloorPy = parseFloat(b.area?.grossFloorPy || b.grossFloorPy || 0);
     let vacancies = [...(b.vacancies || [])];
     const leasingGuideVacancies = b.leasingGuideVacancies || [];
@@ -2762,33 +2761,13 @@ export function renderStatsSection() {
         }
     });
     
-    // --- 저층(지하·1F) 판정 헬퍼 — 오피스 공실률 산출 시 제외 ---
-    // 흡수 패턴: B1, B1F, B-1, B-1F, B01, B01F, 지하1, 지하1층, 지하1F,
-    //          1F, 01F, 1층, G, GF
-    function isLowFloor(floor) {
-        if (!floor) return false;
-        const raw = String(floor).trim();
-        const f   = raw.toUpperCase().replace(/\s+/g, '');
-        if (/^B-?\d+F?$/.test(f))            return true;   // 지하 모든 층
-        if (/^지하\d+(층|F)?$/.test(raw))     return true;   // 한국어 지하
-        if (/^0?1F$/.test(f))                 return true;   // 1F / 01F
-        if (/^1층$/.test(raw))                return true;   // 1층
-        if (/^GF?$/.test(f))                  return true;   // G / GF
-        return false;
-    }
-    
     // --- 통계 계산 함수 ---
     function calcStats(vacList) {
-        // 옵션 ON 시 저층(지하·1F) 공실 제외 — 분자만 영향, 분모는 연면적 그대로
-        const filteredList = excludeLowFloors
-            ? vacList.filter(v => !isLowFloor(v.floor))
-            : vacList;
-        
-        const totalRentArea = filteredList.reduce((sum, v) => sum + (parseFloat(v.rentArea) || 0), 0);
-        const floorCount = filteredList.length;
+        const totalRentArea = vacList.reduce((sum, v) => sum + (parseFloat(v.rentArea) || 0), 0);
+        const floorCount = vacList.length;
         const vacancyRate = grossFloorPy > 0 ? (totalRentArea / grossFloorPy * 100) : null;
         
-        const withRent = filteredList.filter(v => {
+        const withRent = vacList.filter(v => {
             const r = parseFloat(String(v.rentPy || '').replace(/[^\d.]/g, ''));
             return r > 0;
         });
@@ -2809,7 +2788,7 @@ export function renderStatsSection() {
             if (totalWeightArea > 0) weightedAvgRent = weightedSum / totalWeightArea;
         }
         
-        return { totalRentArea, floorCount, vacancyRate, simpleAvgRent, weightedAvgRent, vacList: filteredList };
+        return { totalRentArea, floorCount, vacancyRate, simpleAvgRent, weightedAvgRent, vacList };
     }
     
     // --- 증감 표기 헬퍼 ---
@@ -2953,21 +2932,17 @@ export function renderStatsSection() {
             </table>
         </div>
         
-        <div style="margin-top: 10px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+        <div style="margin-top: 10px; display: flex; align-items: center; gap: 6px;">
             <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none;">
                 <input type="checkbox" ${showWeighted ? 'checked' : ''} onchange="toggleWeightedAvg(this.checked)" style="width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent-color);">
                 가중평균 임대가 보기
-            </label>
-            <label style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none;">
-                <input type="checkbox" ${excludeLowFloors ? 'checked' : ''} onchange="toggleExcludeLowFloors(this.checked)" style="width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent-color);">
-                지하·1F 제외 (오피스 공실률)
             </label>
         </div>
         
         <div style="margin-top: 12px; padding: 10px 14px; background: #fefce8; border-radius: 8px; border: 1px solid #fde68a;">
             <div style="font-size: 11px; font-weight: 600; color: #92400e; margin-bottom: 4px;">📌 산출 기준</div>
             <div style="font-size: 11px; color: #78350f; line-height: 1.6;">
-                • <strong>${excludeLowFloors ? '오피스 공실률 (지하·1F 제외)' : '공실률'}</strong> = ${excludeLowFloors ? '(공실 임대면적 합계 − 지하·1F 공실 면적)' : '공실 임대면적 합계'} ÷ 연면적(${grossFloorPy > 0 ? formatNumber(grossFloorPy) + '평' : '미등록'}) × 100<br>
+                • <strong>공실률</strong> = 공실 임대면적 합계 ÷ 연면적(${grossFloorPy > 0 ? formatNumber(grossFloorPy) + '평' : '미등록'}) × 100<br>
                 • <strong>임대가 평균</strong> = 임대료 합계 ÷ 공실 건수 (임대료 있는 건만)<br>
                 ${showWeighted ? '• <strong>가중평균 임대가</strong> = Σ(임대료 × 임대면적) ÷ Σ(임대면적)<br>' : ''}
                 • <strong>전체 평균</strong> = 각 회사별 수치의 산술 평균<br>
@@ -2988,12 +2963,6 @@ export function renderStatsSection() {
 // 가중평균 토글
 export function toggleWeightedAvg(checked) {
     state.showWeightedAvg = checked;
-    renderStatsSection();
-}
-
-// 지하·1F 제외 토글 (오피스 공실률)
-export function toggleExcludeLowFloors(checked) {
-    state.excludeLowFloors = checked;
     renderStatsSection();
 }
 
