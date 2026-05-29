@@ -7309,3 +7309,10 @@ window.saveBuildingEdit = async function(formData) {
 };
 
 console.log('✅ [v4.2] openBuildingEditModal + saveBuildingEdit 모듈 로드 완료 (소수점 표시 개선)');
+
+// ★ 안전망: registerDetailGlobals() 호출 시점에 의존하지 않고
+//   module 로드 즉시 window에 noexcludeLowFloors 토글 함수 노출
+//   (브라우저 캐시·import 순서 이슈 방어)
+if (typeof window !== 'undefined') {
+    window.toggleExcludeLowFloors = toggleExcludeLowFloors;
+}
