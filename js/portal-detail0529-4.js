@@ -1570,72 +1570,6 @@ export function filterRentrollByDate(date) {
 
 // ===== 메모 섹션 =====
 
-// ★ v#5-hotfix5: 렌트롤·기준가·인센티브·담당자 4개 메뉴의 async refresh 함수 신설
-//   메모 패턴과 동일 — Firebase 직접 fetch + state 갱신 + render
-
-/** 렌트롤 새로고침 — rentrolls 컬렉션에서 buildingId/Name 매칭 */
-export async function refreshRentrollSection() {
-    if (!state.selectedBuilding) return;
-    const bid = state.selectedBuilding.id;
-    const bname = state.selectedBuilding.name;
-    try {
-        const snap = await get(ref(db, 'rentrolls'));
-        const all = snap.val() || {};
-        const matched = Object.entries(all)
-            .filter(([k, r]) => r && k !== '_schema' && (r.buildingId === bid || r.buildingId === bname || r.buildingName === bname))
-            .map(([k, r]) => ({ ...r, id: k }));
-        state.selectedBuilding.rentrolls = matched;
-        const idx = state.allBuildings.findIndex(b => b.id === bid);
-        if (idx >= 0) state.allBuildings[idx].rentrolls = matched;
-        renderRentrollSection();
-    } catch (e) { console.error('렌트롤 새로고침 실패:', e); }
-}
-
-/** 기준가 새로고침 — buildings/{id}/floorPricing 직접 path */
-export async function refreshPricingSection() {
-    if (!state.selectedBuilding) return;
-    const bid = state.selectedBuilding.id;
-    try {
-        const snap = await get(ref(db, `buildings/${bid}/floorPricing`));
-        const val = snap.val() || [];
-        const arr = Array.isArray(val) ? val : Object.entries(val).map(([k, v]) => (v && typeof v === 'object' ? { ...v, id: v.id || k } : v));
-        state.selectedBuilding.floorPricing = arr;
-        const idx = state.allBuildings.findIndex(b => b.id === bid);
-        if (idx >= 0) state.allBuildings[idx].floorPricing = arr;
-        renderPricingSection();
-    } catch (e) { console.error('기준가 새로고침 실패:', e); }
-}
-
-/** 인센티브 새로고침 — buildings/{id}/incentives 직접 path */
-export async function refreshIncentiveSection() {
-    if (!state.selectedBuilding) return;
-    const bid = state.selectedBuilding.id;
-    try {
-        const snap = await get(ref(db, `buildings/${bid}/incentives`));
-        const val = snap.val() || [];
-        const arr = Array.isArray(val) ? val : Object.values(val).filter(v => v != null);
-        state.selectedBuilding.incentives = arr;
-        const idx = state.allBuildings.findIndex(b => b.id === bid);
-        if (idx >= 0) state.allBuildings[idx].incentives = arr;
-        renderIncentiveSection();
-    } catch (e) { console.error('인센티브 새로고침 실패:', e); }
-}
-
-/** 담당자 새로고침 — buildings/{id}/contactPoints 직접 path */
-export async function refreshContactSection() {
-    if (!state.selectedBuilding) return;
-    const bid = state.selectedBuilding.id;
-    try {
-        const snap = await get(ref(db, `buildings/${bid}/contactPoints`));
-        const val = snap.val() || [];
-        const arr = Array.isArray(val) ? val : Object.entries(val).map(([k, v]) => (v && typeof v === 'object' ? { ...v, id: v.id || k } : v));
-        state.selectedBuilding.contactPoints = arr;
-        const idx = state.allBuildings.findIndex(b => b.id === bid);
-        if (idx >= 0) state.allBuildings[idx].contactPoints = arr;
-        renderContactSection();
-    } catch (e) { console.error('담당자 새로고침 실패:', e); }
-}
-
 // ★ v3.2: 메모 새로고침 (Firebase에서 최신 데이터 다시 불러오기)
 export async function refreshMemoSection() {
     if (!state.selectedBuilding) return;
@@ -1925,11 +1859,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 전역 함수 등록
 window.refreshMemoSection = refreshMemoSection;
-// ★ v#5-hotfix5: 4개 메뉴 refresh 함수 window 노출
-window.refreshRentrollSection = refreshRentrollSection;
-window.refreshPricingSection = refreshPricingSection;
-window.refreshIncentiveSection = refreshIncentiveSection;
-window.refreshContactSection = refreshContactSection;
 
 // ===== 인센티브 섹션 =====
 

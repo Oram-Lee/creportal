@@ -111,7 +111,6 @@ export async function deleteRentroll(id) {
         await remove(ref(db, `rentrolls/${id}`)); 
         delete state.dataCache.rentrolls[id]; 
         refreshAfterCrud(renderRentrollSection); 
-        setTimeout(() => { if (window.refreshRentrollSection) window.refreshRentrollSection(); }, 0);
         showToast('삭제되었습니다', 'success'); 
     } catch (e) { 
         console.error(e);
@@ -148,7 +147,6 @@ export async function saveRentroll(formData) {
         }
         closeModal('rentrollModal');
         refreshAfterCrud(renderRentrollSection);
-        setTimeout(() => { if (window.refreshRentrollSection) window.refreshRentrollSection(); }, 0);
         showToast('저장되었습니다', 'success');
     } catch (e) {
         showToast('저장 실패', 'error');
@@ -324,7 +322,6 @@ export async function saveIncentive(formData) {
         
         closeModal('incentiveModal');
         refreshAfterCrud(() => window.renderIncentiveSection?.());
-        setTimeout(() => { if (window.refreshIncentiveSection) window.refreshIncentiveSection(); }, 0);
         showToast('인센티브가 저장되었습니다', 'success');
         
     } catch (error) {
@@ -350,7 +347,6 @@ export async function deleteIncentive(id) {
         syncBuildingCache(buildingId, { incentives });
         
         refreshAfterCrud(() => window.renderIncentiveSection?.());
-        setTimeout(() => { if (window.refreshIncentiveSection) window.refreshIncentiveSection(); }, 0);
         showToast('삭제되었습니다', 'success');
         
     } catch (error) {
@@ -1763,7 +1759,6 @@ export async function deletePricing(id) {
         syncBuildingCache(state.selectedBuilding.id, { floorPricing: state.selectedBuilding.floorPricing });
         
         refreshAfterCrud([renderPricingSection, renderInfoSection]);
-        setTimeout(() => { if (window.refreshPricingSection) window.refreshPricingSection(); }, 0);
         showToast('기준가가 삭제되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1807,7 +1802,6 @@ export async function savePricing(formData) {
         closeModal('pricingModal');
         syncBuildingCache(state.selectedBuilding.id, { floorPricing: state.selectedBuilding.floorPricing });
         refreshAfterCrud([renderPricingSection, renderInfoSection]);
-        setTimeout(() => { if (window.refreshPricingSection) window.refreshPricingSection(); }, 0);
         showToast('기준가가 저장되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1862,7 +1856,6 @@ export async function deleteContact(id) {
         syncBuildingCache(state.selectedBuilding.id, { contactPoints: state.selectedBuilding.contactPoints });
         
         refreshAfterCrud(renderContactSection);
-        setTimeout(() => { if (window.refreshContactSection) window.refreshContactSection(); }, 0);
         showToast('담당자가 삭제되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1907,7 +1900,6 @@ export async function saveContact(formData) {
         closeModal('contactModal');
         syncBuildingCache(state.selectedBuilding.id, { contactPoints: state.selectedBuilding.contactPoints });
         refreshAfterCrud(renderContactSection);
-        setTimeout(() => { if (window.refreshContactSection) window.refreshContactSection(); }, 0);
         showToast('담당자가 저장되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -2361,7 +2353,6 @@ function setupFormListeners() {
                 }
                 closeModal('rentrollModal');
                 refreshAfterCrud(renderRentrollSection);
-                setTimeout(() => { if (window.refreshRentrollSection) window.refreshRentrollSection(); }, 0);
                 showToast('저장되었습니다', 'success');
             } catch (e) {
                 showToast('저장 실패', 'error');
@@ -2518,7 +2509,6 @@ function setupFormListeners() {
                 syncBuildingCache(state.selectedBuilding.id, { floorPricing });
                 closeModal('pricingModal');
                 refreshAfterCrud([renderPricingSection, renderInfoSection]);
-                setTimeout(() => { if (window.refreshPricingSection) window.refreshPricingSection(); }, 0);
                 showToast('저장되었습니다', 'success');
             } catch (err) {
                 console.error(err);
@@ -2577,7 +2567,6 @@ function setupFormListeners() {
                 syncBuildingCache(state.selectedBuilding.id, { contactPoints });
                 closeModal('contactModal');
                 refreshAfterCrud(renderContactSection);
-                setTimeout(() => { if (window.refreshContactSection) window.refreshContactSection(); }, 0);
                 showToast('저장되었습니다', 'success');
             } catch (err) {
                 console.error(err);
