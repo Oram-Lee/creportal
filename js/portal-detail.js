@@ -3199,6 +3199,7 @@ export function registerDetailGlobals() {
     window.refreshStatsSection = refreshStatsSection;
     window.switchToTab = switchToTab;
     window.toggleWeightedAvg = toggleWeightedAvg;
+    window.toggleExcludeLowFloors = toggleExcludeLowFloors;
     window.showStatsVacancyPopup = showStatsVacancyPopup;
     
     // ★ 공실없음 처리 관련
