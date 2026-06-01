@@ -1769,9 +1769,7 @@ export async function deletePricing(id) {
         syncBuildingCache(bid, { floorPricing: filtered });
         
         refreshAfterCrud([renderPricingSection, renderInfoSection]);
-        // ★ v#5-hotfix8: async refreshPricingSection 제거.
-        //   삭제는 로컬 filtered로 이미 완결됐고, Firebase 재fetch는 write 전파 전 stale을
-        //   가져와 삭제된 항목을 화면에 되살리는 race를 유발(2번 클릭해야 반영되던 원인).
+        setTimeout(() => { if (window.refreshPricingSection) window.refreshPricingSection(); }, 0);
         showToast('기준가가 삭제되었습니다', 'success');
     } catch (e) {
         console.error(e);
