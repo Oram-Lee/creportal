@@ -519,14 +519,9 @@ window.applyLedgerChangesPortal = async function(buildingId) {
         console.log('저장된 state.selectedBuilding:', state.selectedBuilding);
         
         // UI 새로고침
-        // ★ v#5-hotfix7: sync render(window.renderInfoSection)만으론 stale.
-        //   async refreshInfoSection(Firebase 직접 fetch + render)으로 fresh 보장.
-        if (window.refreshInfoSection) {
-            setTimeout(() => window.refreshInfoSection(), 0);
-        } else if (typeof renderInfoSection === 'function') {
+        if (typeof renderInfoSection === 'function') {
             renderInfoSection();
         }
-        if (window.applyFilters) window.applyFilters();  // 빌딩 리스트(연면적 등) 갱신
         
         closeLedgerModalPortal();
         showToast(`${selectedCount}개 항목이 갱신되었습니다 ✅`, 'success');
