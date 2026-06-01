@@ -1754,19 +1754,13 @@ export async function deletePricing(id) {
     if (!state.selectedBuilding) return;
     
     try {
-        const bid = state.selectedBuilding.id;
-        const all = state.selectedBuilding.floorPricing || [];
+        await remove(ref(db, `buildings/${state.selectedBuilding.id}/floorPricing/${id}`));
         
-        // ★ v#5-hotfix6: data.id와 Firebase 키가 불일치할 수 있음
-        //   (legacy: array 인덱스 키 + data.id="fp_ocr_xxx" 형식).
-        //   path 기반 remove는 키 불일치 시 silent 무시 → array 통째 set으로 일관 동작.
-        const filtered = all.filter(p => p && p.id !== id);
-        
-        await set(ref(db, `buildings/${bid}/floorPricing`), filtered);
-        
-        // 로컬 데이터 업데이트
-        state.selectedBuilding.floorPricing = filtered;
-        syncBuildingCache(bid, { floorPricing: filtered });
+        // 로컬 데이터에서 제거
+        if (state.selectedBuilding.floorPricing) {
+            state.selectedBuilding.floorPricing = state.selectedBuilding.floorPricing.filter(p => p.id !== id);
+        }
+        syncBuildingCache(state.selectedBuilding.id, { floorPricing: state.selectedBuilding.floorPricing });
         
         refreshAfterCrud([renderPricingSection, renderInfoSection]);
         setTimeout(() => { if (window.refreshPricingSection) window.refreshPricingSection(); }, 0);
@@ -1860,16 +1854,12 @@ export async function deleteContact(id) {
     if (!state.selectedBuilding) return;
     
     try {
-        const bid = state.selectedBuilding.id;
-        const all = state.selectedBuilding.contactPoints || [];
+        await remove(ref(db, `buildings/${state.selectedBuilding.id}/contactPoints/${id}`));
         
-        // ★ v#5-hotfix6: deletePricing와 동일 사유 — array 통째 set으로 키 형식 무관 동작
-        const filtered = all.filter(c => c && c.id !== id);
-        
-        await set(ref(db, `buildings/${bid}/contactPoints`), filtered);
-        
-        state.selectedBuilding.contactPoints = filtered;
-        syncBuildingCache(bid, { contactPoints: filtered });
+        if (state.selectedBuilding.contactPoints) {
+            state.selectedBuilding.contactPoints = state.selectedBuilding.contactPoints.filter(c => c.id !== id);
+        }
+        syncBuildingCache(state.selectedBuilding.id, { contactPoints: state.selectedBuilding.contactPoints });
         
         refreshAfterCrud(renderContactSection);
         setTimeout(() => { if (window.refreshContactSection) window.refreshContactSection(); }, 0);
