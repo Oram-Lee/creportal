@@ -1981,9 +1981,9 @@ export function renderIncentiveSection() {
                             </div>
                             ${item.condition ? `<div style="font-size: 13px; color: var(--accent-color); margin-top: 4px;">📋 ${item.condition}</div>` : ''}
                         </div>
-                        <div class="row-actions" style="display: flex; gap: 4px;">
-                            <button class="row-action-btn" onclick="editIncentive('${item.id}')" title="수정">✏️</button>
-                            <button class="row-action-btn delete" onclick="deleteIncentive('${item.id}')" title="삭제">×</button>
+                        <div class="row-actions" style="display: flex !important; gap: 6px; opacity: 1 !important; visibility: visible !important;">
+                            <button onclick="editIncentive('${item.id}')" title="수정" style="padding: 4px 10px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 4px; cursor: pointer; font-size: 12px;">✏️</button>
+                            <button onclick="deleteIncentive('${item.id}')" title="삭제" style="padding: 4px 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px; cursor: pointer; font-size: 12px; color: #dc2626;">×</button>
                         </div>
                     </div>
                     
