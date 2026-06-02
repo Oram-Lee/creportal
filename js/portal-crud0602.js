@@ -1769,7 +1769,9 @@ export async function deletePricing(id) {
         syncBuildingCache(bid, { floorPricing: filtered });
         
         refreshAfterCrud([renderPricingSection, renderInfoSection]);
-        // ★ FIX(레이스제거): array-update 메뉴는 async refetch 금지(§3-2). 단일 writer + state push/filter + sync render로 충분. [deletePricing]
+        // ★ v#5-hotfix8: async refreshPricingSection 제거.
+        //   삭제는 로컬 filtered로 이미 완결됐고, Firebase 재fetch는 write 전파 전 stale을
+        //   가져와 삭제된 항목을 화면에 되살리는 race를 유발(2번 클릭해야 반영되던 원인).
         showToast('기준가가 삭제되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1813,7 +1815,7 @@ export async function savePricing(formData) {
         closeModal('pricingModal');
         syncBuildingCache(state.selectedBuilding.id, { floorPricing: state.selectedBuilding.floorPricing });
         refreshAfterCrud([renderPricingSection, renderInfoSection]);
-        // ★ FIX(레이스제거): array-update 메뉴는 async refetch 금지(§3-2). 단일 writer + state push/filter + sync render로 충분. [savePricing(dead)]
+        setTimeout(() => { if (window.refreshPricingSection) window.refreshPricingSection(); }, 0);
         showToast('기준가가 저장되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -2528,7 +2530,7 @@ function setupFormListeners() {
                 syncBuildingCache(state.selectedBuilding.id, { floorPricing });
                 closeModal('pricingModal');
                 refreshAfterCrud([renderPricingSection, renderInfoSection]);
-                // ★ FIX(레이스제거): array-update 메뉴는 async refetch 금지(§3-2). 단일 writer + state push/filter + sync render로 충분. [pricingForm submit]
+                setTimeout(() => { if (window.refreshPricingSection) window.refreshPricingSection(); }, 0);
                 showToast('저장되었습니다', 'success');
             } catch (err) {
                 console.error(err);
