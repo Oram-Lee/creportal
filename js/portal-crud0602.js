@@ -1769,14 +1769,9 @@ export async function deletePricing(id) {
         syncBuildingCache(bid, { floorPricing: filtered });
         
         refreshAfterCrud([renderPricingSection, renderInfoSection]);
-        // ★ v#5-hotfix8: async refreshPricingSection 제거 (Firebase 재fetch는 race 유발).
-        // ★ v#5-hotfix10: 대신 이미 정확한 state(filtered) 기준 sync render를 다음 tick에 한 번 더 —
-        //   Firebase refetch가 아니라 로컬 state를 다시 그리는 것이라 race 없이 화면 즉시 갱신.
-        setTimeout(() => {
-            if (window.renderPricingSection) window.renderPricingSection();
-            else renderPricingSection();
-            if (window.renderInfoSection) window.renderInfoSection();
-        }, 0);
+        // ★ v#5-hotfix8: async refreshPricingSection 제거.
+        //   삭제는 로컬 filtered로 이미 완결됐고, Firebase 재fetch는 write 전파 전 stale을
+        //   가져와 삭제된 항목을 화면에 되살리는 race를 유발(2번 클릭해야 반영되던 원인).
         showToast('기준가가 삭제되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -1820,13 +1815,7 @@ export async function savePricing(formData) {
         closeModal('pricingModal');
         syncBuildingCache(state.selectedBuilding.id, { floorPricing: state.selectedBuilding.floorPricing });
         refreshAfterCrud([renderPricingSection, renderInfoSection]);
-        // ★ v#5-hotfix9: async refreshPricingSection 제거 (race 방지).
-        // ★ v#5-hotfix10: state 기준 sync render 다음 tick 재호출 (race 없이 즉시 갱신).
-        setTimeout(() => {
-            if (window.renderPricingSection) window.renderPricingSection();
-            else renderPricingSection();
-            if (window.renderInfoSection) window.renderInfoSection();
-        }, 0);
+        setTimeout(() => { if (window.refreshPricingSection) window.refreshPricingSection(); }, 0);
         showToast('기준가가 저장되었습니다', 'success');
     } catch (e) {
         console.error(e);
@@ -2541,12 +2530,7 @@ function setupFormListeners() {
                 syncBuildingCache(state.selectedBuilding.id, { floorPricing });
                 closeModal('pricingModal');
                 refreshAfterCrud([renderPricingSection, renderInfoSection]);
-                // ★ v#5-hotfix9+10: async refetch 제거 + state 기준 sync render 다음 tick (race 없이 즉시 갱신)
-                setTimeout(() => {
-                    if (window.renderPricingSection) window.renderPricingSection();
-                    else renderPricingSection();
-                    if (window.renderInfoSection) window.renderInfoSection();
-                }, 0);
+                setTimeout(() => { if (window.refreshPricingSection) window.refreshPricingSection(); }, 0);
                 showToast('저장되었습니다', 'success');
             } catch (err) {
                 console.error(err);
