@@ -244,13 +244,6 @@ export async function initApp() {
     try {
         await loadData();
         console.log(`  ✅ 데이터 로드 + 처리 완료 (+${Math.round(performance.now() - t0)}ms)`);
-        // ★ 첫 진입: 리스트를 '지도영역'(viewport) 탭으로 시작 — 보이는 지도 영역의 빌딩만 표시.
-        //   데이터 로드 완료 후라 filteredBuildings가 채워져 있어 빈 리스트가 안 뜬다.
-        //   전체를 보려면 상단 '전체' 탭 클릭. (기본을 '전체'로 되돌리려면 아래 3줄만 제거)
-        state.currentListTab = 'viewport';
-        document.querySelectorAll('.list-tab').forEach(el =>
-            el.classList.toggle('active', el.dataset.tab === 'viewport'));
-        if (typeof updateViewportBuildings === 'function') updateViewportBuildings();
     } catch (err) {
         console.error('데이터 로드 실패:', err);
     } finally {
