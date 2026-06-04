@@ -62,27 +62,7 @@ export function updateMapMarkers() {
     
     const showLabels = state.kakaoMap.getLevel() <= 3;
     
-    // ★ 성능: 전체(수천 개) 대신 현재 지도 화면(bounds) 안의 빌딩만 그린다.
-    //   드래그/줌마다 idle → updateViewportBuildings → updateMapMarkers 로 재호출되므로
-    //   화면을 옮기면 자연스럽게 새 영역 마커가 다시 그려진다.
-    //   가장자리에서 마커가 잘리지 않도록 bounds를 약간(20%) 확장한다.
-    //   bounds를 못 구하면 기존 동작(전체)으로 안전하게 폴백한다.
-    let drawList = state.filteredBuildings;
-    const _bounds = state.kakaoMap.getBounds && state.kakaoMap.getBounds();
-    if (_bounds) {
-        const _sw = _bounds.getSouthWest(), _ne = _bounds.getNorthEast();
-        const _latPad = (_ne.getLat() - _sw.getLat()) * 0.2;
-        const _lngPad = (_ne.getLng() - _sw.getLng()) * 0.2;
-        const _minLat = _sw.getLat() - _latPad, _maxLat = _ne.getLat() + _latPad;
-        const _minLng = _sw.getLng() - _lngPad, _maxLng = _ne.getLng() + _lngPad;
-        drawList = state.filteredBuildings.filter(b =>
-            b.lat && b.lng &&
-            b.lat >= _minLat && b.lat <= _maxLat &&
-            b.lng >= _minLng && b.lng <= _maxLng
-        );
-    }
-    
-    drawList.forEach(b => {
+    state.filteredBuildings.forEach(b => {
         if (!b.lat || !b.lng) return;
         
         const pos = new kakao.maps.LatLng(b.lat, b.lng);
