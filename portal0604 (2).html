@@ -205,9 +205,6 @@
                         <div class="list-tab active" data-tab="all">전체</div>
                         <div class="list-tab" data-tab="viewport">지도영역</div>
                         <div class="list-tab" data-tab="starred">관심 ⭐</div>
-                        <!-- ★ C: 리스트만 새로고침 (네트워크 없이 현재 탭 즉시 재동기화) -->
-                        <button onclick="refreshListOnly()" title="리스트만 새로고침 (서버 재조회 없이 즉시)"
-                            style="margin-left:auto; align-self:center; padding:2px 8px; border:1px solid #cbd5e1; border-radius:5px; background:#fff; cursor:pointer; font-size:12px; line-height:1.4; color:#475569;">🔄</button>
                     </div>
                     <!-- ★ 소팅/필터 컨트롤 바 -->
                     <div id="listSortBar" style="display:flex; align-items:center; gap:6px; padding:6px 12px; background:#f8fafc; border-bottom:1px solid #e2e8f0; flex-wrap:wrap;">
@@ -6657,29 +6654,6 @@
     // ═══════════════════════════════════════════════════════════════
     
     // 소팅 적용 (전체/지도영역 탭)
-    // ★ C: 리스트만 새로고침 — 서버 재조회(loadData) 없이 현재 탭 기준으로 즉시 재동기화.
-    //   전체 새로고침(모든 컬렉션 재fetch + processBuildings)과 달리 네트워크 0, 레이스 0.
-    //   표시 대상(필터 결과)은 바꾸지 않고, 현재 state를 화면에 다시 그린다.
-    window.refreshListOnly = function() {
-        const tab = window.state?.currentListTab || 'all';
-        try {
-            if (tab === 'viewport' && typeof window.updateViewportBuildings === 'function') {
-                window.updateViewportBuildings();           // 지도영역: bounds로 viewport 재계산 + 렌더
-            } else if (tab === 'starred' && typeof window.filterStarredByGroup === 'function') {
-                window.filterStarredByGroup();               // 관심: 그룹 필터 재적용 + 렌더
-            } else if (typeof window.renderBuildingList === 'function') {
-                window.renderBuildingList();                 // 전체: 현재 filteredBuildings 재렌더
-            }
-            if (window.state?.currentViewMode === 'list' && typeof window.renderTableView === 'function') {
-                window.renderTableView();                    // 리스트(테이블) 뷰도 함께
-            }
-            if (typeof showToast === 'function') showToast('🔄 리스트 새로고침');
-        } catch (e) {
-            console.error('refreshListOnly 오류:', e);
-            if (typeof showToast === 'function') showToast('새로고침 실패', 'error');
-        }
-    };
-
     window.applyListSort = function() {
         if (!window.state?.filteredBuildings) return;
         
