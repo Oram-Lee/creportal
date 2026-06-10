@@ -90,59 +90,6 @@ function formatParkingDisplay(b) {
     return '-';
 }
 
-// ★ S2: 빌딩 데이터 출처 판정 (저장된 source 필드 + 신호로 확정, 복수 가능)
-function deriveBuildingOrigins(b) {
-    const raw = b._raw || {};
-    const src = raw.source ?? b.source ?? '';
-    const tags = [];
-    if (src === 'OCR') tags.push('ocr');
-    else if (src === 'admin-research') tags.push('research');
-    else if (!src) {
-        // source 없음: 앱 생성(createdAt 있음) vs 구 시스템 마이그레이션(표식 없음)
-        if (raw.createdAt || raw.createdBy) tags.push('manual');
-        else tags.push('legacy');
-    } else tags.push('other');
-    // 보강 출처 (중첩 가능 — 예: 구 시스템 + 대장 보강)
-    if (Object.keys(b.buildingInfo || raw.buildingInfo || {}).length > 0) tags.push('ledger');
-    if (b.leasingGuideInfo) tags.push('guide');
-    return tags;
-}
-
-const _ORIGIN_META = {
-    legacy:   { label: '🗄️ 구 시스템', bg: '#f1f5f9', fg: '#475569', bd: '#cbd5e1' },
-    ocr:      { label: '📷 OCR',        bg: '#fff7ed', fg: '#c2410c', bd: '#fdba74' },
-    research: { label: '🔬 리서치',     bg: '#eff6ff', fg: '#1d4ed8', bd: '#bfdbfe' },
-    ledger:   { label: '🏛️ 대장',       bg: '#ecfdf5', fg: '#047857', bd: '#6ee7b7' },
-    guide:    { label: '📄 안내문',     bg: '#fefce8', fg: '#a16207', bd: '#fde68a' },
-    manual:   { label: '✍️ 직접입력',   bg: '#f5f3ff', fg: '#6d28d9', bd: '#ddd6fe' },
-    other:    { label: '❔ 기타',        bg: '#f1f5f9', fg: '#64748b', bd: '#cbd5e1' },
-};
-
-function renderOriginBadges(b) {
-    const tags = deriveBuildingOrigins(b);
-    if (!tags.length) return '';
-    const chips = tags.map(t => {
-        const m = _ORIGIN_META[t] || _ORIGIN_META.other;
-        return `<span style="background:${m.bg};color:${m.fg};border:1px solid ${m.bd};border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;">${m.label}</span>`;
-    }).join('');
-    return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:8px 10px;background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;">
-            <span style="font-size:11px;color:#94a3b8;font-weight:600;">데이터 출처</span>${chips}
-        </div>`;
-}
-
-// ★ S2: 주차 구성(자주/기계/혼합) — parking 객체 또는 건축물대장 숫자에서
-function formatParkingComposition(b) {
-    const bi = b.buildingInfo || (b._raw && b._raw.buildingInfo) || {};
-    const self = parseInt(b.parking?.selfPark ?? bi.indrAutoUtcnt ?? 0, 10) || 0;
-    const mech = parseInt(b.parking?.mechanical ?? bi.indrMechUtcnt ?? 0, 10) || 0;
-    if (!self && !mech) return '';
-    const parts = [];
-    if (self) parts.push(`자주식 ${self.toLocaleString()}대`);
-    if (mech) parts.push(`기계식 ${mech.toLocaleString()}대`);
-    const kind = (self && mech) ? ' (혼합)' : '';
-    return ` <span style="color:#64748b;font-size:11px;">· ${parts.join(' · ')}${kind}</span>`;
-}
-
 /**
  * 면적 포맷 (소숫점 토글 반영)
  * @param {number|string} value - 면적 값
@@ -569,8 +516,6 @@ export function renderInfoSection() {
         </div>
         ` : ''}
         
-        ${renderOriginBadges(b)}
-
         <!-- 면적 정보 (평 크게 + ㎡ 괄호 표시) -->
         <div class="info-grid" style="grid-template-columns: repeat(3, 1fr);">
             <div class="info-card">
@@ -721,7 +666,7 @@ export function renderInfoSection() {
         <div class="spec-list">
             <div class="spec-item"><span class="label">층수</span><span class="value">${b.floorsDisplay || (typeof b.floors === 'object' ? (b.floors?.display || `지하${b.floors?.below || 0}층/지상${b.floors?.above || 0}층`) : (b.floors || '-'))}</span></div>
             <div class="spec-item"><span class="label">인근역</span><span class="value">${b.nearbyStation || b.nearestStation || '-'}</span></div>
-            <div class="spec-item"><span class="label">주차</span><span class="value">${formatParkingDisplay(b)}${formatParkingComposition(b)}</span></div>
+            <div class="spec-item"><span class="label">주차</span><span class="value">${formatParkingDisplay(b)}</span></div>
             <div class="spec-item"><span class="label">구조</span><span class="value">${b.specs?.structure || b.structure || '-'}</span></div>
             <div class="spec-item"><span class="label">건물용도</span><span class="value">${b.specs?.buildingUse || b.buildingUse || b.usage || '-'}</span></div>
             <div class="spec-item"><span class="label">냉난방</span><span class="value">${b.hvac || '-'}</span></div>
