@@ -535,32 +535,6 @@ export function renderInfoSection() {
             </div>
         </div>
         
-        ${(() => {
-            // ★ S1: 건축물대장 면적 비교 — 현재값(=안내문 표기값) vs 대장(buildingInfo)이 다르면 경고
-            const bi = b.buildingInfo || (b._raw && b._raw.buildingInfo) || {};
-            const toPy = (sqm) => Math.round(parseFloat(sqm || 0) / 3.3058);
-            const rows = [];
-            const cmp = (label, curSqm, biSqm) => {
-                const c = parseFloat(curSqm || 0), q = parseFloat(biSqm || 0);
-                if (!(c > 0 && q > 0)) return;
-                const diff = Math.abs(c - q) / q;
-                if (diff < 0.01) return; // 1% 미만은 일치로 간주(반올림 흡수)
-                rows.push(`<div>⚠️ <strong>${label}</strong>&nbsp; 현재 ${toPy(c).toLocaleString()}평 &nbsp;·&nbsp; 대장 ${toPy(q).toLocaleString()}평 <span style="color:#dc2626;font-weight:700;">(${(diff*100).toFixed(0)}% 차이)</span></div>`);
-            };
-            const curGrossSqm = (b.area?.grossFloorSqm || b.grossFloorSqm || ((b.area?.grossFloorPy || b.grossFloorPy || 0) * 3.30579));
-            cmp('연면적',   curGrossSqm,                            bi.totArea  || bi.totalArea);
-            cmp('대지면적', b.area?.landArea     || b.landArea,     bi.platArea || bi.landArea);
-            cmp('건축면적', b.area?.buildingArea || b.buildingArea, bi.archArea || bi.buildingArea);
-            if (rows.length === 0) return '';
-            return `<div style="margin-top:8px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
-                    <span style="font-size:12px;font-weight:700;color:#b45309;">🏛️ 건축물대장과 다른 면적</span>
-                    <button onclick="refreshBuildingLedger()" style="padding:3px 10px;font-size:11px;background:#f59e0b;color:#fff;border:none;border-radius:5px;cursor:pointer;white-space:nowrap;">대장 비교·반영</button>
-                </div>
-                <div style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:#92400e;">${rows.join('')}</div>
-            </div>`;
-        })()}
-
         <!-- 기준층/전용률 정보 -->
         <div class="info-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 8px;">
             <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const excPy = b.area?.exclusiveFloorPy || b.exclusiveFloorPy; if (excPy) return formatNumber(excPy); const floorPy = b.area?.typicalFloorPy || b.typicalFloorPy || 0; const rate = b.area?.exclusiveRate || b.exclusiveRate || 0; return floorPy && rate ? formatNumber(Math.round(floorPy * rate / 100 * 1000) / 1000) : '-'; })()}<span class="unit">평</span></div></div>
