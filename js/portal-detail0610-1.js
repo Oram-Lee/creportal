@@ -536,19 +536,8 @@ export function renderInfoSection() {
         </div>
         
         ${(() => {
-            // ★ S1: 건축물대장 면적 — 미조회 안내 / 현재값(=안내문 표기값) vs 대장 불일치 경고
+            // ★ S1: 건축물대장 면적 비교 — 현재값(=안내문 표기값) vs 대장(buildingInfo)이 다르면 경고
             const bi = b.buildingInfo || (b._raw && b._raw.buildingInfo) || {};
-            const hasBi = Object.keys(bi).length > 0;
-
-            // 대장 미조회 → 조회 안내 (비교 대상 자체가 없음)
-            if (!hasBi) {
-                return `<div style="margin-top:8px;padding:8px 12px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-                    <span style="font-size:11px;color:#94a3b8;">🏛️ 건축물대장 미조회 — 조회하면 면적을 비교할 수 있습니다</span>
-                    <button onclick="refreshBuildingLedger()" style="padding:3px 10px;font-size:11px;background:#fff;color:#3b82f6;border:1px solid #bfdbfe;border-radius:5px;cursor:pointer;white-space:nowrap;">🔄 대장 조회</button>
-                </div>`;
-            }
-
-            // 대장 보유 → 면적 불일치 검사
             const toPy = (sqm) => Math.round(parseFloat(sqm || 0) / 3.3058);
             const rows = [];
             const cmp = (label, curSqm, biSqm) => {
@@ -562,7 +551,7 @@ export function renderInfoSection() {
             cmp('연면적',   curGrossSqm,                            bi.totArea  || bi.totalArea);
             cmp('대지면적', b.area?.landArea     || b.landArea,     bi.platArea || bi.landArea);
             cmp('건축면적', b.area?.buildingArea || b.buildingArea, bi.archArea || bi.buildingArea);
-            if (rows.length === 0) return ''; // 보유 + 일치 → 표시 없음
+            if (rows.length === 0) return '';
             return `<div style="margin-top:8px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
                     <span style="font-size:12px;font-weight:700;color:#b45309;">🏛️ 건축물대장과 다른 면적</span>
