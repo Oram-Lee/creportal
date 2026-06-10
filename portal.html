@@ -7484,5 +7484,171 @@
 
     })();
     </script>
+    <!-- ═══ S1: 데이터 출처 자동추론 — 배지 · 필터 · 상세칩 (v1, 스키마 변경 없음) ═══ -->
+    <!-- R5/R6/R7(리서치) 데코레이션과 동일 패턴. 기존 함수 비침습 · append-only. -->
+    <script>
+    (function() {
+        // ─── 출처 자동추론 (기존 필드만 사용, 스키마 변경 0) ──────────
+        //   ledger : 건축물대장 연동 (buildingInfo/대장필드 존재)
+        //   ocr    : OCR 공실 보유 (vacancy.sourceType === 'ocr')
+        //   etc    : 위 신호 없음 (직접등록 / OfficeFind import 등 — 자동 구분 불가)
+        //   ※ 리서치는 별도 축(🔬)이라 출처 태그에 포함하지 않음
+        function deriveBuildingSources(b) {
+            if (!b) return ['etc'];
+            const tags = [];
+            const info = b.buildingInfo || {};
+            if (Object.keys(info).length > 0 || b.strctCdNm || b.vlRat || b.bcRat) tags.push('ledger');
+            if (Array.isArray(b.vacancies) && b.vacancies.some(v => v && v.sourceType === 'ocr')) tags.push('ocr');
+            if (tags.length === 0) tags.push('etc');
+            return tags;
+        }
+        window.deriveBuildingSources = deriveBuildingSources;
+
+        const _SRC_META = {
+            ledger: { label: '🏛️ 건축물대장', bg:'#ecfdf5', fg:'#047857', bd:'#6ee7b7' },
+            ocr:    { label: '📷 OCR',        bg:'#fff7ed', fg:'#c2410c', bd:'#fdba74' },
+            etc:    { label: '⚪ 기타',        bg:'#f1f5f9', fg:'#64748b', bd:'#cbd5e1' },
+        };
+
+        // ─── 출처 필터 (단일 선택, 리스트 클라이언트 show/hide) ────────
+        window._sourceFilter = ''; // '' = 전체
+        function _matchSource(b) {
+            if (!window._sourceFilter) return true;
+            return deriveBuildingSources(b).includes(window._sourceFilter);
+        }
+        function _applySourceFilterTo(el, b) {
+            if (!_matchSource(b)) el.style.display = 'none';
+            else if (el.style.display === 'none') el.style.display = '';
+        }
+        function _applySourceFilter() {
+            document.querySelectorAll('[data-building-id]').forEach(el => {
+                const b = (window.state?.allBuildings || []).find(x => x.id === el.dataset.buildingId);
+                if (b) _applySourceFilterTo(el, b);
+            });
+        }
+        window.setSourceFilter = function(val) {
+            window._sourceFilter = val || '';
+            _applySourceFilter();
+        };
+
+        // ─── 카드 배지 인젝션 (positive 태그만: ledger/ocr) ───────────
+        function _injectSourceBadges() {
+            const items = document.querySelectorAll('[data-building-id]');
+            items.forEach(el => {
+                const b = (window.state?.allBuildings || []).find(x => x.id === el.dataset.buildingId);
+                if (!b) return;
+                if (!el.dataset.sourceBadged) {
+                    const nameEl = el.querySelector('h3,h4,.building-name,[class*="name"]');
+                    if (nameEl && !nameEl.querySelector('.source-badge-list')) {
+                        deriveBuildingSources(b).filter(t => t !== 'etc').forEach(t => {
+                            const m = _SRC_META[t]; if (!m) return;
+                            const s = document.createElement('span');
+                            s.className = 'source-badge-list';
+                            s.textContent = m.label;
+                            s.style.cssText = `background:${m.bg};color:${m.fg};border:1px solid ${m.bd};border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;vertical-align:middle;margin-left:4px;white-space:nowrap;`;
+                            nameEl.appendChild(s);
+                        });
+                        el.dataset.sourceBadged = '1';
+                    }
+                }
+                _applySourceFilterTo(el, b); // 현재 필터 반영
+            });
+        }
+
+        // ─── 필터 UI 주입 (.list-tabs 뒤에) ───────────────────────────
+        function _mountSourceFilter() {
+            if (document.getElementById('sourceFilterWrap')) return;
+            const tabs = document.querySelector('.list-tabs');
+            if (!tabs) return;
+            const wrap = document.createElement('div');
+            wrap.id = 'sourceFilterWrap';
+            wrap.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:11px;color:#64748b;';
+            wrap.innerHTML =
+                '<span style="white-space:nowrap;font-weight:600;">출처</span>' +
+                '<select id="sourceFilterSel" onchange="window.setSourceFilter(this.value)" ' +
+                'style="font-size:11px;padding:3px 7px;border:1px solid #cbd5e1;border-radius:5px;background:#fff;cursor:pointer;">' +
+                '<option value="">전체</option>' +
+                '<option value="ledger">🏛️ 건축물대장</option>' +
+                '<option value="ocr">📷 OCR</option>' +
+                '<option value="etc">⚪ 기타</option>' +
+                '</select>';
+            tabs.insertAdjacentElement('afterend', wrap);
+        }
+
+        // ─── 상세 패널: detailTitle 출처 칩 (etc 포함) ────────────────
+        function _onDetailSource(b) {
+            if (!b) return;
+            const titleEl = document.getElementById('detailTitle');
+            if (!titleEl) return;
+            titleEl.querySelectorAll('.source-badge-detail').forEach(x => x.remove());
+            deriveBuildingSources(b).forEach(t => {
+                const m = _SRC_META[t]; if (!m) return;
+                const s = document.createElement('span');
+                s.className = 'source-badge-detail';
+                s.textContent = m.label;
+                s.style.cssText = `background:${m.bg};color:${m.fg};border:1px solid ${m.bd};border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;vertical-align:middle;margin-left:6px;white-space:nowrap;`;
+                titleEl.appendChild(s);
+            });
+        }
+
+        // ─── 훅: 리스트 렌더 감시 ─────────────────────────────────────
+        const _obs = new MutationObserver(() => {
+            clearTimeout(_obs._t);
+            _obs._t = setTimeout(() => { _injectSourceBadges(); }, 90);
+        });
+        document.addEventListener('DOMContentLoaded', () => {
+            _mountSourceFilter();
+            const listEl = document.getElementById('buildingList');
+            if (listEl) _obs.observe(listEl, { childList:true, subtree:true });
+            const tableEl = document.getElementById('tableBody') || document.getElementById('buildingTable');
+            if (tableEl) _obs.observe(tableEl, { childList:true, subtree:true });
+            setTimeout(_injectSourceBadges, 500);
+            setTimeout(_mountSourceFilter, 900); // list-tabs 늦게 그려질 경우 대비
+        });
+
+        // ─── openDetail 래핑 (상세 칩) ────────────────────────────────
+        let _a = 0;
+        const _i = setInterval(() => {
+            if (window.openDetail && !window.openDetail._sourceWrapped) {
+                const _o = window.openDetail;
+                window.openDetail = function(id, ...r) {
+                    const res = _o.apply(this, [id, ...r]);
+                    const at = () => _onDetailSource((window.state?.allBuildings||[]).find(x=>x.id===id) || window.state?.selectedBuilding);
+                    if (res && typeof res.then === 'function') res.then(at); else setTimeout(at, 220);
+                    return res;
+                };
+                window.openDetail._sourceWrapped = true;
+                clearInterval(_i);
+            } else if (++_a > 100) clearInterval(_i);
+        }, 100);
+
+        // ─── renderInfoSection 래핑 (탭 재렌더 시 칩 유지) ────────────
+        let _b2 = 0;
+        const _i2 = setInterval(() => {
+            if (window.renderInfoSection && !window.renderInfoSection._sourceWrapped) {
+                const _o = window.renderInfoSection;
+                window.renderInfoSection = function(...args) {
+                    const res = _o.apply(this, args);
+                    setTimeout(() => { const b = window.state?.selectedBuilding; if (b) _onDetailSource(b); }, 60);
+                    return res;
+                };
+                window.renderInfoSection._sourceWrapped = true;
+                clearInterval(_i2);
+            } else if (++_b2 > 100) clearInterval(_i2);
+        }, 100);
+
+        // ─── resetAllFilters 래핑 → 출처 필터도 초기화 ────────────────
+        const _origReset2 = window.resetAllFilters;
+        window.resetAllFilters = function(...args) {
+            window._sourceFilter = '';
+            const sel = document.getElementById('sourceFilterSel');
+            if (sel) sel.value = '';
+            const r = (typeof _origReset2 === 'function') ? _origReset2.apply(this, args) : undefined;
+            setTimeout(_applySourceFilter, 60);
+            return r;
+        };
+    })();
+    </script>
+
 </body>
 </html>

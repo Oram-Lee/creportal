@@ -299,24 +299,6 @@ export async function refreshBuildingLedger() {
             throw new Error('buildingInfo null — 로딩 오버레이 해제용');
         }
         
-        // ★ S1-fix: 대장 원본(buildingInfo) + 수신시각을 조회 성공 시 "항상" 영속화.
-        //   기존엔 info를 비교용으로만 쓰고 저장하지 않아 → 면적만 덮이고 원본이 안 남아
-        //   상세 패널이 계속 "대장 미조회"로 보였고, 변경 없음일 땐 모달도 안 떠 영원히 미저장이었음.
-        try {
-            const _ledgerFetchedAt = new Date().toISOString();
-            await update(ref(db, `buildings/${b.id}`), { buildingInfo: info, ledgerFetchedAt: _ledgerFetchedAt });
-            const _applyBI = (obj) => { if (obj) { obj.buildingInfo = info; obj.ledgerFetchedAt = _ledgerFetchedAt; } };
-            _applyBI(state.selectedBuilding);
-            _applyBI(state.selectedBuilding && state.selectedBuilding._raw);
-            if (Array.isArray(state.buildings))    { const _i = state.buildings.findIndex(x => x.id === b.id);    if (_i !== -1) _applyBI(state.buildings[_i]); }
-            if (Array.isArray(state.allBuildings)) { const _i = state.allBuildings.findIndex(x => x.id === b.id); if (_i !== -1) _applyBI(state.allBuildings[_i]); }
-            if (window.refreshInfoSection)     setTimeout(() => window.refreshInfoSection(), 0);
-            else if (window.renderInfoSection) setTimeout(() => window.renderInfoSection(), 0);
-            console.log('✅ buildingInfo 영속화 완료:', b.id);
-        } catch (e) {
-            console.warn('buildingInfo 영속화 실패:', e);
-        }
-
         // 변경사항 수집 (새로운 필드 매핑 사용)
         const changes = [];
         const updateData = {};
