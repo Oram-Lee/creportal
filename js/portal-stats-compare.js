@@ -4430,7 +4430,7 @@ window._scSnapRender = function () {
     const area = _scQS('sc-snap-result');
     if (!area) return;
     if (!_scSnapState.snapshot.size) {
-        area.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8;">스냅샷이 비어 있습니다. 비교 화면에서 빌딩·공실을 선택한 뒤 [📌 현재 선택으로 다시점]을 누르세요.</div>`;
+        area.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8; line-height:1.7;">스냅샷이 비어 있습니다.<br>비교 화면에서 빌딩·공실을 선택한 뒤 <b>[📌 현재 선택으로 다시점]</b>을 누르거나,<br>우측 상단 <b>[📂 불러오기]</b>로 저장된 다시점 세션을 여세요.</div>`;
         return;
     }
     const months = _scSnapState.months;
@@ -4519,10 +4519,11 @@ function _scInjectSnapModal() {
         background:var(--bg-card); border-radius:14px; width:97%; max-width:1280px; z-index:1040;
         box-shadow:0 16px 56px rgba(0,0,0,0.35); max-height:93vh; overflow:hidden; flex-direction:column;`;
     const months = _scTrendAvailableMonths();
-    _scSnapState.months = months.slice();
+    if (!_scSnapState.months || !_scSnapState.months.length) _scSnapState.months = months.slice();
+    const _selM = new Set(_scSnapState.months);
     const chk = months.map(m => `
         <label style="display:inline-flex; align-items:center; gap:4px; font-size:12px; padding:3px 8px; background:#f1f5f9; border-radius:6px; cursor:pointer;">
-            <input type="checkbox" value="${m}" checked onchange="window._scSnapToggleMonth(this)"> ${m}
+            <input type="checkbox" value="${m}" ${_selM.has(m) ? 'checked' : ''} onchange="window._scSnapToggleMonth(this)"> ${m}
         </label>`).join('');
     wrap.innerHTML = `
         <div style="padding:16px 24px; background:linear-gradient(135deg,#0f4c81,#1a73e8); border-radius:14px 14px 0 0; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
@@ -4530,7 +4531,11 @@ function _scInjectSnapModal() {
                 <div style="font-size:16px; font-weight:700; color:#fff;">📌 선택 기반 다시점 추이</div>
                 <div style="font-size:12px; color:rgba(255,255,255,0.8); margin-top:2px;">내가 고른 빌딩·공실(스냅샷)을 여러 시점에 적용 — 동일 셋의 공실률 추이</div>
             </div>
-            <button onclick="window._scCloseSnap()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:20px; width:34px; height:34px; border-radius:8px; cursor:pointer;">×</button>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button onclick="window._scSnapSave()" style="padding:6px 12px; background:rgba(255,255,255,0.28); border:1px solid rgba(255,255,255,0.45); color:#fff; border-radius:7px; cursor:pointer; font-size:12px; font-weight:700;">💾 저장</button>
+                <button onclick="window._scSnapOpenLoadList()" style="padding:6px 12px; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.35); color:#fff; border-radius:7px; cursor:pointer; font-size:12px; font-weight:600;">📂 불러오기</button>
+                <button onclick="window._scCloseSnap()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; font-size:20px; width:34px; height:34px; border-radius:8px; cursor:pointer;">×</button>
+            </div>
         </div>
         <div style="overflow-y:auto; flex:1; min-height:0; padding:16px 24px;">
             <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:flex-start; padding:12px 14px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; margin-bottom:16px;">
@@ -4551,26 +4556,22 @@ function _scInjectSnapModal() {
                 <button onclick="window._scSnapRender()" style="padding:8px 16px; background:#1a73e8; color:#fff; border:none; border-radius:7px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; align-self:center;">📊 추이 계산</button>
             </div>
             <div id="sc-snap-result"></div>
-            <div style="margin-top:14px; padding:10px 12px; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; font-size:11px; color:#94a3b8;">
-                💾 이 다시점 세션 저장/불러오기는 다음 단계에서 추가됩니다 (엔진 검증 후).
-            </div>
         </div>`;
     document.body.appendChild(wrap);
 }
 
 window._scSnapCapture = function () {
     const snap = _scSnapCaptureFromSelection();
-    if (!snap.size) {
-        alert('비교 화면에서 빌딩·공실을 먼저 선택하세요.\n(선택된 빌딩이 없으면 스냅샷을 만들 수 없습니다)');
-        return;
-    }
     _scSnapState.snapshot = snap;
     _scSnapState.includedExtra = new Set();
     _scSnapState.newCands = [];
+    _scSnapState.months = _scTrendAvailableMonths().slice();   // 신규 캡쳐: 전체 시점 기본
+    _scSnapState.snapId = '';                                  // 신규 세션
+    _scSnapState.version = 0;
     _scInjectSnapModal();
     const m = _scQS('sc-snap-modal');
     if (m) m.style.display = 'flex';
-    window._scSnapRender();
+    window._scSnapRender();   // 선택이 없으면 안내 표시(우측 상단 [📂 불러오기]로 저장 세션 열기 가능)
 };
 window._scCloseSnap = function () { const m = _scQS('sc-snap-modal'); if (m) m.style.display = 'none'; };
 window._scSnapToggleMonth = function (cb) {
@@ -4584,4 +4585,162 @@ window._scSnapSelectAll = function (on) {
     document.querySelectorAll('#sc-snap-modal input[type=checkbox][value]').forEach(cb => { cb.checked = on; });
     _scSnapState.months = on ? _scTrendAvailableMonths().slice() : [];
     window._scSnapRender();
+};
+
+// ── 선택 기반 다시점 세션 저장/불러오기 (/statsTrend, 기존 /statsCompare 와 분리) ──
+function _scSnapBuildPayload(title) {
+    const user = window.state?.currentUser?.email || 'unknown';
+    const buildings = {};
+    _scSnapState.snapshot.forEach((e, bid) => {
+        const byMonth = {};
+        Object.keys(e.byMonth || {}).forEach(ym => {
+            const keysObj = {};
+            (e.byMonth[ym].keys || new Set()).forEach(k => { keysObj[_scEscapeKey(k)] = true; });
+            byMonth[_scEscapeKey(ym)] = { source: e.byMonth[ym].source || '', keys: keysObj };
+        });
+        const floorsObj = {};
+        (e.floors || new Set()).forEach(f => { floorsObj[_scEscapeKey(f)] = true; });
+        buildings[_scEscapeKey(String(bid))] = {
+            name: e.name || '', region: e.region || 'ETC', gross: e.gross || 0,
+            noVacancy: !!e.noVacancy, byMonth, floors: floorsObj,
+        };
+    });
+    const extra = {};
+    (_scSnapState.includedExtra || new Set()).forEach(k => {
+        const i = k.indexOf('|'); if (i < 0) return;
+        const eb = _scEscapeKey(k.slice(0, i));
+        (extra[eb] = extra[eb] || {})[_scEscapeKey(k.slice(i + 1))] = true;
+    });
+    return {
+        title: String(title || _scSnapState.title || '제목없음').slice(0, 200),
+        updatedAt: new Date().toISOString(),
+        updatedBy: user,
+        version: (_scSnapState.version || 0) + 1,
+        months: (_scSnapState.months || []).slice(),
+        buildings, includedExtra: extra,
+    };
+}
+function _scSnapRestoreFromPayload(p) {
+    const snap = new Map();
+    const bs = p.buildings || {};
+    Object.keys(bs).forEach(escBid => {
+        const v = bs[escBid] || {};
+        const bid = _scUnescapeKey(escBid);
+        const byMonth = {};
+        Object.keys(v.byMonth || {}).forEach(escYm => {
+            const bm = v.byMonth[escYm] || {};
+            byMonth[_scUnescapeKey(escYm)] = {
+                source: bm.source || '',
+                keys: new Set(Object.keys(bm.keys || {}).map(_scUnescapeKey)),
+            };
+        });
+        snap.set(String(bid), {
+            name: v.name || bid, region: v.region || 'ETC', gross: Number(v.gross) || 0,
+            noVacancy: !!v.noVacancy, byMonth,
+            floors: new Set(Object.keys(v.floors || {}).map(_scUnescapeKey)),
+        });
+    });
+    _scSnapState.snapshot = snap;
+    _scSnapState.months = Array.isArray(p.months) ? p.months.slice() : [];
+    const extra = new Set();
+    const ex = p.includedExtra || {};
+    Object.keys(ex).forEach(escBid => {
+        const bid = _scUnescapeKey(escBid);
+        Object.keys(ex[escBid] || {}).forEach(escF => extra.add(bid + '|' + _scUnescapeKey(escF)));
+    });
+    _scSnapState.includedExtra = extra;
+    _scSnapState.title = p.title || '';
+}
+
+window._scSnapSave = async function () {
+    if (!_scSnapState.snapshot.size) { alert('저장할 스냅샷이 없습니다.'); return; }
+    const title = prompt('다시점 세션 제목:', _scSnapState.title || '');
+    if (title === null) return;
+    try {
+        const { db, ref, set, push } = await import('./portal-firebase.js');
+        const payload = _scSnapBuildPayload(title);
+        if (_scSnapState.snapId) {
+            await set(ref(db, `statsTrend/${_scSnapState.snapId}`), payload);
+        } else {
+            const r = push(ref(db, 'statsTrend'));
+            await set(r, payload);
+            _scSnapState.snapId = r.key;
+        }
+        _scSnapState.version = payload.version;
+        _scSnapState.title = payload.title;
+        alert(`✅ 저장 완료\n제목: ${payload.title}`);
+    } catch (e) { console.error('[snap] 저장 실패:', e); alert('❌ 저장 실패: ' + e.message); }
+};
+
+window._scSnapOpenLoadList = async function () {
+    _scInjectSnapLoadModal();
+    const m = _scQS('sc-snap-load-modal'); if (m) m.style.display = 'flex';
+    _scRenderSnapLoadList(null);
+    try {
+        const { db, ref, get } = await import('./portal-firebase.js');
+        const snap = await get(ref(db, 'statsTrend'));
+        const all = snap.exists() ? snap.val() : {};
+        const list = Object.keys(all).map(id => Object.assign({ id }, all[id]));
+        list.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+        _scRenderSnapLoadList(list);
+    } catch (e) { console.error('[snap] 목록 로드 실패:', e); _scRenderSnapLoadList([], e.message); }
+};
+function _scInjectSnapLoadModal() {
+    if (_scQS('sc-snap-load-modal')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'sc-snap-load-modal';
+    wrap.style.cssText = `display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+        background:var(--bg-card); border-radius:12px; width:720px; max-width:94vw; z-index:1050;
+        box-shadow:0 24px 60px rgba(0,0,0,0.5); max-height:82vh; flex-direction:column;`;
+    wrap.innerHTML = `
+        <div style="padding:14px 20px; background:linear-gradient(135deg,#0f4c81,#1a73e8); color:#fff; display:flex; justify-content:space-between; align-items:center; border-radius:12px 12px 0 0; flex-shrink:0;">
+            <div style="font-size:14px; font-weight:700;">📂 저장된 다시점 세션 불러오기</div>
+            <button onclick="window._scCloseSnapLoad()" style="background:rgba(255,255,255,0.2); border:none; color:#fff; font-size:18px; width:30px; height:30px; border-radius:6px; cursor:pointer;">×</button>
+        </div>
+        <div id="sc-snap-load-list" style="flex:1; overflow-y:auto; padding:14px 20px; min-height:240px;"></div>`;
+    document.body.appendChild(wrap);
+}
+window._scCloseSnapLoad = function () { const m = _scQS('sc-snap-load-modal'); if (m) m.style.display = 'none'; };
+function _scRenderSnapLoadList(list, errMsg) {
+    const el = _scQS('sc-snap-load-list'); if (!el) return;
+    if (list == null) { el.innerHTML = `<div style="padding:40px 0; text-align:center; color:var(--text-muted);">로딩 중…</div>`; return; }
+    if (errMsg) { el.innerHTML = `<div style="padding:30px 0; text-align:center; color:#dc2626;">❌ ${errMsg}</div>`; return; }
+    if (!list.length) { el.innerHTML = `<div style="padding:40px 0; text-align:center; color:var(--text-muted);">저장된 다시점 세션이 없습니다.<br><span style="font-size:11px; opacity:0.7;">다시점 화면에서 [💾 저장]으로 첫 세션을 만들어보세요.</span></div>`; return; }
+    el.innerHTML = list.map(item => {
+        const nB = Object.keys(item.buildings || {}).length;
+        const mm = (item.months || []).join(', ');
+        return `<div style="border:1px solid var(--border-color); background:var(--bg-primary); border-radius:7px; padding:10px 12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <div style="flex:1; min-width:0; cursor:pointer;" onclick="window._scSnapLoad('${item.id}')">
+                <div style="font-size:13px; font-weight:700; color:var(--text-primary);">${item.title || '(제목없음)'}</div>
+                <div style="font-size:10px; color:var(--text-muted); margin-top:3px;">빌딩 ${nB}개 · 시점 ${mm || '-'} · v${item.version || 0} · ${(item.updatedAt || '').slice(0, 16).replace('T', ' ')} · ${item.updatedBy || '-'}</div>
+            </div>
+            <div style="display:flex; gap:4px;">
+                <button onclick="window._scSnapLoad('${item.id}')" style="padding:5px 11px; background:#1a73e8; color:#fff; border:none; border-radius:5px; cursor:pointer; font-size:11px; font-weight:600;">불러오기</button>
+                <button onclick="window._scSnapDelete('${item.id}')" style="padding:5px 9px; background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; border-radius:5px; cursor:pointer; font-size:11px;">🗑️</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+window._scSnapLoad = async function (id) {
+    try {
+        const { db, ref, get } = await import('./portal-firebase.js');
+        const snap = await get(ref(db, `statsTrend/${id}`));
+        if (!snap.exists()) { alert('세션을 찾을 수 없습니다.'); return; }
+        const val = snap.val();
+        _scSnapRestoreFromPayload(val);
+        _scSnapState.snapId = id;
+        _scSnapState.version = val.version || 0;
+        window._scCloseSnapLoad();
+        _scInjectSnapModal();
+        const m = _scQS('sc-snap-modal'); if (m) m.style.display = 'flex';
+        window._scSnapRender();
+    } catch (e) { console.error('[snap] 불러오기 실패:', e); alert('❌ 불러오기 실패: ' + e.message); }
+};
+window._scSnapDelete = async function (id) {
+    if (!confirm('이 다시점 세션을 삭제할까요?')) return;
+    try {
+        const { db, ref, set } = await import('./portal-firebase.js');
+        await set(ref(db, `statsTrend/${id}`), null);
+        window._scSnapOpenLoadList();
+    } catch (e) { console.error('[snap] 삭제 실패:', e); alert('❌ 삭제 실패: ' + e.message); }
 };
