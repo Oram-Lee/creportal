@@ -4324,99 +4324,72 @@ function _scFloorExcluded(floor) {
     return _scIsUndergroundFloor(floor) || _scIsGroundFloor(floor);
 }
 function _scVacFloor(v) { return String(v.floorText || v.floor || '').trim(); }
-/** 정규화 층 — 시점 간 동일 공실(물리적 층) 매칭용 ("3 F"→"3F") */
-function _scNormFloor(v) { return _scVacFloor(v).toUpperCase().replace(/\s+/g, ''); }
-
-// 빌딩 id→정규화빌딩 인덱스 (루프마다 전체 스캔 방지 = 성능)
-let _scBldgIndex = null;
-function _scBuildBldgIndex() {
-    const all = (window.srLib?.srGetNormBuildings?.() || srGetNormBuildings()) || [];
-    const m = new Map();
-    all.forEach(b => m.set(String(b.id), b));
-    return m;
-}
-function _scIdxBldg(bid) {
-    if (!_scBldgIndex) _scBldgIndex = _scBuildBldgIndex();
-    return _scBldgIndex.get(String(bid));
-}
+/** 시점 무관 공실 시그니처 — 층 + 반올림 면적(평) */
+function _scVacSig(v) { return _scVacFloor(v) + '__' + Math.round(_scVacAreaPy(v)); }
 
 const _scSnapState = {
     title: '',
-    snapshot: new Map(),      // Map<bid,{name,region,gross,noVacancy,byMonth:{[ym]:{source,keys:Set}},floors:Set}>
-    months: [],               // 선택 월 (오름차순)
-    includedExtra: new Set(), // 포함하기로 한 신규 공실 "bid|normFloor"
-    newCands: [],             // 최근 계산에서 모은 신규 후보
+    snapshot: new Map(),     // Map<bid,{name,region,gross,sigs:Set<sig>}>
+    months: [],              // 선택 월 (오름차순)
+    includedExtra: new Set(),// 포함하기로 한 신규 공실 "bid|sig"
+    newCands: [],            // 최근 계산에서 모은 신규 후보
 };
 
-/** 현재 A/B 큐레이션 → 스냅샷 캡쳐.
- *  - 원본 시점별로 (chosenSource + selectedVacKeys) 를 그대로 보관 → 그 시점은 기존 계산과 100% 동일
- *  - 선택 공실의 정규화 층(floors)도 수집 → 신규 시점은 층 기준 매칭
- */
+/** 현재 A/B 큐레이션 → 스냅샷 캡쳐 */
 function _scSnapCaptureFromSelection() {
-    _scBldgIndex = _scBuildBldgIndex();
     const snap = new Map();
     ['A', 'B'].forEach(side => {
         const pt = _scState['point' + side];
         if (!pt || !pt.yyyymm) return;
         pt.selections.forEach((sel, bid) => {
-            const b = _scIdxBldg(bid);
+            const b = _scFindNormBuilding(bid);
             if (!b) return;
             const gross = _scGrossPy(b);
             if (gross <= 0) return;
             let entry = snap.get(String(bid));
             if (!entry) {
-                entry = { name: b.name || b.buildingName || String(bid), region: b._region || 'ETC', gross, noVacancy: false, byMonth: {}, floors: new Set() };
+                entry = { name: b.name || b.buildingName || String(bid), region: b._region || 'ETC', gross, sigs: new Set() };
                 snap.set(String(bid), entry);
             }
-            if (sel.noVacancy) { entry.noVacancy = true; return; }     // 0공실 선언: 분모만
-            if (!sel.selectedVacKeys || !sel.selectedVacKeys.size) return;
-            // 원본 시점 정확 선택 보관 (기존 _scExtractBuildingMetrics 와 동일 기준)
-            entry.byMonth[pt.yyyymm] = { source: sel.chosenSource || '', keys: new Set(sel.selectedVacKeys) };
-            // 선택 공실의 정규화 층 (신규 시점 매칭용)
-            _scVacanciesByMonth(b, pt.yyyymm)
-                .filter(v => _scVacancySource(v) === (sel.chosenSource || '') && sel.selectedVacKeys.has(_scVacancyKey(v)))
-                .forEach(v => entry.floors.add(_scNormFloor(v)));
+            if (sel.noVacancy) return;   // 0공실 선언: 분모만 포함, sigs 비움
+            const vacs = _scVacanciesByMonth(b, pt.yyyymm)
+                .filter(v => sel.selectedVacKeys && sel.selectedVacKeys.has(_scVacancyKey(v)));
+            vacs.forEach(v => {
+                if (_scFloorExcluded(_scVacFloor(v))) return;   // 지하·1층 제외
+                entry.sigs.add(_scVacSig(v));
+            });
         });
     });
     return snap;
 }
 
-/** 스냅샷을 한 시점에 적용 → {map, cands}
- *  - 원본 시점(byMonth 존재): source+key 정확매칭 = 기존 2시점 계산과 동일
- *  - 신규 시점: 층 기준 매칭(지하·1층 제외), 스냅샷에 없던 층은 신규 후보
- */
+/** 스냅샷을 한 시점에 적용 → {map, cands} */
 function _scSnapApplyMonth(yyyymm) {
     const regOf = r => (SR_REGIONS.includes(r) ? r : 'ETC');
     const map = new Map();
     [...SR_REGIONS, 'TOTAL'].forEach(r => map.set(r, { gross: 0, vac: 0, rate: 0, nBldg: 0 }));
     const cands = [];
     _scSnapState.snapshot.forEach((entry, bid) => {
-        const b = _scIdxBldg(bid);
+        const b = _scFindNormBuilding(bid);
         const gross = entry.gross || (b ? _scGrossPy(b) : 0);
         if (gross <= 0) return;
         let area = 0;
-        if (!entry.noVacancy && b) {
-            const bm = entry.byMonth[yyyymm];
-            if (bm) {
-                // 원본 시점 — 기존 계산과 100% 동일 (source + key 정확매칭)
-                _scVacanciesByMonth(b, yyyymm)
-                    .filter(v => _scVacancySource(v) === bm.source && bm.keys.has(_scVacancyKey(v)))
-                    .forEach(v => { area += _scVacAreaPy(v); });
-            } else {
-                // 신규 시점 — 층 기준 매칭 + 지하/1층 제외
-                const seen = new Set();
-                _scVacanciesByMonth(b, yyyymm).forEach(v => {
-                    const f = _scNormFloor(v);
-                    if (!f || seen.has(f)) return;
-                    seen.add(f);
-                    if (_scFloorExcluded(f)) return;
-                    if (entry.floors.has(f) || _scSnapState.includedExtra.has(bid + '|' + f)) {
-                        area += _scVacAreaPy(v);
-                    } else {
-                        cands.push({ bid, name: entry.name, floor: f, areaPy: _scVacAreaPy(v), month: yyyymm });
-                    }
-                });
-            }
+        if (b) {
+            const vacs = _scVacanciesByMonth(b, yyyymm);
+            const seen = new Set();
+            vacs.forEach(v => {
+                const sig = _scVacSig(v);
+                if (seen.has(sig)) return;
+                seen.add(sig);
+                if (_scFloorExcluded(_scVacFloor(v))) return;   // 지하·1층 제외
+                const inSnap = entry.sigs.has(sig);
+                const inExtra = _scSnapState.includedExtra.has(bid + '|' + sig);
+                if (inSnap || inExtra) {
+                    area += _scVacAreaPy(v);
+                } else {
+                    cands.push({ bid, name: entry.name, floor: _scVacFloor(v), areaPy: _scVacAreaPy(v), sig, month: yyyymm });
+                }
+            });
         }
         const region = regOf(entry.region || 'ETC');
         [map.get(region), map.get('TOTAL')].forEach(bk => { bk.gross += gross; bk.vac += area; bk.nBldg += 1; });
@@ -4426,7 +4399,6 @@ function _scSnapApplyMonth(yyyymm) {
 }
 
 window._scSnapRender = function () {
-    _scBldgIndex = _scBuildBldgIndex();   // 계산 시 빌딩 인덱스 1회 갱신 (O(1) 조회)
     const area = _scQS('sc-snap-result');
     if (!area) return;
     if (!_scSnapState.snapshot.size) {
@@ -4444,7 +4416,7 @@ window._scSnapRender = function () {
         const { map, cands } = _scSnapApplyMonth(m);
         perMonth.push({ month: m, map });
         cands.forEach(c => {
-            const k = c.bid + '|' + c.floor;
+            const k = c.bid + '|' + c.sig;
             let e = candMap.get(k);
             if (!e) { e = Object.assign({}, c, { months: new Set() }); candMap.set(k, e); }
             e.months.add(c.month);
@@ -4475,7 +4447,7 @@ function _scSnapRenderCandidates() {
     const cands = _scSnapState.newCands || [];
     if (!cands.length) return '';
     const rows = cands.map(c => {
-        const k = c.bid + '|' + c.floor;
+        const k = c.bid + '|' + c.sig;
         const checked = _scSnapState.includedExtra.has(k) ? 'checked' : '';
         const ms = [...c.months].sort().join(', ');
         return `<label style="display:flex; align-items:center; gap:8px; padding:5px 10px; border-top:1px solid #fde68a; font-size:12px; cursor:pointer;">
@@ -4504,7 +4476,7 @@ window._scSnapToggleExtra = function (cb) {
 };
 window._scSnapExtraAll = function (on) {
     (_scSnapState.newCands || []).forEach(c => {
-        const k = c.bid + '|' + c.floor;
+        const k = c.bid + '|' + c.sig;
         if (on) _scSnapState.includedExtra.add(k); else _scSnapState.includedExtra.delete(k);
     });
     window._scSnapRender();
