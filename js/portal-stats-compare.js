@@ -4413,7 +4413,7 @@ function _scSnapApplyMonth(yyyymm) {
                     if (entry.floors.has(f) || _scSnapState.includedExtra.has(bid + '|' + f)) {
                         area += _scVacAreaPy(v);
                     } else {
-                        cands.push({ bid, name: entry.name, floor: f, areaPy: _scVacAreaPy(v), month: yyyymm });
+                        cands.push({ bid, name: entry.name, floor: f, areaPy: _scVacAreaPy(v), month: yyyymm, source: (v.source || ''), docId: (v.documentId || ''), hasRent: (parseFloat(v.rentArea) > 0) });
                     }
                 });
             }
@@ -4446,8 +4446,10 @@ window._scSnapRender = function () {
         cands.forEach(c => {
             const k = c.bid + '|' + c.floor;
             let e = candMap.get(k);
-            if (!e) { e = Object.assign({}, c, { months: new Set() }); candMap.set(k, e); }
+            if (!e) { e = Object.assign({}, c, { months: new Set(), docs: new Set() }); candMap.set(k, e); }
             e.months.add(c.month);
+            const docLabel = c.source || c.docId || '';
+            if (docLabel) e.docs.add(docLabel);
         });
     });
     _scSnapState.newCands = [...candMap.values()];
@@ -4478,16 +4480,22 @@ function _scSnapRenderCandidates() {
         const k = c.bid + '|' + c.floor;
         const checked = _scSnapState.includedExtra.has(k) ? 'checked' : '';
         const ms = [...c.months].sort().join(', ');
+        const docs = c.docs ? [...c.docs] : (c.source || c.docId ? [c.source || c.docId] : []);
+        const docHtml = docs.length
+            ? `<span style="font-size:10px; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; padding:1px 6px;" title="${docs.join(' / ')}">📄 ${docs[0]}${docs.length > 1 ? ` 외 ${docs.length - 1}` : ''}</span>`
+            : `<span style="font-size:10px; color:#cbd5e1;">📄 출처미상</span>`;
+        const basisTag = (c.hasRent === false) ? `<span style="font-size:9px; color:#9ca3af;">(전용)</span>` : '';
         return `<label style="display:flex; align-items:center; gap:8px; padding:5px 10px; border-top:1px solid #fde68a; font-size:12px; cursor:pointer;">
             <input type="checkbox" ${checked} data-k="${encodeURIComponent(k)}" onchange="window._scSnapToggleExtra(this)">
             <span style="font-weight:600; color:#92400e;">${c.name}</span>
-            <span style="color:#b45309;">${c.floor || '-'} · ${Math.round(c.areaPy).toLocaleString()}평</span>
+            <span style="color:#b45309;">${c.floor || '-'} · ${Math.round(c.areaPy).toLocaleString()}평 ${basisTag}</span>
+            ${docHtml}
             <span style="margin-left:auto; font-size:10px; color:#a16207;">신규 출현: ${ms}</span>
         </label>`;
     }).join('');
     return `<div style="margin-bottom:16px; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; overflow:hidden;">
         <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#b45309; background:#fef3c7; display:flex; justify-content:space-between; align-items:center;">
-            <span>⚠️ 스냅샷에 없던 신규 공실 ${cands.length}건 — 포함할 항목을 체크하면 합산·재계산</span>
+            <span>⚠️ 스냅샷에 없던 신규 공실 ${cands.length}건 — 포함할 항목을 체크하면 합산·재계산 <span style="font-weight:400; opacity:0.8;">· 면적=임대평(rentArea)</span></span>
             <span>
                 <button onclick="window._scSnapExtraAll(true)" style="font-size:11px; padding:2px 8px; border:1px solid #f59e0b; background:#fff; border-radius:5px; cursor:pointer;">전체 포함</button>
                 <button onclick="window._scSnapExtraAll(false)" style="font-size:11px; padding:2px 8px; border:1px solid #f59e0b; background:#fff; border-radius:5px; cursor:pointer;">전체 제외</button>
