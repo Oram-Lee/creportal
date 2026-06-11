@@ -4578,6 +4578,7 @@ window._scSnapToggleMonth = function (cb) {
     const set = new Set(_scSnapState.months);
     if (cb.checked) set.add(cb.value); else set.delete(cb.value);
     _scSnapState.months = avail.filter(m => set.has(m));
+    window._scSnapRender();   // 시점 변경 즉시 재계산 (신규 공실 후보·차트 갱신)
 };
 window._scSnapSelectAll = function (on) {
     document.querySelectorAll('#sc-snap-modal input[type=checkbox][value]').forEach(cb => { cb.checked = on; });
