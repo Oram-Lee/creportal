@@ -4423,32 +4423,47 @@ function _scSnapApplyMonth(yyyymm, basis) {
         let area = 0;
         const info = { rep: '', repByCount: '', repByArea: '', floors: new Map() };
         if (!entry.noVacancy && b) {
-            const vacs = _scVacanciesByMonth(b, yyyymm)
-                .filter(v => !String(v._key || '').endsWith('_meta'))
-                .filter(v => { const f = _scNormFloor(v); return f && !_scFloorExcluded(f); });   // 지하·1층 제외
-            if (vacs.length) {
-                const byCo = new Map();   // 회사 → Map<floor, vacancy> (회사 내 층 dedup)
-                vacs.forEach(v => {
-                    const co = _scVacancySource(v), f = _scNormFloor(v);
-                    let fm = byCo.get(co); if (!fm) { fm = new Map(); byCo.set(co, fm); }
-                    if (!fm.has(f)) fm.set(f, v);
-                });
-                const score = co => { const fm = byCo.get(co); let ar = 0; fm.forEach(v => ar += _scVacAreaPy(v)); return { cnt: fm.size, ar }; };
-                const cos = [...byCo.keys()];
-                const pick = key => cos.slice().sort((a, c) => {
-                    const sa = score(a), sc = score(c);
-                    const va = key === 'area' ? sa.ar : sa.cnt, vc = key === 'area' ? sc.ar : sc.cnt;
-                    if (vc !== va) return vc - va;       // 큰 쪽 우선
-                    return a.localeCompare(c);            // 동률 → 가나다순
-                })[0];
-                const repByCount = pick('count'), repByArea = pick('area');
-                const rep = basis === 'count' ? repByCount : repByArea;
-                byCo.get(rep).forEach((v, f) => {
-                    const a = _scVacAreaPy(v); area += a;
-                    const mi = _scMoveInStatus(v, yyyymm);
-                    info.floors.set(f, { area: a, moveKind: mi.kind, moveLabel: mi.label, source: rep, hasRent: (parseFloat(v.rentArea) > 0) });
-                });
-                info.rep = rep; info.repByCount = repByCount; info.repByArea = repByArea;
+            const bm = entry.byMonth && entry.byMonth[yyyymm];
+            if (bm) {
+                // 원본 시점(A·B) — 기존 2시점 계산과 100% 동일 (불러오기 값 일치): 선택 회사 + 선택 층만
+                _scVacanciesByMonth(b, yyyymm)
+                    .filter(v => _scVacancySource(v) === bm.source && bm.keys.has(_scVacancyKey(v)))
+                    .forEach(v => {
+                        const a = _scVacAreaPy(v); area += a;
+                        const f = _scNormFloor(v);
+                        const mi = _scMoveInStatus(v, yyyymm);
+                        info.floors.set(f, { area: a, moveKind: mi.kind, moveLabel: mi.label, source: bm.source, hasRent: (parseFloat(v.rentArea) > 0) });
+                    });
+                info.rep = bm.source; info.repByCount = bm.source; info.repByArea = bm.source;   // 수기 선택 고정 (토글 영향 없음)
+            } else {
+                // 신규 시점 — 대표회사 자동선택 (지하·1층 제외)
+                const vacs = _scVacanciesByMonth(b, yyyymm)
+                    .filter(v => !String(v._key || '').endsWith('_meta'))
+                    .filter(v => { const f = _scNormFloor(v); return f && !_scFloorExcluded(f); });   // 지하·1층 제외
+                if (vacs.length) {
+                    const byCo = new Map();   // 회사 → Map<floor, vacancy> (회사 내 층 dedup)
+                    vacs.forEach(v => {
+                        const co = _scVacancySource(v), f = _scNormFloor(v);
+                        let fm = byCo.get(co); if (!fm) { fm = new Map(); byCo.set(co, fm); }
+                        if (!fm.has(f)) fm.set(f, v);
+                    });
+                    const score = co => { const fm = byCo.get(co); let ar = 0; fm.forEach(v => ar += _scVacAreaPy(v)); return { cnt: fm.size, ar }; };
+                    const cos = [...byCo.keys()];
+                    const pick = key => cos.slice().sort((a, c) => {
+                        const sa = score(a), sc = score(c);
+                        const va = key === 'area' ? sa.ar : sa.cnt, vc = key === 'area' ? sc.ar : sc.cnt;
+                        if (vc !== va) return vc - va;       // 큰 쪽 우선
+                        return a.localeCompare(c);            // 동률 → 가나다순
+                    })[0];
+                    const repByCount = pick('count'), repByArea = pick('area');
+                    const rep = basis === 'count' ? repByCount : repByArea;
+                    byCo.get(rep).forEach((v, f) => {
+                        const a = _scVacAreaPy(v); area += a;
+                        const mi = _scMoveInStatus(v, yyyymm);
+                        info.floors.set(f, { area: a, moveKind: mi.kind, moveLabel: mi.label, source: rep, hasRent: (parseFloat(v.rentArea) > 0) });
+                    });
+                    info.rep = rep; info.repByCount = repByCount; info.repByArea = repByArea;
+                }
             }
         }
         bldgInfo.set(String(bid), info);
