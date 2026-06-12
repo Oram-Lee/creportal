@@ -4406,65 +4406,57 @@ function _scSnapCaptureFromSelection() {
     return snap;
 }
 
-/** 스냅샷을 한 시점에 적용 → {map, cands}
- *  - 원본 시점(byMonth 존재): source+key 정확매칭 = 기존 2시점 계산과 동일
- *  - 신규 시점: 층 기준 매칭(지하·1층 제외), 스냅샷에 없던 층은 신규 후보
+/** 스냅샷을 한 시점에 적용 (대표회사 자동선택) → {map, bldgInfo}
+ *  - 각 빌딩: 그 시점 공실(지하·1층·_meta 제외)을 회사별로 묶어, basis(건수/면적)로 대표회사 1개 자동 선택
+ *  - 대표회사 안내문의 층 = 그 빌딩의 공실 (해소=그 시점에 없으면 0)
+ *  - bldgInfo: 인접 시점 변화 비교 + 기준 차이(건수≠면적) 감지용
  */
-function _scSnapApplyMonth(yyyymm) {
+function _scSnapApplyMonth(yyyymm, basis) {
     const regOf = r => (SR_REGIONS.includes(r) ? r : 'ETC');
     const map = new Map();
     [...SR_REGIONS, 'TOTAL'].forEach(r => map.set(r, { gross: 0, vac: 0, rate: 0, nBldg: 0 }));
-    const cands = [];
-    const alts = [];
+    const bldgInfo = new Map();
     _scSnapState.snapshot.forEach((entry, bid) => {
         const b = _scIdxBldg(bid);
         const gross = entry.gross || (b ? _scGrossPy(b) : 0);
         if (gross <= 0) return;
         let area = 0;
+        const info = { rep: '', repByCount: '', repByArea: '', floors: new Map() };
         if (!entry.noVacancy && b) {
-            const bm = entry.byMonth[yyyymm];
-            if (bm) {
-                // 원본 시점 — 기존 계산과 100% 동일 (source + key 정확매칭)
-                _scVacanciesByMonth(b, yyyymm)
-                    .filter(v => _scVacancySource(v) === bm.source && bm.keys.has(_scVacancyKey(v)))
-                    .forEach(v => { area += _scVacAreaPy(v); });
-            } else {
-                // 신규 시점 — 선택 회사(chosenSource) 안내문 기준으로만 매칭
-                const chosen = entry.chosenSource || '';
-                const subKey = bid + '|' + yyyymm;
-                const subSrc = (_scSnapState.subAlt && _scSnapState.subAlt[subKey]) || '';
-                const effSrc = subSrc || chosen;
-                const allVacs = _scVacanciesByMonth(b, yyyymm).filter(v => !String(v._key || '').endsWith('_meta'));
-                const srcSet = new Set();
-                allVacs.forEach(v => { const s = _scVacancySource(v); if (s) srcSet.add(s); });
-                if (effSrc && srcSet.has(effSrc)) {
-                    // 그 회사 안내문 안에서만 층 매칭 ("외 N건" 중복 제거)
-                    const seen = new Set();
-                    allVacs.filter(v => _scVacancySource(v) === effSrc).forEach(v => {
-                        const f = _scNormFloor(v);
-                        if (!f || seen.has(f)) return;
-                        seen.add(f);
-                        if (_scFloorExcluded(f)) return;
-                        if (entry.floors.has(f) || _scSnapState.includedExtra.has(bid + '|' + f)) {
-                            area += _scVacAreaPy(v);
-                        } else {
-                            const _mi = _scMoveInStatus(v, yyyymm);
-                            cands.push({ bid, name: entry.name, floor: f, areaPy: _scVacAreaPy(v), month: yyyymm, source: effSrc, docId: (v.documentId || ''), hasRent: (parseFloat(v.rentArea) > 0), moveKind: _mi.kind, moveLabel: _mi.label });
-                        }
-                    });
-                    if (subSrc) alts.push({ bid, name: entry.name, month: yyyymm, chosen, applied: subSrc, available: [...srcSet] });
-                } else {
-                    // 선택 회사 안내문 없음 → 공실 0 (엄격) + 대체 제안
-                    const others = [...srcSet].filter(s => s && s !== chosen);
-                    if (others.length) alts.push({ bid, name: entry.name, month: yyyymm, chosen, applied: '', available: others });
-                }
+            const vacs = _scVacanciesByMonth(b, yyyymm)
+                .filter(v => !String(v._key || '').endsWith('_meta'))
+                .filter(v => { const f = _scNormFloor(v); return f && !_scFloorExcluded(f); });   // 지하·1층 제외
+            if (vacs.length) {
+                const byCo = new Map();   // 회사 → Map<floor, vacancy> (회사 내 층 dedup)
+                vacs.forEach(v => {
+                    const co = _scVacancySource(v), f = _scNormFloor(v);
+                    let fm = byCo.get(co); if (!fm) { fm = new Map(); byCo.set(co, fm); }
+                    if (!fm.has(f)) fm.set(f, v);
+                });
+                const score = co => { const fm = byCo.get(co); let ar = 0; fm.forEach(v => ar += _scVacAreaPy(v)); return { cnt: fm.size, ar }; };
+                const cos = [...byCo.keys()];
+                const pick = key => cos.slice().sort((a, c) => {
+                    const sa = score(a), sc = score(c);
+                    const va = key === 'area' ? sa.ar : sa.cnt, vc = key === 'area' ? sc.ar : sc.cnt;
+                    if (vc !== va) return vc - va;       // 큰 쪽 우선
+                    return a.localeCompare(c);            // 동률 → 가나다순
+                })[0];
+                const repByCount = pick('count'), repByArea = pick('area');
+                const rep = basis === 'count' ? repByCount : repByArea;
+                byCo.get(rep).forEach((v, f) => {
+                    const a = _scVacAreaPy(v); area += a;
+                    const mi = _scMoveInStatus(v, yyyymm);
+                    info.floors.set(f, { area: a, moveKind: mi.kind, moveLabel: mi.label, source: rep, hasRent: (parseFloat(v.rentArea) > 0) });
+                });
+                info.rep = rep; info.repByCount = repByCount; info.repByArea = repByArea;
             }
         }
+        bldgInfo.set(String(bid), info);
         const region = regOf(entry.region || 'ETC');
         [map.get(region), map.get('TOTAL')].forEach(bk => { bk.gross += gross; bk.vac += area; bk.nBldg += 1; });
     });
     map.forEach(bk => { bk.rate = bk.gross > 0 ? bk.vac / bk.gross * 100 : 0; });
-    return { map, cands, alts };
+    return { map, bldgInfo };
 }
 
 window._scSnapRender = function () {
@@ -4480,132 +4472,96 @@ window._scSnapRender = function () {
         area.innerHTML = `<div style="padding:40px; text-align:center; color:#94a3b8;">시점을 1개 이상 선택하세요.</div>`;
         return;
     }
+    const basis = _scSnapState.basis === 'count' ? 'count' : 'area';
     const perMonth = [];
-    const candMap = new Map();   // "bid|sig" -> {…, months:Set}
-    const altList = [];
+    const infoByMonth = {};
+    const divergent = new Set();   // 건수≠면적 대표회사인 빌딩
     months.forEach(m => {
-        const { map, cands, alts } = _scSnapApplyMonth(m);
+        const { map, bldgInfo } = _scSnapApplyMonth(m, basis);
         perMonth.push({ month: m, map });
-        cands.forEach(c => {
-            const k = c.bid + '|' + c.floor;
-            let e = candMap.get(k);
-            if (!e) { e = Object.assign({}, c, { months: new Set(), docs: new Set() }); candMap.set(k, e); }
-            e.months.add(c.month);
-            const docLabel = c.source || c.docId || '';
-            if (docLabel) e.docs.add(docLabel);
+        infoByMonth[m] = bldgInfo;
+        bldgInfo.forEach((info, bid) => {
+            if (info.repByCount && info.repByArea && info.repByCount !== info.repByArea) divergent.add(bid);
         });
-        (alts || []).forEach(a => altList.push(a));
     });
-    _scSnapState.newCands = [...candMap.values()];
 
     const present = SR_REGIONS.filter(r => perMonth.some(pm => (pm.map.get(r)?.gross || 0) > 0));
     const regionsToPlot = ['TOTAL', ...present];
     const svg = _scTrendChartSVG(perMonth, regionsToPlot, 'reported');
     const table = _scTrendTable(perMonth, regionsToPlot);
-    const altUI = _scSnapRenderAlts(altList);
-    const candUI = _scSnapRenderCandidates();
+    const basisUI = _scSnapBasisToggle(basis, divergent);
+    const changeUI = _scSnapRenderChanges(months, infoByMonth);
 
     area.innerHTML = `
-        <div style="padding:4px 2px 12px; font-size:12px; color:#64748b;">
-            📌 선택 스냅샷 <b>${_scSnapState.snapshot.size}개 빌딩</b> 기준 · 선택 회사 안내문 기준 · 지하·1층(리테일) 제외 · 해소 공실 0 처리.
+        ${basisUI}
+        <div style="padding:2px 2px 12px; font-size:12px; color:#64748b;">
+            📌 선택 스냅샷 <b>${_scSnapState.snapshot.size}개 빌딩</b> 기준 · 대표회사 자동선택(<b>${basis === 'count' ? '건수' : '면적'}</b>) · 지하·1층(리테일) 제외 · 해소 공실 0.
         </div>
-        ${altUI}
-        ${candUI}
+        ${changeUI}
         ${svg}
         <div style="margin-top:18px;">${table}</div>
         <div style="margin-top:10px; font-size:11px; color:#94a3b8; line-height:1.6;">
-            산식: 공실률 = Σ공실면적(임대평) ÷ Σ연면적 × 100 (권역 가중) · <b>선택 회사(chosenSource) 안내문 기준</b> 층 매칭 · 지하/1층 제외 · 신규 공실/대체는 위에서 선택 시 반영.
+            산식: 공실률 = Σ공실면적(임대평) ÷ Σ연면적 × 100 (권역 가중) · 시점마다 빌딩별 <b>대표회사 자동선택</b>(${basis === 'count' ? '공실 층수 최다' : '임대평 합 최대'}, 동률 가나다순) · 지하/1층 제외.
         </div>`;
 };
 
-/** 선택 회사 안내문이 없는 시점 — 대체 제안 UI */
-function _scSnapRenderAlts(alts) {
-    if (!alts || !alts.length) return '';
-    const rows = alts.map(a => {
-        const opts = a.available.map(s => `<option value="${encodeURIComponent(s)}" ${a.applied === s ? 'selected' : ''}>${s}</option>`).join('');
-        const status = a.applied
-            ? `<span style="color:#16a34a; font-weight:700;">✔ ${a.applied} 적용</span>`
-            : `<span style="color:#dc2626; font-weight:700;">공실 0 (대체 미선택)</span>`;
-        return `<div style="display:flex; align-items:center; gap:8px; padding:6px 10px; border-top:1px solid #fed7aa; font-size:12px;">
-            <span style="font-weight:600; color:#9a3412;">${a.name}</span>
-            <span style="color:#c2410c; font-size:11px;">${a.month} · 선택사 '${a.chosen || '-'}' 없음</span>
-            <span style="margin-left:auto; display:flex; align-items:center; gap:6px;">
-                ${status}
-                <select onchange="window._scSnapSubAlt('${encodeURIComponent(a.bid)}','${a.month}', this.value)" style="font-size:11px; padding:3px 6px; border:1px solid #fdba74; border-radius:5px;">
-                    <option value="">— 대체 회사 —</option>
-                    ${opts}
-                </select>
-                ${a.applied ? `<button onclick="window._scSnapSubAlt('${encodeURIComponent(a.bid)}','${a.month}','')" style="font-size:10px; padding:2px 6px; border:1px solid #fca5a5; background:#fff; border-radius:4px; cursor:pointer;">해제</button>` : ''}
-            </span>
-        </div>`;
-    }).join('');
-    const unresolved = alts.filter(a => !a.applied).length;
-    return `<div style="margin-bottom:16px; background:#fff7ed; border:1px solid #fdba74; border-radius:10px; overflow:hidden;">
-        <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#9a3412; background:#ffedd5;">
-            🔄 선택 회사 안내문이 없는 시점 ${alts.length}건${unresolved ? ` <span style="color:#dc2626;">(미해결 ${unresolved})</span>` : ''} — 대체 회사를 고르면 <b>그 시점만</b> 그 회사로 계산
+/** 대표회사 기준 토글 + 건수↔면적 차이 빌딩 표시 */
+function _scSnapBasisToggle(basis, divergent) {
+    let divHtml = '';
+    const n = divergent ? divergent.size : 0;
+    if (n) {
+        const names = [];
+        divergent.forEach(bid => { const e = _scSnapState.snapshot.get(bid); names.push(e ? e.name : bid); });
+        divHtml = `<div style="margin-top:8px; font-size:11px; color:#9a3412; background:#fff7ed; border:1px solid #fed7aa; border-radius:6px; padding:6px 10px;">⚖️ 건수·면적 기준이 <b>서로 다른 회사</b>를 뽑는 빌딩 ${n}곳 — 토글로 비교해보세요: ${names.slice(0, 10).join(', ')}${names.length > 10 ? ` 외 ${names.length - 10}` : ''}</div>`;
+    }
+    return `<div style="margin-bottom:14px; padding:10px 14px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px;">
+        <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+            <span style="font-size:12px; font-weight:700; color:#475569;">대표회사 기준</span>
+            <label style="font-size:12px; cursor:pointer;"><input type="radio" name="sc-snap-basis" ${basis === 'area' ? 'checked' : ''} onchange="window._scSnapSetBasis('area')"> 면적 (임대평 합 최대)</label>
+            <label style="font-size:12px; cursor:pointer;"><input type="radio" name="sc-snap-basis" ${basis === 'count' ? 'checked' : ''} onchange="window._scSnapSetBasis('count')"> 건수 (공실 층수 최다)</label>
         </div>
-        ${rows}
+        ${divHtml}
     </div>`;
 }
-window._scSnapSubAlt = function (bidEnc, month, srcEnc) {
-    const bid = decodeURIComponent(bidEnc || '');
-    const src = decodeURIComponent(srcEnc || '');
-    _scSnapState.subAlt = _scSnapState.subAlt || {};
-    const key = bid + '|' + month;
-    if (src) _scSnapState.subAlt[key] = src; else delete _scSnapState.subAlt[key];
-    window._scSnapRender();
-};
+window._scSnapSetBasis = function (b) { _scSnapState.basis = (b === 'count' ? 'count' : 'area'); window._scSnapRender(); };
 
-/** 신규(스냅샷에 없는) 공실 후보 UI */
-function _scSnapRenderCandidates() {
-    const cands = _scSnapState.newCands || [];
-    if (!cands.length) return '';
-    const rows = cands.map(c => {
-        const k = c.bid + '|' + c.floor;
-        const checked = _scSnapState.includedExtra.has(k) ? 'checked' : '';
-        const ms = [...c.months].sort().join(', ');
-        const docs = c.docs ? [...c.docs] : (c.source || c.docId ? [c.source || c.docId] : []);
-        const docHtml = docs.length
-            ? `<span style="font-size:10px; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; padding:1px 6px;" title="${docs.join(' / ')}">📄 ${docs[0]}${docs.length > 1 ? ` 외 ${docs.length - 1}` : ''}</span>`
-            : `<span style="font-size:10px; color:#cbd5e1;">📄 출처미상</span>`;
-        const basisTag = (c.hasRent === false) ? `<span style="font-size:9px; color:#9ca3af;">(전용)</span>` : '';
-        const miColor = c.moveKind === 'immediate' ? '#16a34a' : (c.moveKind === 'planned' ? '#ea580c' : '#9ca3af');
-        const miIcon = c.moveKind === 'immediate' ? '🟢' : (c.moveKind === 'planned' ? '🟡' : '⚪');
-        const miBadge = `<span style="font-size:10px; font-weight:700; color:${miColor};" title="입주시기 (해당 시점 기준 즉시=실제공실 / 예정=아직 임차인)">${miIcon} ${c.moveLabel || '미기재'}</span>`;
-        return `<label style="display:flex; align-items:center; gap:8px; padding:5px 10px; border-top:1px solid #fde68a; font-size:12px; cursor:pointer;">
-            <input type="checkbox" ${checked} data-k="${encodeURIComponent(k)}" onchange="window._scSnapToggleExtra(this)">
-            <span style="font-weight:600; color:#92400e; min-width:140px;">${c.name}</span>
-            <span style="color:#b45309;">${c.floor || '-'} · ${Math.round(c.areaPy).toLocaleString()}평 ${basisTag}</span>
-            ${miBadge}
-            ${docHtml}
-            <span style="margin-left:auto; font-size:10px; color:#a16207;">신규 출현: ${ms}</span>
-        </label>`;
-    }).join('');
-    const _plannedN = cands.filter(c => c.moveKind === 'planned').length;
-    return `<div style="margin-bottom:16px; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; overflow:hidden;">
-        <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#b45309; background:#fef3c7; display:flex; justify-content:space-between; align-items:center;">
-            <span>⚠️ 스냅샷에 없던 신규 공실 ${cands.length}건${_plannedN ? ` <span style="color:#ea580c;">(🟡 예정 ${_plannedN}건)</span>` : ''} — 포함할 항목을 체크하면 합산·재계산 <span style="font-weight:400; opacity:0.8;">· 면적=임대평(rentArea)</span></span>
-            <span>
-                <button onclick="window._scSnapExtraAll(true)" style="font-size:11px; padding:2px 8px; border:1px solid #f59e0b; background:#fff; border-radius:5px; cursor:pointer;">전체 포함</button>
-                <button onclick="window._scSnapExtraAll(false)" style="font-size:11px; padding:2px 8px; border:1px solid #f59e0b; background:#fff; border-radius:5px; cursor:pointer;">전체 제외</button>
-            </span>
-        </div>
-        ${rows}
-    </div>`;
-}
-window._scSnapToggleExtra = function (cb) {
-    const k = decodeURIComponent(cb.dataset.k || '');
-    if (!k) return;
-    if (cb.checked) _scSnapState.includedExtra.add(k); else _scSnapState.includedExtra.delete(k);
-    window._scSnapRender();
-};
-window._scSnapExtraAll = function (on) {
-    (_scSnapState.newCands || []).forEach(c => {
-        const k = c.bid + '|' + c.floor;
-        if (on) _scSnapState.includedExtra.add(k); else _scSnapState.includedExtra.delete(k);
+/** 직전 시점 대비 변화 (마지막 전이) — ⊕추가 / ⊖삭제 */
+function _scSnapRenderChanges(months, infoByMonth) {
+    if (!months || months.length < 2) {
+        return `<div style="margin-bottom:16px; padding:14px; background:#f1f5f9; border:1px dashed #cbd5e1; border-radius:10px; font-size:12px; color:#64748b; text-align:center;">🔁 직전 시점 대비 변화를 보려면 시점을 <b>2개 이상</b> 선택하세요.</div>`;
+    }
+    const prevM = months[months.length - 2], curM = months[months.length - 1];
+    const prevInfo = infoByMonth[prevM] || new Map();
+    const curInfo = infoByMonth[curM] || new Map();
+    const added = [], removed = [];
+    _scSnapState.snapshot.forEach((entry, bid) => {
+        const pf = (prevInfo.get(String(bid)) || {}).floors || new Map();
+        const cf = (curInfo.get(String(bid)) || {}).floors || new Map();
+        cf.forEach((fd, f) => { if (!pf.has(f)) added.push(Object.assign({ name: entry.name, floor: f }, fd)); });
+        pf.forEach((fd, f) => { if (!cf.has(f)) removed.push(Object.assign({ name: entry.name, floor: f }, fd)); });
     });
-    window._scSnapRender();
-};
+    const miBadge = (k, l) => {
+        const c = k === 'immediate' ? '#16a34a' : (k === 'planned' ? '#ea580c' : '#9ca3af');
+        const i = k === 'immediate' ? '🟢' : (k === 'planned' ? '🟡' : '⚪');
+        return `<span style="font-size:10px; font-weight:700; color:${c};">${i} ${l || '미기재'}</span>`;
+    };
+    const row = (x, sign, color) => `<div style="display:flex; align-items:center; gap:8px; padding:5px 10px; border-top:1px solid #e5e7eb; font-size:12px;">
+        <span style="font-weight:800; color:${color}; width:46px;">${sign}</span>
+        <span style="font-weight:600; color:#1e293b; min-width:150px;">${x.name}</span>
+        <span style="color:#475569;">${x.floor} · ${Math.round(x.area).toLocaleString()}평 ${x.hasRent === false ? '<span style="font-size:9px;color:#9ca3af;">(전용)</span>' : ''}</span>
+        ${miBadge(x.moveKind, x.moveLabel)}
+        <span style="font-size:10px; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; padding:1px 6px;">📄 ${x.source || '-'}</span>
+    </div>`;
+    const body = (added.length || removed.length)
+        ? added.map(x => row(x, '⊕ 추가', '#16a34a')).join('') + removed.map(x => row(x, '⊖ 삭제', '#dc2626')).join('')
+        : `<div style="padding:14px; text-align:center; color:#94a3b8; font-size:12px;">두 시점 간 공실 변화 없음</div>`;
+    return `<div style="margin-bottom:16px; background:#fff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+        <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#0f172a; background:#f8fafc;">
+            🔁 직전 시점 대비 변화 — <b>${prevM} → ${curM}</b> · <span style="color:#16a34a;">⊕ 추가 ${added.length}</span> / <span style="color:#dc2626;">⊖ 삭제 ${removed.length}</span>
+        </div>
+        ${body}
+    </div>`;
+}
 
 function _scInjectSnapModal() {
     const old = _scQS('sc-snap-modal');
