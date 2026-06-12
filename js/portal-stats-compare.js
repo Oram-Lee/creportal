@@ -4396,6 +4396,7 @@ function _scSnapCaptureFromSelection() {
             if (!sel.selectedVacKeys || !sel.selectedVacKeys.size) return;
             // 원본 시점 정확 선택 보관 (기존 _scExtractBuildingMetrics 와 동일 기준)
             entry.byMonth[pt.yyyymm] = { source: sel.chosenSource || '', keys: new Set(sel.selectedVacKeys) };
+            entry.chosenSource = sel.chosenSource || entry.chosenSource || '';   // 빌딩 레벨 선택 회사(신규 시점 매칭 기준)
             // 선택 공실의 정규화 층 (신규 시점 매칭용)
             _scVacanciesByMonth(b, pt.yyyymm)
                 .filter(v => _scVacancySource(v) === (sel.chosenSource || '') && sel.selectedVacKeys.has(_scVacancyKey(v)))
@@ -4414,6 +4415,7 @@ function _scSnapApplyMonth(yyyymm) {
     const map = new Map();
     [...SR_REGIONS, 'TOTAL'].forEach(r => map.set(r, { gross: 0, vac: 0, rate: 0, nBldg: 0 }));
     const cands = [];
+    const alts = [];
     _scSnapState.snapshot.forEach((entry, bid) => {
         const b = _scIdxBldg(bid);
         const gross = entry.gross || (b ? _scGrossPy(b) : 0);
@@ -4427,27 +4429,42 @@ function _scSnapApplyMonth(yyyymm) {
                     .filter(v => _scVacancySource(v) === bm.source && bm.keys.has(_scVacancyKey(v)))
                     .forEach(v => { area += _scVacAreaPy(v); });
             } else {
-                // 신규 시점 — 층 기준 매칭 + 지하/1층 제외
-                const seen = new Set();
-                _scVacanciesByMonth(b, yyyymm).forEach(v => {
-                    const f = _scNormFloor(v);
-                    if (!f || seen.has(f)) return;
-                    seen.add(f);
-                    if (_scFloorExcluded(f)) return;
-                    if (entry.floors.has(f) || _scSnapState.includedExtra.has(bid + '|' + f)) {
-                        area += _scVacAreaPy(v);
-                    } else {
-                        const _mi = _scMoveInStatus(v, yyyymm);
-                        cands.push({ bid, name: entry.name, floor: f, areaPy: _scVacAreaPy(v), month: yyyymm, source: (v.source || ''), docId: (v.documentId || ''), hasRent: (parseFloat(v.rentArea) > 0), moveKind: _mi.kind, moveLabel: _mi.label });
-                    }
-                });
+                // 신규 시점 — 선택 회사(chosenSource) 안내문 기준으로만 매칭
+                const chosen = entry.chosenSource || '';
+                const subKey = bid + '|' + yyyymm;
+                const subSrc = (_scSnapState.subAlt && _scSnapState.subAlt[subKey]) || '';
+                const effSrc = subSrc || chosen;
+                const allVacs = _scVacanciesByMonth(b, yyyymm).filter(v => !String(v._key || '').endsWith('_meta'));
+                const srcSet = new Set();
+                allVacs.forEach(v => { const s = _scVacancySource(v); if (s) srcSet.add(s); });
+                if (effSrc && srcSet.has(effSrc)) {
+                    // 그 회사 안내문 안에서만 층 매칭 ("외 N건" 중복 제거)
+                    const seen = new Set();
+                    allVacs.filter(v => _scVacancySource(v) === effSrc).forEach(v => {
+                        const f = _scNormFloor(v);
+                        if (!f || seen.has(f)) return;
+                        seen.add(f);
+                        if (_scFloorExcluded(f)) return;
+                        if (entry.floors.has(f) || _scSnapState.includedExtra.has(bid + '|' + f)) {
+                            area += _scVacAreaPy(v);
+                        } else {
+                            const _mi = _scMoveInStatus(v, yyyymm);
+                            cands.push({ bid, name: entry.name, floor: f, areaPy: _scVacAreaPy(v), month: yyyymm, source: effSrc, docId: (v.documentId || ''), hasRent: (parseFloat(v.rentArea) > 0), moveKind: _mi.kind, moveLabel: _mi.label });
+                        }
+                    });
+                    if (subSrc) alts.push({ bid, name: entry.name, month: yyyymm, chosen, applied: subSrc, available: [...srcSet] });
+                } else {
+                    // 선택 회사 안내문 없음 → 공실 0 (엄격) + 대체 제안
+                    const others = [...srcSet].filter(s => s && s !== chosen);
+                    if (others.length) alts.push({ bid, name: entry.name, month: yyyymm, chosen, applied: '', available: others });
+                }
             }
         }
         const region = regOf(entry.region || 'ETC');
         [map.get(region), map.get('TOTAL')].forEach(bk => { bk.gross += gross; bk.vac += area; bk.nBldg += 1; });
     });
     map.forEach(bk => { bk.rate = bk.gross > 0 ? bk.vac / bk.gross * 100 : 0; });
-    return { map, cands };
+    return { map, cands, alts };
 }
 
 window._scSnapRender = function () {
@@ -4465,8 +4482,9 @@ window._scSnapRender = function () {
     }
     const perMonth = [];
     const candMap = new Map();   // "bid|sig" -> {…, months:Set}
+    const altList = [];
     months.forEach(m => {
-        const { map, cands } = _scSnapApplyMonth(m);
+        const { map, cands, alts } = _scSnapApplyMonth(m);
         perMonth.push({ month: m, map });
         cands.forEach(c => {
             const k = c.bid + '|' + c.floor;
@@ -4476,6 +4494,7 @@ window._scSnapRender = function () {
             const docLabel = c.source || c.docId || '';
             if (docLabel) e.docs.add(docLabel);
         });
+        (alts || []).forEach(a => altList.push(a));
     });
     _scSnapState.newCands = [...candMap.values()];
 
@@ -4483,18 +4502,58 @@ window._scSnapRender = function () {
     const regionsToPlot = ['TOTAL', ...present];
     const svg = _scTrendChartSVG(perMonth, regionsToPlot, 'reported');
     const table = _scTrendTable(perMonth, regionsToPlot);
+    const altUI = _scSnapRenderAlts(altList);
     const candUI = _scSnapRenderCandidates();
 
     area.innerHTML = `
         <div style="padding:4px 2px 12px; font-size:12px; color:#64748b;">
-            📌 선택 스냅샷 <b>${_scSnapState.snapshot.size}개 빌딩</b> 기준 · 지하·1층(리테일) 제외 · 해소 공실 0 처리.
+            📌 선택 스냅샷 <b>${_scSnapState.snapshot.size}개 빌딩</b> 기준 · 선택 회사 안내문 기준 · 지하·1층(리테일) 제외 · 해소 공실 0 처리.
         </div>
+        ${altUI}
         ${candUI}
         ${svg}
         <div style="margin-top:18px;">${table}</div>
         <div style="margin-top:10px; font-size:11px; color:#94a3b8; line-height:1.6;">
-            산식: 공실률 = Σ공실면적(임대평) ÷ Σ연면적 × 100 (권역 가중) · 스냅샷 시그니처(층+면적)로 시점 매칭 · 지하/1층 제외 · 신규 공실은 위에서 포함 선택 시 합산.
+            산식: 공실률 = Σ공실면적(임대평) ÷ Σ연면적 × 100 (권역 가중) · <b>선택 회사(chosenSource) 안내문 기준</b> 층 매칭 · 지하/1층 제외 · 신규 공실/대체는 위에서 선택 시 반영.
         </div>`;
+};
+
+/** 선택 회사 안내문이 없는 시점 — 대체 제안 UI */
+function _scSnapRenderAlts(alts) {
+    if (!alts || !alts.length) return '';
+    const rows = alts.map(a => {
+        const opts = a.available.map(s => `<option value="${encodeURIComponent(s)}" ${a.applied === s ? 'selected' : ''}>${s}</option>`).join('');
+        const status = a.applied
+            ? `<span style="color:#16a34a; font-weight:700;">✔ ${a.applied} 적용</span>`
+            : `<span style="color:#dc2626; font-weight:700;">공실 0 (대체 미선택)</span>`;
+        return `<div style="display:flex; align-items:center; gap:8px; padding:6px 10px; border-top:1px solid #fed7aa; font-size:12px;">
+            <span style="font-weight:600; color:#9a3412;">${a.name}</span>
+            <span style="color:#c2410c; font-size:11px;">${a.month} · 선택사 '${a.chosen || '-'}' 없음</span>
+            <span style="margin-left:auto; display:flex; align-items:center; gap:6px;">
+                ${status}
+                <select onchange="window._scSnapSubAlt('${encodeURIComponent(a.bid)}','${a.month}', this.value)" style="font-size:11px; padding:3px 6px; border:1px solid #fdba74; border-radius:5px;">
+                    <option value="">— 대체 회사 —</option>
+                    ${opts}
+                </select>
+                ${a.applied ? `<button onclick="window._scSnapSubAlt('${encodeURIComponent(a.bid)}','${a.month}','')" style="font-size:10px; padding:2px 6px; border:1px solid #fca5a5; background:#fff; border-radius:4px; cursor:pointer;">해제</button>` : ''}
+            </span>
+        </div>`;
+    }).join('');
+    const unresolved = alts.filter(a => !a.applied).length;
+    return `<div style="margin-bottom:16px; background:#fff7ed; border:1px solid #fdba74; border-radius:10px; overflow:hidden;">
+        <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#9a3412; background:#ffedd5;">
+            🔄 선택 회사 안내문이 없는 시점 ${alts.length}건${unresolved ? ` <span style="color:#dc2626;">(미해결 ${unresolved})</span>` : ''} — 대체 회사를 고르면 <b>그 시점만</b> 그 회사로 계산
+        </div>
+        ${rows}
+    </div>`;
+}
+window._scSnapSubAlt = function (bidEnc, month, srcEnc) {
+    const bid = decodeURIComponent(bidEnc || '');
+    const src = decodeURIComponent(srcEnc || '');
+    _scSnapState.subAlt = _scSnapState.subAlt || {};
+    const key = bid + '|' + month;
+    if (src) _scSnapState.subAlt[key] = src; else delete _scSnapState.subAlt[key];
+    window._scSnapRender();
 };
 
 /** 신규(스냅샷에 없는) 공실 후보 UI */
@@ -4602,6 +4661,7 @@ window._scSnapCapture = function () {
     const snap = _scSnapCaptureFromSelection();
     _scSnapState.snapshot = snap;
     _scSnapState.includedExtra = new Set();
+    _scSnapState.subAlt = {};
     _scSnapState.newCands = [];
     _scSnapState.months = _scTrendAvailableMonths().slice();   // 신규 캡쳐: 전체 시점 기본
     _scSnapState.snapId = '';                                  // 신규 세션
@@ -4649,13 +4709,19 @@ function _scSnapBuildPayload(title) {
         const eb = _scEscapeKey(k.slice(0, i));
         (extra[eb] = extra[eb] || {})[_scEscapeKey(k.slice(i + 1))] = true;
     });
+    const subAlt = {};
+    Object.keys(_scSnapState.subAlt || {}).forEach(k => {
+        const i = k.indexOf('|'); if (i < 0) return;
+        const eb = _scEscapeKey(k.slice(0, i));
+        (subAlt[eb] = subAlt[eb] || {})[_scEscapeKey(k.slice(i + 1))] = _scSnapState.subAlt[k];
+    });
     return {
         title: String(title || _scSnapState.title || '제목없음').slice(0, 200),
         updatedAt: new Date().toISOString(),
         updatedBy: user,
         version: (_scSnapState.version || 0) + 1,
         months: (_scSnapState.months || []).slice(),
-        buildings, includedExtra: extra,
+        buildings, includedExtra: extra, subAlt,
     };
 }
 function _scSnapRestoreFromPayload(p) {
@@ -4687,6 +4753,13 @@ function _scSnapRestoreFromPayload(p) {
         Object.keys(ex[escBid] || {}).forEach(escF => extra.add(bid + '|' + _scUnescapeKey(escF)));
     });
     _scSnapState.includedExtra = extra;
+    const subAlt = {};
+    const sa = p.subAlt || {};
+    Object.keys(sa).forEach(escBid => {
+        const bid = _scUnescapeKey(escBid);
+        Object.keys(sa[escBid] || {}).forEach(escYm => { subAlt[bid + '|' + _scUnescapeKey(escYm)] = sa[escBid][escYm]; });
+    });
+    _scSnapState.subAlt = subAlt;
     _scSnapState.title = p.title || '';
 }
 
