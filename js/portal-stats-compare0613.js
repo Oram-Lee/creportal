@@ -4327,30 +4327,6 @@ function _scVacFloor(v) { return String(v.floorText || v.floor || '').trim(); }
 /** 정규화 층 — 시점 간 동일 공실(물리적 층) 매칭용 ("3 F"→"3F") */
 function _scNormFloor(v) { return _scVacFloor(v).toUpperCase().replace(/\s+/g, ''); }
 
-// ── 입주시기: 즉시(실제공실) vs 예정공실 판정 (해당 시점 기준) ──
-function _scYM2Num(s) {
-    const m = String(s || '').match(/(\d{2,4})[^\d]+(\d{1,2})/);
-    if (!m) return null;
-    let y = parseInt(m[1], 10); if (y < 100) y += 2000;
-    return y * 12 + parseInt(m[2], 10);
-}
-/** 해당 시점(yyyymm) 기준 입주 상태:
- *   immediate 🟢 = '즉시' 키워드 또는 입주월 ≤ 시점 (= 실제 공실)
- *   planned   🟡 = 입주월 > 시점, 또는 '협의' 등 텍스트 (= 예정 공실, 아직 임차인)
- *   empty     ⚪ = 미기재
- */
-function _scMoveInStatus(v, yyyymm) {
-    const c = _scClassifyMoveIn(v);
-    if (c.kind === 'immediate') return { kind: 'immediate', label: '즉시', raw: c.raw };
-    if (c.kind === 'empty') return { kind: 'empty', label: '미기재', raw: '' };
-    const mv = _scYM2Num(c.raw), vw = _scYM2Num(yyyymm);
-    if (mv != null && vw != null) {
-        if (mv <= vw) return { kind: 'immediate', label: `즉시(${c.raw})`, raw: c.raw };
-        return { kind: 'planned', label: c.raw, raw: c.raw };
-    }
-    return { kind: 'planned', label: c.raw, raw: c.raw };
-}
-
 // 빌딩 id→정규화빌딩 인덱스 (루프마다 전체 스캔 방지 = 성능)
 let _scBldgIndex = null;
 function _scBuildBldgIndex() {
@@ -4437,8 +4413,7 @@ function _scSnapApplyMonth(yyyymm) {
                     if (entry.floors.has(f) || _scSnapState.includedExtra.has(bid + '|' + f)) {
                         area += _scVacAreaPy(v);
                     } else {
-                        const _mi = _scMoveInStatus(v, yyyymm);
-                        cands.push({ bid, name: entry.name, floor: f, areaPy: _scVacAreaPy(v), month: yyyymm, source: (v.source || ''), docId: (v.documentId || ''), hasRent: (parseFloat(v.rentArea) > 0), moveKind: _mi.kind, moveLabel: _mi.label });
+                        cands.push({ bid, name: entry.name, floor: f, areaPy: _scVacAreaPy(v), month: yyyymm, source: (v.source || ''), docId: (v.documentId || ''), hasRent: (parseFloat(v.rentArea) > 0) });
                     }
                 });
             }
@@ -4510,22 +4485,17 @@ function _scSnapRenderCandidates() {
             ? `<span style="font-size:10px; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; padding:1px 6px;" title="${docs.join(' / ')}">📄 ${docs[0]}${docs.length > 1 ? ` 외 ${docs.length - 1}` : ''}</span>`
             : `<span style="font-size:10px; color:#cbd5e1;">📄 출처미상</span>`;
         const basisTag = (c.hasRent === false) ? `<span style="font-size:9px; color:#9ca3af;">(전용)</span>` : '';
-        const miColor = c.moveKind === 'immediate' ? '#16a34a' : (c.moveKind === 'planned' ? '#ea580c' : '#9ca3af');
-        const miIcon = c.moveKind === 'immediate' ? '🟢' : (c.moveKind === 'planned' ? '🟡' : '⚪');
-        const miBadge = `<span style="font-size:10px; font-weight:700; color:${miColor};" title="입주시기 (해당 시점 기준 즉시=실제공실 / 예정=아직 임차인)">${miIcon} ${c.moveLabel || '미기재'}</span>`;
         return `<label style="display:flex; align-items:center; gap:8px; padding:5px 10px; border-top:1px solid #fde68a; font-size:12px; cursor:pointer;">
             <input type="checkbox" ${checked} data-k="${encodeURIComponent(k)}" onchange="window._scSnapToggleExtra(this)">
-            <span style="font-weight:600; color:#92400e; min-width:140px;">${c.name}</span>
+            <span style="font-weight:600; color:#92400e;">${c.name}</span>
             <span style="color:#b45309;">${c.floor || '-'} · ${Math.round(c.areaPy).toLocaleString()}평 ${basisTag}</span>
-            ${miBadge}
             ${docHtml}
             <span style="margin-left:auto; font-size:10px; color:#a16207;">신규 출현: ${ms}</span>
         </label>`;
     }).join('');
-    const _plannedN = cands.filter(c => c.moveKind === 'planned').length;
     return `<div style="margin-bottom:16px; background:#fffbeb; border:1px solid #fde68a; border-radius:10px; overflow:hidden;">
         <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#b45309; background:#fef3c7; display:flex; justify-content:space-between; align-items:center;">
-            <span>⚠️ 스냅샷에 없던 신규 공실 ${cands.length}건${_plannedN ? ` <span style="color:#ea580c;">(🟡 예정 ${_plannedN}건)</span>` : ''} — 포함할 항목을 체크하면 합산·재계산 <span style="font-weight:400; opacity:0.8;">· 면적=임대평(rentArea)</span></span>
+            <span>⚠️ 스냅샷에 없던 신규 공실 ${cands.length}건 — 포함할 항목을 체크하면 합산·재계산 <span style="font-weight:400; opacity:0.8;">· 면적=임대평(rentArea)</span></span>
             <span>
                 <button onclick="window._scSnapExtraAll(true)" style="font-size:11px; padding:2px 8px; border:1px solid #f59e0b; background:#fff; border-radius:5px; cursor:pointer;">전체 포함</button>
                 <button onclick="window._scSnapExtraAll(false)" style="font-size:11px; padding:2px 8px; border:1px solid #f59e0b; background:#fff; border-radius:5px; cursor:pointer;">전체 제외</button>
