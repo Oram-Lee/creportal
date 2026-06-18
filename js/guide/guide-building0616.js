@@ -1019,18 +1019,6 @@ export function renderBuildingEditor(item, building) {
     }
 }
 
-// ★ [B-4] 공실 고유 키 — id 우선(타사 공실=Firebase key), 없으면(직접입력) 식별 필드 조합.
-//   기존 floor+면적+source 키는 같은 층의 서로 다른 공실(면적 비거나 동일 시) 2번째를 떨궜음.
-function vacancyDedupKey(v) {
-    if (v && (v.id || v.vacancyId)) return 'id:' + (v.id || v.vacancyId);
-    const f = (x) => (x === undefined || x === null) ? '' : String(x);
-    return 'k:' + [
-        f(v.floor), f(v.exclusiveArea || v.area), f(v.rentArea || v.area),
-        f(v.deposit ?? v.depositPy), f(v.rent ?? v.rentPy), f(v.maintenance ?? v.maintenancePy),
-        f(v.moveIn ?? v.moveInDate), f(v.source), f(v.guideId), f(v.createdAt)
-    ].join('|');
-}
-
 // ★ 신규: leasingGuides에서 해당 빌딩의 공실 정보 가져오기
 function getLeasingGuideVacancies(buildingId) {
     const vacancies = [];
@@ -1064,11 +1052,14 @@ function getLeasingGuideVacancies(buildingId) {
         });
     });
     
-    // ★ [B-4] 중복 제거 — id 기준(타사 공실은 Firebase key로 고유). 같은 층 중복 공실 보존.
+    // 중복 제거 (floor + exclusiveArea + rentArea + source 기준으로 고유 식별)
     const uniqueVacancies = [];
     const seen = new Set();
     vacancies.forEach(v => {
-        const key = vacancyDedupKey(v);
+        // ★ 더 정확한 고유 키 생성 (전용면적, 임대면적 모두 포함)
+        const exclusiveArea = v.exclusiveArea || v.area || '';
+        const rentArea = v.rentArea || v.area || '';
+        const key = `${v.floor}_${exclusiveArea}_${rentArea}_${v.source || ''}`;
         if (!seen.has(key)) {
             seen.add(key);
             uniqueVacancies.push(v);
@@ -1114,9 +1105,15 @@ export function toggleGuideVacancy(idx, vacancyIdx) {
     
     if (!item.leasingGuideVacancies) item.leasingGuideVacancies = [];
     
-    // ★ [B-4] id 기준 비교 (같은 층 중복 공실도 개별 식별)
-    const targetKey = vacancyDedupKey(targetVacancy);
-    const existingIdx = item.leasingGuideVacancies.findIndex(v => vacancyDedupKey(v) === targetKey);
+    // ★ 더 정확한 비교 (floor + exclusiveArea + rentArea)
+    const getVacancyKey = (v) => {
+        const exclusiveArea = v.exclusiveArea || v.area || '';
+        const rentArea = v.rentArea || v.area || '';
+        return `${v.floor}_${exclusiveArea}_${rentArea}`;
+    };
+    
+    const targetKey = getVacancyKey(targetVacancy);
+    const existingIdx = item.leasingGuideVacancies.findIndex(v => getVacancyKey(v) === targetKey);
     
     if (existingIdx >= 0) {
         item.leasingGuideVacancies.splice(existingIdx, 1);
