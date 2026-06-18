@@ -325,13 +325,8 @@ export function renderBuildingEditor(item, building) {
     if (!item.leasingGuideVacancies) item.leasingGuideVacancies = [];  // ★ 안내문 공실
     
     // ★ v3.8: 기준가(floorPricing) 자동 로드 - 공실 이관 시 동반 참조용
-    // ★ [B-2] 로드는 비동기 → 완료 후 재렌더해야 기준가 선택 UI 노출 + RENT 반영됨 (현재 편집 중인 항목일 때만)
     if (!item.floorPricingLoaded) {
-        loadFloorPricing(building.id, item).then(() => {
-            if (state.tocItems[state.selectedTocIndex] === item) {
-                renderBuildingEditor(item, building);
-            }
-        });
+        loadFloorPricing(building.id, item);
     }
     
     // ★ 타사 공실 자동 로드 (vacancies가 없거나 로드되지 않은 경우)
@@ -656,7 +651,6 @@ export function renderBuildingEditor(item, building) {
                                 const selectedIds = item.selectedFloorPricingIds || [];
                                 const fps = item.floorPricing || [];
                                 const selectedFps = fps.filter((fp, i) => selectedIds.includes(fp.id || String(i)));
-                                // 1) 명시적으로 선택·반영한 기준가가 있으면 그것을 표시
                                 if (selectedFps.length > 0) {
                                     return selectedFps.map(fp => `
                                         <tr>
@@ -667,17 +661,6 @@ export function renderBuildingEditor(item, building) {
                                         </tr>
                                     `).join('');
                                 }
-                                // ★ [B-2] 2) 선택이 없으면 기준가 1순위(floorPricing[0])를 자동 표시
-                                if (fps.length > 0) {
-                                    const fp = fps[0];
-                                    return `<tr>
-                                        <td>${fp.label || fp.floorRange || '기준층'}</td>
-                                        <td>${formatPriceWon(fp.depositPy)}</td>
-                                        <td>${formatPriceWon(fp.rentPy)}</td>
-                                        <td>${formatPriceWon(fp.maintenancePy)}</td>
-                                    </tr>`;
-                                }
-                                // 3) 기준가가 전혀 없으면 빌딩 기본값으로 폴백
                                 return `<tr>
                                     <td>${building.rentLabel || '기준층'}</td>
                                     <td>${formatPriceWon(building.depositPy)}</td>
@@ -2269,26 +2252,13 @@ export function editFloorPricingInline(itemIdx, fpIdx) {
     const isChecked = selectedIds.includes(fpId);
     const label = fp.label || fp.floorRange || ('기준가 ' + (fpIdx+1));
     rowEl.innerHTML = `
-        <td style="padding:5px 8px; text-align:center;">
-            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleFloorPricing(${itemIdx}, '${fpId}')" style="cursor:pointer;">
-        </td>
-        <td style="padding:5px 8px;">
-            <input type="text" id="fpLabel_${itemIdx}_${fpIdx}" value="${label}" placeholder="구분명" style="width:100%; box-sizing:border-box; font-size:11px; padding:3px 6px; border:1px solid #94a3b8; border-radius:3px;">
-        </td>
-        <td style="padding:5px 8px;">
-            <input type="text" id="fpDep_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.depositPy || ''}" placeholder="보증금" style="width:100%; box-sizing:border-box; text-align:right; font-size:11px; padding:3px 6px; border:1px solid #94a3b8; border-radius:3px;">
-        </td>
-        <td style="padding:5px 8px;">
-            <input type="text" id="fpRent_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.rentPy || ''}" placeholder="임대료" style="width:100%; box-sizing:border-box; text-align:right; font-size:11px; padding:3px 6px; border:1px solid #94a3b8; border-radius:3px;">
-        </td>
-        <td style="padding:5px 8px;">
-            <input type="text" id="fpMaint_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.maintenancePy || ''}" placeholder="관리비" style="width:100%; box-sizing:border-box; text-align:right; font-size:11px; padding:3px 6px; border:1px solid #94a3b8; border-radius:3px;">
-        </td>
-        <td style="padding:5px 8px;"></td>
-        <td colspan="2" style="padding:5px 8px; text-align:center; white-space:nowrap;">
-            <button onclick="saveFloorPricingInline(${itemIdx}, ${fpIdx})" style="font-size:11px; padding:3px 8px; border-radius:3px; background:#2563eb; color:white; border:none; cursor:pointer;">저장</button>
-            <button onclick="cancelFloorPricingInline(${itemIdx})" style="font-size:11px; padding:3px 6px; border-radius:3px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer; margin-left:4px;">취소</button>
-        </td>
+        <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleFloorPricing(${itemIdx}, '${fpId}')" style="cursor:pointer; flex-shrink:0;">
+        <input type="text" id="fpLabel_${itemIdx}_${fpIdx}" value="${label}" placeholder="구분명" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <input type="text" id="fpDep_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.depositPy || ''}" placeholder="보증금" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <input type="text" id="fpRent_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.rentPy || ''}" placeholder="임대료" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <input type="text" id="fpMaint_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.maintenancePy || ''}" placeholder="관리비" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <button onclick="saveFloorPricingInline(${itemIdx}, ${fpIdx})" style="font-size:11px; padding:2px 8px; border-radius:3px; background:#2563eb; color:white; border:none; cursor:pointer;">저장</button>
+        <button onclick="cancelFloorPricingInline(${itemIdx})" style="font-size:11px; padding:2px 6px; border-radius:3px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer;">취소</button>
     `;
 }
 
