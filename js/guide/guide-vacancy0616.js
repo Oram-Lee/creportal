@@ -109,12 +109,6 @@ export function renderExternalVacancyGroups(vacancies, selectedVacancies, idx) {
                         // ★ 금액 포맷팅 적용
                         const priceDisplay = formatPrice(v.rentPy || v.rent || '문의');
                         const depositDisplay = formatPrice(v.depositPy || v.deposit || '');
-                        // ★ [B-5] 관리비 (정상 기준 portal-detail.js와 동일: maintenancePy, custom 입력은 maintenance 폴백)
-                        const maintDisplay = formatPrice(v.maintenancePy || v.maintenance || '');
-                        // 적용/대기 배지 (그리드 6컬럼 유지를 위해 관리비 셀 안에 합침)
-                        const stateBadge = isApplied
-                            ? '<span style="font-size:9px; color:#16a34a; margin-left:6px;">✓</span>'
-                            : (isPending ? '<span style="font-size:9px; color:#d97706; margin-left:6px;">⏳</span>' : '');
                         return `
                             <div class="external-vacancy-item ${isApplied ? 'selected' : ''} ${isPending ? 'pending' : ''}" 
                                  onclick="toggleExternalVacancyItem(${idx}, '${v.id}', this)">
@@ -123,7 +117,8 @@ export function renderExternalVacancyGroups(vacancies, selectedVacancies, idx) {
                                 <div class="vacancy-area">${formatPrice(v.rentArea || v.area || '-')}/${formatPrice(v.exclusiveArea || v.area || '-')}평</div>
                                 <div class="vacancy-deposit">${depositDisplay}</div>
                                 <div class="vacancy-price">${priceDisplay}</div>
-                                <div class="vacancy-maint">${maintDisplay}${stateBadge}</div>
+                                ${isApplied ? '<span style="font-size:9px; color:#16a34a; margin-left:auto;">✓적용</span>' : ''}
+                                ${isPending ? '<span style="font-size:9px; color:#d97706; margin-left:auto;">⏳대기</span>' : ''}
                             </div>
                         `;
                     }).join('')}
