@@ -13,7 +13,7 @@
  */
 
 import { state, db, ref, get } from './guide-state.js?v=5.1';
-import { showToast, formatPrice, unformatNumber } from './guide-utils.js?v=5.6';
+import { showToast, formatPrice } from './guide-utils.js?v=5.1';
 // renderBuildingEditor는 window 객체를 통해 호출 (순환 의존성 방지)
 
 // ★ v3.7: 층 표기 정규화 함수 (FF 중복 방지)
@@ -462,11 +462,11 @@ export function switchAddVacancyMode(mode) {
 // 직접 공실 추가
 export function addDirectVacancy(idx) {
     const floor = document.getElementById('newVacFloor')?.value;
-    const exclusiveArea = unformatNumber(document.getElementById('newVacExclusive')?.value) || '';
-    const area = unformatNumber(document.getElementById('newVacArea')?.value);
-    const deposit = unformatNumber(document.getElementById('newVacDeposit')?.value) || '문의';
-    const rent = unformatNumber(document.getElementById('newVacRent')?.value) || '문의';
-    const maintenance = unformatNumber(document.getElementById('newVacMaintenance')?.value) || '문의';
+    const exclusiveArea = document.getElementById('newVacExclusive')?.value || '';
+    const area = document.getElementById('newVacArea')?.value;
+    const deposit = document.getElementById('newVacDeposit')?.value || '문의';
+    const rent = document.getElementById('newVacRent')?.value || '문의';
+    const maintenance = document.getElementById('newVacMaintenance')?.value || '문의';
     const moveIn = document.getElementById('newVacMoveIn')?.value || '-';
     
     if (!floor) {
@@ -535,11 +535,11 @@ export function startVacancyRowEdit(idx, vacancyId, type, btn) {
 
     targetRow.innerHTML = `
         <td><input id="veFloor_${idx}" value="${vacancy.floor || ''}" style="width:48px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
-        <td><input id="veExcl_${idx}" class="js-comma" inputmode="decimal" value="${vacancy.exclusiveArea || vacancy.area || ''}" style="width:56px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
-        <td><input id="veRentArea_${idx}" class="js-comma" inputmode="decimal" value="${vacancy.rentArea || vacancy.area || ''}" style="width:56px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
-        <td><input id="veDep_${idx}" class="js-comma" inputmode="decimal" value="${dep}" placeholder="문의" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
-        <td><input id="veRent_${idx}" class="js-comma" inputmode="decimal" value="${rent}" placeholder="문의" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
-        <td><input id="veMaint_${idx}" class="js-comma" inputmode="decimal" value="${maint}" placeholder="문의" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veExcl_${idx}" value="${vacancy.exclusiveArea || vacancy.area || ''}" style="width:56px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veRentArea_${idx}" value="${vacancy.rentArea || vacancy.area || ''}" style="width:56px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veDep_${idx}" value="${dep}" placeholder="문의" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veRent_${idx}" value="${rent}" placeholder="문의" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veMaint_${idx}" value="${maint}" placeholder="문의" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
         <td><input id="veMoveIn_${idx}" value="${moveIn}" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
         <td>
             <div class="actions">
@@ -568,11 +568,11 @@ export function saveVacancyRowEdit(idx, vacancyId, type, btn) {
     if (!vacancy) return;
 
     const floorVal = document.getElementById(`veFloor_${idx}`)?.value ?? vacancy.floor;
-    const exclVal  = unformatNumber(document.getElementById(`veExcl_${idx}`)?.value) ?? '';
-    const rentAreaVal = unformatNumber(document.getElementById(`veRentArea_${idx}`)?.value) ?? '';
-    const depVal   = unformatNumber(document.getElementById(`veDep_${idx}`)?.value);
-    const rentVal  = unformatNumber(document.getElementById(`veRent_${idx}`)?.value);
-    const maintVal = unformatNumber(document.getElementById(`veMaint_${idx}`)?.value);
+    const exclVal  = document.getElementById(`veExcl_${idx}`)?.value ?? '';
+    const rentAreaVal = document.getElementById(`veRentArea_${idx}`)?.value ?? '';
+    const depVal   = document.getElementById(`veDep_${idx}`)?.value;
+    const rentVal  = document.getElementById(`veRent_${idx}`)?.value;
+    const maintVal = document.getElementById(`veMaint_${idx}`)?.value;
     const moveInVal = document.getElementById(`veMoveIn_${idx}`)?.value ?? '';
 
     // 빈 문자열 → '문의' 처리

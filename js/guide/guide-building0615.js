@@ -54,7 +54,7 @@
  */
 
 import { state, db, ref, get, update, getAllRegions } from './guide-state.js?v=5.1';
-import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, cleanUnitValue, formatNumberInput, unformatNumber, bindCommaInputs } from './guide-utils.js?v=5.6';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, cleanUnitValue } from './guide-utils.js?v=5.1';
 import { 
     getUniqueSourcesHtml, 
     getUniqueDatesHtml, 
@@ -887,11 +887,11 @@ export function renderBuildingEditor(item, building) {
                     <div id="addVacancyDirect_${idx}" class="vacancy-add-content">
                         <div class="vacancy-add-grid">
                             <input type="text" id="newVacFloor" placeholder="층 (예: 15)">
-                            <input type="text" id="newVacExclusive" class="js-comma" inputmode="decimal" placeholder="전용면적">
-                            <input type="text" id="newVacArea" class="js-comma" inputmode="decimal" placeholder="임대면적">
-                            <input type="text" id="newVacDeposit" class="js-comma" inputmode="decimal" placeholder="보증금">
-                            <input type="text" id="newVacRent" class="js-comma" inputmode="decimal" placeholder="임대료">
-                            <input type="text" id="newVacMaintenance" class="js-comma" inputmode="decimal" placeholder="관리비">
+                            <input type="text" id="newVacExclusive" placeholder="전용면적">
+                            <input type="text" id="newVacArea" placeholder="임대면적">
+                            <input type="text" id="newVacDeposit" placeholder="보증금">
+                            <input type="text" id="newVacRent" placeholder="임대료">
+                            <input type="text" id="newVacMaintenance" placeholder="관리비">
                             <input type="text" id="newVacMoveIn" placeholder="입주시기">
                             <button class="btn btn-primary btn-sm" onclick="addDirectVacancy(${idx})">추가</button>
                         </div>
@@ -1672,11 +1672,11 @@ export function openBuildingEditModal(buildingId) {
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                         <div class="form-group">
                             <label>연면적 (평)</label>
-                            <input type="text" id="editBldGrossFloor" class="js-comma" inputmode="decimal" value="${building.grossFloorPy ? formatNumberInput(String(building.grossFloorPy)) : ''}">
+                            <input type="text" id="editBldGrossFloor" value="${building.grossFloorPy || ''}">
                         </div>
                         <div class="form-group">
                             <label>기준층 전용면적 (평)</label>
-                            <input type="text" id="editBldTypicalFloor" class="js-comma" inputmode="decimal" value="${building.typicalFloorPy ? formatNumberInput(String(building.typicalFloorPy)) : ''}">
+                            <input type="text" id="editBldTypicalFloor" value="${building.typicalFloorPy || ''}">
                         </div>
                     </div>
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
@@ -1706,7 +1706,7 @@ export function openBuildingEditModal(buildingId) {
                         </div>
                         <div class="form-group">
                             <label>주차 (총 대수)</label>
-                            <input type="text" id="editBldParking" class="js-comma" inputmode="numeric" value="${building.parkingTotal ? formatNumberInput(String(building.parkingTotal)) : ''}">
+                            <input type="text" id="editBldParking" value="${building.parkingTotal || ''}">
                         </div>
                     </div>
                     <div class="form-group">
@@ -1733,20 +1733,18 @@ export function closeBuildingEditModal() {
 export async function saveBuildingEdit(buildingId) {
     if (!confirm('이 변경사항은 CRE Portal의 해당 빌딩 기본정보에도 반영됩니다.\n저장하시겠습니까?')) return;
     try {
-        // ★ [B-6] 숫자 입력값에서 콤마 제거 후 파싱 (parseFloat("1,234")=1 방지)
-        const numV = id => unformatNumber(document.getElementById(id)?.value);
         const updateData = {
             name: document.getElementById('editBldName')?.value || '',
             address: document.getElementById('editBldAddress')?.value || '',
             nearbyStation: document.getElementById('editBldStation')?.value || '',
-            'area/grossFloorPy': parseFloat(numV('editBldGrossFloor')) || 0,
-            'area/typicalFloorPy': parseFloat(numV('editBldTypicalFloor')) || 0,
-            'area/exclusiveRate': parseFloat(numV('editBldExclusiveRate')) || 0,
-            'floors/above': parseInt(numV('editBldFloorsAbove')) || 0,
-            'floors/below': parseInt(numV('editBldFloorsBelow')) || 0,
+            'area/grossFloorPy': parseFloat(document.getElementById('editBldGrossFloor')?.value) || 0,
+            'area/typicalFloorPy': parseFloat(document.getElementById('editBldTypicalFloor')?.value) || 0,
+            'area/exclusiveRate': parseFloat(document.getElementById('editBldExclusiveRate')?.value) || 0,
+            'floors/above': parseInt(document.getElementById('editBldFloorsAbove')?.value) || 0,
+            'floors/below': parseInt(document.getElementById('editBldFloorsBelow')?.value) || 0,
             'specs/completionYear': document.getElementById('editBldYear')?.value || '',
-            'specs/passengerElevator': parseInt(numV('editBldElevator')) || 0,
-            'parking/total': parseInt(numV('editBldParking')) || 0,
+            'specs/passengerElevator': parseInt(document.getElementById('editBldElevator')?.value) || 0,
+            'parking/total': parseInt(document.getElementById('editBldParking')?.value) || 0,
             parkingNote: document.getElementById('editBldParkingNote')?.value || ''
         };
         
@@ -1758,14 +1756,14 @@ export async function saveBuildingEdit(buildingId) {
             building.name = document.getElementById('editBldName')?.value || building.name;
             building.address = document.getElementById('editBldAddress')?.value || building.address;
             building.nearbyStation = document.getElementById('editBldStation')?.value || building.nearbyStation;
-            building.grossFloorPy = parseFloat(numV('editBldGrossFloor')) || building.grossFloorPy;
-            building.typicalFloorPy = parseFloat(numV('editBldTypicalFloor')) || building.typicalFloorPy;
-            building.exclusiveRate = parseFloat(numV('editBldExclusiveRate')) || building.exclusiveRate;
-            building.floorsAbove = parseInt(numV('editBldFloorsAbove')) || building.floorsAbove;
-            building.floorsBelow = parseInt(numV('editBldFloorsBelow')) || building.floorsBelow;
+            building.grossFloorPy = parseFloat(document.getElementById('editBldGrossFloor')?.value) || building.grossFloorPy;
+            building.typicalFloorPy = parseFloat(document.getElementById('editBldTypicalFloor')?.value) || building.typicalFloorPy;
+            building.exclusiveRate = parseFloat(document.getElementById('editBldExclusiveRate')?.value) || building.exclusiveRate;
+            building.floorsAbove = parseInt(document.getElementById('editBldFloorsAbove')?.value) || building.floorsAbove;
+            building.floorsBelow = parseInt(document.getElementById('editBldFloorsBelow')?.value) || building.floorsBelow;
             building.completionYear = document.getElementById('editBldYear')?.value || building.completionYear;
-            building.elevatorTotal = parseInt(numV('editBldElevator')) || building.elevatorTotal;
-            building.parkingTotal = parseInt(numV('editBldParking')) || building.parkingTotal;
+            building.elevatorTotal = parseInt(document.getElementById('editBldElevator')?.value) || building.elevatorTotal;
+            building.parkingTotal = parseInt(document.getElementById('editBldParking')?.value) || building.parkingTotal;
             building.parkingNote = document.getElementById('editBldParkingNote')?.value || building.parkingNote;
             // ★ 중첩 키도 동기화 (출력 페이지 Firebase 재읽기 시 반영)
             if (!building.area) building.area = {};
@@ -1976,9 +1974,9 @@ function renderDirectInputRows(idx, building) {
         const bId = building.id || '';
         return '<div class="direct-input-row" id="dirRow_' + idx + '_' + ri + '" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:6px; align-items:center; padding:6px 8px; margin-bottom:4px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">'
             + '<input type="text" value="' + (row.label || '') + '" placeholder="구분명 (예: 기준층)" data-field="label" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'label\', this.value)">'
-            + '<input type="text" class="js-comma" inputmode="decimal" value="' + (row.depositPy || '') + '" placeholder="보증금" data-field="depositPy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'depositPy\', this.value)">'
-            + '<input type="text" class="js-comma" inputmode="decimal" value="' + (row.rentPy || '') + '" placeholder="임대료" data-field="rentPy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'rentPy\', this.value)">'
-            + '<input type="text" class="js-comma" inputmode="decimal" value="' + (row.maintenancePy || '') + '" placeholder="관리비" data-field="maintenancePy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'maintenancePy\', this.value)">'
+            + '<input type="text" value="' + (row.depositPy || '') + '" placeholder="보증금" data-field="depositPy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'depositPy\', this.value)">'
+            + '<input type="text" value="' + (row.rentPy || '') + '" placeholder="임대료" data-field="rentPy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'rentPy\', this.value)">'
+            + '<input type="text" value="' + (row.maintenancePy || '') + '" placeholder="관리비" data-field="maintenancePy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'maintenancePy\', this.value)">'
             + '<div style="display:flex; gap:4px; flex-shrink:0;">'
             +   '<button onclick="saveDirectRow(' + idx + ', ' + ri + ', \'' + bId + '\')" title="이 행 저장" style="padding:4px 8px; background:#2563eb; color:white; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;">💾</button>'
             +   '<button onclick="deleteDirectRow(' + idx + ', ' + ri + ', \'' + bId + '\')" title="이 행 삭제" style="padding:4px 8px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:4px; font-size:11px; cursor:pointer;">🗑</button>'
@@ -2251,9 +2249,9 @@ export function editFloorPricingInline(itemIdx, fpIdx) {
     rowEl.innerHTML = `
         <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleFloorPricing(${itemIdx}, '${fpId}')" style="cursor:pointer; flex-shrink:0;">
         <input type="text" id="fpLabel_${itemIdx}_${fpIdx}" value="${label}" placeholder="구분명" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
-        <input type="text" id="fpDep_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.depositPy || ''}" placeholder="보증금" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
-        <input type="text" id="fpRent_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.rentPy || ''}" placeholder="임대료" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
-        <input type="text" id="fpMaint_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.maintenancePy || ''}" placeholder="관리비" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <input type="text" id="fpDep_${itemIdx}_${fpIdx}" value="${fp.depositPy || ''}" placeholder="보증금" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <input type="text" id="fpRent_${itemIdx}_${fpIdx}" value="${fp.rentPy || ''}" placeholder="임대료" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
+        <input type="text" id="fpMaint_${itemIdx}_${fpIdx}" value="${fp.maintenancePy || ''}" placeholder="관리비" style="width:70px; font-size:11px; padding:2px 4px; border:1px solid #94a3b8; border-radius:3px;">
         <button onclick="saveFloorPricingInline(${itemIdx}, ${fpIdx})" style="font-size:11px; padding:2px 8px; border-radius:3px; background:#2563eb; color:white; border:none; cursor:pointer;">저장</button>
         <button onclick="cancelFloorPricingInline(${itemIdx})" style="font-size:11px; padding:2px 6px; border-radius:3px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer;">취소</button>
     `;
@@ -2347,7 +2345,6 @@ export async function saveNoteInline(idx, buildingId) {
 }
 
 export function registerBuildingFunctions() {
-    bindCommaInputs();  // ★ [B-6] 숫자 입력 실시간 콤마 (이벤트 위임, 1회 등록)
     window.renderBuildingEditor = renderBuildingEditor;
     window.uploadImage = uploadImage;
     window.startNoteInlineEdit = startNoteInlineEdit;

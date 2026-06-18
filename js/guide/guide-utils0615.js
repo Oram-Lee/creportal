@@ -297,53 +297,6 @@ export function cleanUnitValue(val) {
     return isNaN(num) ? null : num;
 }
 
-// ★ v5.6: [B-6] 숫자 입력 실시간 콤마 — 정수부만 3자리 그룹핑, 소수점/입력중 상태 보존
-//   "1234" → "1,234", "1234.5" → "1,234.5", "1234." → "1,234." (입력중 점 유지)
-export function formatNumberInput(rawValue) {
-    if (rawValue === null || rawValue === undefined) return '';
-    let s = String(rawValue).replace(/[^0-9.]/g, '');  // 숫자와 점만 허용
-    if (s === '') return '';
-    const firstDot = s.indexOf('.');
-    if (firstDot !== -1) {
-        const intRaw = s.slice(0, firstDot);
-        const decRaw = s.slice(firstDot + 1).replace(/\./g, '');  // 두 번째 이후 점 제거
-        const intGrouped = intRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-        return intGrouped + '.' + decRaw;
-    }
-    return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
-
-// ★ v5.6: [B-6] 저장용 — 콤마만 제거 (텍스트 "문의/협의/-"는 그대로 통과)
-export function unformatNumber(value) {
-    if (value === null || value === undefined) return '';
-    return String(value).replace(/,/g, '').trim();
-}
-
-// ★ v5.6: [B-6] .js-comma 입력 필드에 실시간 콤마 바인딩
-//   이벤트 위임 + 1회 등록 → innerHTML 재렌더로 새로 생긴 입력에도 자동 적용
-let _commaInputBound = false;
-export function bindCommaInputs() {
-    if (_commaInputBound) return;
-    _commaInputBound = true;
-    document.addEventListener('input', (e) => {
-        const el = e.target;
-        if (!el || !el.classList || !el.classList.contains('js-comma')) return;
-        const before = el.value;
-        const caret = el.selectionStart ?? before.length;
-        const digitsBeforeCaret = (before.slice(0, caret).match(/\d/g) || []).length;
-        const after = formatNumberInput(before);
-        if (after === before) return;
-        el.value = after;
-        // 캐럿 복원: 동일한 숫자 개수만큼 지난 위치로
-        let pos = 0, seen = 0;
-        while (pos < after.length && seen < digitsBeforeCaret) {
-            if (/[0-9]/.test(after[pos])) seen++;
-            pos++;
-        }
-        try { el.setSelectionRange(pos, pos); } catch (_) {}
-    });
-}
-
 // 날짜 포맷팅
 export function formatArea(n) {
     if (!n && n !== 0) return '-';
