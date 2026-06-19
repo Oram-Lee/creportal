@@ -5392,14 +5392,14 @@
         /* ★ v5.5: 공실 아이템 - 테이블 행 스타일 */
         .external-vacancy-item {
             display: grid;
-            grid-template-columns: 18px 52px 1fr 1fr 1fr auto;
+            grid-template-columns: 20px 48px 1fr 1fr 1fr auto;
             align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
+            gap: 8px;
+            padding: 7px 12px;
             border-bottom: 1px solid var(--border-color);
             cursor: pointer;
             transition: background 0.15s;
-            font-size: 13px;
+            font-size: 11px;
         }
         .external-vacancy-item:last-child {
             border-bottom: none;
@@ -5417,38 +5417,30 @@
             accent-color: #2563eb;
             cursor: pointer;
         }
-        /* ★ [B-3] 체크박스는 표시 전용 — 행 전체가 단일 클릭 타깃이라 '체크박스냐 행이냐' 혼란 제거 */
-        .external-vacancy-item .vacancy-checkbox {
-            width: 16px; height: 16px;
-            accent-color: #2563eb;
-            pointer-events: none;
-            flex-shrink: 0;
-            margin: 0;
-        }
         .external-vacancy-item .vacancy-floor {
             font-weight: 700;
             color: #1e3a5f;
             background: #e0e7ff;
-            padding: 3px 6px;
+            padding: 2px 6px;
             border-radius: 3px;
             text-align: center;
-            font-size: 12px;
+            font-size: 11px;
         }
         .external-vacancy-item .vacancy-area {
             color: var(--text-secondary);
-            font-size: 13px;
+            font-size: 11px;
         }
         .external-vacancy-item .vacancy-deposit {
             color: #334155;
-            font-size: 13px;
+            font-size: 11px;
         }
         .external-vacancy-item .vacancy-rent {
             color: #334155;
-            font-size: 13px;
+            font-size: 11px;
         }
         .external-vacancy-item .vacancy-price {
             color: var(--text-muted);
-            font-size: 13px;
+            font-size: 10px;
         }
         /* 그룹 헤더에도 같은 grid 컬럼 헤더 표시 */
         .external-vacancy-group-th {
@@ -5537,14 +5529,8 @@
             border: 1px solid #e2e8f0 !important;
         }
         .ext-cart-actions .btn-apply {
-            background: #2563eb;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            padding: 7px 18px;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
+            background: #0369a1;
+            color: white;
         }
         .external-vacancy-cart-body {
             padding: 6px 12px;

@@ -13,7 +13,7 @@
  */
 
 import { state, db, ref, get } from './guide-state.js?v=5.1';
-import { showToast, formatPrice } from './guide-utils.js?v=5.1';
+import { showToast, formatPrice, unformatNumber } from './guide-utils.js?v=5.6';
 // renderBuildingEditor는 window 객체를 통해 호출 (순환 의존성 방지)
 
 // ★ v3.7: 층 표기 정규화 함수 (FF 중복 방지)
@@ -109,16 +109,21 @@ export function renderExternalVacancyGroups(vacancies, selectedVacancies, idx) {
                         // ★ 금액 포맷팅 적용
                         const priceDisplay = formatPrice(v.rentPy || v.rent || '문의');
                         const depositDisplay = formatPrice(v.depositPy || v.deposit || '');
+                        // ★ [B-5] 관리비 (정상 기준 portal-detail.js와 동일: maintenancePy, custom 입력은 maintenance 폴백)
+                        const maintDisplay = formatPrice(v.maintenancePy || v.maintenance || '');
+                        // 적용/대기 배지 (그리드 6컬럼 유지를 위해 관리비 셀 안에 합침)
+                        const stateBadge = isApplied
+                            ? '<span style="font-size:9px; color:#16a34a; margin-left:6px;">✓</span>'
+                            : (isPending ? '<span style="font-size:9px; color:#d97706; margin-left:6px;">⏳</span>' : '');
                         return `
                             <div class="external-vacancy-item ${isApplied ? 'selected' : ''} ${isPending ? 'pending' : ''}" 
                                  onclick="toggleExternalVacancyItem(${idx}, '${v.id}', this)">
-                                <input type="checkbox" class="vacancy-checkbox" ${(isApplied || isPending) ? 'checked' : ''} tabindex="-1" aria-hidden="true">
+                                <input type="checkbox" class="vacancy-checkbox" ${(isApplied || isPending) ? 'checked' : ''} onclick="event.stopPropagation();">
                                 <div class="vacancy-floor">${formatFloorDisplay(v.floor)}</div>
                                 <div class="vacancy-area">${formatPrice(v.rentArea || v.area || '-')}/${formatPrice(v.exclusiveArea || v.area || '-')}평</div>
                                 <div class="vacancy-deposit">${depositDisplay}</div>
                                 <div class="vacancy-price">${priceDisplay}</div>
-                                ${isApplied ? '<span style="font-size:11px; color:#16a34a; font-weight:600; margin-left:auto;">✓적용</span>' : ''}
-                                ${isPending ? '<span style="font-size:11px; color:#d97706; font-weight:600; margin-left:auto;">⏳대기</span>' : ''}
+                                <div class="vacancy-maint">${maintDisplay}${stateBadge}</div>
                             </div>
                         `;
                     }).join('')}
@@ -273,11 +278,11 @@ export function updatePendingUI(idx) {
             pendingBar.style.display = 'flex';
             pendingBar.innerHTML = `
                 <span style="font-size:12px; color:#d97706; font-weight:600;">⏳ ${pendingCount}건 대기 중</span>
-                <div style="display:flex; gap:6px;">
+                <div style="display:flex; gap:4px;">
                     <button class="btn btn-sm" onclick="cancelPendingExternal(${idx})" 
-                        style="background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; border-radius:6px; font-size:13px; padding:7px 12px;">취소</button>
-                    <button onclick="applyPendingExternalVacancies(${idx})" 
-                        style="background:#2563eb; color:#fff; border:none; border-radius:6px; font-size:13px; padding:7px 18px; font-weight:700; cursor:pointer;">✓ 반영</button>
+                        style="background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; font-size:11px; padding:3px 8px;">취소</button>
+                    <button class="btn btn-sm btn-primary" onclick="applyPendingExternalVacancies(${idx})" 
+                        style="background:#2563eb; color:white; font-size:11px; padding:3px 10px; font-weight:600;">✓ 반영</button>
                 </div>
             `;
         } else {
@@ -462,11 +467,11 @@ export function switchAddVacancyMode(mode) {
 // 직접 공실 추가
 export function addDirectVacancy(idx) {
     const floor = document.getElementById('newVacFloor')?.value;
-    const exclusiveArea = document.getElementById('newVacExclusive')?.value || '';
-    const area = document.getElementById('newVacArea')?.value;
-    const deposit = document.getElementById('newVacDeposit')?.value || '문의';
-    const rent = document.getElementById('newVacRent')?.value || '문의';
-    const maintenance = document.getElementById('newVacMaintenance')?.value || '문의';
+    const exclusiveArea = unformatNumber(document.getElementById('newVacExclusive')?.value) || '';
+    const area = unformatNumber(document.getElementById('newVacArea')?.value);
+    const deposit = unformatNumber(document.getElementById('newVacDeposit')?.value) || '문의';
+    const rent = unformatNumber(document.getElementById('newVacRent')?.value) || '문의';
+    const maintenance = unformatNumber(document.getElementById('newVacMaintenance')?.value) || '문의';
     const moveIn = document.getElementById('newVacMoveIn')?.value || '-';
     
     if (!floor) {
@@ -534,17 +539,17 @@ export function startVacancyRowEdit(idx, vacancyId, type, btn) {
     const moveIn = vacancy.moveIn ?? vacancy.moveInDate ?? '';
 
     targetRow.innerHTML = `
-        <td><input id="veFloor_${idx}" value="${vacancy.floor || ''}" style="width:52px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veExcl_${idx}" value="${vacancy.exclusiveArea || vacancy.area || ''}" style="width:60px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veRentArea_${idx}" value="${vacancy.rentArea || vacancy.area || ''}" style="width:60px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veDep_${idx}" value="${dep}" placeholder="문의" style="width:64px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veRent_${idx}" value="${rent}" placeholder="문의" style="width:64px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veMaint_${idx}" value="${maint}" placeholder="문의" style="width:64px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veMoveIn_${idx}" value="${moveIn}" style="width:64px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
+        <td><input id="veFloor_${idx}" value="${vacancy.floor || ''}" style="width:48px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veExcl_${idx}" class="js-comma" inputmode="decimal" value="${vacancy.exclusiveArea || vacancy.area || ''}" style="width:56px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veRentArea_${idx}" class="js-comma" inputmode="decimal" value="${vacancy.rentArea || vacancy.area || ''}" style="width:56px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veDep_${idx}" class="js-comma" inputmode="decimal" value="${dep}" placeholder="문의" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veRent_${idx}" class="js-comma" inputmode="decimal" value="${rent}" placeholder="문의" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veMaint_${idx}" class="js-comma" inputmode="decimal" value="${maint}" placeholder="문의" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
+        <td><input id="veMoveIn_${idx}" value="${moveIn}" style="width:60px; font-size:11px; border:1px solid #93c5fd; border-radius:4px; padding:2px 4px;"></td>
         <td>
-            <div class="actions" style="display:flex; gap:4px; white-space:nowrap;">
-                <button onclick="saveVacancyRowEdit(${idx}, '${vacancyId}', '${type}', this)" style="font-size:12px; padding:5px 11px; border-radius:4px; background:#2563eb; color:#fff; border:none; cursor:pointer; font-weight:700;">저장</button>
-                <button onclick="cancelVacancyRowEdit(${idx}, '${vacancyId}')" style="font-size:12px; padding:5px 9px; border-radius:4px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer;">취소</button>
+            <div class="actions">
+                <button class="btn btn-sm btn-primary" onclick="saveVacancyRowEdit(${idx}, '${vacancyId}', '${type}', this)" style="font-size:11px; padding:2px 6px;">💾</button>
+                <button class="btn btn-sm btn-secondary" onclick="cancelVacancyRowEdit(${idx}, '${vacancyId}')" style="font-size:11px; padding:2px 6px;">✕</button>
             </div>
         </td>
     `;
@@ -568,11 +573,11 @@ export function saveVacancyRowEdit(idx, vacancyId, type, btn) {
     if (!vacancy) return;
 
     const floorVal = document.getElementById(`veFloor_${idx}`)?.value ?? vacancy.floor;
-    const exclVal  = document.getElementById(`veExcl_${idx}`)?.value ?? '';
-    const rentAreaVal = document.getElementById(`veRentArea_${idx}`)?.value ?? '';
-    const depVal   = document.getElementById(`veDep_${idx}`)?.value;
-    const rentVal  = document.getElementById(`veRent_${idx}`)?.value;
-    const maintVal = document.getElementById(`veMaint_${idx}`)?.value;
+    const exclVal  = unformatNumber(document.getElementById(`veExcl_${idx}`)?.value) ?? '';
+    const rentAreaVal = unformatNumber(document.getElementById(`veRentArea_${idx}`)?.value) ?? '';
+    const depVal   = unformatNumber(document.getElementById(`veDep_${idx}`)?.value);
+    const rentVal  = unformatNumber(document.getElementById(`veRent_${idx}`)?.value);
+    const maintVal = unformatNumber(document.getElementById(`veMaint_${idx}`)?.value);
     const moveInVal = document.getElementById(`veMoveIn_${idx}`)?.value ?? '';
 
     // 빈 문자열 → '문의' 처리

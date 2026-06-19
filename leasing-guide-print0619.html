@@ -1563,7 +1563,7 @@
                                         ${(() => {
                                             const selectedIds = item.selectedFloorPricingIds || [];
                                             const fps = item.floorPricing || [];
-                                            const selectedFps = selectedIds.map(id => fps.find((fp, i) => (fp.id || String(i)) === id)).filter(Boolean);
+                                            const selectedFps = fps.filter((fp, i) => selectedIds.includes(fp.id || String(i)));
                                             if (selectedFps.length > 0) {
                                                 return selectedFps.map(fp => `<tr>
                                                     <td>${fp.label || fp.floorRange || '기준층'}</td>

@@ -656,7 +656,7 @@ export function renderBuildingEditor(item, building) {
                             ${(() => {
                                 const selectedIds = item.selectedFloorPricingIds || [];
                                 const fps = item.floorPricing || [];
-                                const selectedFps = selectedIds.map(id => fps.find((fp, i) => (fp.id || String(i)) === id)).filter(Boolean);
+                                const selectedFps = fps.filter((fp, i) => selectedIds.includes(fp.id || String(i)));
                                 // 1) 명시적으로 선택·반영한 기준가가 있으면 그것을 표시
                                 if (selectedFps.length > 0) {
                                     return selectedFps.map(fp => `
@@ -777,9 +777,8 @@ export function renderBuildingEditor(item, building) {
         
         <!-- 데이터 관리 섹션 -->
         <div class="image-manager" id="dataManagerSection">
-            <div class="image-manager-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div class="image-manager-header">
                 <div class="image-manager-title">📋 데이터 관리</div>
-                <button onclick="refreshGuidePreview(${idx})" title="편집·추가한 값을 위 미리보기에 반영" style="padding:6px 14px; background:white; color:#0369a1; border:1px solid #7dd3fc; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;">🔄 미리보기 새로고침</button>
             </div>
             
             <!-- 기준층 정보 -->
@@ -808,63 +807,60 @@ export function renderBuildingEditor(item, building) {
                 </div>
                 ${item.floorPricing && item.floorPricing.length > 0 ? `
                     <div style="margin-top:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px;">
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-                            <div style="font-size:13px; font-weight:700; color:#0369a1; display:flex; align-items:center; gap:8px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                            <div style="font-size:12px; font-weight:700; color:#0369a1; display:flex; align-items:center; gap:8px;">
                                 💰 기준가 선택
-                                <span style="font-weight:400; color:#64748b; font-size:11px;">체크 후 반영 · 선택 항목은 ↕로 노출 순서 변경</span>
+                                <span style="font-weight:400; color:#64748b; font-size:11px;">복수 선택 후 전체 반영 또는 개별 반영 가능</span>
                             </div>
                             <button onclick="applyAllSelectedFloorPricing(${idx})"
-                                style="padding:7px 18px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap;">
-                                ✓ 반영
+                                style="padding:5px 14px; background:#0369a1; color:white; border:none; border-radius:5px; font-size:12px; font-weight:700; cursor:pointer;">
+                                ✅ 선택항목 전체 반영
                             </button>
                         </div>
-                        <input type="text" id="fpSearch_${idx}" oninput="filterFloorPricingRows(${idx}, this.value)" placeholder="🔍 구분·출처 검색"
-                            style="width:100%; box-sizing:border-box; font-size:13px; padding:7px 10px; border:1px solid #bae6fd; border-radius:6px; background:#fff; margin-bottom:8px;">
-                        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                        <table style="width:100%; border-collapse:collapse; font-size:12px;">
                             <thead>
                                 <tr style="background:#e0f2fe;">
-                                    <th style="padding:5px 6px; text-align:center; font-weight:700; color:#0369a1; border-bottom:1px solid #bae6fd; width:30px;">
-                                        <input type="checkbox" id="fpCheckAll_${idx}" onchange="toggleAllFloorPricingCheck(${idx}, this.checked)" style="cursor:pointer; width:15px; height:15px;">
+                                    <th style="padding:6px 8px; text-align:center; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd; width:32px;">
+                                        <input type="checkbox" id="fpCheckAll_${idx}" onchange="toggleAllFloorPricingCheck(${idx}, this.checked)" style="cursor:pointer;">
                                     </th>
-                                    <th style="padding:5px 8px; text-align:left; font-weight:700; color:#0369a1; border-bottom:1px solid #bae6fd;">구분</th>
-                                    <th style="padding:5px 8px; text-align:right; font-weight:700; color:#0369a1; border-bottom:1px solid #bae6fd;">보증금</th>
-                                    <th style="padding:5px 8px; text-align:right; font-weight:700; color:#0369a1; border-bottom:1px solid #bae6fd;">임대료</th>
-                                    <th style="padding:5px 8px; text-align:right; font-weight:700; color:#0369a1; border-bottom:1px solid #bae6fd;">관리비</th>
-                                    <th style="padding:5px 6px; text-align:center; font-weight:700; color:#0369a1; border-bottom:1px solid #bae6fd; font-size:11px;">출처</th>
-                                    <th style="padding:5px 4px; text-align:center; font-weight:700; color:#0369a1; border-bottom:1px solid #bae6fd; width:50px;">순서</th>
-                                    <th style="padding:5px 4px; border-bottom:1px solid #bae6fd; width:30px;"></th>
+                                    <th style="padding:6px 8px; text-align:left; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">구분</th>
+                                    <th style="padding:6px 8px; text-align:right; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">보증금</th>
+                                    <th style="padding:6px 8px; text-align:right; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">임대료</th>
+                                    <th style="padding:6px 8px; text-align:right; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">관리비</th>
+                                    <th style="padding:6px 8px; text-align:center; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">출처</th>
+                                    <th style="padding:6px 8px; text-align:center; font-weight:600; color:#0369a1; border-bottom:1px solid #bae6fd;">개별반영</th>
+                                    <th style="padding:6px 8px; border-bottom:1px solid #bae6fd; width:28px;"></th>
                                 </tr>
                             </thead>
                             <tbody id="floorPricingList_${idx}">
                             ${item.floorPricing.map((fp, fi) => {
                                 const fpId = fp.id || String(fi);
                                 const selectedIds = item.selectedFloorPricingIds || [];
-                                const selPos = selectedIds.indexOf(fpId);
-                                const isSelected = selPos >= 0;
+                                const isSelected = selectedIds.includes(fpId);
                                 const label = fp.label || fp.floorRange || ('기준가 ' + (fi+1));
                                 const dep = fp.depositPy ? fp.depositPy.toLocaleString() : '-';
                                 const rent = fp.rentPy ? fp.rentPy.toLocaleString() : '-';
                                 const maint = fp.maintenancePy ? fp.maintenancePy.toLocaleString() : '-';
                                 const source = (fp.source || fp.company || '') + (fp.publishDate ? ' ' + fp.publishDate : '');
                                 const rowBg = isSelected ? '#f0fdf4' : 'white';
-                                const searchKey = (label + ' ' + source).toLowerCase().replace(/"/g, '');
-                                const badge = isSelected ? '<span style="display:inline-block; min-width:17px; height:17px; line-height:17px; text-align:center; background:#16a34a; color:#fff; border-radius:50%; font-size:10px; font-weight:700; margin-right:6px;">' + (selPos+1) + '</span>' : '';
-                                const orderCell = isSelected
-                                    ? '<button onclick="moveFloorPricingOrder(' + idx + ', \'' + fpId + '\', -1)" title="위로" ' + (selPos === 0 ? 'disabled' : '') + ' style="font-size:11px; padding:1px 5px; border:1px solid #cbd5e1; border-radius:3px; background:#fff; color:#0369a1; cursor:pointer; opacity:' + (selPos === 0 ? '0.35' : '1') + ';">▲</button>'
-                                      + '<button onclick="moveFloorPricingOrder(' + idx + ', \'' + fpId + '\', 1)" title="아래로" ' + (selPos === selectedIds.length - 1 ? 'disabled' : '') + ' style="font-size:11px; padding:1px 5px; border:1px solid #cbd5e1; border-radius:3px; background:#fff; color:#0369a1; cursor:pointer; opacity:' + (selPos === selectedIds.length - 1 ? '0.35' : '1') + '; margin-left:3px;">▼</button>'
-                                    : '<span style="color:#cbd5e1; font-size:11px;">–</span>';
-                                return '<tr id="fpRow_' + idx + '_' + fi + '" data-fpsearch="' + searchKey + '" style="background:' + rowBg + '; border-bottom:1px solid #e0f2fe;">'
-                                    + '<td style="padding:6px 6px; text-align:center;">'
-                                    +   '<input type="checkbox" data-fpid="' + fpId + '" ' + (isSelected ? 'checked' : '') + ' onchange="toggleFloorPricingCheck(' + idx + ', \'' + fpId + '\', this.checked)" style="cursor:pointer; width:15px; height:15px;">'
+                                const rowBorder = isSelected ? '1px solid #bbf7d0' : '1px solid transparent';
+                                return '<tr id="fpRow_' + idx + '_' + fi + '" style="background:' + rowBg + '; border:' + rowBorder + '; transition:background 0.15s;">'
+                                    + '<td style="padding:7px 8px; text-align:center;">'
+                                    +   '<input type="checkbox" data-fpid="' + fpId + '" ' + (isSelected ? 'checked' : '') + ' onchange="toggleFloorPricingCheck(' + idx + ', \'' + fpId + '\', this.checked)" style="cursor:pointer;">'
                                     + '</td>'
-                                    + '<td style="padding:6px 8px; font-weight:600;">' + badge + label + '</td>'
-                                    + '<td style="padding:6px 8px; text-align:right; color:#334155;">' + dep + '</td>'
-                                    + '<td style="padding:6px 8px; text-align:right; color:#334155;">' + rent + '</td>'
-                                    + '<td style="padding:6px 8px; text-align:right; color:#334155;">' + maint + '</td>'
-                                    + '<td style="padding:6px 6px; text-align:center; color:#64748b; font-size:11px;">' + (source || '-') + '</td>'
-                                    + '<td style="padding:6px 4px; text-align:center; white-space:nowrap;">' + orderCell + '</td>'
-                                    + '<td style="padding:6px 4px; text-align:center;">'
-                                    +   '<button onclick="editFloorPricingInline(' + idx + ',' + fi + ')" title="항목 편집" style="font-size:13px; padding:2px 5px; border:1px solid #e2e8f0; border-radius:4px; background:#fff; color:#64748b; cursor:pointer;">✏️</button>'
+                                    + '<td style="padding:7px 8px; font-weight:600;">' + label + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:right; color:#334155;">' + dep + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:right; color:#334155;">' + rent + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:right; color:#334155;">' + maint + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:center; color:#64748b; font-size:11px;">' + (source || '-') + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:center;">'
+                                    +   '<button onclick="applyFloorPricingToRent(' + idx + ', \'' + fpId + '\')" '
+                                    +   'style="padding:3px 10px; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; '
+                                    +   (isSelected ? 'background:#16a34a; color:white; border:1px solid #16a34a;' : 'background:white; color:#0369a1; border:1px solid #0369a1;') + '">'
+                                    +   (isSelected ? '✅ 적용중' : '반영') + '</button>'
+                                    + '</td>'
+                                    + '<td style="padding:7px 8px; text-align:center;">'
+                                    +   '<button onclick="editFloorPricingInline(' + idx + ',' + fi + ')" title="항목 편집" style="font-size:12px; padding:2px 5px; border:1px solid #e2e8f0; border-radius:3px; background:white; color:#94a3b8; cursor:pointer;">✏️</button>'
                                     + '</td>'
                                     + '</tr>';
                             }).join('')}
@@ -958,7 +954,7 @@ export function renderBuildingEditor(item, building) {
                                     ${(item.selectedExternalVacancies?.length || 0) > 0 ? '<span style="font-size:11px; color:#16a34a; font-weight:600;">✅ 적용됨 ' + item.selectedExternalVacancies.length + '건</span>' : '<span style="font-size:11px; color:#94a3b8;">공실을 선택하세요</span>'}
                                     <div class="ext-cart-actions">
                                         <button class="btn-reset" onclick="clearExternalCart(${idx})">초기화</button>
-                                        <button class="btn-apply" onclick="applyPendingExternalVacancies(${idx})">✓ 반영</button>
+                                        <button class="btn-apply" onclick="applyPendingExternalVacancies(${idx})">✅ 전체 반영</button>
                                     </div>
                                 </div>
                                 <div class="external-vacancy-cart-body" id="extCartBody_${idx}">
@@ -2338,42 +2334,6 @@ export function toggleAllFloorPricing(itemIdx, selectAll) {
     if (building) window.renderBuildingEditor(item, building);
 }
 
-// ★ [B-3] 기준가 검색 필터 — 행 show/hide만, 선택/로직 변경 없음
-export function filterFloorPricingRows(itemIdx, query) {
-    const q = (query || '').trim().toLowerCase();
-    const tbody = document.getElementById(`floorPricingList_${itemIdx}`);
-    if (!tbody) return;
-    tbody.querySelectorAll('tr').forEach(tr => {
-        const hay = tr.getAttribute('data-fpsearch') || '';
-        tr.style.display = (!q || hay.includes(q)) ? '' : 'none';
-    });
-}
-
-// ★ [B-3] 선택된 기준가 노출 순서 변경 (selectedFloorPricingIds 재정렬 → RENT 표시 순서)
-export function moveFloorPricingOrder(itemIdx, fpId, dir) {
-    const item = state.tocItems[itemIdx];
-    if (!item || !Array.isArray(item.selectedFloorPricingIds)) return;
-    const arr = item.selectedFloorPricingIds;
-    const i = arr.indexOf(fpId);
-    if (i < 0) return;
-    const j = i + dir;
-    if (j < 0 || j >= arr.length) return;
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-    const building = state.allBuildings.find(b => b.id === item.buildingId);
-    if (building) window.renderBuildingEditor(item, building);
-}
-
-// ★ [B-3] 미리보기 새로고침 — 편집/추가한 현재 상태를 상단 미리보기에 반영
-export function refreshGuidePreview(itemIdx) {
-    const item = state.tocItems[itemIdx];
-    if (!item) return;
-    const building = state.allBuildings.find(b => b.id === item.buildingId);
-    if (building) window.renderBuildingEditor(item, building);
-    const prev = document.querySelector('.building-preview');
-    if (prev) prev.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (typeof showToast === 'function') showToast('미리보기를 새로고침했습니다', 'success');
-}
-
 // ★ v5.4: 기준가 선택 항목 인라인 편집
 export function editFloorPricingInline(itemIdx, fpIdx) {
     const item = state.tocItems[itemIdx];
@@ -2387,25 +2347,25 @@ export function editFloorPricingInline(itemIdx, fpIdx) {
     const isChecked = selectedIds.includes(fpId);
     const label = fp.label || fp.floorRange || ('기준가 ' + (fpIdx+1));
     rowEl.innerHTML = `
-        <td style="padding:6px 6px; text-align:center;">
-            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleFloorPricing(${itemIdx}, '${fpId}')" style="cursor:pointer; width:15px; height:15px;">
+        <td style="padding:5px 8px; text-align:center;">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleFloorPricing(${itemIdx}, '${fpId}')" style="cursor:pointer;">
         </td>
-        <td style="padding:6px 8px;">
-            <input type="text" id="fpLabel_${itemIdx}_${fpIdx}" value="${label}" placeholder="구분명" style="width:100%; box-sizing:border-box; font-size:13px; padding:5px 7px; border:1px solid #2563eb; border-radius:4px; outline:none;">
+        <td style="padding:5px 8px;">
+            <input type="text" id="fpLabel_${itemIdx}_${fpIdx}" value="${label}" placeholder="구분명" style="width:100%; box-sizing:border-box; font-size:11px; padding:3px 6px; border:1px solid #94a3b8; border-radius:3px;">
         </td>
-        <td style="padding:6px 8px;">
-            <input type="text" id="fpDep_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.depositPy || ''}" placeholder="보증금" style="width:100%; box-sizing:border-box; text-align:right; font-size:13px; padding:5px 7px; border:1px solid #2563eb; border-radius:4px; outline:none;">
+        <td style="padding:5px 8px;">
+            <input type="text" id="fpDep_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.depositPy || ''}" placeholder="보증금" style="width:100%; box-sizing:border-box; text-align:right; font-size:11px; padding:3px 6px; border:1px solid #94a3b8; border-radius:3px;">
         </td>
-        <td style="padding:6px 8px;">
-            <input type="text" id="fpRent_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.rentPy || ''}" placeholder="임대료" style="width:100%; box-sizing:border-box; text-align:right; font-size:13px; padding:5px 7px; border:1px solid #2563eb; border-radius:4px; outline:none;">
+        <td style="padding:5px 8px;">
+            <input type="text" id="fpRent_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.rentPy || ''}" placeholder="임대료" style="width:100%; box-sizing:border-box; text-align:right; font-size:11px; padding:3px 6px; border:1px solid #94a3b8; border-radius:3px;">
         </td>
-        <td style="padding:6px 8px;">
-            <input type="text" id="fpMaint_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.maintenancePy || ''}" placeholder="관리비" style="width:100%; box-sizing:border-box; text-align:right; font-size:13px; padding:5px 7px; border:1px solid #2563eb; border-radius:4px; outline:none;">
+        <td style="padding:5px 8px;">
+            <input type="text" id="fpMaint_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.maintenancePy || ''}" placeholder="관리비" style="width:100%; box-sizing:border-box; text-align:right; font-size:11px; padding:3px 6px; border:1px solid #94a3b8; border-radius:3px;">
         </td>
-        <td style="padding:6px 6px;"></td>
-        <td colspan="2" style="padding:6px 6px; text-align:center; white-space:nowrap;">
-            <button onclick="saveFloorPricingInline(${itemIdx}, ${fpIdx})" style="font-size:12px; padding:5px 11px; border-radius:4px; background:#2563eb; color:#fff; border:none; cursor:pointer; font-weight:700;">저장</button>
-            <button onclick="cancelFloorPricingInline(${itemIdx})" style="font-size:12px; padding:5px 9px; border-radius:4px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer; margin-left:4px;">취소</button>
+        <td style="padding:5px 8px;"></td>
+        <td colspan="2" style="padding:5px 8px; text-align:center; white-space:nowrap;">
+            <button onclick="saveFloorPricingInline(${itemIdx}, ${fpIdx})" style="font-size:11px; padding:3px 8px; border-radius:3px; background:#2563eb; color:white; border:none; cursor:pointer;">저장</button>
+            <button onclick="cancelFloorPricingInline(${itemIdx})" style="font-size:11px; padding:3px 6px; border-radius:3px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer; margin-left:4px;">취소</button>
         </td>
     `;
 }
@@ -2517,9 +2477,6 @@ export function registerBuildingFunctions() {
     window.applyAllSelectedFloorPricing = applyAllSelectedFloorPricing;
     window.toggleFloorPricingCheck = toggleFloorPricingCheck;
     window.toggleAllFloorPricingCheck = toggleAllFloorPricingCheck;
-    window.filterFloorPricingRows = filterFloorPricingRows;
-    window.moveFloorPricingOrder = moveFloorPricingOrder;
-    window.refreshGuidePreview = refreshGuidePreview;
     window.switchVacancyAddTab = switchVacancyAddTab;
     // switchAddVacancyMode 오버라이드 (guide-vacancy.js보다 나중에 등록)
     // guide-vacancy.js 충돌 방지: 버튼에서 직접 switchVacancyAddTab 호출하므로 override 불필요
