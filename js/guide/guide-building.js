@@ -61,7 +61,7 @@ import {
     renderExternalVacancyGroups, 
     renderExternalCartItems 
 
-} from './guide-vacancy.js?v=5.1';
+} from './guide-vacancy.js?v=5.6';
 
 // ★ v5.5: 타사공실 카트 태그 렌더 (하단 선택 현황 패널용)
 function renderExternalCartTagItems(pending, idx) {
