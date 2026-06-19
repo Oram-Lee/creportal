@@ -515,10 +515,9 @@ export function renderBuildingEditor(item, building) {
                                 <!-- ★ v4.6: 로드뷰/캡처 버튼을 지도 밖으로 이동 -->
                                 ${item.mapMode === 'auto' ? `
                                     ${building.lat && building.lng ? `<button class="info-action-btn" onclick="event.stopPropagation(); openRoadview(${building.lat}, ${building.lng})" title="로드뷰 보기" style="font-size:11px; padding:4px 8px;">👁️ 로드뷰</button>` : ''}
-                                    <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="네이버 지도 생성·저장 (핑크 마커)" style="font-size:11px; padding:4px 8px;">📸 지도생성</button>
+                                    <button class="info-action-btn" onclick="event.stopPropagation(); captureMap(${idx}, '${(building.name || '지도').replace(/'/g, "\\'")}')" title="지도 캡처 저장" style="font-size:11px; padding:4px 8px;">📸 캡처</button>
                                 ` : `
-                                    <!-- 수동 모드: 네이버 지도 생성 + 삭제/기본값 -->
-                                    <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="네이버 지도 생성·저장 (핑크 마커)" style="font-size:11px; padding:4px 8px; color:#0369a1;">📸 지도생성</button>
+                                    <!-- 수동 모드: 삭제/기본값만 노출 -->
                                     ${item.mapImage ? `
                                         <button class="info-action-btn" onclick="event.stopPropagation(); removeMapImage(${idx})" title="업로드 이미지 삭제" style="font-size:11px; padding:4px 8px; color:#dc2626;">🗑️ 삭제</button>
                                         ${building.images?.location ? `<button class="info-action-btn" onclick="event.stopPropagation(); resetToStorageMapImage(${idx}, '${building.id}')" title="Firebase Storage 이미지로 복원" style="font-size:11px; padding:4px 8px; color:#2563eb;">🔄 기본값</button>` : ''}
@@ -1636,7 +1635,6 @@ export async function generateLocationMap(idx, buildingId) {
             
             // item에도 반영 (mapImage는 null로 유지 → Storage 이미지 사용)
             item.mapImage = null;
-            item.mapMode = 'manual';  // ★ [A-1] 생성된 네이버 정적지도를 미리보기에 표시 (화면=저장 일치)
             
             // 에디터 다시 렌더링
             renderBuildingEditor(item, building);
