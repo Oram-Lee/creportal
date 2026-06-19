@@ -1498,82 +1498,6 @@ async function processLocationImage(file, idx) {
     }
 }
 
-// ★ [B-1] 붙여넣기/드롭 이미지 처리 — uploadImage와 동일 경로(압축 → 배열 → RTDB 동기화) 재사용
-async function processGuideImage(file, idx, type) {
-    const item = state.tocItems[idx];
-    if (!item) return;
-    if (!file || !file.type || !file.type.startsWith('image/')) {
-        showToast('이미지 파일만 가능합니다', 'warning');
-        return;
-    }
-    showToast('이미지 처리 중...', 'info');
-    try {
-        const dataUrl = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (ev) => resolve(ev.target.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-        const compressed = await compressImage(dataUrl, 800, 0.7);
-        const newImg = { url: compressed, fileName: file.name || 'pasted.png' };
-        const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
-        if (type === 'exterior') {
-            if (!item.exteriorImages) item.exteriorImages = [];
-            item.exteriorImages.push(newImg);
-            await syncImageToBuilding(item.buildingId, 'exterior', item.exteriorImages);
-            if (building.id) building.exteriorImages = item.exteriorImages;
-        } else if (type === 'floorplan') {
-            if (!item.floorPlanImages) item.floorPlanImages = [];
-            item.floorPlanImages.unshift(newImg);  // uploadImage와 동일하게 맨 앞에
-            await syncImageToBuilding(item.buildingId, 'floorplan', item.floorPlanImages);
-            if (building.id) building.floorPlanImages = item.floorPlanImages;
-        } else {
-            // map 등은 기존 지도 처리로 위임
-            return processLocationImage(file, idx);
-        }
-        renderBuildingEditor(item, building);
-        showToast('이미지가 추가되었습니다', 'success');
-        setTimeout(() => {
-            const tabBtn = document.querySelector(`.image-tab[data-type="${type}"]`);
-            if (tabBtn) switchImageTab(idx, type, tabBtn);
-        }, 100);
-    } catch (error) {
-        console.error('이미지 붙여넣기 처리 오류:', error);
-        showToast('이미지 처리 중 오류가 발생했습니다', 'error');
-    }
-}
-
-// ★ [B-1] 문서 레벨 클립보드 이미지 붙여넣기 — 활성 이미지 탭(외관/평면도/지도)으로 라우팅 (1회 등록)
-//   입력창/리치텍스트 붙여넣기는 건드리지 않음. 지도 영역 자체 paste는 stopPropagation이라 충돌 없음.
-let _guideImagePasteBound = false;
-function bindGuideImagePaste() {
-    if (_guideImagePasteBound) return;
-    _guideImagePasteBound = true;
-    document.addEventListener('paste', (e) => {
-        const t = e.target;
-        const tag = (t && t.tagName ? t.tagName : '').toUpperCase();
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
-        // 빌딩 편집 중일 때만 (divider 등 buildingId 없는 항목 제외)
-        const idx = state.selectedTocIndex;
-        const item = state.tocItems && state.tocItems[idx];
-        if (!item || !item.buildingId) return;
-        const clip = e.clipboardData && e.clipboardData.items;
-        if (!clip) return;
-        for (const ci of clip) {
-            if (ci.type && ci.type.startsWith('image/')) {
-                const file = ci.getAsFile();
-                if (file) {
-                    e.preventDefault();
-                    const activeType = document.querySelector('.image-tab.active')?.dataset?.type || 'exterior';
-                    if (activeType === 'map') processLocationImage(file, idx);
-                    else processGuideImage(file, idx, activeType);
-                    return;
-                }
-            }
-        }
-    });
-}
-
 // ★ v5.1: 지도 이미지 자동 생성 (카카오 Static Map API)
 export async function generateLocationMap(idx, buildingId) {
     const item = state.tocItems[idx];
@@ -2457,7 +2381,6 @@ export async function saveNoteInline(idx, buildingId) {
 
 export function registerBuildingFunctions() {
     bindCommaInputs();  // ★ [B-6] 숫자 입력 실시간 콤마 (이벤트 위임, 1회 등록)
-    bindGuideImagePaste();  // ★ [B-1] 클립보드 이미지 붙여넣기 (활성 탭 라우팅, 1회 등록)
     window.renderBuildingEditor = renderBuildingEditor;
     window.uploadImage = uploadImage;
     window.startNoteInlineEdit = startNoteInlineEdit;
