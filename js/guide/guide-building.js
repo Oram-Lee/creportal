@@ -162,9 +162,12 @@ export function filterExternalVacancies(idx) {
     const dateVal = dateEl?.value || 'all';
     const item = state.tocItems?.[idx];
     if (!item) return;
-    // 원본 공실 목록 재조회
+    // 원본 공실 목록 재조회 — ★ building.vacancies가 실제 데이터(state.externalVacanciesByBuilding은 미사용/빈값이라 필터 시 목록이 사라지던 버그)
     const buildingId = item.buildingId;
-    const allVacs = state.externalVacanciesByBuilding?.[buildingId] || [];
+    const _bldg = state.allBuildings?.find(b => b.id === buildingId);
+    const allVacs = (_bldg && Array.isArray(_bldg.vacancies))
+        ? _bldg.vacancies
+        : (state.externalVacanciesByBuilding?.[buildingId] || []);
     const filtered = allVacs.filter(v => {
         if (srcVal !== 'all' && v.source !== srcVal) return false;
         if (dateVal !== 'all' && (v.publishDate || v.date || '') !== dateVal) return false;
@@ -343,7 +346,7 @@ export function renderBuildingEditor(item, building) {
             if (vacancies && vacancies.length > 0) {
                 building.vacancies = vacancies;
                 // 타사 공실 영역만 업데이트
-                const extBody = document.getElementById('extVacancyBody');
+                const extBody = document.getElementById('extVacancyBody_' + idx);
                 if (extBody) {
                     extBody.innerHTML = renderExternalVacancyGroups(vacancies, item.pendingExternalVacancies || [], idx);
                     setTimeout(() => _bindExternalVacancyCheckboxes(idx), 50);
