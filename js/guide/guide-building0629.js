@@ -59,9 +59,9 @@ import {
     getUniqueSourcesHtml, 
     getUniqueDatesHtml, 
     renderExternalVacancyGroups, 
-    renderExternalCartItems,
-    renderExternalCartTags 
-} from './guide-vacancy.js?v=5.10';
+    renderExternalCartItems 
+
+} from './guide-vacancy.js?v=5.9';
 
 // ★ v5.5: 타사공실 카트 태그 렌더 (하단 선택 현황 패널용)
 function renderExternalCartTagItems(pending, idx) {
@@ -451,63 +451,44 @@ export function renderBuildingEditor(item, building) {
     // ★ v4.9: 페이지 정보 가져오기
     const pageInfo = window.getPageInfo ? window.getPageInfo() : { current: idx + 3, total: '?' };
     
-    // ★ v6.1: 섹션 입력 상태 (플로팅 점프 버튼 색상/태그용)
-    const _secFilled = {
-        exterior: (item.exteriorImages?.length || 0) > 0,
-        floorplan: (item.floorPlanImages?.length || 0) > 0,
-        map: !!(item.mapImage || building.images?.location),
-        floorPricing: (item.floorPricing?.length || 0) > 0 || (item.selectedFloorPricingIds?.length || 0) > 0 || !!(building.rentPy || building.depositPy),
-        vacancy: (allVacancies?.length || 0) > 0,
-        note: guideMemos.length > 0,
-        contact: (item.contactPoints || building.contactPoints || []).length > 0
-    };
-    const _jumpBtn = (key, target, icon, label) => {
-        const f = _secFilled[key];
-        return `<button class="floating-jump ${f ? 'filled' : 'empty'}" onclick="jumpToEditSection('${target}', ${idx}, '${building.id}')" title="${label} ${f ? '· 입력됨' : '· 비어있음 (클릭하여 편집)'}"><span class="floating-jump-dot">${f ? '✓' : '○'}</span>${icon} ${label}</button>`;
-    };
-
     editorMain.innerHTML = `
-        <!-- 플로팅 메뉴 (v6.1: 섹션 점프 + 상태 + 이동/저장/출력 그룹) -->
+        <!-- 플로팅 메뉴 -->
         <div class="floating-menu no-print">
-            <!-- Row 1: 섹션 편집 점프 (입력됨/빈 상태) -->
-            <div class="floating-row floating-row-sections">
-                <span class="floating-row-label">편집</span>
-                <div class="floating-jump-group">
-                    ${_jumpBtn('exterior','exterior','🏞️','외관')}
-                    ${_jumpBtn('floorplan','floorplan','📐','평면도')}
-                    ${_jumpBtn('map','map','🗺️','지도')}
-                </div>
-                <div class="floating-jump-group">
-                    ${_jumpBtn('floorPricing','floorPricing','💰','기준가')}
-                    ${_jumpBtn('vacancy','vacancy','🏠','공실')}
-                    ${_jumpBtn('note','note','📝','메모')}
-                    ${_jumpBtn('contact','contact','👤','컨택')}
-                </div>
-            </div>
-            <!-- Row 2: 이동 · 저장 · 출력 · 관리 -->
-            <div class="floating-row floating-row-actions">
+            <div class="floating-menu-left">
+                <!-- ★ v4.9: 페이지 네비게이션 -->
                 <div class="floating-nav-buttons">
-                    <button class="floating-nav-btn" onclick="navigateToPrev()" title="이전 페이지">◀ 이전</button>
+                    <button class="floating-nav-btn" onclick="navigateToPrev()" title="이전 페이지">
+                        ◀ 이전
+                    </button>
                     <span class="floating-page-info">${pageInfo.current} / ${pageInfo.total}</span>
-                    <button class="floating-nav-btn" onclick="navigateToNext()" title="다음 페이지">다음 ▶</button>
-                    <button class="floating-nav-btn floating-nav-top" onclick="jumpToEditSection('top', ${idx}, '${building.id}')" title="편집화면 맨 위로">⤒ 맨위로</button>
+                    <button class="floating-nav-btn" onclick="navigateToNext()" title="다음 페이지">
+                        다음 ▶
+                    </button>
                 </div>
-                <div class="floating-save-group">
-                    <button class="floating-save-btn draft" onclick="if(window.saveDraft)window.saveDraft()" title="임시저장">💾 임시저장</button>
-                    <button class="floating-save-btn final" onclick="if(window.saveFinal)window.saveFinal()" title="최종저장">✅ 최종저장</button>
+                <div class="floating-status ${isConfirmed ? 'confirmed' : 'pending'}">
+                    ${isConfirmed ? '✅ 확정' : '⏳ 대기'}
                 </div>
-                <div class="floating-print-group">
-                    <button class="floating-shortcut" onclick="openPrintPage(${idx})" title="현재 페이지 미리보기 (임시저장 후 출력)">🖨️ 미리보기</button>
-                    <button class="floating-shortcut print-all" onclick="openPrintPage()" title="전체 페이지 출력 (임시저장 후 출력)">📄 전체</button>
-                </div>
-                <div class="floating-meta-group">
+                <div class="floating-shortcuts">
                     <select class="region-select-btn" onchange="changeItemRegion(${idx}, this.value)" title="권역 변경">
                         ${allRegions.map(r => `<option value="${r.code}" ${region === r.code ? 'selected' : ''}>${r.code} (${r.name})</option>`).join('')}
                     </select>
-                    <div class="floating-status ${isConfirmed ? 'confirmed' : 'pending'}">${isConfirmed ? '✅ 확정' : '⏳ 대기'}</div>
-                    <button class="btn btn-sm ${isConfirmed ? 'btn-secondary' : 'btn-primary'}" onclick="toggleCloseStatus(${idx})">${isConfirmed ? '🔓 마감해제' : '🔒 마감확정'}</button>
+                    <button class="floating-shortcut" onclick="openPrintPage(${idx})" title="현재 페이지 출력">
+                        🖨️ 출력
+                    </button>
+                    <button class="floating-shortcut" onclick="openPrintPage()" title="전체 페이지 출력" style="background:#22c55e;">
+                        📄 전체
+                    </button>
+                    <button class="floating-shortcut" onclick="document.getElementById('imageManagerSection').scrollIntoView({behavior:'smooth'})">
+                        📷 이미지
+                    </button>
+                    <button class="floating-shortcut" onclick="document.getElementById('vacancySection').scrollIntoView({behavior:'smooth'})">
+                        📋 공실
+                    </button>
                 </div>
             </div>
+            <button class="btn btn-sm ${isConfirmed ? 'btn-secondary' : 'btn-primary'}" onclick="toggleCloseStatus(${idx})">
+                ${isConfirmed ? '🔓 마감해제' : '🔒 마감확정'}
+            </button>
         </div>
         
         <!-- 가로형 임대안내문 프리뷰 (A4 Landscape) -->
@@ -998,15 +979,15 @@ export function renderBuildingEditor(item, building) {
                             <!-- 하단 선택 현황 패널 -->
                             <div class="external-vacancy-cart" id="extCartPanel_${idx}">
                                 <div class="external-vacancy-cart-header">
-                                    <h5>✓ 선택된 공실 <span id="extSelectedCount_${idx}" style="background:#0369a1; color:white; padding:1px 7px; border-radius:10px; font-size:11px; margin-left:4px;">${((item.selectedExternalVacancies?.length || 0) + (item.pendingExternalVacancies?.length || 0))}</span></h5>
-                                    <span id="extCartStatus_${idx}">${(() => { const _a = item.selectedExternalVacancies?.length || 0; const _p = item.pendingExternalVacancies?.length || 0; return (_a + _p) === 0 ? '<span style="font-size:11px; color:#94a3b8;">공실을 선택하세요</span>' : '<span style="font-size:11px; color:#16a34a; font-weight:600;">✅ 적용 ' + _a + '</span>' + (_p ? ' <span style="font-size:11px; color:#d97706; font-weight:600;">· ⏳ 대기 ' + _p + '</span>' : ''); })()}</span>
+                                    <h5>✓ 선택된 공실 <span id="extSelectedCount_${idx}" style="background:#0369a1; color:white; padding:1px 7px; border-radius:10px; font-size:11px; margin-left:4px;">${(item.pendingExternalVacancies?.length || 0)}</span></h5>
+                                    ${(item.selectedExternalVacancies?.length || 0) > 0 ? '<span style="font-size:11px; color:#16a34a; font-weight:600;">✅ 적용됨 ' + item.selectedExternalVacancies.length + '건</span>' : '<span style="font-size:11px; color:#94a3b8;">공실을 선택하세요</span>'}
                                     <div class="ext-cart-actions">
                                         <button class="btn-reset" onclick="clearExternalCart(${idx})">초기화</button>
                                         <button class="btn-apply" onclick="applyPendingExternalVacancies(${idx})">✓ 반영</button>
                                     </div>
                                 </div>
                                 <div class="external-vacancy-cart-body" id="extCartBody_${idx}">
-                                    ${renderExternalCartTags(item.selectedExternalVacancies || [], item.pendingExternalVacancies || [], idx)}
+                                    ${renderExternalCartTagItems(item.pendingExternalVacancies || [], idx)}
                                 </div>
                             </div>
                             
@@ -1060,7 +1041,8 @@ export function renderBuildingEditor(item, building) {
         </div>
     `;
         
-    // ★ v6.2: 이중 바인딩 제거 — 아코디언 클릭은 인라인 onclick(toggleExternalVacancyItem) 단독 처리
+    // ★ v5.5: 타사공실 체크박스 이벤트 바인딩 (렌더 직후)
+    setTimeout(() => _bindExternalVacancyCheckboxes(idx), 100);
         
     // 숨겨진 파일 input 추가
     if (!document.getElementById('imageUploadInput')) {
@@ -2088,28 +2070,6 @@ export function openPrintPage(pageIndex = null) {
     doOpen();
 }
 
-// ★ v6.1: 플로팅 섹션 점프 (스크롤 + 해당 탭/편집기 오픈)
-export function jumpToEditSection(target, idx, buildingId) {
-    const scrollTo = (sel) => { const el = document.querySelector(sel); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-    const byId = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-    switch (target) {
-        case 'exterior':
-        case 'floorplan':
-        case 'map':
-            byId('imageManagerSection');
-            setTimeout(() => document.querySelector(`.image-tab[data-type="${target}"]`)?.click(), 350);
-            break;
-        case 'floorPricing': byId('floorPricingSection'); break;
-        case 'vacancy': byId('vacancySection'); break;
-        case 'note':
-            scrollTo('.preview-note-section');
-            setTimeout(() => { if (typeof window.startNoteInlineEdit === 'function') window.startNoteInlineEdit(idx, buildingId); }, 420);
-            break;
-        case 'contact': scrollTo('.preview-contact-section'); break;
-        case 'top': scrollTo('.building-preview'); break;
-    }
-}
-
 // ★ 공실 정렬 토글 함수
 export function toggleVacancySort(idx) {
     const item = state.tocItems[idx];
@@ -2611,7 +2571,6 @@ export function registerBuildingFunctions() {
     window.pushToPortal = pushToPortal;
     window.changeItemRegion = changeItemRegion;
     window.openPrintPage = openPrintPage;
-    window.jumpToEditSection = jumpToEditSection;
     // ★ v5.0: 상수 노출
     window.MAX_VACANCIES_PER_BUILDING = MAX_VACANCIES_PER_BUILDING;
     // ★ 신규: 안내문 공실 관련

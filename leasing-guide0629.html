@@ -1604,35 +1604,13 @@
             background: white;
             border-radius: 10px;
             box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-            padding: 10px 14px;
+            padding: 10px 16px;
             margin-bottom: 12px;
             display: flex;
-            flex-direction: column;
-            align-items: stretch;
-            gap: 9px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
         }
-        /* ★ v6.1: 플로팅 바 고도화 (2단: 섹션 점프 + 이동/저장/출력 그룹) */
-        .floating-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        .floating-row-sections { padding-bottom: 9px; border-bottom: 1px solid #eef2f7; }
-        .floating-row-label { font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 0.03em; }
-        .floating-jump-group { display: flex; gap: 5px; flex-wrap: wrap; }
-        .floating-jump-group + .floating-jump-group { border-left: 1px solid #e2e8f0; padding-left: 10px; }
-        .floating-jump { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
-        .floating-jump-dot { font-size: 10px; line-height: 1; }
-        .floating-jump.filled { background: #f0fdf4; border: 1px solid #86efac; color: #15803d; }
-        .floating-jump.filled:hover { background: #dcfce7; }
-        .floating-jump.empty { background: #fff7ed; border: 1px solid #fed7aa; color: #c2410c; }
-        .floating-jump.empty:hover { background: #ffedd5; }
-        .floating-row-actions > div:not(:first-child) { border-left: 1px solid #e2e8f0; padding-left: 12px; }
-        .floating-save-group, .floating-print-group, .floating-meta-group { display: flex; align-items: center; gap: 6px; }
-        .floating-save-btn { padding: 6px 13px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
-        .floating-save-btn.draft { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-        .floating-save-btn.draft:hover { background: #dbeafe; }
-        .floating-save-btn.final { background: #2563eb; color: #fff; border: 1px solid #2563eb; }
-        .floating-save-btn.final:hover { background: #1d4ed8; }
-        .floating-nav-top { background: #64748b !important; }
-        .floating-nav-top:hover { background: #475569 !important; }
-        .floating-print-group .print-all { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
         .floating-menu-left {
             display: flex;
             align-items: center;
@@ -7054,6 +7032,6 @@
     </script>
 
     <!-- 모듈 로드 -->
-    <script type="module" src="./js/guide/guide-main.js?v=6.2"></script>
+    <script type="module" src="./js/guide/guide-main.js?v=6.0"></script>
 </body>
 </html>
