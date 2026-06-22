@@ -93,7 +93,7 @@ export function renderExternalVacancyGroups(vacancies, selectedVacancies, idx) {
         return `
             <div class="external-vacancy-group">
                 <div class="external-vacancy-group-header" onclick="toggleSourceGroup(this)">
-                    <span class="group-toggle">▶</span>
+                    <span class="group-toggle">▼</span>
                     <span class="group-source">${group.source}</span>
                     <span class="group-date">${group.date}</span>
                     <span class="group-count">${group.items.length}건</span>
@@ -102,7 +102,7 @@ export function renderExternalVacancyGroups(vacancies, selectedVacancies, idx) {
                         ${allAppliedOrPending ? '전체해제' : '전체선택'}
                     </button>
                 </div>
-                <div class="external-vacancy-group-body" style="display:none;">
+                <div class="external-vacancy-group-body">
                     ${group.items.map(v => {
                         const isApplied = selectedIds.includes(v.id);
                         const isPending = pendingIds.includes(v.id);
@@ -157,21 +157,6 @@ export function toggleSourceGroup(header) {
         body.style.display = 'none';
         toggle.textContent = '▶';
     }
-}
-
-// ★ [A1] 출처 그룹 모두 펼치기/접기 토글 (스크롤 과다 해소)
-export function expandAllExternalGroups(idx) {
-    const container = document.getElementById('extVacancyBody_' + idx);
-    if (!container) return;
-    const bodies = container.querySelectorAll('.external-vacancy-group-body');
-    const btn = document.getElementById('extExpandToggle_' + idx);
-    const anyCollapsed = Array.from(bodies).some(b => b.style.display === 'none');
-    bodies.forEach(b => {
-        b.style.display = anyCollapsed ? 'block' : 'none';
-        const tg = b.previousElementSibling && b.previousElementSibling.querySelector('.group-toggle');
-        if (tg) tg.textContent = anyCollapsed ? '▼' : '▶';
-    });
-    if (btn) btn.textContent = anyCollapsed ? '▲ 모두 접기' : '▼ 모두 펼치기';
 }
 
 // ★ v3.8: pending 배열 관리 (반영 버튼 확인 단계)
@@ -483,8 +468,6 @@ export function addDirectVacancy(idx) {
     const rent = document.getElementById('newVacRent')?.value || '문의';
     const maintenance = document.getElementById('newVacMaintenance')?.value || '문의';
     const moveIn = document.getElementById('newVacMoveIn')?.value || '-';
-    const company = document.getElementById('newVacCompany')?.value || '';
-    const publishDate = document.getElementById('newVacPublishDate')?.value || '';
     
     if (!floor) {
         showToast('층을 입력하세요', 'error');
@@ -505,8 +488,6 @@ export function addDirectVacancy(idx) {
         rent, 
         maintenance,
         moveIn,
-        source: company || '직접입력',
-        publishDate: publishDate || '',
         sourceType: 'direct',
         createdAt: new Date().toISOString()
     });
@@ -519,8 +500,6 @@ export function addDirectVacancy(idx) {
     document.getElementById('newVacRent').value = '';
     document.getElementById('newVacMaintenance').value = '';
     document.getElementById('newVacMoveIn').value = '';
-    if (document.getElementById('newVacCompany')) document.getElementById('newVacCompany').value = '';
-    if (document.getElementById('newVacPublishDate')) document.getElementById('newVacPublishDate').value = '';
     
     const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
     window.renderBuildingEditor(item, building);
@@ -707,7 +686,6 @@ export function removeSelectedVacancy(idx, vacancyId, type) {
 // 전역 함수 등록
 export function registerVacancyFunctions() {
     window.toggleSourceGroup = toggleSourceGroup;
-    window.expandAllExternalGroups = expandAllExternalGroups;
     window.toggleExternalVacancyItem = toggleExternalVacancyItem;
     window.selectAllFromSource = selectAllFromSource;
     window.removeFromExternalCart = removeFromExternalCart;

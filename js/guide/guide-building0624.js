@@ -61,7 +61,7 @@ import {
     renderExternalVacancyGroups, 
     renderExternalCartItems 
 
-} from './guide-vacancy.js?v=5.8';
+} from './guide-vacancy.js?v=5.6';
 
 // ★ v5.5: 타사공실 카트 태그 렌더 (하단 선택 현황 패널용)
 function renderExternalCartTagItems(pending, idx) {
@@ -918,8 +918,6 @@ export function renderBuildingEditor(item, building) {
                             <input type="text" id="newVacRent" class="js-comma" inputmode="decimal" placeholder="임대료">
                             <input type="text" id="newVacMaintenance" class="js-comma" inputmode="decimal" placeholder="관리비">
                             <input type="text" id="newVacMoveIn" placeholder="입주시기">
-                            <input type="text" id="newVacCompany" placeholder="회사명(출처)">
-                            <input type="text" id="newVacPublishDate" placeholder="발행(26.02)">
                             <button class="btn btn-primary btn-sm" onclick="addDirectVacancy(${idx})">추가</button>
                         </div>
                     </div>
@@ -940,10 +938,7 @@ export function renderBuildingEditor(item, building) {
                                             ${getUniqueDatesHtml(externalVacancies)}
                                         </select>
                                     </div>
-                                    <span style="display:flex; align-items:center; gap:10px;">
-                                        <button id="extExpandToggle_${idx}" onclick="expandAllExternalGroups(${idx})" style="font-size:11px; padding:4px 10px; border:1px solid #cbd5e1; border-radius:5px; background:#fff; color:#0369a1; cursor:pointer; white-space:nowrap;">▼ 모두 펼치기</button>
-                                        <span class="external-vacancy-count" style="font-size:11px; color:#64748b;">총 ${externalVacancies.length}건</span>
-                                    </span>
+                                    <span class="external-vacancy-count" style="font-size:11px; color:#64748b;">총 ${externalVacancies.length}건</span>
                                 </div>
                                 <!-- 컬럼 헤더 -->
                                 <div class="external-vacancy-group-th">
@@ -992,7 +987,6 @@ export function renderBuildingEditor(item, building) {
                             <th>임대료</th>
                             <th>관리비</th>
                             <th>입주시기</th>
-                            <th>출처</th>
                             <th>관리</th>
                         </tr>
                     </thead>
@@ -1006,7 +1000,6 @@ export function renderBuildingEditor(item, building) {
                                 <td>${v.rent ?? v.rentPy ?? '문의'}</td>
                                 <td>${v.maintenance ?? v.maintenancePy ?? '문의'}</td>
                                 <td>${v.moveIn || v.moveInDate || '협의'}</td>
-                                <td style="font-size:11px; line-height:1.35;">${(v.source || v.company) ? (v.source || v.company) : '<span style="color:#cbd5e1;">-</span>'}${(v.publishDate || v.date) ? '<br><span style="color:#94a3b8;">' + (v.publishDate || v.date) + '</span>' : ''}</td>
                                 <td>
                                     <div class="actions">
                                         <button class="btn btn-sm btn-secondary" onclick="startVacancyRowEdit(${idx}, '${v.id}', '${v.type}', this)" title="인라인 편집">✏️</button>
@@ -1014,7 +1007,7 @@ export function renderBuildingEditor(item, building) {
                                     </div>
                                 </td>
                             </tr>
-                        `).join('') : `<tr><td colspan="9" style="text-align:center; padding:30px; color:#94a3b8;">등록된 공실이 없습니다</td></tr>`}
+                        `).join('') : `<tr><td colspan="8" style="text-align:center; padding:30px; color:#94a3b8;">등록된 공실이 없습니다</td></tr>`}
                     </tbody>
                 </table>
             </div>
