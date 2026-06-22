@@ -61,7 +61,7 @@ import {
     renderExternalVacancyGroups, 
     renderExternalCartItems 
 
-} from './guide-vacancy.js?v=5.9';
+} from './guide-vacancy.js?v=5.8';
 
 // ★ v5.5: 타사공실 카트 태그 렌더 (하단 선택 현황 패널용)
 function renderExternalCartTagItems(pending, idx) {
@@ -173,16 +173,8 @@ export function filterExternalVacancies(idx) {
         if (dateVal !== 'all' && (v.publishDate || v.date || '') !== dateVal) return false;
         return true;
     });
-    bodyEl.innerHTML = renderExternalVacancyGroups(filtered, item.selectedExternalVacancies || [], idx);
+    bodyEl.innerHTML = renderExternalVacancyGroups(filtered, item.pendingExternalVacancies || [], idx);
     _bindExternalVacancyCheckboxes(idx);
-    // ★ 특정 출처/날짜를 고르면 해당 그룹을 펼쳐서 바로 보이게 (전체일 땐 접힘 유지)
-    if (srcVal !== 'all' || dateVal !== 'all') {
-        bodyEl.querySelectorAll('.external-vacancy-group-body').forEach(b => {
-            b.style.display = 'block';
-            const tg = b.previousElementSibling && b.previousElementSibling.querySelector('.group-toggle');
-            if (tg) tg.textContent = '▼';
-        });
-    }
 }
 
 // ★ v5.5: 카트 UI 갱신 (카운트 + 태그 목록)
@@ -280,14 +272,10 @@ async function loadExternalVacancies(buildingId) {
         if (snapshot.exists()) {
             const vacancyData = snapshot.val();
             // 배열로 변환
-            return Object.entries(vacancyData)
-                .map(([id, v]) => ({ id, ...(v && typeof v === 'object' ? v : {}) }))
-                .filter(v => {
-                    const _s = x => (x === undefined || x === null) ? '' : String(x).trim();
-                    const _floor = _s(v.floor);
-                    const _area = _s(v.rentArea) || _s(v.exclusiveArea) || _s(v.area);
-                    return (_floor && _floor !== '-') || (_area && _area !== '-');
-                });
+            return Object.entries(vacancyData).map(([id, v]) => ({
+                id,
+                ...v
+            }));
         }
         return [];
     } catch (error) {
@@ -360,7 +348,7 @@ export function renderBuildingEditor(item, building) {
                 // 타사 공실 영역만 업데이트
                 const extBody = document.getElementById('extVacancyBody_' + idx);
                 if (extBody) {
-                    extBody.innerHTML = renderExternalVacancyGroups(vacancies, item.selectedExternalVacancies || [], idx);
+                    extBody.innerHTML = renderExternalVacancyGroups(vacancies, item.pendingExternalVacancies || [], idx);
                     setTimeout(() => _bindExternalVacancyCheckboxes(idx), 50);
                 }
                 const countEl = document.querySelector('.external-vacancy-count');
@@ -481,7 +469,7 @@ export function renderBuildingEditor(item, building) {
                     <button class="floating-shortcut" onclick="document.getElementById('imageManagerSection').scrollIntoView({behavior:'smooth'})">
                         📷 이미지
                     </button>
-                    <button class="floating-shortcut" onclick="document.getElementById('vacancySection').scrollIntoView({behavior:'smooth'})">
+                    <button class="floating-shortcut" onclick="document.getElementById('dataManagerSection').scrollIntoView({behavior:'smooth'})">
                         📋 공실
                     </button>
                 </div>
@@ -790,10 +778,10 @@ export function renderBuildingEditor(item, building) {
             </div>
         </div>
         
-        <!-- 기준가 관리 섹션 -->
-        <div class="image-manager" id="floorPricingSection">
+        <!-- 데이터 관리 섹션 -->
+        <div class="image-manager" id="dataManagerSection">
             <div class="image-manager-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                <div class="image-manager-title">💰 기준가 관리</div>
+                <div class="image-manager-title">📋 데이터 관리</div>
                 <button onclick="refreshGuidePreview(${idx})" title="편집·추가한 값을 위 미리보기에 반영" style="padding:6px 14px; background:white; color:#0369a1; border:1px solid #7dd3fc; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;">🔄 미리보기 새로고침</button>
             </div>
             
@@ -888,16 +876,11 @@ export function renderBuildingEditor(item, building) {
                     </div>
                 ` : ''}
             </div>
-        </div>
-
-        <!-- 공실 관리 섹션 -->
-        <div class="image-manager" id="vacancySection">
-            <div class="image-manager-header" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                <div class="image-manager-title">🏠 공실 관리</div>
-                <button onclick="refreshGuidePreview(${idx})" title="편집·추가한 값을 위 미리보기에 반영" style="padding:6px 14px; background:white; color:#0369a1; border:1px solid #7dd3fc; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;">🔄 미리보기 새로고침</button>
-            </div>
+            
+            <!-- 공실 관리 -->
             <div class="vacancy-section">
                 <div class="vacancy-header">
+                    <div class="vacancy-title">🏠 공실 관리</div>
                     <div class="vacancy-count-info">
                         <span class="vacancy-current-count ${allVacancies.length >= MAX_VACANCIES_PER_BUILDING ? 'over-limit' : ''}">${allVacancies.length}</span>
                         <span class="vacancy-max-count">/ ${MAX_VACANCIES_PER_BUILDING}개</span>
@@ -972,7 +955,7 @@ export function renderBuildingEditor(item, building) {
                                     <span>관리비</span>
                                 </div>
                                 <div class="external-vacancy-body" id="extVacancyBody_${idx}">
-                                    ${renderExternalVacancyGroups(externalVacancies, item.selectedExternalVacancies || [], idx)}
+                                    ${renderExternalVacancyGroups(externalVacancies, item.pendingExternalVacancies || [], idx)}
                                 </div>
                             </div>
                             
@@ -998,10 +981,8 @@ export function renderBuildingEditor(item, building) {
                     </div>
                 </div>
                 
-                <!-- 선택된 공실 목록 (기준가 선택 패널과 동일 스타일 카드) -->
-                <div style="margin-top:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px;">
-                    <div style="font-size:13px; font-weight:700; color:#0369a1; margin-bottom:8px; display:flex; align-items:center; gap:8px;">✓ 선택된 공실 <span style="font-weight:400; color:#64748b; font-size:11px;">출력에 반영될 공실 목록</span></div>
-                    <table class="vacancy-list-table">
+                <!-- 등록된 공실 테이블 (★ 관리비 컬럼 + 인라인 편집) -->
+                <table class="vacancy-list-table">
                     <thead>
                         <tr>
                             <th>층</th>
@@ -1028,15 +1009,14 @@ export function renderBuildingEditor(item, building) {
                                 <td style="font-size:11px; line-height:1.35;">${(v.source || v.company) ? (v.source || v.company) : '<span style="color:#cbd5e1;">-</span>'}${(v.publishDate || v.date) ? '<br><span style="color:#94a3b8;">' + (v.publishDate || v.date) + '</span>' : ''}</td>
                                 <td>
                                     <div class="actions">
-                                        <button onclick="startVacancyRowEdit(${idx}, '${v.id}', '${v.type}', this)" title="인라인 편집" style="font-size:13px; padding:2px 6px; border:1px solid #e2e8f0; border-radius:4px; background:#fff; color:#64748b; cursor:pointer;">✏️</button>
-                                        <button onclick="removeSelectedVacancy(${idx}, '${v.id}', '${v.type}')" title="삭제" style="font-size:13px; padding:2px 7px; border:1px solid #fecaca; border-radius:4px; background:#fff; color:#dc2626; cursor:pointer; margin-left:3px;">×</button>
+                                        <button class="btn btn-sm btn-secondary" onclick="startVacancyRowEdit(${idx}, '${v.id}', '${v.type}', this)" title="인라인 편집">✏️</button>
+                                        <button class="btn btn-sm btn-danger" onclick="removeSelectedVacancy(${idx}, '${v.id}', '${v.type}')">×</button>
                                     </div>
                                 </td>
                             </tr>
                         `).join('') : `<tr><td colspan="9" style="text-align:center; padding:30px; color:#94a3b8;">등록된 공실이 없습니다</td></tr>`}
                     </tbody>
                 </table>
-                </div>
             </div>
         </div>
     `;
