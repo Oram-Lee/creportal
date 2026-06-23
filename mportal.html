@@ -45,6 +45,11 @@ input{font-family:inherit;font-size:16px}
 #map{position:absolute;inset:0;background:#e9ecef}
 .map-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;color:var(--muted);gap:8px;text-align:center;padding:20px}
+.mk-label{background:#fff;border:1.5px solid var(--navy);color:var(--navy);font-size:11.5px;font-weight:700;
+  padding:3px 10px;border-radius:14px;white-space:nowrap;box-shadow:0 2px 7px rgba(0,0,0,.22);cursor:pointer;
+  max-width:160px;overflow:hidden;text-overflow:ellipsis}
+.mk-label.has-vac{border-color:var(--pink);color:var(--pink-d)}
+.mk-label:active{transform:scale(.96)}
 
 /* 상단 검색 */
 #topbar{position:absolute;top:calc(var(--sb-top) + 10px);left:10px;right:10px;z-index:30;
@@ -184,6 +189,36 @@ input{font-family:inherit;font-size:16px}
 #loading.show{display:flex}
 .spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
+
+/* 임대공실 — 출처/발행월 그룹 카드 (leaseinfo 스타일) */
+.vgroup{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:10px}
+.vghead{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--bg);border-bottom:1px solid var(--line2)}
+.src-badge{font-size:11.5px;font-weight:700;color:#fff;padding:3px 10px;border-radius:6px;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vgmonth{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);font-weight:500;flex-shrink:0}
+.vrows{padding:0}
+.vrow{padding:9px 12px;border-bottom:1px solid var(--line2)}
+.vrow:last-child{border-bottom:none}
+.vfl{margin-bottom:6px}
+.floor-badge{display:inline-block;background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:2px 11px;border-radius:6px}
+.vareas,.vprices{display:flex;gap:16px;font-size:13.5px;margin-top:4px;flex-wrap:wrap}
+.vareas span,.vprices span{display:flex;align-items:baseline;gap:5px;color:var(--ink)}
+.vareas i,.vprices i{font-style:normal;font-size:11px;color:var(--muted);font-weight:500}
+.vprices .rent{color:var(--pink-d);font-weight:700}
+.vmove{font-size:11.5px;color:var(--warn);margin-top:5px;font-weight:500}
+.vimg-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;
+  background:#fff;border-top:1px solid var(--line);color:var(--navy);font-size:13.5px;font-weight:700}
+.vimg-btn:active{background:var(--bg)}
+
+/* 임대안내문 원본 뷰어 */
+#vacViewer{position:fixed;inset:0;z-index:80;background:#0e0f12;display:flex;flex-direction:column}
+.vv-bar{display:flex;align-items:center;gap:10px;padding:calc(var(--sb-top) + 10px) 12px 10px;background:#16171b;color:#fff;flex-shrink:0}
+.vv-title{font-size:13.5px;font-weight:500;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vv-archive{background:#2a2c33;color:#fff;border:1px solid #3a3d45;border-radius:8px;padding:6px 8px;font-size:13px;max-width:42%}
+.vv-close{color:#fff;padding:6px;display:flex;flex-shrink:0}
+.vv-stage{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none;position:relative;background:#0e0f12}
+#vvImg{max-width:100%;max-height:100%;transform-origin:center center;user-select:none;-webkit-user-drag:none;will-change:transform;transition:opacity .15s}
+.vv-hint{position:absolute;bottom:calc(var(--sb-bot) + 14px);left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.6);color:#fff;font-size:11.5px;padding:6px 14px;border-radius:20px;pointer-events:none}
 </style>
 </head>
 <body>
@@ -206,7 +241,7 @@ input{font-family:inherit;font-size:16px}
     <div class="search-row">
       <div class="search-box">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        <input id="searchInput" type="search" placeholder="빌딩명 · 주소 검색" enterkeyhint="search">
+        <input id="searchInput" type="search" placeholder="빌딩명 · 주소 · 역 · 지역 검색" enterkeyhint="search">
         <button class="clear" id="searchClear" aria-label="지우기">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
@@ -260,6 +295,21 @@ input{font-family:inherit;font-size:16px}
   </div>
 </div>
 
+<!-- 임대안내문 원본 뷰어 -->
+<div id="vacViewer" class="hidden">
+  <div class="vv-bar">
+    <div class="vv-title" id="vvTitle">임대안내문</div>
+    <select id="vvArchive" class="vv-archive hidden"></select>
+    <button class="vv-close" id="vvClose" aria-label="닫기">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="vv-stage" id="vvStage">
+    <img id="vvImg" alt="임대안내문 원본" draggable="false">
+    <div class="vv-hint">더블탭 확대 · 두 손가락으로 확대·이동</div>
+  </div>
+</div>
+
 <!-- 모달 -->
 <div id="modalWrap">
   <div class="ov" id="modalOv"></div>
@@ -295,7 +345,7 @@ const S = {
   filtered: [],       // 필터 적용
   cache: {},          // raw 컬렉션
   selected: null,     // 현재 상세 빌딩
-  map: null, clusterer: null, markers: [],
+  map: null, clusterer: null, markers: [], overlays: [],
   filters: { vacancy:false, data:false, q:'' },
   tab: 'info'
 };
@@ -311,6 +361,34 @@ function gradeOf(b){
   const py=parseFloat(b.grossFloorPy)||0;
   if(py>=20000)return 'Prime'; if(py>=10000)return 'A'; if(py>=5000)return 'B';
   if(py>=3000)return 'C'; if(py>=1000)return 'D'; if(py>0)return 'E'; return '';
+}
+
+// ===== 임대공실 헬퍼 (leaseinfo 스키마 정합) =====
+function price(v){ if(v==null||v===''||v==='-'||v===0) return '-'; const n=parseFloat(String(v).replace(/[^0-9.]/g,'')); return (isNaN(n)||n===0)?'-':n.toLocaleString('ko-KR'); }
+function area1(v){ const n=parseFloat(v); return (!n||isNaN(n))?'-':n.toFixed(1); }
+function normMonth(d){ if(!d) return ''; const s=String(d).replace(/[^0-9]/g,''); if(s.length>=6) return s.slice(0,4)+'-'+s.slice(4,6); if(s.length>=4) return '20'+s.slice(0,2)+'-'+s.slice(2,4); return s; }
+function monthLabel(d){ const m=normMonth(d); return m?m.replace('-','.'):'-'; }
+function cmpFloor(a,b){ const p=f=>{ if(!f)return 9999; const s=String(f).trim(); if(/^B/i.test(s)) return -(parseInt(s.replace(/[^0-9]/g,''))||1); const n=parseInt(s.replace(/[^0-9]/g,'')); return isNaN(n)?9999:n; }; return p(a)-p(b); }
+const _SRC_COLORS=['#2563eb','#0f9d58','#ec4899','#f59e0b','#8b5cf6','#ef4444','#0891b2','#65a30d'];
+const _srcCache=new Map();
+function srcColor(s){ if(!s)return _SRC_COLORS[0]; if(_srcCache.has(s))return _srcCache.get(s); let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h&=h;} const c=_SRC_COLORS[Math.abs(h)%_SRC_COLORS.length]; _srcCache.set(s,c); return c; }
+function vacEmpty(v){ return [v.exclusiveArea,v.rentArea,v.depositPy,v.rentPy,v.maintenancePy].every(x=>!x||x==='-'||x===''||parseFloat(x)===0); }
+// 빌딩 공실 → 출처+발행월 그룹 (출처별 최신월만 노출, 과월호는 뷰어에서 전환)
+function groupVac(vacs){
+  const valid=(vacs||[]).filter(v=> v && typeof v==='object' && !vacEmpty(v));
+  const map=new Map();
+  valid.forEach(v=>{
+    const m=normMonth(v.publishDate); const key=((v.source||'').trim())+'__'+m;
+    if(!map.has(key)) map.set(key,{ key, source:v.source||'', month:m, label:monthLabel(v.publishDate),
+      publishDate:v.publishDate, pageImageUrl:v.pageImageUrl||'', documentId:v.documentId||'', rows:[] });
+    map.get(key).rows.push(v);
+  });
+  const groups=[...map.values()];
+  groups.forEach(g=> g.rows.sort((a,b)=>cmpFloor(a.floor,b.floor)));
+  const latest=new Map();
+  groups.forEach(g=>{ const e=latest.get(g.source); if(!e || (g.month||'')>(e.month||'')) latest.set(g.source,g); });
+  const show=[...latest.values()].sort((a,b)=>(b.month||'').localeCompare(a.month||''));
+  return { show, all:groups };
 }
 
 // ===== 인증 (users 노드 매칭 — 데스크톱과 동일) =====
@@ -423,7 +501,7 @@ function applyFilters(){
   S.filtered=S.all.filter(b=>{
     if(f.vacancy && !b.hasVacancy) return false;
     if(f.data && !b.hasData) return false;
-    if(q){ const hay=(b.name+' '+b.address+' '+b.addressJibun).toLowerCase(); if(!hay.includes(q)) return false; }
+    if(q){ const hay=(b.name+' '+b.address+' '+b.addressJibun+' '+(b.region||'')+' '+(b.nearbyStation||'')).toLowerCase(); if(!hay.includes(q)) return false; }
     return true;
   });
   renderMarkers();
@@ -435,10 +513,15 @@ function initMap(){
   kakao.maps.load(()=>{
     S.map=new kakao.maps.Map($('map'),{ center:new kakao.maps.LatLng(37.5012,127.0396), level:6 });
     S.clusterer=new kakao.maps.MarkerClusterer({
-      map:S.map, averageCenter:true, minLevel:6, disableClickZoom:false, gridSize:70,
-      styles:[{ width:'46px',height:'46px',background:'rgba(43,50,61,.88)',borderRadius:'50%',
-        color:'#fff',textAlign:'center',lineHeight:'46px',fontWeight:'700',fontSize:'14px',border:'2px solid #fff',
+      map:S.map, averageCenter:true, minLevel:1, minClusterSize:1, disableClickZoom:true, gridSize:70,
+      styles:[{ width:'44px',height:'44px',background:'rgba(43,50,61,.9)',borderRadius:'50%',
+        color:'#fff',textAlign:'center',lineHeight:'44px',fontWeight:'700',fontSize:'14px',border:'2px solid #fff',
         boxShadow:'0 2px 8px rgba(0,0,0,.3)' }]
+    });
+    kakao.maps.event.addListener(S.clusterer,'clusterclick',c=>{
+      const size=c.getSize?c.getSize():(c.getMarkers?c.getMarkers().length:2);
+      if(size===1 && c.getMarkers){ const m=c.getMarkers()[0]; if(m&&m.bid){ openSheet(m.bid); return; } }
+      S.map.setLevel(Math.max(1,S.map.getLevel()-2),{anchor:c.getCenter()});
     });
     kakao.maps.event.addListener(S.map,'idle',renderMarkers);
     if(S.filtered.length) renderMarkers();
@@ -456,9 +539,13 @@ function pinkPin(){
   return _pinkPin;
 }
 
+const NAME_LEVEL = 3; // 이 레벨 이하(가장 가까운 줌)에서는 빌딩명 라벨, 그 위로는 클러스터 숫자
+
 function renderMarkers(){
   if(!S.map||!S.clusterer) return;
-  S.clusterer.clear(); S.markers=[];
+  S.clusterer.clear();
+  (S.overlays||[]).forEach(o=>o.setMap(null)); S.overlays=[];
+  S.markers=[];
   // 뷰포트 + 20% 여백만 그림 (마커 많을 때 성능)
   let list=S.filtered;
   const bnd=S.map.getBounds && S.map.getBounds();
@@ -467,14 +554,31 @@ function renderMarkers(){
     const latP=(ne.getLat()-sw.getLat())*0.2, lngP=(ne.getLng()-sw.getLng())*0.2;
     list=S.filtered.filter(b=> b.lat&&b.lng && b.lat>=sw.getLat()-latP && b.lat<=ne.getLat()+latP && b.lng>=sw.getLng()-lngP && b.lng<=ne.getLng()+lngP);
   }
-  const img=pinkPin();
-  list.forEach(b=>{
-    if(!b.lat||!b.lng) return;
-    const mk=new kakao.maps.Marker({ position:new kakao.maps.LatLng(b.lat,b.lng), image:img, title:b.name });
-    kakao.maps.event.addListener(mk,'click',()=>openSheet(b.id));
-    S.markers.push(mk);
-  });
-  S.clusterer.addMarkers(S.markers);
+  const lvl=S.map.getLevel();
+  if(lvl<=NAME_LEVEL){
+    // 가장 가까운 레벨: 빌딩명 라벨
+    list.forEach(b=>{
+      if(!b.lat||!b.lng) return;
+      const el=document.createElement('div');
+      el.className='mk-label'+(b.hasVacancy?' has-vac':'');
+      el.textContent=b.name||'이름없음';
+      el.addEventListener('click',()=>openSheet(b.id));
+      const ov=new kakao.maps.CustomOverlay({ position:new kakao.maps.LatLng(b.lat,b.lng), content:el, yAnchor:1.25, clickable:true });
+      ov.setMap(S.map);
+      S.overlays.push(ov);
+    });
+  }else{
+    // 중간 레벨~: 클러스터 숫자 (단일 빌딩도 1로 표기)
+    const img=pinkPin();
+    list.forEach(b=>{
+      if(!b.lat||!b.lng) return;
+      const mk=new kakao.maps.Marker({ position:new kakao.maps.LatLng(b.lat,b.lng), image:img, title:b.name });
+      mk.bid=b.id;
+      kakao.maps.event.addListener(mk,'click',()=>openSheet(b.id));
+      S.markers.push(mk);
+    });
+    S.clusterer.addMarkers(S.markers);
+  }
 }
 
 function panToBuilding(b){
@@ -566,41 +670,45 @@ function tplInfo(b){
 }
 
 function tplLease(b){
-  const pc=(lbl,val,unit)=>`<div class="price-cell"><div class="lbl">${lbl}</div><div class="num">${val}<span class="unit"> ${unit}</span></div></div>`;
-  let html=`<div class="sec-title">임대 조건 (평당)</div>
-    <div class="price-grid">
-      ${pc('보증금', fmt(b.depositPy), '만원')}
-      ${pc('임대료', fmt(b.rentPy), '만원')}
-      ${pc('관리비', fmt(b.maintenancePy), '만원')}
-    </div>`;
+  const vg=groupVac(b.vacancies);
+  S._vacAll=vg.all;   // 과월호 조회용
+  let html='';
 
-  // 공실
-  html+=`<div class="sec-title">공실 현황 ${b.vacancies.length?`(${b.vacancies.length})`:''}</div>`;
-  if(b.vacancies.length){
-    html+=b.vacancies.map(v=>{
-      const fl=v.floor||v.floorName||v.fl||'-';
-      const area=v.exclusiveArea||v.area||v.areaPy||v.leaseArea;
-      const meta=[];
-      if(area) meta.push(`전용 ${fmt(area)}평`);
-      if(v.rentPy||v.rent) meta.push(`임대 ${fmt(v.rentPy||v.rent)}`);
-      if(v.maintenancePy||v.maintenance) meta.push(`관리 ${fmt(v.maintenancePy||v.maintenance)}`);
-      if(v.source) meta.push(esc(v.source));
-      return `<div class="vac-card"><div class="vh"><span class="fl">${esc(fl)}</span>${v.status?`<span class="tag">${esc(v.status)}</span>`:''}</div>
-        <div class="vmeta">${meta.join(' · ')||'세부 정보 없음'}</div></div>`;
+  // 공실 — 출처+발행월 그룹 카드 (leaseinfo 방식)
+  html+=`<div class="sec-title">공실 현황 ${vg.show.length?`· 출처 ${vg.show.length}곳`:''}</div>`;
+  if(vg.show.length){
+    html+=vg.show.map(g=>{
+      const col=srcColor(g.source);
+      const archCnt=vg.all.filter(x=>x.source===g.source).length;
+      const rows=g.rows.map(r=>`<div class="vrow">
+        <div class="vfl"><span class="floor-badge">${esc(r.floor||'-')}</span></div>
+        <div class="vareas"><span><i>전용</i>${area1(r.exclusiveArea)}</span><span><i>임대</i>${area1(r.rentArea)}</span></div>
+        <div class="vprices"><span><i>보증</i>${price(r.depositPy)}</span><span class="rent"><i>임대</i>${price(r.rentPy)}</span><span><i>관리</i>${price(r.maintenancePy)}</span></div>
+        ${r.moveInDate?`<div class="vmove">입주가능 ${esc(r.moveInDate)}</div>`:''}
+      </div>`).join('');
+      return `<div class="vgroup">
+        <div class="vghead">
+          <span class="src-badge" style="background:${col}">${esc(g.source||'-')}</span>
+          <span class="vgmonth"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${esc(g.label)}</span>
+        </div>
+        <div class="vrows">${rows}</div>
+        ${g.pageImageUrl?`<button class="vimg-btn" data-act="view-img" data-gid="${esc(g.key)}">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+          임대안내문 원본보기${archCnt>1?` · 과월호 ${archCnt}`:''}</button>`:''}
+      </div>`;
     }).join('');
-  }else html+='<div class="empty">등록된 공실이 없습니다</div>';
+  } else html+='<div class="empty">등록된 공실이 없습니다</div>';
 
   // 층별 기준가
   if(b.floorPricing && b.floorPricing.length){
     html+=`<div class="sec-title">층별 기준가</div>`;
     html+=b.floorPricing.map(p=>{
-      const fl=p.floor||p.floorName||p.fl||'-';
       const meta=[];
-      if(p.rentPy||p.rent) meta.push(`임대 ${fmt(p.rentPy||p.rent)}`);
-      if(p.maintenancePy||p.maintenance) meta.push(`관리 ${fmt(p.maintenancePy||p.maintenance)}`);
-      if(p.depositPy||p.deposit) meta.push(`보증 ${fmt(p.depositPy||p.deposit)}`);
-      if(p.exclusivePy||p.area) meta.push(`전용 ${fmt(p.exclusivePy||p.area)}평`);
-      return `<div class="vac-card"><div class="vh"><span class="fl">${esc(fl)}</span></div><div class="vmeta">${meta.join(' · ')||'-'}</div></div>`;
+      if(p.rentPy||p.rent) meta.push(`임대 ${price(p.rentPy||p.rent)}`);
+      if(p.maintenancePy||p.maintenance) meta.push(`관리 ${price(p.maintenancePy||p.maintenance)}`);
+      if(p.depositPy||p.deposit) meta.push(`보증 ${price(p.depositPy||p.deposit)}`);
+      if(p.exclusivePy||p.exclusiveArea||p.area) meta.push(`전용 ${area1(p.exclusivePy||p.exclusiveArea||p.area)}평`);
+      return `<div class="vac-card"><div class="vh"><span class="fl">${esc(p.floor||p.floorName||'-')}</span></div><div class="vmeta">${meta.join(' · ')||'-'}</div></div>`;
     }).join('');
   }
 
@@ -608,10 +716,19 @@ function tplLease(b){
   if(b.incentives && b.incentives.length){
     html+=`<div class="sec-title">인센티브</div>`;
     html+=b.incentives.map(i=>{
-      const t=i.title||i.type||i.name||'인센티브';
-      const c=i.content||i.description||i.detail||i.value||'';
+      const t=i.title||i.type||i.name||'인센티브'; const c=i.content||i.description||i.detail||i.value||'';
       return `<div class="vac-card"><div class="vh"><span class="fl">${esc(t)}</span></div>${c?`<div class="vmeta">${esc(c)}</div>`:''}</div>`;
     }).join('');
+  }
+
+  // 기준 임대조건 (빌딩 레벨 · 참고)
+  if(b.rentPy||b.depositPy||b.maintenancePy){
+    html+=`<div class="sec-title">기준 임대조건 (평당 · 참고)</div>
+      <div class="price-grid">
+        <div class="price-cell"><div class="lbl">보증금</div><div class="num">${price(b.depositPy)}<span class="unit"> 만</span></div></div>
+        <div class="price-cell"><div class="lbl">임대료</div><div class="num">${price(b.rentPy)}<span class="unit"> 만</span></div></div>
+        <div class="price-cell"><div class="lbl">관리비</div><div class="num">${price(b.maintenancePy)}<span class="unit"> 만</span></div></div>
+      </div>`;
   }
   return html;
 }
@@ -820,6 +937,7 @@ $('sheetBody').addEventListener('click',e=>{
   else if(act==='add-contact') contactModal(null);
   else if(act==='edit-contact'){ const c=asArr(b.contactPoints).find(x=>x.id===id); contactModal(c); }
   else if(act==='del-contact') deleteContact(id);
+  else if(act==='view-img') openVacViewer(el.dataset.gid);
 });
 
 // 모달 액션 위임
@@ -841,6 +959,56 @@ $('locBtn').addEventListener('click',()=>{
   navigator.geolocation.getCurrentPosition(p=>{ if(S.map){ S.map.setCenter(new kakao.maps.LatLng(p.coords.latitude,p.coords.longitude)); S.map.setLevel(4); } },
     ()=>toast('위치 권한이 필요합니다',1),{enableHighAccuracy:true,timeout:8000});
 });
+
+// ===== 임대안내문 원본 뷰어 (이미지 + 과월호 + 핀치줌) =====
+const vv={ scale:1, x:0, y:0 };
+function applyZoom(){ $('vvImg').style.transform=`translate(${vv.x}px,${vv.y}px) scale(${vv.scale})`; }
+function resetZoom(){ vv.scale=1; vv.x=0; vv.y=0; applyZoom(); }
+function loadVacImg(g){
+  $('vvTitle').textContent=`${S.selected?.name||''} · ${g.source} ${g.label}`;
+  resetZoom();
+  const img=$('vvImg'); img.style.opacity='0.4';
+  const probe=new Image();
+  probe.onload=()=>{ img.src=g.pageImageUrl; img.style.opacity='1'; };
+  probe.onerror=()=>{ img.src=g.pageImageUrl; img.style.opacity='1'; };
+  probe.src=g.pageImageUrl;
+}
+function openVacViewer(gid){
+  const all=S._vacAll||[]; const g=all.find(x=>x.key===gid);
+  if(!g||!g.pageImageUrl){ toast('원본 이미지가 없습니다',1); return; }
+  const arch=all.filter(x=>x.source===g.source && x.pageImageUrl).sort((a,b)=>(b.month||'').localeCompare(a.month||''));
+  const sel=$('vvArchive');
+  if(arch.length>1){ sel.classList.remove('hidden');
+    sel.innerHTML=arch.map(a=>`<option value="${esc(a.key)}" ${a.key===g.key?'selected':''}>${esc(a.label)} · ${esc(a.source)}</option>`).join('');
+  } else sel.classList.add('hidden');
+  loadVacImg(g);
+  $('vacViewer').classList.remove('hidden');
+}
+function closeVacViewer(){ $('vacViewer').classList.add('hidden'); $('vvImg').src=''; resetZoom(); }
+$('vvClose').addEventListener('click',closeVacViewer);
+$('vvArchive').addEventListener('change',e=>{ const g=(S._vacAll||[]).find(x=>x.key===e.target.value); if(g) loadVacImg(g); });
+$('vvImg').addEventListener('dblclick',()=>{ if(vv.scale>1) resetZoom(); else { vv.scale=2.5; applyZoom(); } });
+(function vvGestures(){
+  let mode=null,startDist=0,startScale=1,sx=0,sy=0,px=0,py=0,lastTap=0;
+  const open=()=>!$('vacViewer').classList.contains('hidden');
+  const dist=t=>Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);
+  document.addEventListener('touchstart',e=>{
+    if(!open()||!e.target.closest('#vvStage')) return;
+    if(e.touches.length===2){ mode='pinch'; startDist=dist(e.touches)||1; startScale=vv.scale; }
+    else if(e.touches.length===1){
+      const now=Date.now();
+      if(now-lastTap<300){ if(vv.scale>1) resetZoom(); else { vv.scale=2.5; applyZoom(); } lastTap=0; e.preventDefault(); return; }
+      lastTap=now;
+      if(vv.scale>1){ mode='pan'; sx=e.touches[0].clientX; sy=e.touches[0].clientY; px=vv.x; py=vv.y; }
+    }
+  },{passive:false});
+  document.addEventListener('touchmove',e=>{
+    if(!open()) return;
+    if(mode==='pinch'&&e.touches.length===2){ vv.scale=Math.max(1,Math.min(5,startScale*(dist(e.touches)/startDist))); applyZoom(); e.preventDefault(); }
+    else if(mode==='pan'&&e.touches.length===1){ vv.x=px+(e.touches[0].clientX-sx); vv.y=py+(e.touches[0].clientY-sy); applyZoom(); e.preventDefault(); }
+  },{passive:false});
+  document.addEventListener('touchend',e=>{ if(e.touches.length===0){ mode=null; if(vv.scale<=1){vv.x=0;vv.y=0;applyZoom();} } });
+})();
 
 // ===== 시작 =====
 if(checkAuth()) enterApp();
