@@ -15,9 +15,9 @@ import { state, initFirebase, setCurrentUser, setAllBuildings, setLeasingGuides,
 import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-utils.js?v=5.1';
 
 // Modules
-import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.7';
+import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.6';
 import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.1';
-import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.8';
+import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.7';
 import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.4';
 import { registerVacancyFunctions } from './guide-vacancy.js?v=5.12';
 import { registerMapFunctions } from './guide-map.js?v=5.2';

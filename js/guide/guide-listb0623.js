@@ -126,17 +126,7 @@ export function openCreateModal() {
     const modal = document.getElementById('createModal');
     if (modal) {
         modal.classList.add('show');
-
-        // ★ #4: 모달 열 때 입력값 초기화 (이전 값·브라우저 자동완성에 다른 사용자 제목이 남는 문제 방지)
-        const titleInput = document.getElementById('createTitle');
-        if (titleInput) { titleInput.value = ''; titleInput.setAttribute('autocomplete', 'off'); }
-        selectedTemplate = 'new';
-        document.querySelectorAll('.option-card').forEach(c => c.classList.toggle('selected', c.dataset.type === 'new'));
-        const prevGroup = document.getElementById('prevGuideGroup');
-        if (prevGroup) prevGroup.style.display = 'none';
-        const tplSel = document.getElementById('coverTemplateSelect');
-        if (tplSel) tplSel.value = '';
-
+        
         // ★ 발행년도 드롭다운 초기화
         const yearSelect = document.getElementById('createYear');
         if (yearSelect) {
@@ -159,9 +149,8 @@ export function openCreateModal() {
             }
         }
 
-        // ★ v5.6→Firebase: 캐시 즉시 렌더 + 최신본 비동기 로드
+        // ★ v5.6: 저장된 표지/엔딩 템플릿 목록 갱신
         refreshTemplateSelect();
-        refreshTemplatesFromFirebase();
     }
 }
 
@@ -171,132 +160,61 @@ export function closeCreateModal() {
     if (modal) modal.classList.remove('show');
 }
 
-// 생성 방식 선택 (HTML은 .option-card + selected 클래스 사용)
-let selectedTemplate = 'new';
+// 템플릿 선택
+let selectedTemplate = 'blank';
 export function selectCreateType(type) {
     selectedTemplate = type;
-    document.querySelectorAll('.option-card').forEach(c => c.classList.toggle('selected', c.dataset.type === type));
-    // 이전호 재활용 선택 시 안내문 목록 노출·채우기
-    const prevGroup = document.getElementById('prevGuideGroup');
-    if (prevGroup) prevGroup.style.display = (type === 'prev') ? 'block' : 'none';
-    if (type === 'prev') {
-        const sel = document.getElementById('prevGuideSelect');
-        if (sel) {
-            const guides = Object.entries(state.leasingGuides || {})
-                .map(([id, g]) => ({ id, ...g }))
-                .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-            sel.innerHTML = '<option value="">-- 선택하세요 --</option>'
-                + guides.map(g => `<option value="${g.id}">${(g.title || '제목 없음').replace(/</g, '&lt;')}</option>`).join('');
-        }
-    }
+    document.querySelectorAll('.template-card').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.template-card[data-type="${type}"]`)?.classList.add('active');
 }
 
-// ★ v6: 표지/엔딩 템플릿 — Firebase 저장 (공통 shared / 개별 users/{uid})
-//   기존 호출부가 동기 loadSavedTemplates()를 쓰므로, 인메모리 캐시를 두고
-//   백그라운드로 Firebase에서 받아와 캐시·UI를 갱신한다.
-const TPL_SHARED_PATH = 'guideCoverTemplates/shared';
-const TPL_USERS_PATH  = 'guideCoverTemplates/users';
-let _templateCache = [];
+// ★ v5.6: 표지/엔딩 템플릿 로컬스토리지 키
+const TEMPLATE_STORAGE_KEY = 'cre_leasing_cover_templates';
 
-function _sanitizeUid(u) {
-    return String(u || 'unknown').replace(/[.#$\[\]\/@]/g, '_');
-}
-function _currentUid() {
-    const u = state.currentUser || {};
-    return _sanitizeUid(u.uid || u.email || u.name || 'unknown');
-}
-function _escHtml(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-// 동기 스냅샷 반환 (기존 호출부 호환)
+// 저장된 템플릿 목록 불러오기
 export function loadSavedTemplates() {
-    return _templateCache;
-}
-
-// Firebase에서 공통+개별 템플릿을 받아 캐시·UI 갱신
-export async function refreshTemplatesFromFirebase() {
     try {
-        const uid = _currentUid();
-        const [sharedSnap, personalSnap] = await Promise.all([
-            get(ref(db, TPL_SHARED_PATH)),
-            get(ref(db, `${TPL_USERS_PATH}/${uid}`))
-        ]);
-        const out = [];
-        if (sharedSnap.exists()) {
-            Object.entries(sharedSnap.val()).forEach(([id, t]) => out.push({ id, scope: 'shared', ...(t || {}) }));
-        }
-        if (personalSnap.exists()) {
-            Object.entries(personalSnap.val()).forEach(([id, t]) => out.push({ id, scope: 'personal', ...(t || {}) }));
-        }
-        // 공통 먼저 → 같은 그룹 내 최신순
-        out.sort((a, b) => (a.scope === b.scope
-            ? String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
-            : (a.scope === 'shared' ? -1 : 1)));
-        _templateCache = out;
-    } catch (e) {
-        console.error('템플릿 로드 오류:', e);
-    }
-    // UI 갱신 (셀렉트 + 열려있으면 관리 모달 목록)
-    refreshTemplateSelect();
-    if (typeof window._rerenderTemplateManagerList === 'function') window._rerenderTemplateManagerList();
-    return _templateCache;
+        const raw = localStorage.getItem(TEMPLATE_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch(e) { return []; }
 }
 
-// 템플릿 저장 (scope: 'shared'=공통 공유 / 'personal'=개별) — guide-cover.js에서 호출
-export async function saveAsTemplate(name, coverSettings, endingSettings, scope) {
-    scope = (scope === 'shared') ? 'shared' : 'personal';
-    const uid = _currentUid();
-    const base = scope === 'shared' ? TPL_SHARED_PATH : `${TPL_USERS_PATH}/${uid}`;
-    const newRef = push(ref(db, base));
-    const payload = {
+// 템플릿 저장 (guide-cover.js에서 호출)
+export function saveAsTemplate(name, coverSettings, endingSettings) {
+    const templates = loadSavedTemplates();
+    const newTpl = {
+        id: Date.now().toString(),
         name,
-        scope,
         coverSettings: JSON.parse(JSON.stringify(coverSettings || {})),
         endingSettings: JSON.parse(JSON.stringify(endingSettings || {})),
-        createdAt: new Date().toISOString(),
-        createdBy: state.currentUser?.email || state.currentUser?.name || 'unknown'
+        createdAt: new Date().toLocaleString('ko-KR')
     };
-    await set(newRef, payload);
-    await refreshTemplatesFromFirebase();
-    return { id: newRef.key, ...payload };
+    templates.push(newTpl);
+    localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
+    return newTpl;
 }
 
-// 템플릿 삭제 (scope 미지정 시 캐시에서 추론)
-export async function deleteTemplate(id, scope) {
-    if (!scope) {
-        const t = _templateCache.find(x => x.id === id);
-        scope = t?.scope || 'personal';
-    }
-    const uid = _currentUid();
-    const tplPath = scope === 'shared' ? `${TPL_SHARED_PATH}/${id}` : `${TPL_USERS_PATH}/${uid}/${id}`;
-    await remove(ref(db, tplPath));
-    await refreshTemplatesFromFirebase();
+// 템플릿 삭제
+export function deleteTemplate(id) {
+    const templates = loadSavedTemplates().filter(t => t.id !== id);
+    localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(templates));
 }
 
-// 신규 생성 모달의 표지/엔딩 셀렉트박스 갱신 (공통/개별 그룹 분리)
+// 신규 생성 모달 오픈 시 템플릿 셀렉트박스 갱신
 function refreshTemplateSelect() {
     const sel = document.getElementById('coverTemplateSelect');
     if (!sel) return;
-    const prev = sel.value;
-    const shared = _templateCache.filter(t => t.scope === 'shared');
-    const personal = _templateCache.filter(t => t.scope === 'personal');
-    let html = '<option value="">-- 없음 (기본값) --</option>';
-    if (shared.length) {
-        html += '<optgroup label="📌 공통 템플릿">';
-        shared.forEach(t => { html += `<option value="shared:${t.id}">${_escHtml(t.name)}</option>`; });
-        html += '</optgroup>';
-    }
-    if (personal.length) {
-        html += '<optgroup label="👤 내 템플릿">';
-        personal.forEach(t => { html += `<option value="personal:${t.id}">${_escHtml(t.name)}</option>`; });
-        html += '</optgroup>';
-    }
-    sel.innerHTML = html;
-    // 이전 선택 유지 시도
-    if (prev && sel.querySelector(`option[value="${prev}"]`)) sel.value = prev;
+    const templates = loadSavedTemplates();
+    sel.innerHTML = '<option value="">-- 없음 (기본값) --</option>';
+    templates.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = `${t.name}  (${t.createdAt})`;
+        sel.appendChild(opt);
+    });
+    // 삭제 버튼 갱신
     const delBtn = document.getElementById('deleteTemplateBtn');
-    if (delBtn) delBtn.style.display = 'none'; // 삭제는 템플릿 관리 모달에서
+    if (delBtn) delBtn.style.display = templates.length ? 'inline-block' : 'none';
 }
 
 // 안내문 생성
@@ -313,16 +231,15 @@ export async function createGuide() {
     const publishYear = document.getElementById('createYear')?.value || '';
     const publishMonth = document.getElementById('createMonth')?.value || '';
 
-    // ★ v6: 선택된 표지/엔딩 템플릿 적용 (값 형식: "scope:id")
-    const selVal = document.getElementById('coverTemplateSelect')?.value || '';
+    // ★ v5.6: 선택된 표지/엔딩 템플릿 적용
+    const selectedTplId = document.getElementById('coverTemplateSelect')?.value || '';
     let appliedCoverSettings = null;
     let appliedEndingSettings = null;
-    if (selVal) {
-        const [scope, tid] = selVal.includes(':') ? selVal.split(':') : ['', selVal];
-        const tpl = _templateCache.find(t => t.id === tid && (!scope || t.scope === scope));
+    if (selectedTplId) {
+        const tpl = loadSavedTemplates().find(t => t.id === selectedTplId);
         if (tpl) {
-            appliedCoverSettings = JSON.parse(JSON.stringify(tpl.coverSettings || {}));
-            appliedEndingSettings = JSON.parse(JSON.stringify(tpl.endingSettings || {}));
+            appliedCoverSettings = JSON.parse(JSON.stringify(tpl.coverSettings));
+            appliedEndingSettings = JSON.parse(JSON.stringify(tpl.endingSettings));
         }
     }
 
@@ -362,11 +279,6 @@ export async function createGuide() {
         
         showToast('안내문이 생성되었습니다', 'success');
         window.openEditor();
-        // ★ #4: 편집기 제목칸을 방금 입력한 제목으로 보정 (openEditor가 채우지 않거나 stale 값이 남는 경우 방지)
-        setTimeout(() => {
-            const et = document.getElementById('editTitle');
-            if (et) et.value = title;
-        }, 60);
         
     } catch (error) {
         console.error('안내문 생성 오류:', error);
@@ -590,12 +502,9 @@ export function registerListFunctions() {
     window.saveDraft = saveDraft;
     window.saveFinal = saveFinal;
     window.renderGuideList = renderGuideList;
-    // ★ v6: 템플릿 함수 (Firebase 공통/개별)
+    // ★ v5.6: 템플릿 관련 함수
     window.loadSavedTemplates = loadSavedTemplates;
     window.saveAsTemplate = saveAsTemplate;
     window.deleteTemplate = deleteTemplate;
     window.refreshTemplateSelect = refreshTemplateSelect;
-    window.refreshTemplatesFromFirebase = refreshTemplatesFromFirebase;
-    // 시작 시 캐시 1회 채우기 (currentUser·db는 이 시점에 준비됨)
-    refreshTemplatesFromFirebase();
 }
