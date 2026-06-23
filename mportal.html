@@ -80,6 +80,16 @@ input{font-family:inherit;font-size:16px}
 .ritem .meta{flex:1;min-width:0}
 .gbadge{flex-shrink:0;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:#eef2ff;color:var(--blue)}
 .gbadge.prime{background:#fdf2f8;color:var(--pink-d)}
+.rfloor{font-size:12px;color:var(--pink-d);font-weight:600;margin-top:3px}
+.rpager{display:flex;align-items:center;justify-content:center;gap:16px;padding:11px;border-top:1px solid var(--line2);font-size:13px;color:var(--muted);position:sticky;bottom:0;background:#fff}
+.rpager button{padding:6px 16px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-weight:600;color:var(--navy);background:#fff}
+.rpager button:disabled{opacity:.4}
+.fcount{font-size:11px;font-weight:500;opacity:.85}
+.freg-wrap{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
+.freg{padding:7px 13px;border:1px solid var(--line);border-radius:18px;font-size:13px;color:var(--ink);background:#fff}
+.freg.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.fchk{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:14px;cursor:pointer}
+.fchk input{width:18px;height:18px;accent-color:var(--pink);flex-shrink:0}
 
 /* 우측 하단 지도 컨트롤 */
 .map-ctrl{position:absolute;right:12px;bottom:calc(var(--sb-bot) + 16px);z-index:20;display:flex;flex-direction:column;gap:8px}
@@ -252,6 +262,9 @@ input{font-family:inherit;font-size:16px}
       </button>
     </div>
     <div class="chips">
+      <button class="chip" id="filterChip">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"/></svg>필터<span class="fcount"></span>
+      </button>
       <button class="chip" data-filter="vacancy"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--ok)"></span>공실만</button>
       <button class="chip" data-filter="data">자료있음</button>
       <button class="chip" id="listChip">
@@ -347,7 +360,7 @@ const S = {
   cache: {},          // raw 컬렉션
   selected: null,     // 현재 상세 빌딩
   map: null, clusterer: null, markers: [], overlays: [],
-  filters: { vacancy:false, data:false, q:'' },
+  filters: { vacancy:false, data:false, q:'', region:[], vacAreaMin:0, vacAreaMax:0, combinedVac:false },
   tab: 'info'
 };
 
@@ -497,12 +510,95 @@ function processBuildings(){
 }
 
 // ===== 필터 =====
+// ===== 연층(완화) — 데스크톱 hasSubsetSumInRange 이식 =====
+// 공실 전용면적 중 2개 이상 조합의 합이 [from,to]에 들면 true (층 연속 무관)
+function hasSubsetSumInRange(areas, from, to){
+  const n=areas.length; if(n<2) return false;
+  const hasTo=isFinite(to)&&to>0, hasFrom=isFinite(from)&&from>0;
+  if(n<=18){
+    const limit=1<<n;
+    for(let mask=1;mask<limit;mask++){
+      let bits=0,sum=0;
+      for(let i=0;i<n;i++){ if(mask&(1<<i)){bits++;sum+=areas[i];} }
+      if(bits<2) continue;
+      if(hasFrom && sum<from) continue;
+      if(hasTo && sum>to) continue;
+      return true;
+    }
+    return false;
+  }
+  const s=areas.slice().sort((a,b)=>b-a).slice(0,18);
+  return hasSubsetSumInRange(s,from,to);
+}
+function vacAreas(b){ return (b.vacancies||[]).map(v=>parseFloat(String(v.exclusiveArea||v.exclusive_area||'').replace(/[^\d.]/g,''))||0).filter(a=>a>0); }
+
+// 결과 카드의 공실층 요약 ("3F 외 2건" / "연층 합산 …")
+function resultFloorLabel(b){
+  const f=S.filters; const aMin=f.vacAreaMin||0, aMax=f.vacAreaMax||0; const areaOn=aMin>0||aMax>0;
+  const vacs=b.vacancies||[];
+  if(areaOn){
+    if(b._areaComb && !b._areaIndiv) return `연층 합산 · 공실 ${vacs.length}건`;
+    const hits=vacs.filter(v=>{ const a=parseFloat(String(v.exclusiveArea||'').replace(/[^\d.]/g,''))||0; return a>0 && (!aMin||a>=aMin)&&(!aMax||a<=aMax); });
+    if(hits.length){ const f0=esc(hits[0].floor||'-'); return hits.length>1?`${f0} 외 ${hits.length-1}건`:f0; }
+  }
+  if(vacs.length){ const f0=esc(vacs[0].floor||''); return vacs.length>1?`${f0?f0+' 외 ':''}공실 ${vacs.length}건`:(f0||'공실 1건'); }
+  return '';
+}
+
+// ===== 상세 검색 필터 모달 =====
+function filterModal(){
+  const f=S.filters;
+  const regions=[...new Set(S.all.map(b=>b.region).filter(Boolean))].sort();
+  const chips=regions.map(r=>`<button class="freg ${f.region.includes(r)?'on':''}" data-act="freg" data-r="${esc(r)}">${esc(r)}</button>`).join('');
+  openModal(`<h3>상세 검색</h3>
+    <label>권역</label>
+    <div class="freg-wrap">${chips||'<span style="color:var(--muted);font-size:13px">권역 정보 없음</span>'}</div>
+    <label>공실 전용면적 (평)</label>
+    <div style="display:flex;align-items:center;gap:10px">
+      <input type="number" id="fAreaMin" inputmode="decimal" placeholder="최소" value="${f.vacAreaMin||''}" style="flex:1">
+      <span style="color:var(--muted)">~</span>
+      <input type="number" id="fAreaMax" inputmode="decimal" placeholder="최대" value="${f.vacAreaMax||''}" style="flex:1">
+    </div>
+    <label class="fchk"><input type="checkbox" id="fComb" ${f.combinedVac?'checked':''}>연층(복수층) 적용 <span style="color:var(--muted);font-size:11px">— 합산 면적 포함</span></label>
+    <div class="btns"><button class="btn-cancel" data-act="freset">초기화</button><button class="btn-save" data-act="fapply">적용</button></div>`);
+}
+function filterApply(){
+  S.filters.region=[...document.querySelectorAll('.freg.on')].map(x=>x.dataset.r);
+  S.filters.vacAreaMin=parseFloat($('fAreaMin').value)||0;
+  S.filters.vacAreaMax=parseFloat($('fAreaMax').value)||0;
+  S.filters.combinedVac=$('fComb').checked;
+  closeModal(); S._listMode=false; S._resPage=0;
+  applyFilters(); updateFilterChip(); renderResults(true);
+  toast(`${S.filtered.length}개 빌딩`);
+}
+function filterReset(){
+  S.filters.region=[]; S.filters.vacAreaMin=0; S.filters.vacAreaMax=0; S.filters.combinedVac=false;
+  closeModal(); applyFilters(); updateFilterChip(); $('results').style.display='none';
+  toast('필터 초기화');
+}
+function updateFilterChip(){
+  const f=S.filters; const on=f.region.length||f.vacAreaMin||f.vacAreaMax;
+  const chip=$('filterChip'); if(!chip) return;
+  chip.classList.toggle('on',!!on);
+  chip.querySelector('.fcount').textContent = on ? ' '+([f.region.length&&`권역${f.region.length}`,(f.vacAreaMin||f.vacAreaMax)&&'면적'].filter(Boolean).join('·')) : '';
+}
+
 function applyFilters(){
   const f=S.filters; const q=f.q.trim().toLowerCase();
+  const aMin=f.vacAreaMin||0, aMax=f.vacAreaMax||0; const areaOn=aMin>0||aMax>0;
   S.filtered=S.all.filter(b=>{
     if(f.vacancy && !b.hasVacancy) return false;
     if(f.data && !b.hasData) return false;
+    if(f.region.length && !f.region.includes(b.region)) return false;
     if(q){ const hay=(b.name+' '+b.address+' '+b.addressJibun+' '+(b.region||'')+' '+(b.nearbyStation||'')).toLowerCase(); if(!hay.includes(q)) return false; }
+    if(areaOn){
+      const areas=vacAreas(b);
+      const indiv=areas.some(a=> (!aMin||a>=aMin) && (!aMax||a<=aMax));
+      let ok=indiv;
+      if(!ok && f.combinedVac) ok=hasSubsetSumInRange(areas, aMin||0, aMax||Infinity);  // 연층: 2층 이상 합산
+      if(!ok) return false;
+      b._areaIndiv=indiv; b._areaComb=!indiv;
+    } else { b._areaIndiv=false; b._areaComb=false; }
     return true;
   });
   renderMarkers();
@@ -590,31 +686,43 @@ function panToBuilding(b){
 }
 
 // ===== 검색 결과 패널 =====
-function renderResults(){
+const RES_PAGE=15;
+function renderResults(filterMode){
   const q=S.filters.q.trim();
   const box=$('results');
-  if(!q && !S._listMode){ box.style.display='none'; return; }
-  let list = S.filtered.slice();
+  const f=S.filters; const fActive=f.region.length||f.vacAreaMin||f.vacAreaMax;
+  if(!q && !S._listMode && !filterMode && !fActive){ box.style.display='none'; return; }
+  let list=S.filtered.slice();
   if(q){
     const lq=q.toLowerCase();
-    list.sort((a,b)=>{ // 이름 시작 매칭 우선
-      const ai=(a.name||'').toLowerCase().startsWith(lq)?0:1, bi=(b.name||'').toLowerCase().startsWith(lq)?0:1;
-      return ai-bi;
-    });
+    list.sort((a,b)=>{ const ai=(a.name||'').toLowerCase().startsWith(lq)?0:1, bi=(b.name||'').toLowerCase().startsWith(lq)?0:1; return ai-bi; });
   } else if(S._listMode && S.map){ // 현재 지도 영역
     const bnd=S.map.getBounds(); const sw=bnd.getSouthWest(), ne=bnd.getNorthEast();
     list=list.filter(b=> b.lat&&b.lng && b.lat>=sw.getLat()&&b.lat<=ne.getLat()&&b.lng>=sw.getLng()&&b.lng<=ne.getLng());
   }
-  list=list.slice(0,40);
-  const head=`<div class="rhead">${q?`'${esc(q)}' 검색`:'현재 지도 영역'} · ${list.length}개${list.length>=40?'+':''}</div>`;
-  box.innerHTML = head + (list.length? list.map(b=>{
-    const g=gradeOf(b);
+  const total=list.length;
+  const pages=Math.max(1,Math.ceil(total/RES_PAGE));
+  if(S._resPage==null||S._resPage>=pages) S._resPage=0;
+  const start=S._resPage*RES_PAGE;
+  const pageItems=list.slice(start,start+RES_PAGE);
+  const ctx = q?`'${esc(q)}' 검색` : (fActive?'상세 검색':'현재 지도 영역');
+  const head=`<div class="rhead">${ctx} · ${total}개</div>`;
+  const items = total? pageItems.map(b=>{
+    const g=gradeOf(b); const fl=resultFloorLabel(b);
     return `<div class="ritem" data-bid="${esc(b.id)}">
-      <div class="meta"><div class="nm">${esc(b.name)}</div><div class="ad">${esc(b.address||b.addressJibun||'')}</div></div>
+      <div class="meta"><div class="nm">${esc(b.name)}</div>
+        <div class="ad">${esc(b.address||b.addressJibun||'')}</div>
+        ${fl?`<div class="rfloor">${fl}</div>`:''}</div>
       ${b.hasVacancy?'<span class="tag v" style="font-size:11px">공실</span>':''}
       ${g?`<span class="gbadge ${g==='Prime'?'prime':''}">${esc(g)}</span>`:''}
     </div>`;
-  }).join('') : '<div class="empty">결과가 없습니다</div>');
+  }).join('') : '<div class="empty">결과가 없습니다</div>';
+  const pager = pages>1?`<div class="rpager">
+    <button data-pg="prev" ${S._resPage===0?'disabled':''}>이전</button>
+    <span>${S._resPage+1} / ${pages}</span>
+    <button data-pg="next" ${S._resPage>=pages-1?'disabled':''}>다음</button>
+  </div>`:'';
+  box.innerHTML=head+items+pager;
   box.style.display='block';
 }
 
@@ -882,15 +990,21 @@ $('loginBtn').addEventListener('click',doLogin);
 $('loginPassword').addEventListener('keypress',e=>{ if(e.key==='Enter') doLogin(); });
 
 const si=$('searchInput');
-si.addEventListener('input',()=>{ S.filters.q=si.value; $('searchClear').style.display=si.value?'block':'none'; S._listMode=false; applyFilters(); renderResults(); });
+si.addEventListener('input',()=>{ S.filters.q=si.value; $('searchClear').style.display=si.value?'block':'none'; S._listMode=false; S._resPage=0; applyFilters(); renderResults(); });
 $('searchClear').addEventListener('click',()=>{ si.value=''; S.filters.q=''; $('searchClear').style.display='none'; applyFilters(); $('results').style.display='none'; });
 
-document.querySelectorAll('.chip[data-filter]').forEach(ch=>{
-  ch.addEventListener('click',()=>{ const f=ch.dataset.filter; S.filters[f]=!S.filters[f]; ch.classList.toggle('on',S.filters[f]); applyFilters(); if($('results').style.display==='block') renderResults(); });
-});
-$('listChip').addEventListener('click',()=>{ S._listMode=!S._listMode; if(S._listMode){ si.value=''; S.filters.q=''; $('searchClear').style.display='none'; applyFilters(); } renderResults(); });
+$('filterChip').addEventListener('click',filterModal);
 
-$('results').addEventListener('click',e=>{ const it=e.target.closest('.ritem'); if(it) openSheet(it.dataset.bid); });
+document.querySelectorAll('.chip[data-filter]').forEach(ch=>{
+  ch.addEventListener('click',()=>{ const f=ch.dataset.filter; S.filters[f]=!S.filters[f]; ch.classList.toggle('on',S.filters[f]); S._resPage=0; applyFilters(); if($('results').style.display==='block') renderResults(); });
+});
+$('listChip').addEventListener('click',()=>{ S._listMode=!S._listMode; if(S._listMode){ si.value=''; S.filters.q=''; $('searchClear').style.display='none'; applyFilters(); } S._resPage=0; renderResults(); });
+
+$('results').addEventListener('click',e=>{
+  const pg=e.target.closest('[data-pg]');
+  if(pg){ if(pg.dataset.pg==='prev'&&S._resPage>0)S._resPage--; else if(pg.dataset.pg==='next')S._resPage++; renderResults(true); $('results').scrollTop=0; return; }
+  const it=e.target.closest('.ritem'); if(it) openSheet(it.dataset.bid);
+});
 
 $('menuBtn').addEventListener('click',()=>{
   openModal(`<h3>${esc(S.user?.name||S.user?.email||'사용자')}</h3>
@@ -929,6 +1043,9 @@ $('modalBox').addEventListener('click',e=>{
   if(act==='m-cancel'||act==='c-cancel') closeModal();
   else if(act==='m-save') saveMemo(id);
   else if(act==='c-save') saveContact(id);
+  else if(act==='freg') el.classList.toggle('on');
+  else if(act==='fapply') filterApply();
+  else if(act==='freset') filterReset();
   else if(act==='logout') logout();
 });
 $('modalOv').addEventListener('click',closeModal);
