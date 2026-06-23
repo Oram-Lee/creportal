@@ -823,10 +823,9 @@
         }
         .toc-full-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 20px;
             flex: 1;
-            align-content: start;
         }
         .toc-full-region {
             background: #f9fafb;
@@ -843,12 +842,8 @@
         }
         .toc-region-title .region-name {
             flex: 1;
-            min-width: 0;
             font-weight: 600;
             color: #374151;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
         .toc-region-title .region-count {
             font-size: 12px;
@@ -3422,8 +3417,6 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            position: relative;
-            z-index: 1;
         }
         .toc-region-title-area {
             margin-bottom: 30px;
@@ -3443,20 +3436,19 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
-            width: 100%;
+            max-width: 760px;
         }
         .toc-region-item {
             display: flex;
-            align-items: baseline;
-            justify-content: space-between;
+            align-items: center;
             gap: 12px;
-            padding: 8px 4px;
+            padding: 8px 2px;
             cursor: pointer;
-            transition: background 0.15s;
+            transition: all 0.2s;
             border-bottom: 1px solid rgba(255,255,255,0.10);
         }
         .toc-region-item:hover {
-            background: rgba(255,255,255,0.04);
+            transform: translateX(8px);
         }
         .toc-region-item-num {
             font-size: 14px;
@@ -3481,6 +3473,9 @@
             flex-shrink: 0;
             margin-left: 16px;
         }
+        .toc-region-item:hover {
+            background: rgba(255,255,255,0.04);
+        }
         .toc-region-item:hover .toc-region-item-name {
             color: #f9a8d4;
         }
@@ -3488,11 +3483,9 @@
             position: absolute;
             bottom: 0;
             right: 0;
-            width: 55%;
-            height: 130px;
-            opacity: 0.28;
-            z-index: 0;
-            pointer-events: none;
+            width: 60%;
+            height: 150px;
+            opacity: 0.6;
         }
         .toc-region-skyline svg {
             width: 100%;

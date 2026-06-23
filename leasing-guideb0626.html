@@ -823,10 +823,9 @@
         }
         .toc-full-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 20px;
             flex: 1;
-            align-content: start;
         }
         .toc-full-region {
             background: #f9fafb;
@@ -843,12 +842,8 @@
         }
         .toc-region-title .region-name {
             flex: 1;
-            min-width: 0;
             font-weight: 600;
             color: #374151;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
         .toc-region-title .region-count {
             font-size: 12px;
