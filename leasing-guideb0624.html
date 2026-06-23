@@ -874,7 +874,7 @@
         }
         .toc-region-header-banner {
             padding: 30px;
-            background: #2b323d;
+            background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
             color: white;
             display: flex;
             align-items: center;
@@ -886,7 +886,7 @@
         .toc-region-header-banner.region-BBD,
         .toc-region-header-banner.region-PAN,
         .toc-region-header-banner.region-ETC {
-            background: #2b323d;
+            background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
         }
         .toc-region-logo img {
             height: 40px;
@@ -3323,7 +3323,7 @@
             padding: 0;
         }
         .toc-full-header {
-            background: #2b323d;
+            background: #ec4899;
             padding: 20px 40px;
             display: flex;
             justify-content: space-between;
@@ -3340,8 +3340,8 @@
             object-fit: contain;
         }
         .toc-full-accent-bar {
-            height: 5px;
-            background: #ec4899;
+            height: 6px;
+            background: linear-gradient(90deg, #ec4899, #f472b6);
         }
         .toc-full-body {
             flex: 1;
@@ -3361,7 +3361,7 @@
             gap: 6px;
             margin-bottom: 12px;
             padding-bottom: 8px;
-            border-bottom: 2px solid #ec4899;
+            border-bottom: 1px solid #e5e7eb;
         }
         .toc-region-icon {
             font-size: 14px;
@@ -3369,7 +3369,7 @@
         .toc-region-label {
             font-size: 16px;
             font-weight: 700;
-            color: #1e293b;
+            color: #ec4899;
         }
         .toc-full-region-list {
             display: flex;
@@ -3406,7 +3406,7 @@
         .fullpreview-toc-region {
             width: 100%;
             height: 100%;
-            background: #2b323d;
+            background: linear-gradient(135deg, #ec4899 0%, #be185d 100%);
             display: flex;
             flex-direction: column;
             padding: 40px 60px;
@@ -3435,17 +3435,16 @@
         .toc-region-list-area {
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            max-width: 760px;
+            gap: 8px;
+            max-width: 400px;
         }
         .toc-region-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 8px 2px;
+            padding: 6px 0;
             cursor: pointer;
             transition: all 0.2s;
-            border-bottom: 1px solid rgba(255,255,255,0.10);
         }
         .toc-region-item:hover {
             transform: translateX(8px);
@@ -3453,31 +3452,17 @@
         .toc-region-item-num {
             font-size: 14px;
             font-weight: 700;
-            color: #ec4899;
+            color: #f0f0f0;
             min-width: 24px;
         }
         .toc-region-item-name {
             font-size: 15px;
-            color: #f1f5f9;
+            color: #e2e8f0;
             font-weight: 500;
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .toc-region-item-address {
-            font-size: 12px;
-            color: #aeb8c5;
-            white-space: nowrap;
-            text-align: right;
-            flex-shrink: 0;
-            margin-left: 16px;
-        }
-        .toc-region-item:hover {
-            background: rgba(255,255,255,0.04);
         }
         .toc-region-item:hover .toc-region-item-name {
-            color: #f9a8d4;
+            color: #ec4899;
+            text-decoration: underline;
         }
         .toc-region-skyline {
             position: absolute;

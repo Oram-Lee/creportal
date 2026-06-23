@@ -25,7 +25,7 @@ import { registerNoteFunctions } from './guide-note.js?v=5.1';
 import { registerDividerFunctions } from './guide-divider.js?v=5.1';
 import { registerModalFunctions } from './guide-modal.js?v=5.1';
 import { registerContactFunctions } from './guide-contact.js?v=5.1';
-import { registerPreviewFunctions } from './guide-preview.js?v=5.6';
+import { registerPreviewFunctions } from './guide-preview.js?v=5.5';
 
 // Firebase 설정
 const firebaseConfig = {

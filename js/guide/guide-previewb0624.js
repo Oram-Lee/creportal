@@ -456,7 +456,7 @@ function renderTocFullPage(data) {
                 ${activeRegions.map(region => {
                     const buildings = regionGroups[region];
                     const regionInfo = getRegionInfo(region);
-                    const icon = '<svg width="9" height="12" viewBox="0 0 24 24" fill="#ec4899" style="vertical-align:-1px;"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/></svg>';
+                    const icon = regionIcons[region] || '📍';
                     
                     return `
                         <div class="toc-full-column">
@@ -489,7 +489,7 @@ function renderTocRegionPage(data) {
     // 도시 스카이라인 SVG
     const skylineSvg = `
         <svg viewBox="0 0 400 100" preserveAspectRatio="none">
-            <path d="M0,100 L0,70 L20,70 L20,50 L35,50 L35,70 L50,70 L50,40 L70,40 L70,70 L85,70 L85,55 L100,55 L100,70 L115,70 L115,30 L140,30 L140,70 L155,70 L155,60 L175,60 L175,70 L190,70 L190,45 L210,45 L210,70 L225,70 L225,35 L250,35 L250,70 L265,70 L265,50 L285,50 L285,70 L300,70 L300,25 L330,25 L330,70 L345,70 L345,55 L365,55 L365,70 L380,70 L380,40 L400,40 L400,100 Z" fill="rgba(236,72,153,0.55)"/>
+            <path d="M0,100 L0,70 L20,70 L20,50 L35,50 L35,70 L50,70 L50,40 L70,40 L70,70 L85,70 L85,55 L100,55 L100,70 L115,70 L115,30 L140,30 L140,70 L155,70 L155,60 L175,60 L175,70 L190,70 L190,45 L210,45 L210,70 L225,70 L225,35 L250,35 L250,70 L265,70 L265,50 L285,50 L285,70 L300,70 L300,25 L330,25 L330,70 L345,70 L345,55 L365,55 L365,70 L380,70 L380,40 L400,40 L400,100 Z" fill="rgba(255,255,255,0.15)"/>
         </svg>
     `;
     
@@ -505,7 +505,6 @@ function renderTocRegionPage(data) {
                         <div class="toc-region-item" onclick="goToBuildingPage('${bd.building.id}')">
                             <span class="toc-region-item-num">${String(i + 1).padStart(2, '0')}</span>
                             <span class="toc-region-item-name">${bd.name}</span>
-                            <span class="toc-region-item-address">${(bd.building && bd.building.address) ? bd.building.address : ''}</span>
                         </div>
                     `).join('')}
                 </div>
