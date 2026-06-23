@@ -61,171 +61,66 @@ import {
     renderExternalVacancyGroups, 
     renderExternalCartItems,
     renderExternalCartTags 
-} from './guide-vacancy.js?v=5.10';
+} from './guide-vacancy.js?v=5.12';
 
-// ★ v5.5: 타사공실 카트 태그 렌더 (하단 선택 현황 패널용)
-function renderExternalCartTagItems(pending, idx) {
-    if (!pending || !pending.length) {
-        return '<span style="color:#94a3b8; font-size:11px; padding:4px 0; display:block;">선택된 공실이 없습니다</span>';
-    }
-    return pending.map((v, i) => {
-        const floor = v.floor || v.floorLabel || '-';
-        const area = v.area || v.leaseArea || '';
-        return '<span class="ext-cart-tag">'
-            + '<span>' + floor + (area ? ' · ' + area + '평' : '') + '</span>'
-            + '<button class="tag-remove" onclick="removeExternalCartItem(' + idx + ',' + i + ')" title="제거">✕</button>'
-            + '</span>';
-    }).join('');
+// ★ 메인 "선택된 공실" 표(tbody)만 즉시 재렌더 — 전체 에디터 재렌더 없이 라이브 반영
+//   (타사 공실 체크 시 패널/아코디언을 닫지 않고 공실 현황 표를 갱신하기 위함)
+function _parseFloorNumForSort(floor) {
+    if (!floor || floor === '-') return 0;
+    const str = String(floor).trim().toUpperCase();
+    const basement = str.match(/^B(\d+)/);
+    if (basement) return -parseInt(basement[1]);
+    const above = str.match(/^(\d+)/);
+    if (above) return parseInt(above[1]);
+    return 0;
 }
-
-// ★ v5.5: 타사공실 체크박스 토글 → pending 배열 관리 + 카트 UI 갱신
-export function toggleExternalVacancyItem(idx, vacId, vacObj) {
+export function refreshVacancyListTable(idx) {
     const item = state.tocItems?.[idx];
     if (!item) return;
-    if (!item.pendingExternalVacancies) item.pendingExternalVacancies = [];
-    const existIdx = item.pendingExternalVacancies.findIndex(v => (v.id || v.vacancyId) === vacId);
-    if (existIdx >= 0) {
-        // 이미 있으면 제거
-        item.pendingExternalVacancies.splice(existIdx, 1);
-    } else {
-        // 없으면 추가
-        const obj = typeof vacObj === 'string' ? JSON.parse(decodeURIComponent(vacObj)) : vacObj;
-        item.pendingExternalVacancies.push(obj);
-    }
-    _refreshExternalCart(idx);
-    // 아이템 UI 선택 상태 갱신
-    const el = document.getElementById('extVacItem_' + idx + '_' + vacId);
-    if (el) el.classList.toggle('selected', existIdx < 0);
-}
-
-// ★ v5.5: 카트 아이템 단건 제거
-export function removeExternalCartItem(idx, i) {
-    const item = state.tocItems?.[idx];
-    if (!item || !item.pendingExternalVacancies) return;
-    item.pendingExternalVacancies.splice(i, 1);
-    _refreshExternalCart(idx);
-    // 리스트 체크박스 연동
-    const body = document.getElementById('extVacancyBody_' + idx);
-    if (body) {
-        const cbs = body.querySelectorAll('input[type="checkbox"]');
-        cbs.forEach(cb => {
-            const vid = cb.dataset.vacId;
-            const isIn = item.pendingExternalVacancies.some(v => (v.id || v.vacancyId) === vid);
-            cb.checked = isIn;
-            const row = cb.closest('.external-vacancy-item');
-            if (row) row.classList.toggle('selected', isIn);
-        });
-    }
-}
-
-// ★ v5.5: 카트 전체 초기화
-export function clearExternalCart(idx) {
-    const item = state.tocItems?.[idx];
-    if (!item) return;
-    item.pendingExternalVacancies = [];
-    _refreshExternalCart(idx);
-    // 리스트 체크 해제
-    const body = document.getElementById('extVacancyBody_' + idx);
-    if (body) {
-        body.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = false; });
-        body.querySelectorAll('.external-vacancy-item.selected').forEach(el => el.classList.remove('selected'));
-    }
-}
-
-// ★ v5.5: pending → selectedExternalVacancies 반영
-export async function applyPendingExternalVacancies(idx) {
-    const item = state.tocItems?.[idx];
-    if (!item) return;
-    if (!item.pendingExternalVacancies || !item.pendingExternalVacancies.length) {
-        showToast('선택된 공실이 없습니다.', 'warning'); return;
-    }
+    const tbody = document.getElementById('vacancyListBody_' + idx);
+    if (!tbody) return;
+    if (!item.customVacancies) item.customVacancies = [];
     if (!item.selectedExternalVacancies) item.selectedExternalVacancies = [];
-    // 중복 제외 추가
-    item.pendingExternalVacancies.forEach(v => {
-        const dup = item.selectedExternalVacancies.some(s => (s.id || s.vacancyId) === (v.id || v.vacancyId));
-        if (!dup) item.selectedExternalVacancies.push(v);
+    if (!item.leasingGuideVacancies) item.leasingGuideVacancies = [];
+    const raw = [
+        ...item.customVacancies.map((v, i) => ({ ...v, type: 'custom', id: `custom_${i}` })),
+        ...item.selectedExternalVacancies,
+        ...item.leasingGuideVacancies.map((v, i) => ({ ...v, type: 'guide', id: `guide_${i}` }))
+    ];
+    const order = item.vacancySortOrder || 'asc';
+    const all = [...raw].sort((a, b) => {
+        const fa = _parseFloorNumForSort(a.floor), fb = _parseFloorNumForSort(b.floor);
+        return order === 'asc' ? fa - fb : fb - fa;
     });
-    item.pendingExternalVacancies = [];
-    showToast(item.selectedExternalVacancies.length + '건 공실 적용 완료', 'success');
-    // 빌딩 에디터 리렌더
-    const building = state.allBuildings?.find(b => b.id === item.buildingId);
-    if (building) window.renderBuildingEditor(item, building);
-}
-
-// ★ v5.5: 필터 적용
-export function filterExternalVacancies(idx) {
-    const srcEl = document.getElementById('extSourceFilter_' + idx);
-    const dateEl = document.getElementById('extDateFilter_' + idx);
-    const bodyEl = document.getElementById('extVacancyBody_' + idx);
-    if (!bodyEl) return;
-    const srcVal = srcEl?.value || 'all';
-    const dateVal = dateEl?.value || 'all';
-    const item = state.tocItems?.[idx];
-    if (!item) return;
-    // 원본 공실 목록 재조회 — ★ building.vacancies가 실제 데이터(state.externalVacanciesByBuilding은 미사용/빈값이라 필터 시 목록이 사라지던 버그)
-    const buildingId = item.buildingId;
-    const _bldg = state.allBuildings?.find(b => b.id === buildingId);
-    const allVacs = (_bldg && Array.isArray(_bldg.vacancies))
-        ? _bldg.vacancies
-        : (state.externalVacanciesByBuilding?.[buildingId] || []);
-    const filtered = allVacs.filter(v => {
-        if (srcVal !== 'all' && v.source !== srcVal) return false;
-        if (dateVal !== 'all' && (v.publishDate || v.date || '') !== dateVal) return false;
-        return true;
-    });
-    bodyEl.innerHTML = renderExternalVacancyGroups(filtered, item.selectedExternalVacancies || [], idx);
-    _bindExternalVacancyCheckboxes(idx);
-    // ★ 특정 출처/날짜를 고르면 해당 그룹을 펼쳐서 바로 보이게 (전체일 땐 접힘 유지)
-    if (srcVal !== 'all' || dateVal !== 'all') {
-        bodyEl.querySelectorAll('.external-vacancy-group-body').forEach(b => {
-            b.style.display = 'block';
-            const tg = b.previousElementSibling && b.previousElementSibling.querySelector('.group-toggle');
-            if (tg) tg.textContent = '▼';
-        });
+    if (all.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:30px; color:#94a3b8;">등록된 공실이 없습니다</td></tr>`;
+    } else {
+        tbody.innerHTML = all.map((v, i) => `
+            <tr id="vacRow_${idx}_${i}" data-vacid="${v.id}" data-vactype="${v.type}">
+                <td class="floor">${formatFloorDisplay(v.floor)}</td>
+                <td>${v.exclusiveArea || v.area || '-'}</td>
+                <td>${v.rentArea || v.area || '-'}</td>
+                <td>${v.deposit ?? v.depositPy ?? '문의'}</td>
+                <td>${v.rent ?? v.rentPy ?? '문의'}</td>
+                <td>${v.maintenance ?? v.maintenancePy ?? '문의'}</td>
+                <td>${v.moveIn || v.moveInDate || '협의'}</td>
+                <td style="font-size:11px; line-height:1.35;">${(v.source || v.company) ? (v.source || v.company) : '<span style="color:#cbd5e1;">-</span>'}${(v.publishDate || v.date) ? '<br><span style="color:#94a3b8;">' + (v.publishDate || v.date) + '</span>' : ''}</td>
+                <td>
+                    <div class="actions">
+                        <button onclick="startVacancyRowEdit(${idx}, '${v.id}', '${v.type}', this)" title="인라인 편집" style="font-size:13px; padding:2px 6px; border:1px solid #e2e8f0; border-radius:4px; background:#fff; color:#64748b; cursor:pointer;">✏️</button>
+                        <button onclick="removeSelectedVacancy(${idx}, '${v.id}', '${v.type}')" title="삭제" style="font-size:13px; padding:2px 7px; border:1px solid #fecaca; border-radius:4px; background:#fff; color:#dc2626; cursor:pointer; margin-left:3px;">×</button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+    const cntEl = document.querySelector('#vacancySection .vacancy-current-count');
+    if (cntEl) {
+        cntEl.textContent = all.length;
+        cntEl.classList.toggle('over-limit', all.length >= MAX_VACANCIES_PER_BUILDING);
     }
 }
 
-// ★ v5.5: 카트 UI 갱신 (카운트 + 태그 목록)
-function _refreshExternalCart(idx) {
-    const item = state.tocItems?.[idx];
-    const pending = item?.pendingExternalVacancies || [];
-    const countEl = document.getElementById('extSelectedCount_' + idx);
-    if (countEl) countEl.textContent = pending.length;
-    const cartBody = document.getElementById('extCartBody_' + idx);
-    if (cartBody) cartBody.innerHTML = renderExternalCartTagItems(pending, idx);
-}
-
-// ★ v5.5: 체크박스 이벤트 바인딩 (renderExternalVacancyGroups 렌더 후 호출)
-export function _bindExternalVacancyCheckboxes(idx) {
-    const body = document.getElementById('extVacancyBody_' + idx);
-    if (!body) return;
-    const item = state.tocItems?.[idx];
-    const pending = item?.pendingExternalVacancies || [];
-    body.querySelectorAll('.external-vacancy-item').forEach(row => {
-        // 체크박스 클릭 이벤트 위임
-        const cb = row.querySelector('input[type="checkbox"]');
-        if (!cb) return;
-        const vacId = cb.dataset.vacId || cb.value;
-        const isChecked = pending.some(v => (v.id || v.vacancyId) === vacId);
-        cb.checked = isChecked;
-        row.classList.toggle('selected', isChecked);
-        // 중복 바인딩 방지
-        if (cb._extBound) return;
-        cb._extBound = true;
-        cb.addEventListener('change', function() {
-            const vacDataStr = this.closest('.external-vacancy-item')?.dataset.vacData;
-            let vacObj = null;
-            try { vacObj = vacDataStr ? JSON.parse(decodeURIComponent(vacDataStr)) : null; } catch(e){}
-            if (!vacObj) vacObj = { id: vacId, vacancyId: vacId, floor: row.querySelector('.vacancy-floor')?.textContent };
-            toggleExternalVacancyItem(idx, vacId, vacObj);
-        });
-        row.addEventListener('click', function(e) {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
-            cb.checked = !cb.checked;
-            cb.dispatchEvent(new Event('change'));
-        });
-    });
-}
 import { initBuildingKakaoMap } from './guide-map.js?v=5.2';
 
 // ★ v5.0: 공실 최대 개수 (A4 가로 기준, 헤더/합계 포함)
@@ -361,7 +256,7 @@ export function renderBuildingEditor(item, building) {
                 const extBody = document.getElementById('extVacancyBody_' + idx);
                 if (extBody) {
                     extBody.innerHTML = renderExternalVacancyGroups(vacancies, item.selectedExternalVacancies || [], idx);
-                    setTimeout(() => _bindExternalVacancyCheckboxes(idx), 50);
+                    setTimeout(() => { if (window.refreshExternalArea) window.refreshExternalArea(idx); }, 50);
                 }
                 const countEl = document.querySelector('.external-vacancy-count');
                 if (countEl) {
@@ -985,10 +880,16 @@ export function renderBuildingEditor(item, building) {
                                 <div class="external-vacancy-group-th">
                                     <span></span>
                                     <span>층</span>
-                                    <span>면적 (전용/임대)</span>
+                                    <span>전용/임대</span>
                                     <span>보증금</span>
                                     <span>임대료</span>
                                     <span>관리비</span>
+                                    <span>입주시기</span>
+                                </div>
+                                <div class="external-vacancy-legend" style="display:flex; gap:14px; padding:5px 10px; font-size:10px; color:#64748b; background:#fafbfc; border-bottom:1px solid var(--border-color);">
+                                    <span>🔵 선택 (반영 전)</span>
+                                    <span>🟢 반영됨 (공실 현황에 추가됨)</span>
+                                    <span style="margin-left:auto; color:#94a3b8;">클릭=선택 · 다시 클릭=해제</span>
                                 </div>
                                 <div class="external-vacancy-body" id="extVacancyBody_${idx}">
                                     ${renderExternalVacancyGroups(externalVacancies, item.selectedExternalVacancies || [], idx)}
@@ -998,10 +899,10 @@ export function renderBuildingEditor(item, building) {
                             <!-- 하단 선택 현황 패널 -->
                             <div class="external-vacancy-cart" id="extCartPanel_${idx}">
                                 <div class="external-vacancy-cart-header">
-                                    <h5>✓ 선택된 공실 <span id="extSelectedCount_${idx}" style="background:#0369a1; color:white; padding:1px 7px; border-radius:10px; font-size:11px; margin-left:4px;">${((item.selectedExternalVacancies?.length || 0) + (item.pendingExternalVacancies?.length || 0))}</span></h5>
-                                    <span id="extCartStatus_${idx}">${(() => { const _a = item.selectedExternalVacancies?.length || 0; const _p = item.pendingExternalVacancies?.length || 0; return (_a + _p) === 0 ? '<span style="font-size:11px; color:#94a3b8;">공실을 선택하세요</span>' : '<span style="font-size:11px; color:#16a34a; font-weight:600;">✅ 적용 ' + _a + '</span>' + (_p ? ' <span style="font-size:11px; color:#d97706; font-weight:600;">· ⏳ 대기 ' + _p + '</span>' : ''); })()}</span>
+                                    <h5>🛒 선택 바구니 <span style="font-weight:400; color:#64748b; font-size:11px;">(반영 전)</span> <span id="extSelectedCount_${idx}" style="background:#2563eb; color:white; padding:1px 7px; border-radius:10px; font-size:11px; margin-left:4px;">${item.pendingExternalVacancies?.length || 0}</span></h5>
+                                    <span id="extCartStatus_${idx}">${(() => { const _p = item.pendingExternalVacancies?.length || 0; const _c = item.selectedExternalVacancies?.length || 0; if (_p === 0) return _c ? '<span style="font-size:11px; color:#16a34a; font-weight:600;">🟢 반영됨 ' + _c + '</span>' : '<span style="font-size:11px; color:#94a3b8;">공실을 선택하세요</span>'; return '<span style="font-size:11px; color:#2563eb; font-weight:700;">🔵 선택 ' + _p + '</span>' + (_c ? ' <span style="font-size:11px; color:#16a34a; font-weight:600;">· 🟢 반영됨 ' + _c + '</span>' : '') + ' <span style="font-size:11px; color:#94a3b8;">— [반영] 누르면 공실 현황에 추가</span>'; })()}</span>
                                     <div class="ext-cart-actions">
-                                        <button class="btn-reset" onclick="clearExternalCart(${idx})">초기화</button>
+                                        <button class="btn-reset" onclick="clearExternalCart(${idx})">선택 해제</button>
                                         <button class="btn-apply" onclick="applyPendingExternalVacancies(${idx})">✓ 반영</button>
                                     </div>
                                 </div>
@@ -1011,7 +912,7 @@ export function renderBuildingEditor(item, building) {
                             </div>
                             
                             <div class="external-vacancy-notice" style="border-radius:0 0 8px 8px; padding:8px 12px; font-size:11px;">
-                                💡 리스트에서 공실을 체크하면 아래 선택 현황에 추가됩니다. <strong>[전체 반영]</strong>으로 공실 현황에 적용하세요.
+                                💡 리스트에서 공실을 <strong>클릭(체크)해 선택</strong>한 뒤 <strong>[반영]</strong>을 누르면 위 공실 현황 표에 추가됩니다. 여러 출처를 모아 한 번에 반영(중복 자동 정리)할 수 있어요.
                             </div>
                         </div>
                     </div>
@@ -2593,12 +2494,8 @@ export function registerBuildingFunctions() {
     window.switchVacancyAddTab = switchVacancyAddTab;
     // switchAddVacancyMode 오버라이드 (guide-vacancy.js보다 나중에 등록)
     // guide-vacancy.js 충돌 방지: 버튼에서 직접 switchVacancyAddTab 호출하므로 override 불필요
-    window.toggleExternalVacancyItem = toggleExternalVacancyItem;
-    window.removeExternalCartItem = removeExternalCartItem;
-    window.clearExternalCart = clearExternalCart;
-    window.applyPendingExternalVacancies = applyPendingExternalVacancies;
-    window.filterExternalVacancies = filterExternalVacancies;
-    window._bindExternalVacancyCheckboxes = _bindExternalVacancyCheckboxes;
+    // 타사 공실 토글/필터/초기화 함수는 guide-vacancy.js에서 단일 등록 (중복 제거)
+    window.refreshVacancyListTable = refreshVacancyListTable;
     window.updateDirectRow = updateDirectRow;
     window.saveDirectRow = saveDirectRow;
     window.addDirectRow = addDirectRow;

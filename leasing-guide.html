@@ -5413,14 +5413,14 @@
         /* ★ v5.5: 공실 아이템 - 테이블 행 스타일 */
         .external-vacancy-item {
             display: grid;
-            grid-template-columns: 18px 48px 112px 88px 88px auto;
+            grid-template-columns: 16px 38px minmax(72px,1fr) 62px 62px 58px 62px 18px;
             align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
+            gap: 6px;
+            padding: 7px 10px;
             border-bottom: 1px solid var(--border-color);
             cursor: pointer;
             transition: background 0.15s;
-            font-size: 13px;
+            font-size: 12px;
         }
         .external-vacancy-item:last-child {
             border-bottom: none;
@@ -5432,6 +5432,23 @@
             background: #f0fdf4;
             border-left: 3px solid #16a34a;
             padding-left: 9px;
+        }
+        .external-vacancy-item.committed {
+            background: #f0fdf4;
+            border-left: 3px solid #16a34a;
+            padding-left: 9px;
+        }
+        .external-vacancy-item.committed .vacancy-checkbox { accent-color: #16a34a; }
+        .external-vacancy-item.staged {
+            background: #eff6ff;
+            border-left: 3px solid #3b82f6;
+            padding-left: 9px;
+        }
+        .external-vacancy-item.staged .vacancy-checkbox { accent-color: #2563eb; }
+        .external-vacancy-item .ev-badge {
+            font-size: 10px;
+            text-align: center;
+            line-height: 1;
         }
         .external-vacancy-item.pending {
             background: #fffbeb;
@@ -5472,6 +5489,15 @@
             color: #334155;
             font-size: 13px;
         }
+        .external-vacancy-item .vacancy-maint {
+            color: #334155;
+            font-size: 12px;
+        }
+        .external-vacancy-item .vacancy-movein {
+            color: #475569;
+            font-size: 12px;
+            white-space: nowrap;
+        }
         .external-vacancy-item .vacancy-price {
             color: var(--text-muted);
             font-size: 13px;
@@ -5479,9 +5505,9 @@
         /* 그룹 헤더에도 같은 grid 컬럼 헤더 표시 */
         .external-vacancy-group-th {
             display: grid;
-            grid-template-columns: 18px 48px 112px 88px 88px auto;
-            gap: 8px;
-            padding: 5px 12px;
+            grid-template-columns: 16px 38px minmax(72px,1fr) 62px 62px 58px 62px 18px;
+            gap: 6px;
+            padding: 5px 10px;
             background: #f1f5f9;
             border-bottom: 1px solid var(--border-color);
             font-size: 10px;
@@ -7054,6 +7080,6 @@
     </script>
 
     <!-- 모듈 로드 -->
-    <script type="module" src="./js/guide/guide-main.js?v=6.2"></script>
+    <script type="module" src="./js/guide/guide-main.js?v=6.4"></script>
 </body>
 </html>
