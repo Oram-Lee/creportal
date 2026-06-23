@@ -196,15 +196,16 @@ input{font-family:inherit;font-size:16px}
 .src-badge{font-size:11.5px;font-weight:700;color:#fff;padding:3px 10px;border-radius:6px;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vgmonth{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);font-weight:500;flex-shrink:0}
 .vrows{padding:0}
-.vrow{padding:9px 12px;border-bottom:1px solid var(--line2)}
+.vrow{padding:10px 12px;border-bottom:1px solid var(--line2)}
 .vrow:last-child{border-bottom:none}
-.vfl{margin-bottom:6px}
-.floor-badge{display:inline-block;background:var(--navy);color:#fff;font-size:12px;font-weight:700;padding:2px 11px;border-radius:6px}
-.vareas,.vprices{display:flex;gap:16px;font-size:13.5px;margin-top:4px;flex-wrap:wrap}
-.vareas span,.vprices span{display:flex;align-items:baseline;gap:5px;color:var(--ink)}
-.vareas i,.vprices i{font-style:normal;font-size:11px;color:var(--muted);font-weight:500}
-.vprices .rent{color:var(--pink-d);font-weight:700}
-.vmove{font-size:11.5px;color:var(--warn);margin-top:5px;font-weight:500}
+.floor-badge{display:inline-block;background:var(--navy);color:#fff;font-size:12.5px;font-weight:700;padding:3px 11px;border-radius:6px}
+.vl1{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13.5px}
+.vl1>span{display:flex;align-items:baseline;gap:4px;color:var(--ink)}
+.vl1 i,.vl2 i{font-style:normal;font-size:11px;color:var(--muted);font-weight:500}
+.vl2{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;font-size:13.5px;margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}
+.vl2>span{display:flex;align-items:baseline;gap:4px;color:var(--ink)}
+.vl2 .rent{color:var(--pink-d);font-weight:700}
+.vpy{font-size:10.5px;color:var(--muted);background:var(--bg);padding:1px 7px;border-radius:4px;margin-left:auto;align-self:center}
 .vimg-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;
   background:#fff;border-top:1px solid var(--line);color:var(--navy);font-size:13.5px;font-weight:700}
 .vimg-btn:active{background:var(--bg)}
@@ -288,7 +289,7 @@ input{font-family:inherit;font-size:16px}
     </div>
     <div class="sheet-tabs">
       <button data-tab="info" class="on">기본정보</button>
-      <button data-tab="lease">임대·공실</button>
+      <button data-tab="lease">공실정보</button>
       <button data-tab="note">컨택·메모</button>
     </div>
     <div class="sheet-body" id="sheetBody"></div>
@@ -650,7 +651,6 @@ function row(k,v){ return `<div class="drow"><div class="k">${k}</div><div class
 function tplInfo(b){
   const scale = (b.floorsBelow||b.floorsAbove) ? `${b.floorsBelow?'B'+b.floorsBelow+' / ':''}${b.floorsAbove?b.floorsAbove+'F':''}` : '';
   const park = b.parkingDisplay || (b.parkingTotal? fmt(b.parkingTotal)+'대':'');
-  const hp = b.homepage? `<a href="${esc(b.homepage)}" target="_blank" rel="noopener">${esc(b.homepage.replace(/^https?:\/\//,''))}</a>`:'';
   return `<div class="sec-title">기본 정보</div>
     ${row('주소', esc(b.address))}
     ${b.addressJibun? row('지번', esc(b.addressJibun)) : ''}
@@ -665,70 +665,52 @@ function tplInfo(b){
     ${row('인근역', esc(b.nearbyStation))}
     ${b.structure? row('구조', esc(b.structure)) : ''}
     ${b.pm? row('PM', esc(b.pm)) : ''}
-    ${b.owner? row('소유', esc(b.owner)) : ''}
-    ${hp? row('홈페이지', hp) : ''}`;
+    ${b.owner? row('소유', esc(b.owner)) : ''}`;
 }
 
 function tplLease(b){
   const vg=groupVac(b.vacancies);
   S._vacAll=vg.all;   // 과월호 조회용
-  let html='';
+  const total=vg.show.reduce((s,g)=>s+g.rows.length,0);
 
-  // 공실 — 출처+발행월 그룹 카드 (leaseinfo 방식)
-  html+=`<div class="sec-title">공실 현황 ${vg.show.length?`· 출처 ${vg.show.length}곳`:''}</div>`;
-  if(vg.show.length){
-    html+=vg.show.map(g=>{
-      const col=srcColor(g.source);
-      const archCnt=vg.all.filter(x=>x.source===g.source).length;
-      const rows=g.rows.map(r=>`<div class="vrow">
-        <div class="vfl"><span class="floor-badge">${esc(r.floor||'-')}</span></div>
-        <div class="vareas"><span><i>전용</i>${area1(r.exclusiveArea)}</span><span><i>임대</i>${area1(r.rentArea)}</span></div>
-        <div class="vprices"><span><i>보증</i>${price(r.depositPy)}</span><span class="rent"><i>임대</i>${price(r.rentPy)}</span><span><i>관리</i>${price(r.maintenancePy)}</span></div>
-        ${r.moveInDate?`<div class="vmove">입주가능 ${esc(r.moveInDate)}</div>`:''}
-      </div>`).join('');
-      return `<div class="vgroup">
-        <div class="vghead">
-          <span class="src-badge" style="background:${col}">${esc(g.source||'-')}</span>
-          <span class="vgmonth"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${esc(g.label)}</span>
-        </div>
-        <div class="vrows">${rows}</div>
-        ${g.pageImageUrl?`<button class="vimg-btn" data-act="view-img" data-gid="${esc(g.key)}">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-          임대안내문 원본보기${archCnt>1?` · 과월호 ${archCnt}`:''}</button>`:''}
+  if(!vg.show.length) return '<div class="sec-title">공실정보</div><div class="empty">등록된 공실이 없습니다</div>';
+
+  let html=`<div class="sec-title">공실 ${total}건 · 출처 ${vg.show.length}곳</div>`;
+  html+=vg.show.map(g=>{
+    const col=srcColor(g.source);
+    const archCnt=vg.all.filter(x=>x.source===g.source).length;
+    const rows=g.rows.map(r=>{
+      const a=[];                                  // 1행: 층 · 임대(평) · 전용(평) · 입주시기
+      if(r.rentArea) a.push(`<span><i>임대</i>${area1(r.rentArea)}평</span>`);
+      if(r.exclusiveArea) a.push(`<span><i>전용</i>${area1(r.exclusiveArea)}평</span>`);
+      if(r.moveInDate) a.push(`<span><i>입주</i>${esc(r.moveInDate)}</span>`);
+      const p=[];                                  // 2행: 보증금·임대료·관리비 (평당)
+      if(price(r.depositPy)!=='-') p.push(`<span><i>보증금</i>${price(r.depositPy)}</span>`);
+      if(price(r.rentPy)!=='-') p.push(`<span class="rent"><i>임대료</i>${price(r.rentPy)}</span>`);
+      if(price(r.maintenancePy)!=='-') p.push(`<span><i>관리비</i>${price(r.maintenancePy)}</span>`);
+      return `<div class="vrow">
+        <div class="vl1"><span class="floor-badge">${esc(r.floor||'-')}</span>${a.join('')}</div>
+        ${p.length?`<div class="vl2">${p.join('')}<span class="vpy">평당</span></div>`:''}
       </div>`;
     }).join('');
-  } else html+='<div class="empty">등록된 공실이 없습니다</div>';
+    return `<div class="vgroup">
+      <div class="vghead">
+        <span class="src-badge" style="background:${col}">${esc(g.source||'-')}</span>
+        <span class="vgmonth"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${esc(g.label)}</span>
+      </div>
+      <div class="vrows">${rows}</div>
+      ${g.pageImageUrl?`<button class="vimg-btn" data-act="view-img" data-gid="${esc(g.key)}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+        임대안내문 원본보기${archCnt>1?` · 과월호 ${archCnt}`:''}</button>`:''}
+    </div>`;
+  }).join('');
 
-  // 층별 기준가
-  if(b.floorPricing && b.floorPricing.length){
-    html+=`<div class="sec-title">층별 기준가</div>`;
-    html+=b.floorPricing.map(p=>{
-      const meta=[];
-      if(p.rentPy||p.rent) meta.push(`임대 ${price(p.rentPy||p.rent)}`);
-      if(p.maintenancePy||p.maintenance) meta.push(`관리 ${price(p.maintenancePy||p.maintenance)}`);
-      if(p.depositPy||p.deposit) meta.push(`보증 ${price(p.depositPy||p.deposit)}`);
-      if(p.exclusivePy||p.exclusiveArea||p.area) meta.push(`전용 ${area1(p.exclusivePy||p.exclusiveArea||p.area)}평`);
-      return `<div class="vac-card"><div class="vh"><span class="fl">${esc(p.floor||p.floorName||'-')}</span></div><div class="vmeta">${meta.join(' · ')||'-'}</div></div>`;
-    }).join('');
-  }
-
-  // 인센티브
-  if(b.incentives && b.incentives.length){
+  if(b.incentives && b.incentives.length){     // 인센티브 (있을 때만 노출)
     html+=`<div class="sec-title">인센티브</div>`;
     html+=b.incentives.map(i=>{
       const t=i.title||i.type||i.name||'인센티브'; const c=i.content||i.description||i.detail||i.value||'';
       return `<div class="vac-card"><div class="vh"><span class="fl">${esc(t)}</span></div>${c?`<div class="vmeta">${esc(c)}</div>`:''}</div>`;
     }).join('');
-  }
-
-  // 기준 임대조건 (빌딩 레벨 · 참고)
-  if(b.rentPy||b.depositPy||b.maintenancePy){
-    html+=`<div class="sec-title">기준 임대조건 (평당 · 참고)</div>
-      <div class="price-grid">
-        <div class="price-cell"><div class="lbl">보증금</div><div class="num">${price(b.depositPy)}<span class="unit"> 만</span></div></div>
-        <div class="price-cell"><div class="lbl">임대료</div><div class="num">${price(b.rentPy)}<span class="unit"> 만</span></div></div>
-        <div class="price-cell"><div class="lbl">관리비</div><div class="num">${price(b.maintenancePy)}<span class="unit"> 만</span></div></div>
-      </div>`;
   }
   return html;
 }
