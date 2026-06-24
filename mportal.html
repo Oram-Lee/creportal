@@ -90,6 +90,13 @@ input{font-family:inherit;font-size:16px}
 .freg.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .fchk{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:14px;cursor:pointer}
 .fchk input{width:18px;height:18px;accent-color:var(--pink);flex-shrink:0}
+.stepper-row{display:flex;align-items:center;gap:10px;margin-top:9px}
+.stepper-row .slabel{width:38px;flex-shrink:0;font-size:13px;color:var(--muted);font-weight:500}
+.stepper{display:flex;align-items:center;flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.stepper button{width:48px;height:52px;flex-shrink:0;font-size:24px;line-height:1;color:var(--navy);background:var(--bg);display:flex;align-items:center;justify-content:center}
+.stepper button:active{background:var(--line)}
+.stepper input{flex:1;min-width:0;width:100%;border:none;outline:none;text-align:center;height:52px;font-size:16px;padding:0;background:#fff;-moz-appearance:textfield;appearance:textfield}
+.stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 
 /* 우측 하단 지도 컨트롤 */
 .map-ctrl{position:absolute;right:12px;bottom:calc(var(--sb-bot) + 16px);z-index:20;display:flex;flex-direction:column;gap:8px}
@@ -200,22 +207,27 @@ input{font-family:inherit;font-size:16px}
 .spin{width:15px;height:15px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 
+/* 결과 목록으로 돌아가기 버튼 (peek 시트 바로 위, 시트 확장 시 가려짐) */
+#backToList{position:absolute;left:50%;bottom:calc(42vh + 12px);transform:translateX(-50%);z-index:36;
+  background:var(--navy);color:#fff;border:none;border-radius:22px;padding:11px 20px;font-size:13.5px;font-weight:700;
+  box-shadow:0 5px 16px rgba(0,0,0,.32);display:flex;align-items:center;gap:7px}
+#backToList:active{transform:translateX(-50%) scale(.96)}
+
 /* 임대공실 — 출처/발행월 그룹 카드 (leaseinfo 스타일) */
 .vgroup{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:10px}
 .vghead{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--bg);border-bottom:1px solid var(--line2)}
 .src-badge{font-size:11.5px;font-weight:700;color:#fff;padding:3px 10px;border-radius:6px;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vgmonth{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);font-weight:500;flex-shrink:0}
 .vrows{padding:0}
-.vrow{padding:10px 12px;border-bottom:1px solid var(--line2)}
+.vrow{padding:12px 12px;border-bottom:1px solid #bcc4cd}
 .vrow:last-child{border-bottom:none}
-.floor-badge{display:inline-block;background:var(--navy);color:#fff;font-size:12.5px;font-weight:700;padding:3px 11px;border-radius:6px}
+.floor-badge{display:inline-block;background:var(--navy);color:#fff;font-size:13px;font-weight:700;padding:3px 12px;border-radius:6px}
 .vl1{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13.5px}
-.vl1>span{display:flex;align-items:baseline;gap:4px;color:var(--ink)}
+.vl1>span:not(.floor-badge){display:flex;align-items:baseline;gap:4px;color:var(--ink)}
 .vl1 i,.vl2 i{font-style:normal;font-size:11px;color:var(--muted);font-weight:500}
-.vl2{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;font-size:13.5px;margin-top:7px;padding-top:7px;border-top:1px dashed var(--line)}
-.vl2>span{display:flex;align-items:baseline;gap:4px;color:var(--ink)}
-.vl2 .rent{color:var(--pink-d);font-weight:700}
-.vpy{font-size:10.5px;color:var(--muted);background:var(--bg);padding:1px 7px;border-radius:4px;margin-left:auto;align-self:center}
+.vl2{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;font-size:16px;margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
+.vl2>span{display:flex;align-items:baseline;gap:4px;color:var(--ink);font-weight:700}
+.vl2 .rent{color:var(--pink-d)}
 .vimg-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;
   background:#fff;border-top:1px solid var(--line);color:var(--navy);font-size:13.5px;font-weight:700}
 .vimg-btn:active{background:var(--bg)}
@@ -284,6 +296,11 @@ input{font-family:inherit;font-size:16px}
   </div>
 
   <div id="loading"><div class="spin"></div><span id="loadingText">데이터를 불러오는 중...</span></div>
+
+  <!-- 결과 목록으로 돌아가기 (플로팅) -->
+  <button id="backToList" class="hidden">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>목록 보기
+  </button>
 
   <!-- 바텀시트 -->
   <div id="sheet">
@@ -546,6 +563,7 @@ function resultFloorLabel(b){
 }
 
 // ===== 상세 검색 필터 모달 =====
+function stepInput(id,dir){ const inp=$(id); if(!inp) return; const step=10; let v=parseFloat(inp.value)||0; v = dir==='+'? v+step : Math.max(0, v-step); inp.value=v||''; }
 function filterModal(){
   const f=S.filters;
   const regions=[...new Set(S.all.map(b=>b.region).filter(Boolean))].sort();
@@ -554,10 +572,21 @@ function filterModal(){
     <label>권역</label>
     <div class="freg-wrap">${chips||'<span style="color:var(--muted);font-size:13px">권역 정보 없음</span>'}</div>
     <label>공실 전용면적 (평)</label>
-    <div style="display:flex;align-items:center;gap:10px">
-      <input type="number" id="fAreaMin" inputmode="decimal" placeholder="최소" value="${f.vacAreaMin||''}" style="flex:1">
-      <span style="color:var(--muted)">~</span>
-      <input type="number" id="fAreaMax" inputmode="decimal" placeholder="최대" value="${f.vacAreaMax||''}" style="flex:1">
+    <div class="stepper-row">
+      <span class="slabel">최소</span>
+      <div class="stepper">
+        <button data-act="step" data-t="fAreaMin" data-d="-" aria-label="감소">−</button>
+        <input type="number" id="fAreaMin" inputmode="numeric" placeholder="0" value="${f.vacAreaMin||''}">
+        <button data-act="step" data-t="fAreaMin" data-d="+" aria-label="증가">+</button>
+      </div>
+    </div>
+    <div class="stepper-row">
+      <span class="slabel">최대</span>
+      <div class="stepper">
+        <button data-act="step" data-t="fAreaMax" data-d="-" aria-label="감소">−</button>
+        <input type="number" id="fAreaMax" inputmode="numeric" placeholder="제한없음" value="${f.vacAreaMax||''}">
+        <button data-act="step" data-t="fAreaMax" data-d="+" aria-label="증가">+</button>
+      </div>
     </div>
     <label class="fchk"><input type="checkbox" id="fComb" ${f.combinedVac?'checked':''}>연층(복수층) 적용 <span style="color:var(--muted);font-size:11px">— 합산 면적 포함</span></label>
     <div class="btns"><button class="btn-cancel" data-act="freset">초기화</button><button class="btn-save" data-act="fapply">적용</button></div>`);
@@ -730,7 +759,9 @@ function renderResults(filterMode){
 function openSheet(id){
   const b=S.all.find(x=>x.id===id); if(!b) return;
   S.selected=b; S.tab='info';
-  $('results').style.display='none'; S._listMode=false;
+  S._returnToResults = ($('results').style.display==='block');  // 결과 목록에서 진입했는지
+  $('results').style.display='none';
+  $('backToList').classList.toggle('hidden', !S._returnToResults);
   panToBuilding(b);
   $('shName').textContent=b.name;
   $('shAddr').textContent=b.address||b.addressJibun||'주소 정보 없음';
@@ -798,7 +829,7 @@ function tplLease(b){
       if(price(r.maintenancePy)!=='-') p.push(`<span><i>관리비</i>${price(r.maintenancePy)}</span>`);
       return `<div class="vrow">
         <div class="vl1"><span class="floor-badge">${esc(r.floor||'-')}</span>${a.join('')}</div>
-        ${p.length?`<div class="vl2">${p.join('')}<span class="vpy">평당</span></div>`:''}
+        ${p.length?`<div class="vl2">${p.join('')}</div>`:''}
       </div>`;
     }).join('');
     return `<div class="vgroup">
@@ -873,7 +904,7 @@ function sheetTo(state){
   sheet.classList.add('show');
   requestAnimationFrame(()=>{ if(state==='full') setY(0); else if(state==='peek') setY(peekY()); else closeSheet(); });
 }
-function closeSheet(){ setY(sheetH()); setTimeout(()=>{ sheet.classList.remove('show'); S.selected=null; },280); }
+function closeSheet(){ setY(sheetH()); $('backToList').classList.add('hidden'); setTimeout(()=>{ sheet.classList.remove('show'); S.selected=null; },280); }
 
 (function dragInit(){
   let dragging=false, startY=0, startTr=0;
@@ -1022,6 +1053,7 @@ document.querySelectorAll('.sheet-tabs button').forEach(t=>{
 });
 function curSheetState(){ const m=/translateY\(([-\d.]+)px\)/.exec(sheet.style.transform); const y=m?parseFloat(m[1]):peekY(); return y<peekY()*0.5?'full':'peek'; }
 $('sheetClose').addEventListener('click',closeSheet);
+$('backToList').addEventListener('click',()=>{ closeSheet(); renderResults(true); });
 
 // 시트 본문 액션 위임 (메모/연락처)
 $('sheetBody').addEventListener('click',e=>{
@@ -1046,6 +1078,7 @@ $('modalBox').addEventListener('click',e=>{
   else if(act==='freg') el.classList.toggle('on');
   else if(act==='fapply') filterApply();
   else if(act==='freset') filterReset();
+  else if(act==='step') stepInput(el.dataset.t, el.dataset.d);
   else if(act==='logout') logout();
 });
 $('modalOv').addEventListener('click',closeModal);
