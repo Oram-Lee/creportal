@@ -222,12 +222,17 @@ input{font-family:inherit;font-size:16px}
 .vrow{padding:12px 12px;border-bottom:1px solid #bcc4cd}
 .vrow:last-child{border-bottom:none}
 .floor-badge{display:inline-block;background:var(--navy);color:#fff;font-size:13px;font-weight:700;padding:3px 12px;border-radius:6px}
-.vl1{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:13.5px}
-.vl1>span:not(.floor-badge){display:flex;align-items:baseline;gap:4px;color:var(--ink)}
-.vl1 i,.vl2 i{font-style:normal;font-size:11px;color:var(--muted);font-weight:500}
-.vl2{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;font-size:16px;margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
-.vl2>span{display:flex;align-items:baseline;gap:4px;color:var(--ink);font-weight:700}
-.vl2 .rent{color:var(--pink-d)}
+.vl1{display:flex;align-items:center;gap:8px 13px;flex-wrap:wrap}
+.vl2{display:flex;align-items:baseline;gap:8px 14px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.m{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
+.m i{font-style:normal;font-size:11px;color:var(--muted);font-weight:500}
+.m b{font-style:normal;font-size:18px;font-weight:700;color:var(--ink);line-height:1.1}
+.m .un{font-size:11.5px;color:var(--muted);font-weight:400}
+.m.ex b{color:#0f766e}
+.m.dep b{color:#4338ca}
+.m.rent b{color:#be185d}
+.m.mnt b{color:#b45309}
+.vi{font-size:12.5px;color:var(--muted);font-weight:500;white-space:nowrap}
 .vimg-btn{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;padding:11px;
   background:#fff;border-top:1px solid var(--line);color:var(--navy);font-size:13.5px;font-weight:700}
 .vimg-btn:active{background:var(--bg)}
@@ -397,6 +402,9 @@ function gradeOf(b){
 // ===== 임대공실 헬퍼 (leaseinfo 스키마 정합) =====
 function price(v){ if(v==null||v===''||v==='-'||v===0) return '-'; const n=parseFloat(String(v).replace(/[^0-9.]/g,'')); return (isNaN(n)||n===0)?'-':n.toLocaleString('ko-KR'); }
 function area1(v){ const n=parseFloat(v); return (!n||isNaN(n))?'-':n.toFixed(1); }
+// 금액 정규화 (데스크톱 toWon 미러링): 1000 미만이면 만원 단위로 보고 ×10000 → 원, 아니면 이미 원
+function toWon(v){ const n=parseFloat(String(v||'').replace(/[^0-9.]/g,''))||0; return n===0?0:(n<1000?n*10000:n); }
+function manwon(v){ const w=toWon(v); if(!w) return null; return (w/10000).toLocaleString('ko-KR',{maximumFractionDigits:1}); }
 function normMonth(d){ if(!d) return ''; const s=String(d).replace(/[^0-9]/g,''); if(s.length>=6) return s.slice(0,4)+'-'+s.slice(4,6); if(s.length>=4) return '20'+s.slice(0,2)+'-'+s.slice(2,4); return s; }
 function monthLabel(d){ const m=normMonth(d); return m?m.replace('-','.'):'-'; }
 function cmpFloor(a,b){ const p=f=>{ if(!f)return 9999; const s=String(f).trim(); if(/^B/i.test(s)) return -(parseInt(s.replace(/[^0-9]/g,''))||1); const n=parseInt(s.replace(/[^0-9]/g,'')); return isNaN(n)?9999:n; }; return p(a)-p(b); }
@@ -819,14 +827,15 @@ function tplLease(b){
     const col=srcColor(g.source);
     const archCnt=vg.all.filter(x=>x.source===g.source).length;
     const rows=g.rows.map(r=>{
-      const a=[];                                  // 1행: 층 · 임대(평) · 전용(평) · 입주시기
-      if(r.rentArea) a.push(`<span><i>임대</i>${area1(r.rentArea)}평</span>`);
-      if(r.exclusiveArea) a.push(`<span><i>전용</i>${area1(r.exclusiveArea)}평</span>`);
-      if(r.moveInDate) a.push(`<span><i>입주</i>${esc(r.moveInDate)}</span>`);
-      const p=[];                                  // 2행: 보증금·임대료·관리비 (평당)
-      if(price(r.depositPy)!=='-') p.push(`<span><i>보증금</i>${price(r.depositPy)}</span>`);
-      if(price(r.rentPy)!=='-') p.push(`<span class="rent"><i>임대료</i>${price(r.rentPy)}</span>`);
-      if(price(r.maintenancePy)!=='-') p.push(`<span><i>관리비</i>${price(r.maintenancePy)}</span>`);
+      const a=[];                                  // 1행: 층 · 임대(평) · 전용(평·색상) · 입주(전용 옆, 맨값)
+      if(r.rentArea) a.push(`<span class="m"><i>임대</i><b>${area1(r.rentArea)}</b><span class="un">평</span></span>`);
+      if(r.exclusiveArea) a.push(`<span class="m ex"><i>전용</i><b>${area1(r.exclusiveArea)}</b><span class="un">평</span></span>`);
+      if(r.moveInDate) a.push(`<span class="vi">${esc(r.moveInDate)}</span>`);
+      const p=[];                                  // 2행: 보증금·임대료·관리비 (만원 정규화 · 각 색상)
+      const dep=manwon(r.depositPy), rent=manwon(r.rentPy), maint=manwon(r.maintenancePy);
+      if(dep) p.push(`<span class="m dep"><i>보</i><b>${dep}</b><span class="un">만원</span></span>`);
+      if(rent) p.push(`<span class="m rent"><i>임</i><b>${rent}</b><span class="un">만원</span></span>`);
+      if(maint) p.push(`<span class="m mnt"><i>관</i><b>${maint}</b><span class="un">만원</span></span>`);
       return `<div class="vrow">
         <div class="vl1"><span class="floor-badge">${esc(r.floor||'-')}</span>${a.join('')}</div>
         ${p.length?`<div class="vl2">${p.join('')}</div>`:''}
