@@ -39,6 +39,10 @@ input{font-family:inherit;font-size:16px}
 #loginBtn{width:100%;max-width:340px;height:50px;border-radius:12px;background:var(--pink);
   color:#fff;font-size:16px;font-weight:700;margin-top:4px}
 #loginBtn:active{background:var(--pink-d)}
+#loginScreen .login-foot{position:absolute;left:0;right:0;bottom:0;padding:16px 22px calc(16px + env(safe-area-inset-bottom,0px));text-align:center;pointer-events:none}
+#loginScreen .warn{color:#8a93a2;font-size:11px;line-height:1.65;max-width:360px;margin:0 auto 8px}
+#loginScreen .warn b{color:#b9c1cc;font-weight:600}
+#loginScreen .copy{color:#646d7c;font-size:11px;letter-spacing:.02em}
 
 /* ===== 앱 ===== */
 #app{position:fixed;inset:0}
@@ -116,6 +120,11 @@ input{font-family:inherit;font-size:16px}
 .sheet-head .top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .sheet-head h2{margin:0;font-size:18px;font-weight:700;line-height:1.3}
 .sheet-head .sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+.sheet-head .sub.vac{display:flex;align-items:center;gap:6px;margin-top:5px;color:var(--ink);font-weight:500}
+.sheet-head .sub.vac b{font-weight:700;color:var(--navy)}
+.sheet-head .sub.vac .vt.off,.sheet-head .sub.vac .vo{color:var(--muted);font-weight:400}
+.vd{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--ok)}
+.vd.off{background:#cbd5e1}
 .sheet-head .close{padding:4px;color:var(--muted);flex-shrink:0;margin-top:2px}
 .sheet-head .badges{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
 .tag{font-size:11.5px;font-weight:500;padding:3px 9px;border-radius:6px;background:var(--bg);color:var(--muted)}
@@ -259,6 +268,13 @@ input{font-family:inherit;font-size:16px}
   <div class="field"><input id="loginEmail" type="email" placeholder="이메일" autocomplete="username"></div>
   <div class="field"><input id="loginPassword" type="password" placeholder="비밀번호" autocomplete="current-password"></div>
   <button id="loginBtn">로그인</button>
+  <div class="login-foot">
+    <div class="warn">
+      본 시스템은 <b>(주)에스앤아이코퍼레이션</b>의 내부 업무용으로만 제공됩니다.<br>
+      인가받지 않은 외부 접속·자료 조회·복제·유출은 「정보통신망법」, 「부정경쟁방지 및 영업비밀보호법」 등 관련 법령에 따라 민·형사상 책임을 질 수 있습니다.
+    </div>
+    <div class="copy">© 2026 S&amp;I Corporation. All rights reserved.</div>
+  </div>
 </div>
 
 <!-- ========== 앱 ========== -->
@@ -315,6 +331,7 @@ input{font-family:inherit;font-size:16px}
         <div style="min-width:0">
           <h2 id="shName">빌딩명</h2>
           <div class="sub" id="shAddr">주소</div>
+          <div class="sub vac" id="shVac"></div>
         </div>
         <button class="close" id="sheetClose" aria-label="닫기">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -428,6 +445,16 @@ function groupVac(vacs){
   groups.forEach(g=>{ const e=latest.get(g.source); if(!e || (g.month||'')>(e.month||'')) latest.set(g.source,g); });
   const show=[...latest.values()].sort((a,b)=>(b.month||'').localeCompare(a.month||''));
   return { show, all:groups };
+}
+// peek 요약: 공실 유무 + 최신 임대안내문(출처·발행월) 인지 (탭과 동일한 groupVac 사용)
+function vacPeek(b){
+  const vg=groupVac(b.vacancies);
+  if(!vg.show.length) return `<span class="vd off"></span><span class="vt off">공실 없음</span>`;
+  const g=vg.show[0];                              // 월 내림차순 정렬 → 최신 안내문
+  const src=esc(((g.source||'').trim())||'출처미상');
+  const lbl=esc(g.label||'-');
+  const others=vg.show.length-1;                   // 다른 출처(안내문) 수
+  return `<span class="vd on"></span>공실정보 · ${src} <b>${lbl}</b>${others>0?`<span class="vo"> 외 ${others}건</span>`:''}`;
 }
 
 // ===== 인증 (users 노드 매칭 — 데스크톱과 동일) =====
@@ -773,11 +800,11 @@ function openSheet(id){
   panToBuilding(b);
   $('shName').textContent=b.name;
   $('shAddr').textContent=b.address||b.addressJibun||'주소 정보 없음';
+  $('shVac').innerHTML=vacPeek(b);
   const g=gradeOf(b);
   const badges=[];
   if(g) badges.push(`<span class="tag g">${esc(g)}</span>`);
   if(b.region) badges.push(`<span class="tag">${esc(b.region)}</span>`);
-  if(b.hasVacancy) badges.push(`<span class="tag v">공실 ${b.vacancies.length}</span>`);
   $('shBadges').innerHTML=badges.join('');
   document.querySelectorAll('.sheet-tabs button').forEach(x=>x.classList.toggle('on',x.dataset.tab==='info'));
   renderTab();
