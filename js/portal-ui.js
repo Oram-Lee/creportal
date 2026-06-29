@@ -123,19 +123,20 @@ export function renderBuildingList() {
             ${(() => {
                 const fps = b.floorPricing || [];
                 const official = fps.find(fp => fp.isOfficial);
+                const tag = `<span style="display:inline-block; background:#7c3aed; color:#fff; font-size:10px; font-weight:600; padding:2px 7px; border-radius:10px; flex-shrink:0; line-height:1.5;">기준가</span>`;
                 // 공식(⭐) 기준가 미지정 → 하이픈
                 if (!official) {
-                    return `<div class="price" onclick="selectBuildingFromList('${b.id}')" title="공식 기준가 미지정" style="color:var(--text-muted,#9ca3af); font-weight:400;">기준가 -</div>`;
+                    return `<div class="price" onclick="selectBuildingFromList('${b.id}')" title="공식 기준가 미지정" style="display:flex; align-items:center; gap:6px;">${tag}<span style="color:var(--text-muted,#9ca3af); font-weight:400;">-</span></div>`;
                 }
                 const d = toManwon(official.depositPy), r = toManwon(official.rentPy), m = toManwon(official.maintenancePy);
-                const seg = [];
-                if (d != null) seg.push(`보 ${d}`);
-                if (r != null) seg.push(`임 ${r}`);
-                if (m != null) seg.push(`관 ${m}`);
-                const priceStr = seg.length ? seg.join(' · ') : '-';
-                const unit = seg.length ? ` <span style="font-size:11px; opacity:.55; font-weight:400;">만/평</span>` : '';
-                const more = fps.length > 1 ? ` <span style="font-size:11px; opacity:.6; font-weight:400;">외 ${fps.length - 1}건</span>` : '';
-                return `<div class="price" onclick="selectBuildingFromList('${b.id}')" title="공식 기준가 · 평당 보증금·임대료·관리비 (만원)">${priceStr}${unit}${more}</div>`;
+                const item = (lbl, val, color) => val != null
+                    ? `<span style="white-space:nowrap;"><span style="color:var(--text-muted,#9ca3af); font-weight:400;">${lbl}</span> <span style="color:${color}; font-weight:600;">${val}</span><span style="color:var(--text-muted,#9ca3af); font-size:11px;">만원/평</span></span>`
+                    : '';
+                const partsArr = [item('보', d, '#2563eb'), item('임', r, 'var(--accent-color,#dc2626)'), item('관', m, '#16a34a')].filter(Boolean);
+                const sep = `<span style="color:var(--text-muted,#cbd5e1);">·</span>`;
+                const priceStr = partsArr.length ? partsArr.join(sep) : `<span style="color:var(--text-muted,#9ca3af);">-</span>`;
+                const more = fps.length > 1 ? `<span style="color:var(--text-muted,#9ca3af); font-size:11px;">외 ${fps.length - 1}건</span>` : '';
+                return `<div class="price" onclick="selectBuildingFromList('${b.id}')" style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; font-size:13px;" title="공식 기준가 · 평당 보증금·임대료·관리비 (만원)">${tag}${priceStr}${more}</div>`;
             })()}
         </div>
         `;
