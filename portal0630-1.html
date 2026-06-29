@@ -6680,12 +6680,83 @@
         }
     };
 
-    // ★ 통합: 정렬/공실드롭다운/탭 전환 등 모든 리스트 갱신 진입점을 단일 파이프라인으로 위임.
-    //   applyFilters(portal-filter.js)가 [검색어 + 모든 칩 필터 + 공실(reconcile) + 리서치 +
-    //   정렬 + viewport-aware 렌더]를 한 번에 처리하므로, 이 함수는 진입점 역할만 한다.
-    //   (listSortBy / listVacancyFilter onchange, _origTabClick 등에서 호출)
     window.applyListSort = function() {
-        if (typeof window.applyFilters === 'function') window.applyFilters();
+        if (!window.state?.filteredBuildings) return;
+        
+        const vacFilter = document.getElementById('listVacancyFilter')?.value || 'all';
+        const sortBy = document.getElementById('listSortBy')?.value || 'area_desc';
+        
+        let list = [...(window.state.allBuildings || [])];
+        
+        // ★ 공실 필터 적용
+        if (vacFilter === 'hasVacancy') {
+            list = list.filter(b => {
+                const vacs = (b.vacancies || []).filter(v => !v._key?.endsWith('_meta'));
+                return vacs.length > 0;
+            });
+        } else if (vacFilter === 'noVacancy') {
+            list = list.filter(b => {
+                const vacs = (b.vacancies || []).filter(v => !v._key?.endsWith('_meta'));
+                return vacs.length === 0;
+            });
+        }
+        
+        // 🔬 R6: 리서치 필터
+        const _researchOnly = document.getElementById('listResearchFilter')?.checked || false;
+        if (_researchOnly) list = list.filter(b => b.isResearchTarget === true);
+
+        // ★ Bug1 fix: 검색어를 라이브로 적용 (탭 전환/정렬 시에도 검색 보존)
+        //   검색 리스너(setupSearchListener→applyFilters)와 별개 funnel이므로,
+        //   #searchInput 값을 직접 읽어 동일하게 필터링한다.
+        //   → 지도영역 탭에서 검색 후 전체 탭으로 이동/정렬해도 검색 결과가 유지된다.
+        //   ※ 매칭 로직은 portal-filter.js의 applyFilters와 100% 동일하게 맞춤
+        //     (빌딩명/주소/지번주소/인근역을 연결 후 공백 제거하고 부분일치)
+        const _kw = (document.getElementById('searchInput')?.value || '').toLowerCase().replace(/\s/g, '');
+        if (_kw) {
+            list = list.filter(b => {
+                const _s = [b.name, b.address, b.addressJibun, b.nearbyStation]
+                    .filter(Boolean).join('').toLowerCase().replace(/\s/g, '');
+                return _s.includes(_kw);
+            });
+        }
+
+        // ★ 정렬 적용
+        list.sort((a, b) => {
+            // NEW 빌딩 항상 최상위
+            if (a.isNew && !b.isNew) return -1;
+            if (!a.isNew && b.isNew) return 1;
+            // hidden 빌딩 하위
+            if (a.status === 'hidden' && b.status !== 'hidden') return 1;
+            if (a.status !== 'hidden' && b.status === 'hidden') return -1;
+            // 🔬 리서치 우선 정렬
+            if (sortBy === 'research') {
+                const d = (a.isResearchTarget ? 0 : 1) - (b.isResearchTarget ? 0 : 1);
+                if (d !== 0) return d;
+                return (parseFloat(b.grossFloorPy) || 0) - (parseFloat(a.grossFloorPy) || 0);
+            }
+            if (sortBy === 'area_desc') {
+                return (parseFloat(b.grossFloorPy) || 0) - (parseFloat(a.grossFloorPy) || 0) || (a.name || '').localeCompare(b.name || '');
+            } else if (sortBy === 'area_asc') {
+                return (parseFloat(a.grossFloorPy) || 0) - (parseFloat(b.grossFloorPy) || 0) || (a.name || '').localeCompare(b.name || '');
+            } else if (sortBy === 'name_asc') {
+                return (a.name || '').localeCompare(b.name || '');
+            }
+            return 0;
+        });
+        
+        window.state.filteredBuildings = list;
+        // ★ Bug1 fix: 지도영역(viewport) 탭이면 viewport를 재계산해 검색 결과를 반영
+        //   (renderBuildingList는 viewport 탭일 때 viewportBuildings를 그리므로,
+        //    filteredBuildings만 갱신하면 화면이 안 바뀐다 → updateViewportBuildings로 재계산)
+        if (window.state.currentListTab === 'viewport' && typeof window.updateViewportBuildings === 'function') {
+            window.updateViewportBuildings();
+        } else if (typeof window.renderBuildingList === 'function') {
+            window.renderBuildingList();
+        }
+        
+        // 카운트 업데이트 (viewport는 renderBuildingList가 viewport 개수로 설정하므로 덮어쓰지 않음)
+        const countEl = document.getElementById('buildingCount');
+        if (countEl && window.state.currentListTab !== 'viewport') countEl.textContent = list.length + '개';
     };
     
     // 탭 전환 시 소팅바/그룹바 토글
@@ -6701,9 +6772,11 @@
             if (tabName === 'starred') {
                 loadFavoriteGroups().then(() => filterStarredByGroup());
             } else {
-                // ★ 전체/지도영역 탭 전환 — 단일 파이프라인으로 현재 검색/필터/정렬을 그대로 재적용
-                //   (applyFilters가 allBuildings에서 다시 빌드하므로 별도 리셋 불필요)
-                if (typeof applyListSort === 'function') applyListSort();
+                // ★ 전체/지도영역 탭 복귀 시 filteredBuildings 복원
+                if (window.state) {
+                    window.state.filteredBuildings = [...(window.state.allBuildings || [])];
+                    applyListSort();
+                }
             }
         });
     });

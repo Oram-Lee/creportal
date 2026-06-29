@@ -144,14 +144,7 @@ export function updateFilterChipState() {
 // 필터 적용 (실제 필터링 로직)
 export function applyFilters() {
     const q = document.getElementById('searchInput').value.toLowerCase().replace(/\s/g, '');
-
-    // ★ 통합 파이프라인: 정렬바(portal.html)의 공실드롭다운 / 리서치 / 정렬 값을 함께 읽어
-    //   하나의 funnel로 처리한다. (탭 전환·정렬도 applyListSort가 이 함수로 위임 → 검색/필터/정렬이
-    //   모든 경로에서 일관되게 유지됨)
-    const _vacFilter = document.getElementById('listVacancyFilter')?.value || 'all';
-    const _researchOnly = document.getElementById('listResearchFilter')?.checked || false;
-    const _sortBy = document.getElementById('listSortBy')?.value || 'area_desc';
-
+    
     state.filteredBuildings = state.allBuildings.filter(b => {
         // 검색어
         if (q) {
@@ -206,47 +199,12 @@ export function applyFilters() {
         if (state.activeFilters.hasRentroll && b.rentrollCount === 0) return false;
         if (state.activeFilters.hasMemo && b.memoCount === 0) return false;
         if (state.activeFilters.hasIncentive && !b.hasIncentive) return false;
-
-        // 공실 유무 — 드롭다운(listVacancyFilter)이 '전체'가 아니면 우선,
-        //   '전체'면 "공실 있는 빌딩만" 체크박스(activeFilters.hasVacancy)로 폴백.
-        //   (두 컨트롤이 AND로 충돌해 0건이 되는 문제 방지 + 기본 동작 보존)
-        if (_vacFilter === 'hasVacancy') {
-            if ((b.vacancies || []).filter(v => !v._key?.endsWith('_meta')).length === 0) return false;
-        } else if (_vacFilter === 'noVacancy') {
-            if ((b.vacancies || []).filter(v => !v._key?.endsWith('_meta')).length > 0) return false;
-        } else if (state.activeFilters.hasVacancy && (!b.vacancies || b.vacancies.length === 0)) {
-            return false;
-        }
-
-        // 🔬 리서치 필터 (정렬바 체크박스) — 통합
-        if (_researchOnly && b.isResearchTarget !== true) return false;
-
+        if (state.activeFilters.hasVacancy && (!b.vacancies || b.vacancies.length === 0)) return false;
+        
         // 임대안내문 포함 빌딩 필터
         if (state.activeFilters.leasingGuideOnly && !state.leasingGuideBuildings.has(b.id)) return false;
         
         return true;
-    });
-
-    // ── 정렬 (listSortBy) — 통합 ──
-    //   NEW 빌딩 최상위 → hidden 최하위 → 선택한 정렬 기준
-    state.filteredBuildings.sort((a, b) => {
-        if (a.isNew && !b.isNew) return -1;
-        if (!a.isNew && b.isNew) return 1;
-        if (a.status === 'hidden' && b.status !== 'hidden') return 1;
-        if (a.status !== 'hidden' && b.status === 'hidden') return -1;
-        if (_sortBy === 'research') {
-            const d = (a.isResearchTarget ? 0 : 1) - (b.isResearchTarget ? 0 : 1);
-            if (d !== 0) return d;
-            return (parseFloat(b.grossFloorPy) || 0) - (parseFloat(a.grossFloorPy) || 0);
-        }
-        if (_sortBy === 'area_desc') {
-            return (parseFloat(b.grossFloorPy) || 0) - (parseFloat(a.grossFloorPy) || 0) || (a.name || '').localeCompare(b.name || '');
-        } else if (_sortBy === 'area_asc') {
-            return (parseFloat(a.grossFloorPy) || 0) - (parseFloat(b.grossFloorPy) || 0) || (a.name || '').localeCompare(b.name || '');
-        } else if (_sortBy === 'name_asc') {
-            return (a.name || '').localeCompare(b.name || '');
-        }
-        return 0;
     });
     
     // 렌더링

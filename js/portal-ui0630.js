@@ -17,26 +17,6 @@ export const getSelectedBuilding = () => state.selectedBuilding;
 export const getStarredBuildings = () => state.allBuildings.filter(b => state.starredBuildings.has(b.id));
 
 // 빌딩 리스트 렌더링
-// ★ 공실정보 최신 발행월(YY.MM) 추출
-//   사용자 피드백: 공실 개수는 의미가 약함(공실없음일 수도, 안내문마다 정보 상이).
-//   대신 "공실정보가 얼마나 최신인지"를 보여준다. _meta(공실없음) 항목도 시점으로 포함.
-//   publishDate 포맷이 일정치 않을 수 있어(YYYY-MM-DD / YYYY.MM / YYYY/MM 등) 정규식으로 연·월만 추출.
-function latestVacancyYM(b) {
-    const vacs = (b && b.vacancies) || [];
-    let bestKey = '';   // 비교용 YYYYMM
-    let disp = '';      // 표시용 YY.MM
-    for (const v of vacs) {
-        const m = String((v && v.publishDate) || '').match(/(\d{4})\D?(\d{1,2})/);
-        if (!m) continue;
-        const key = m[1] + m[2].padStart(2, '0');
-        if (key > bestKey) {
-            bestKey = key;
-            disp = m[1].slice(2) + '.' + m[2].padStart(2, '0');
-        }
-    }
-    return disp;
-}
-
 export function renderBuildingList() {
     const container = document.getElementById('buildingList');
     const { currentListTab, viewportBuildings, filteredBuildings, selectedBuilding, starredBuildings } = state;
@@ -59,7 +39,6 @@ export function renderBuildingList() {
     
     container.innerHTML = list.slice(0, 100).map(b => {
         const isHidden = b.status === 'hidden';
-        const _vacYM = latestVacancyYM(b);
         return `
         <div class="list-item ${selectedBuilding?.id === b.id ? 'active' : ''} ${b.isNew ? 'is-new' : ''} ${isHidden ? 'is-hidden' : ''}" data-id="${b.id}" style="${isHidden ? 'opacity: 0.6; border-left: 3px solid #f59e0b;' : ''}">
             <div class="list-item-header">
@@ -77,7 +56,7 @@ export function renderBuildingList() {
             <div class="badges" onclick="selectBuildingFromList('${b.id}')">
                 ${b.region ? `<span class="badge badge-region">${b.region}</span>` : ''}
                 ${state.leasingGuideBuildings.has(b.id) ? `<span class="badge" style="background:linear-gradient(135deg, #667eea, #764ba2);color:white;">우리안내문</span>` : ''}
-                ${b.vacancies?.length > 0 ? `<span class="badge" style="background:#3b82f6;color:white;">공실정보${_vacYM ? ' ' + _vacYM : ''}</span>` : ''}
+                ${b.vacancies?.length > 0 ? `<span class="badge" style="background:#3b82f6;color:white;">공실 ${b.vacancies.length > 99 ? '99+' : b.vacancies.length}</span>` : ''}
                 ${b.grossFloorPy ? `<span class="badge badge-area">${formatNumber(b.grossFloorPy)}평</span>` : ''}
                 ${b.rentrollCount > 0 ? `<span class="badge badge-rentroll">렌트롤 ${b.rentrollCount}</span>` : ''}
                 ${b.memoCount > 0 ? `<span class="badge badge-memo">메모 ${b.memoCount}</span>` : ''}
@@ -125,7 +104,7 @@ export function renderStarredList(container, list) {
             </button>
         </div>
         <div class="starred-list">
-            ${list.map(b => { const _vacYM = latestVacancyYM(b); return `
+            ${list.map(b => `
                 <div class="starred-card" data-id="${b.id}" onclick="openDetail('${b.id}')" style="cursor: pointer;">
                     <input type="checkbox" class="starred-check" data-id="${b.id}" onchange="updateStarredSelection()" onclick="event.stopPropagation()">
                     <div class="starred-card-content">
@@ -133,12 +112,12 @@ export function renderStarredList(container, list) {
                         <div class="starred-info">${b.address || ''}</div>
                         <div class="starred-badges">
                             ${b.region ? `<span class="badge badge-region">${b.region}</span>` : ''}
-                            ${b.vacancies?.length > 0 ? `<span class="badge badge-vacancy">공실정보${_vacYM ? ' ' + _vacYM : ''}</span>` : ''}
+                            ${b.hasVacancy ? `<span class="badge badge-vacancy">공실 ${b.vacancies?.length || 0}</span>` : ''}
                         </div>
                     </div>
                     <button class="star-btn starred" onclick="event.stopPropagation(); toggleStar('${b.id}')" title="즐겨찾기 해제">★</button>
                 </div>
-            `; }).join('')}
+            `).join('')}
         </div>
     `;
 }
