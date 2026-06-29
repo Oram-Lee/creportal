@@ -2473,6 +2473,17 @@ export function renderDocumentSection() {
                                     title="선택한 공실을 다른 빌딩으로 이관">
                                 <span>↗️</span> 이관
                             </button>
+                            <button onclick="copySelectedVacancies()" 
+                                    id="copySelectedVacanciesBtn"
+                                    ${selectedCount === 0 ? 'disabled' : ''}
+                                    style="padding: 5px 8px; background: ${selectedCount > 0 ? '#dbeafe' : '#f3f4f6'}; 
+                                           color: ${selectedCount > 0 ? '#2563eb' : '#9ca3af'}; 
+                                           border: 1px solid ${selectedCount > 0 ? '#bfdbfe' : '#e5e7eb'}; 
+                                           border-radius: 4px; cursor: ${selectedCount > 0 ? 'pointer' : 'not-allowed'}; 
+                                           font-size: 11px; display: flex; align-items: center; gap: 3px;"
+                                    title="선택한 공실을 복사하여 다른 안내문/빌딩에 붙여넣기">
+                                <span>📋</span> 복사
+                            </button>
                         </div>
                         <button onclick="addSelectedVacanciesToCompList()" 
                                 id="addVacanciesToCompListBtn"
@@ -2543,6 +2554,9 @@ export function renderDocumentSection() {
                                             <button onclick="openTransferVacancyModalByIdx(${idx})" 
                                                     title="이관"
                                                     style="padding: 3px 5px; background: #fef3c7; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">↗️</button>
+                                            <button onclick="openCopyVacancyModalByIdx(${idx})" 
+                                                    title="복사 (다른 안내문/빌딩에 붙여넣기)"
+                                                    style="padding: 3px 5px; background: #dbeafe; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">📋</button>
                                             <button onclick="openPricingFromVacancyModal(${idx})" 
                                                     title="기준가 등록"
                                                     style="padding: 3px 5px; background: #d1fae5; border: none; border-radius: 3px; cursor: pointer; font-size: 10px;">💰</button>
@@ -3413,6 +3427,14 @@ export function registerDetailGlobals() {
     window.selectTransferBuilding = selectTransferBuilding;
     window.executeVacancyTransfer = executeVacancyTransfer;
     window.closeTransferModal = closeTransferModal;
+    // 📋 공실 복사 기능
+    window.openCopyVacancyModalByIdx = openCopyVacancyModalByIdx;
+    window.copySelectedVacancies = copySelectedVacancies;
+    window.searchCopyBuilding = searchCopyBuilding;
+    window.selectCopyBuilding = selectCopyBuilding;
+    window.onCopyGuideChange = onCopyGuideChange;
+    window.executeVacancyCopy = executeVacancyCopy;
+    window.closeCopyModal = closeCopyModal;
     window.validateExclusiveArea = validateExclusiveArea;
     
     // ★ v2.1: 기준가 통합 기능
@@ -3805,6 +3827,16 @@ function updateVacancySelectUI() {
         transferBtn.style.color = count > 0 ? '#d97706' : '#9ca3af';
         transferBtn.style.borderColor = count > 0 ? '#fde68a' : '#e5e7eb';
         transferBtn.style.cursor = count > 0 ? 'pointer' : 'not-allowed';
+    }
+    
+    // 복사 버튼 상태 업데이트
+    const copyBtn = document.getElementById('copySelectedVacanciesBtn');
+    if (copyBtn) {
+        copyBtn.disabled = count === 0;
+        copyBtn.style.background = count > 0 ? '#dbeafe' : '#f3f4f6';
+        copyBtn.style.color = count > 0 ? '#2563eb' : '#9ca3af';
+        copyBtn.style.borderColor = count > 0 ? '#bfdbfe' : '#e5e7eb';
+        copyBtn.style.cursor = count > 0 ? 'pointer' : 'not-allowed';
     }
 }
 
@@ -6114,6 +6146,255 @@ export function closeTransferModal() {
     if (overlay) overlay.remove();
     state.transferTargetBuilding = null;
     state.transferVacancyIndices = null;
+}
+
+// ===== 📋 공실 복사 (복사 + 붙여넣기) =====
+//   이관(잘라내기)과 달리 원본을 남기고 복제한다.
+//   대상: 빌딩(기본=현재 빌딩, 자가 복제) + 그 빌딩의 특정 안내문(출처·발행월) 또는 직접 입력(새 안내문).
+//   용도: OCR이 놓친 공실 추가/안내문 없는 경우 — 보증금·임대료·관리비가 동일하고 층/면적만 다를 때 입력 절감.
+
+export function openCopyVacancyModalByIdx(idx) {
+    const vacancies = state.currentDisplayedVacancies || [];
+    const v = vacancies[idx];
+    if (!v) return;
+    if (String(v._key || '').endsWith('_meta')) {
+        showToast('공실없음 항목은 복사할 수 없습니다', 'error');
+        return;
+    }
+    openCopyModal([v]);
+}
+
+export function copySelectedVacancies() {
+    const selectedIds = state.selectedVacancyIds;
+    if (!selectedIds || selectedIds.size === 0) {
+        showToast('복사할 공실을 선택하세요', 'error');
+        return;
+    }
+    const vacancies = state.currentDisplayedVacancies || [];
+    const toCopy = vacancies.filter(v => selectedIds.has(v._vacancyId) && !String(v._key || '').endsWith('_meta'));
+    if (toCopy.length === 0) {
+        showToast('복사할 공실이 없습니다', 'error');
+        return;
+    }
+    openCopyModal(toCopy);
+}
+
+function openCopyModal(vacanciesToCopy) {
+    state.copyVacancies = vacanciesToCopy;
+    state.copyTargetBuilding = state.selectedBuilding || null; // 기본: 현재 빌딩(자가 복제)
+    const cur = state.selectedBuilding;
+
+    const listHtml = vacanciesToCopy.map(v =>
+        `• ${v.floor || '-'}${v.tower ? ' [' + v.tower + ']' : ''} (${v.rentArea ? formatArea(v.rentArea) : '-'} / 보증 ${formatMoney(v.depositPy)} · 임대 ${formatMoney(v.rentPy)} · 관리 ${formatMoney(v.maintenancePy)})`
+    ).join('<br>');
+
+    const modalHtml = `
+        <div class="modal-overlay show" id="copyModalOverlay" onclick="if(event.target===this)closeCopyModal()"></div>
+        <div class="modal show" id="copyModal" style="max-width: 540px; z-index: 10001;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white;">
+                <h3 class="modal-title">📋 공실 복사</h3>
+                <button class="close-btn" onclick="closeCopyModal()" style="color: white;">×</button>
+            </div>
+            <div style="padding: 20px;">
+                <div style="padding: 12px; background: #eff6ff; border-radius: 8px; margin-bottom: 16px;">
+                    <div style="font-size: 12px; font-weight: 600; color: #1e40af; margin-bottom: 8px;">📋 복사할 공실 (${vacanciesToCopy.length}건)</div>
+                    <div style="font-size: 12px; color: #1e3a8a; max-height: 90px; overflow-y: auto; line-height: 1.7;">${listHtml}</div>
+                    <div style="font-size: 11px; color: #1e40af; margin-top: 8px;">💡 보증금·임대료·관리비는 그대로 복사됩니다. 붙여넣은 뒤 층·면적만 수정하세요. (원본 유지)</div>
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 6px;">🏢 붙여넣을 빌딩 <span style="color:#9ca3af;">(기본: 현재 빌딩 — 자가 복제)</span></label>
+                    <input type="text" id="copyBuildingSearch"
+                           placeholder="다른 빌딩으로 복사하려면 검색 (2글자 이상)"
+                           oninput="searchCopyBuilding()"
+                           style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; box-sizing: border-box;">
+                </div>
+                <div id="copyBuildingResults" style="display:none; max-height: 160px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px;"></div>
+                <div id="copySelectedBuilding" style="margin-bottom: 14px; padding: 10px 12px; background: #dbeafe; border-radius: 8px; font-size: 13px; color: #1e40af;">
+                    선택된 빌딩: <strong id="copySelectedBuildingName">${cur?.name || '-'}</strong>
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 6px;">📄 붙여넣을 안내문 (출처 · 발행월)</label>
+                    <select id="copyTargetGuide" onchange="onCopyGuideChange()"
+                            style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; box-sizing: border-box; background: #fff;">
+                    </select>
+                </div>
+                <div id="copyManualGuide" style="display: none; gap: 8px; margin-bottom: 6px;">
+                    <input type="text" id="copyManualSource" placeholder="출처(회사명) 예: 직접입력"
+                           style="flex: 1; padding: 9px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+                    <input type="text" id="copyManualDate" placeholder="발행월 예: 25.03"
+                           style="width: 130px; padding: 9px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; box-sizing: border-box;">
+                </div>
+            </div>
+            <div class="form-actions" style="padding: 16px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 8px;">
+                <button type="button" class="btn btn-secondary" onclick="closeCopyModal()">취소</button>
+                <button type="button" class="btn btn-primary" id="executeCopyBtn" onclick="executeVacancyCopy()" style="background: #2563eb;">복사 실행</button>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    if (cur) renderCopyGuideOptions(cur);
+}
+
+// 대상 빌딩의 안내문(출처+발행월) 목록을 드롭다운에 채움
+function renderCopyGuideOptions(building) {
+    const sel = document.getElementById('copyTargetGuide');
+    if (!sel) return;
+    const seen = new Map();
+    (building.vacancies || []).forEach(v => {
+        if (String(v._key || '').endsWith('_meta')) return;
+        if (!v.source && !v.publishDate) return;
+        const k = `${v.source || ''}|${v.publishDate || ''}`;
+        const e = seen.get(k) || { source: v.source || '', publishDate: v.publishDate || '', count: 0 };
+        e.count++;
+        seen.set(k, e);
+    });
+    (building.documents || []).forEach(d => {
+        const k = `${d.source || ''}|${d.publishDate || ''}`;
+        if (!seen.has(k) && (d.source || d.publishDate)) {
+            seen.set(k, { source: d.source || '', publishDate: d.publishDate || '', count: d.vacancyCount || 0 });
+        }
+    });
+    const opts = [...seen.values()].sort((a, b) => String(b.publishDate || '').localeCompare(String(a.publishDate || '')));
+    let html = '';
+    if (opts.length === 0) {
+        html += `<option value="__new__" selected>등록된 안내문 없음 — 직접 입력</option>`;
+    } else {
+        opts.forEach(o => {
+            const label = `${o.source || '(출처없음)'} · ${o.publishDate || '(발행일없음)'}${o.count ? ` (${o.count}건)` : ''}`;
+            html += `<option value="${encodeURIComponent(o.source)}|${encodeURIComponent(o.publishDate)}">${label}</option>`;
+        });
+        html += `<option value="__new__">➕ 새 안내문 / 직접 입력…</option>`;
+    }
+    sel.innerHTML = html;
+    onCopyGuideChange();
+}
+
+export function onCopyGuideChange() {
+    const sel = document.getElementById('copyTargetGuide');
+    const manual = document.getElementById('copyManualGuide');
+    if (!sel || !manual) return;
+    manual.style.display = sel.value === '__new__' ? 'flex' : 'none';
+}
+
+export function searchCopyBuilding() {
+    const query = (document.getElementById('copyBuildingSearch')?.value || '').trim().toLowerCase();
+    const resultsDiv = document.getElementById('copyBuildingResults');
+    if (!resultsDiv) return;
+    if (query.length < 2) {
+        resultsDiv.style.display = 'none';
+        resultsDiv.innerHTML = '';
+        return;
+    }
+    const results = state.allBuildings.filter(b =>
+        !b.isHidden &&
+        (b.name?.toLowerCase().includes(query) || b.address?.toLowerCase().includes(query))
+    ).slice(0, 10);
+    resultsDiv.style.display = 'block';
+    if (results.length === 0) {
+        resultsDiv.innerHTML = `<div style="padding: 16px; text-align: center; color: #666; font-size: 13px;">검색 결과가 없습니다</div>`;
+        return;
+    }
+    resultsDiv.innerHTML = results.map(b => `
+        <div class="copy-building-item" onclick="selectCopyBuilding('${b.id}')" data-building-id="${b.id}"
+             style="padding: 10px 12px; border-bottom: 1px solid #e2e8f0; cursor: pointer;"
+             onmouseenter="this.style.background='#f1f5f9'" onmouseleave="this.style.background=''">
+            <div style="font-weight: 500; color: var(--text-primary);">${b.name}${b.id === state.selectedBuilding?.id ? ' <span style=\"font-size:10px; color:#2563eb;\">(현재)</span>' : ''}</div>
+            <div style="font-size: 12px; color: #666; margin-top: 2px;">${b.address || '-'}</div>
+        </div>
+    `).join('');
+}
+
+export function selectCopyBuilding(buildingId) {
+    const b = state.allBuildings.find(x => x.id === buildingId);
+    if (!b) return;
+    state.copyTargetBuilding = b;
+    const nameEl = document.getElementById('copySelectedBuildingName');
+    if (nameEl) nameEl.textContent = b.name || buildingId;
+    const resultsDiv = document.getElementById('copyBuildingResults');
+    if (resultsDiv) { resultsDiv.style.display = 'none'; resultsDiv.innerHTML = ''; }
+    const searchEl = document.getElementById('copyBuildingSearch');
+    if (searchEl) searchEl.value = '';
+    renderCopyGuideOptions(b);
+}
+
+export async function executeVacancyCopy() {
+    const target = state.copyTargetBuilding;
+    const toCopy = state.copyVacancies || [];
+    if (!target || toCopy.length === 0) {
+        showToast('복사 정보가 올바르지 않습니다', 'error');
+        return;
+    }
+    const sel = document.getElementById('copyTargetGuide');
+    let targetSource = '', targetPublishDate = '';
+    if (sel && sel.value === '__new__') {
+        targetSource = (document.getElementById('copyManualSource')?.value || '').trim();
+        targetPublishDate = (document.getElementById('copyManualDate')?.value || '').trim();
+        if (!targetSource || !targetPublishDate) {
+            showToast('새 안내문의 출처와 발행월을 입력하세요', 'error');
+            return;
+        }
+    } else if (sel && sel.value) {
+        const parts = sel.value.split('|');
+        targetSource = decodeURIComponent(parts[0] || '');
+        targetPublishDate = decodeURIComponent(parts[1] || '');
+    } else {
+        showToast('붙여넣을 안내문을 선택하세요', 'error');
+        return;
+    }
+
+    if (!confirm(`${toCopy.length}개 공실을 "${target.name}"의\n[${targetSource} · ${targetPublishDate}] 안내문으로 복사할까요?\n\n원본은 그대로 유지됩니다.`)) return;
+
+    try {
+        const { push, set } = await import('./portal-firebase.js');
+        const targetId = target.id;
+        if (!state.dataCache.vacancies) state.dataCache.vacancies = {};
+        if (!state.dataCache.vacancies[targetId]) state.dataCache.vacancies[targetId] = {};
+        const targetLocal = state.allBuildings.find(b => b.id === targetId);
+        if (targetLocal && !targetLocal.vacancies) targetLocal.vacancies = [];
+
+        for (const v of toCopy) {
+            const newData = { ...v };
+            delete newData._key;
+            delete newData._vacancyId;
+            // 페이지 원본 참조는 원본 안내문 기준이라 복사본에서는 제거 (복사본은 수동 입력 성격)
+            delete newData.pageImageUrl;
+            delete newData.pageNum;
+            delete newData.pdfUrl;
+            newData.source = targetSource;
+            newData.publishDate = targetPublishDate;
+            newData.buildingName = target.buildingName || target.name || newData.buildingName || '';
+            newData.copiedFrom = state.selectedBuilding?.id || null;
+            newData.copiedAt = new Date().toISOString();
+            newData.createdAt = newData.createdAt || new Date().toISOString();
+            newData.updatedAt = new Date().toISOString();
+
+            const newRef = push(ref(db, `vacancies/${targetId}`));
+            const newKey = newRef.key;
+            await set(newRef, newData);
+            state.dataCache.vacancies[targetId][newKey] = newData;
+            if (targetLocal) targetLocal.vacancies.push({ ...newData, _key: newKey });
+        }
+        if (targetLocal) targetLocal.vacancyCount = targetLocal.vacancies.length;
+
+        if (state.selectedVacancyIds) state.selectedVacancyIds.clear();
+        showToast(`${toCopy.length}개 공실을 복사했습니다`, 'success');
+        closeCopyModal();
+        renderDocumentSection();
+        if (window.renderBuildingList) window.renderBuildingList();
+    } catch (error) {
+        console.error('공실 복사 오류:', error);
+        showToast('복사 중 오류가 발생했습니다: ' + (error?.message || ''), 'error');
+    }
+}
+
+export function closeCopyModal() {
+    document.getElementById('copyModal')?.remove();
+    document.getElementById('copyModalOverlay')?.remove();
+    state.copyVacancies = null;
+    state.copyTargetBuilding = null;
 }
 
 // ===== ★ v2.1: 기준가 통합 기능 =====
