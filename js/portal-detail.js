@@ -63,6 +63,10 @@ if (typeof state.showWeightedAvg === 'undefined') {
 if (typeof state.vacancySortOrder === 'undefined') {
     state.vacancySortOrder = 'asc';
 }
+// 정렬 기준 컬럼 (floor/tower/rentArea/exclusiveArea/depositPy/rentPy/maintenancePy/moveInDate)
+if (typeof state.vacancySortColumn === 'undefined') {
+    state.vacancySortColumn = 'floor';
+}
 
 // ★ Sprint3-NEW2: 주차정보 포맷 함수
 function formatParkingDisplay(b) {
@@ -164,6 +168,19 @@ function formatArea(value, forceDecimal = false) {
 }
 
 /**
+ * 금액(보증금/임대료/관리비) 표시용 포맷.
+ * OCR/수기 입력값이 "1,010,000"처럼 콤마 포함 문자열로 저장될 수 있어
+ * formatNumber로는 NaN이 된다 → 콤마/공백 제거 후 숫자로 파싱하여 천단위 콤마로 재포맷.
+ * 숫자가 아니면(예: "협의") 원문 유지, 빈 값이면 '-'.
+ */
+function formatMoney(value) {
+    if (value === undefined || value === null || value === '') return '-';
+    const num = parseFloat(String(value).replace(/[, ]/g, ''));
+    if (isNaN(num)) return String(value);
+    return num.toLocaleString('en-US');
+}
+
+/**
  * 소숫점 표기 토글
  */
 export function toggleDecimalArea() {
@@ -211,18 +228,49 @@ function parseFloorNumber(floorStr) {
  * ★ v3.11: 공실 리스트 정렬 토글 (오름차순 ↔ 내림차순)
  */
 export function toggleVacancySortOrder() {
-    state.vacancySortOrder = state.vacancySortOrder === 'asc' ? 'desc' : 'asc';
-    
-    // 공실 테이블 다시 렌더링
+    // 하위 호환: 층 기준 정렬 토글
+    setVacancySort('floor');
+}
+
+// ★ 컬럼 클릭 정렬: 같은 컬럼이면 asc↔desc 토글, 다른 컬럼이면 그 컬럼 asc로 시작
+export function setVacancySort(col) {
+    if (state.vacancySortColumn === col) {
+        state.vacancySortOrder = state.vacancySortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        state.vacancySortColumn = col;
+        state.vacancySortOrder = 'asc';
+    }
     if (state.selectedBuilding) {
         renderDocumentSection();
     }
-    
-    showToast(state.vacancySortOrder === 'asc' ? '층 오름차순 ↑' : '층 내림차순 ↓', 'info');
+}
+
+// 컬럼별 정렬 비교값 (숫자 컬럼은 콤마 제거 후 숫자, 그 외는 문자열)
+function vacancySortValue(v, col) {
+    switch (col) {
+        case 'floor': return parseFloorNumber(v.floor);
+        case 'tower': return String(v.tower || '').toLowerCase();
+        case 'rentArea': return parseFloat(String(v.rentArea ?? '').replace(/[, ]/g, '')) || 0;
+        case 'exclusiveArea': return parseFloat(String(v.exclusiveArea ?? '').replace(/[, ]/g, '')) || 0;
+        case 'depositPy': return parseFloat(String(v.depositPy ?? '').replace(/[, ]/g, '')) || 0;
+        case 'rentPy': return parseFloat(String(v.rentPy ?? '').replace(/[, ]/g, '')) || 0;
+        case 'maintenancePy': return parseFloat(String(v.maintenancePy ?? '').replace(/[, ]/g, '')) || 0;
+        case 'moveInDate': return String(v.moveInDate || '');
+        default: return parseFloorNumber(v.floor);
+    }
+}
+
+// 헤더 정렬 화살표 (활성 컬럼에만 표시)
+function vacancySortArrow(col) {
+    if (state.vacancySortColumn !== col) return '';
+    return state.vacancySortOrder === 'asc'
+        ? ' <span style="font-size:10px; opacity:0.8;">↑</span>'
+        : ' <span style="font-size:10px; opacity:0.8;">↓</span>';
 }
 
 // 전역으로 노출 (onclick에서 사용)
 window.toggleVacancySortOrder = toggleVacancySortOrder;
+window.setVacancySort = setVacancySort;
 
 // ===== 단위 변환 헬퍼 함수 (마이그레이션 호환) =====
 /**
@@ -2350,11 +2398,18 @@ export function renderDocumentSection() {
         };
     });
     
-    // ★ v3.11: 층별 정렬 적용
+    // ★ 컬럼별 정렬 적용 (헤더 클릭으로 컬럼/방향 선택)
+    const _sortCol = state.vacancySortColumn || 'floor';
     vacanciesWithId.sort((a, b) => {
-        const floorA = parseFloorNumber(a.floor);
-        const floorB = parseFloorNumber(b.floor);
-        return state.vacancySortOrder === 'asc' ? floorA - floorB : floorB - floorA;
+        const va = vacancySortValue(a, _sortCol);
+        const vb = vacancySortValue(b, _sortCol);
+        let cmp;
+        if (typeof va === 'number' && typeof vb === 'number') {
+            cmp = va - vb;
+        } else {
+            cmp = String(va).localeCompare(String(vb), 'ko');
+        }
+        return state.vacancySortOrder === 'asc' ? cmp : -cmp;
     });
     
     // 전역 상태에 현재 표시 중인 공실 저장 (선택 시 사용)
@@ -2441,16 +2496,16 @@ export function renderDocumentSection() {
                                            style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color);"
                                            title="전체 선택">
                                 </th>
-                                <th style="padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="toggleVacancySortOrder()" title="클릭하여 정렬 변경">
-                                    층 <span style="font-size: 10px; opacity: 0.7;">${state.vacancySortOrder === 'asc' ? '↑' : '↓'}</span>
+                                <th style="padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="setVacancySort('floor')" title="클릭하여 정렬 변경">
+                                    층${vacancySortArrow('floor')}
                                 </th>
-                                ${_hasTower ? `<th style="padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border-color); white-space: nowrap;">구분</th>` : ''}
-                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap;">임대면적</th>
-                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap;">전용면적</th>
-                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap;">보증금/평</th>
-                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap;">임대료/평</th>
-                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap;">관리비/평</th>
-                                <th style="padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border-color); white-space: nowrap;">입주시기</th>
+                                ${_hasTower ? `<th style="padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="setVacancySort('tower')" title="클릭하여 정렬 변경">구분${vacancySortArrow('tower')}</th>` : ''}
+                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="setVacancySort('rentArea')" title="클릭하여 정렬 변경">임대면적${vacancySortArrow('rentArea')}</th>
+                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="setVacancySort('exclusiveArea')" title="클릭하여 정렬 변경">전용면적${vacancySortArrow('exclusiveArea')}</th>
+                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="setVacancySort('depositPy')" title="클릭하여 정렬 변경">보증금/평${vacancySortArrow('depositPy')}</th>
+                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="setVacancySort('rentPy')" title="클릭하여 정렬 변경">임대료/평${vacancySortArrow('rentPy')}</th>
+                                <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="setVacancySort('maintenancePy')" title="클릭하여 정렬 변경">관리비/평${vacancySortArrow('maintenancePy')}</th>
+                                <th style="padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="setVacancySort('moveInDate')" title="클릭하여 정렬 변경">입주시기${vacancySortArrow('moveInDate')}</th>
                                 <th style="padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border-color); white-space: nowrap; width: 80px;">액션</th>
                             </tr>
                         </thead>
@@ -2473,9 +2528,9 @@ export function renderDocumentSection() {
                                     ${_hasTower ? `<td style="padding: 8px 6px; text-align: center; color: var(--text-muted);">${v.tower || '-'}</td>` : ''}
                                     <td style="padding: 8px 6px; text-align: right;">${formatArea(v.rentArea)}</td>
                                     <td style="padding: 8px 6px; text-align: right;">${formatArea(v.exclusiveArea)}</td>
-                                    <td style="padding: 8px 6px; text-align: right;">${v.depositPy ? formatNumber(v.depositPy) : '-'}</td>
-                                    <td style="padding: 8px 6px; text-align: right; color: var(--accent-color); font-weight: 500;">${v.rentPy ? formatNumber(v.rentPy) : '-'}</td>
-                                    <td style="padding: 8px 6px; text-align: right;">${v.maintenancePy ? formatNumber(v.maintenancePy) : '-'}</td>
+                                    <td style="padding: 8px 6px; text-align: right;">${formatMoney(v.depositPy)}</td>
+                                    <td style="padding: 8px 6px; text-align: right; color: var(--accent-color); font-weight: 500;">${formatMoney(v.rentPy)}</td>
+                                    <td style="padding: 8px 6px; text-align: right;">${formatMoney(v.maintenancePy)}</td>
                                     <td style="padding: 8px 6px; text-align: center;">${v.moveInDate || '-'}</td>
                                     <td style="padding: 4px 2px; text-align: center;">
                                         <div style="display: flex; gap: 2px; justify-content: center;">

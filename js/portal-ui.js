@@ -17,6 +17,15 @@ export const getSelectedBuilding = () => state.selectedBuilding;
 export const getStarredBuildings = () => state.allBuildings.filter(b => state.starredBuildings.has(b.id));
 
 // 빌딩 리스트 렌더링
+// ★ 금액 표시용 포맷: "1,010,000" 같은 콤마 포함 문자열도 안전하게 천단위 콤마로.
+//   (formatNumber는 콤마 문자열을 NaN으로 만들 수 있음 → 콤마/공백 제거 후 파싱)
+function formatMoney(value) {
+    if (value === undefined || value === null || value === '') return '-';
+    const num = parseFloat(String(value).replace(/[, ]/g, ''));
+    if (isNaN(num)) return String(value);
+    return num.toLocaleString('en-US');
+}
+
 // ★ 공실정보 최신 발행월(YY.MM) 추출
 //   사용자 피드백: 공실 개수는 의미가 약함(공실없음일 수도, 안내문마다 정보 상이).
 //   대신 "공실정보가 얼마나 최신인지"를 보여준다. _meta(공실없음) 항목도 시점으로 포함.
@@ -227,9 +236,9 @@ export function renderTableView() {
                     <div class="info-item"><span class="info-label">층수</span><span class="info-value">${formatFloors(b)}</span></div>
                     <div class="info-item"><span class="info-label">준공</span><span class="info-value">${b.completionYear || '-'}</span></div>
                     <div class="info-item"><span class="info-label">역세권</span><span class="info-value">${formatStation(b)}</span></div>
-                    <div class="info-item"><span class="info-label">보증금</span><span class="info-value">${b.depositPy ? formatNumber(b.depositPy) : '-'}</span></div>
-                    <div class="info-item"><span class="info-label">임대료</span><span class="info-value price">${b.rentPy ? formatNumber(b.rentPy) : '-'}</span></div>
-                    <div class="info-item"><span class="info-label">관리비</span><span class="info-value">${b.maintenancePy ? formatNumber(b.maintenancePy) : '-'}</span></div>
+                    <div class="info-item"><span class="info-label">보증금</span><span class="info-value">${formatMoney(b.depositPy)}</span></div>
+                    <div class="info-item"><span class="info-label">임대료</span><span class="info-value price">${formatMoney(b.rentPy)}</span></div>
+                    <div class="info-item"><span class="info-label">관리비</span><span class="info-value">${formatMoney(b.maintenancePy)}</span></div>
                 </div>
                 
                 <!-- 공실 -->
@@ -472,9 +481,9 @@ function renderVacancyRow(building, v, idx) {
             <td class="floor-cell">${v.floor || '-'}</td>
             <td class="area-cell">${v.rentArea ? formatNumber(v.rentArea) + '평' : '-'}</td>
             <td class="area-cell">${v.exclusiveArea ? formatNumber(v.exclusiveArea) + '평' : '-'}</td>
-            <td class="price-cell">${v.depositPy ? formatNumber(v.depositPy) : '-'}</td>
-            <td class="price-cell">${v.rentPy ? formatNumber(v.rentPy) : '-'}</td>
-            <td class="price-cell">${v.maintenancePy ? formatNumber(v.maintenancePy) : '-'}</td>
+            <td class="price-cell">${formatMoney(v.depositPy)}</td>
+            <td class="price-cell">${formatMoney(v.rentPy)}</td>
+            <td class="price-cell">${formatMoney(v.maintenancePy)}</td>
             <td>${v.moveInDate || '-'}</td>
             <td>
                 <button class="star-btn ${v.starred ? 'starred' : ''}" onclick="event.stopPropagation(); toggleVacancyStar('${building.id}', '${v._key || idx}')">
