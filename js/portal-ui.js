@@ -26,6 +26,17 @@ function formatMoney(value) {
     return num.toLocaleString('en-US');
 }
 
+// ★ 평당 금액을 만원 단위로 압축 표기 (빌딩 리스트 폭 절약).
+//   원 단위(예: 76000) → 7.6, 1010000 → 101. 1000 미만이면 이미 만원으로 간주.
+//   소수는 최대 2자리, 불필요한 0 제거. 값이 없거나 숫자가 아니면 null.
+function toManwon(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const n = parseFloat(String(value).replace(/[, ]/g, ''));
+    if (isNaN(n)) return null;
+    const man = n >= 1000 ? n / 10000 : n; // 1000↑=원 단위 환산, 미만=이미 만원
+    return (Math.round(man * 100) / 100).toString();
+}
+
 // ★ 공실정보 최신 발행월(YY.MM) 추출
 //   사용자 피드백: 공실 개수는 의미가 약함(공실없음일 수도, 안내문마다 정보 상이).
 //   대신 "공실정보가 얼마나 최신인지"를 보여준다. _meta(공실없음) 항목도 시점으로 포함.
@@ -109,7 +120,23 @@ export function renderBuildingList() {
                 ${b.memoCount > 0 ? `<span class="badge badge-memo">메모 ${b.memoCount}</span>` : ''}
                 ${b.hasIncentive ? `<span class="badge badge-incentive">인센티브</span>` : ''}
             </div>
-            ${b.rentPy ? `<div class="price" onclick="selectBuildingFromList('${b.id}')">임대료 ${b.rentPy}/평</div>` : ''}
+            ${(() => {
+                const fps = b.floorPricing || [];
+                const official = fps.find(fp => fp.isOfficial);
+                // 공식(⭐) 기준가 미지정 → 하이픈
+                if (!official) {
+                    return `<div class="price" onclick="selectBuildingFromList('${b.id}')" title="공식 기준가 미지정" style="color:var(--text-muted,#9ca3af); font-weight:400;">기준가 -</div>`;
+                }
+                const d = toManwon(official.depositPy), r = toManwon(official.rentPy), m = toManwon(official.maintenancePy);
+                const seg = [];
+                if (d != null) seg.push(`보 ${d}`);
+                if (r != null) seg.push(`임 ${r}`);
+                if (m != null) seg.push(`관 ${m}`);
+                const priceStr = seg.length ? seg.join(' · ') : '-';
+                const unit = seg.length ? ` <span style="font-size:11px; opacity:.55; font-weight:400;">만/평</span>` : '';
+                const more = fps.length > 1 ? ` <span style="font-size:11px; opacity:.6; font-weight:400;">외 ${fps.length - 1}건</span>` : '';
+                return `<div class="price" onclick="selectBuildingFromList('${b.id}')" title="공식 기준가 · 평당 보증금·임대료·관리비 (만원)">${priceStr}${unit}${more}</div>`;
+            })()}
         </div>
         `;
     }).join('');
