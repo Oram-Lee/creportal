@@ -59,23 +59,23 @@ input{font-family:inherit;font-size:16px}
 #topbar{position:absolute;top:calc(var(--sb-top) + 10px);left:10px;right:10px;z-index:30;
   display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .search-row{display:flex;gap:8px;align-items:center;pointer-events:auto}
-.search-box{flex:1;height:46px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.12);
+.search-box{flex:1;min-width:0;height:46px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.12);
   display:flex;align-items:center;padding:0 12px;gap:8px}
 .search-box svg{flex-shrink:0}
-.search-box input{flex:1;border:none;outline:none;background:none;font-size:15px;color:var(--ink);min-width:0}
+.search-box input{flex:1;width:0;min-width:0;border:none;outline:none;background:none;font-size:15px;color:var(--ink)}
 .search-box .clear{padding:4px;color:var(--muted);display:none}
-.icon-btn{width:46px;height:46px;background:#fff;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.12);
+.icon-btn{width:46px;height:46px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.12);
   display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--navy)}
 .chips{display:flex;gap:6px;pointer-events:auto;overflow-x:auto;padding-bottom:2px;-ms-overflow-style:none;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
-.chip{flex-shrink:0;height:32px;padding:0 13px;border-radius:16px;background:#fff;
+.chip{flex-shrink:0;height:36px;padding:0 14px;border-radius:10px;background:#fff;
   box-shadow:0 1px 6px rgba(0,0,0,.1);font-size:13px;color:var(--ink);display:flex;align-items:center;gap:5px;font-weight:500}
 .chip.on{background:var(--navy);color:#fff}
 .chip.on .dot{background:var(--pink)}
 
 /* 검색 결과 패널 */
-#results{position:absolute;top:calc(var(--sb-top) + 66px);left:10px;right:10px;z-index:29;
-  background:#fff;border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:62vh;overflow-y:auto;display:none}
+#results{position:absolute;top:calc(var(--sb-top) + 108px);left:10px;right:10px;z-index:29;
+  background:#fff;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:60vh;overflow-y:auto;display:none}
 #results .rhead{padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line2);position:sticky;top:0;background:#fff}
 .ritem{padding:11px 14px;border-bottom:1px solid var(--line2);display:flex;align-items:center;gap:10px}
 .ritem:active{background:var(--bg)}
@@ -90,22 +90,23 @@ input{font-family:inherit;font-size:16px}
 .rpager button:disabled{opacity:.4}
 .fcount{font-size:11px;font-weight:500;opacity:.85}
 .freg-wrap{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
-.freg{padding:7px 13px;border:1px solid var(--line);border-radius:18px;font-size:13px;color:var(--ink);background:#fff}
+.freg{padding:9px 15px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;color:var(--ink);background:#fff}
 .freg.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .fchk{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:14px;cursor:pointer}
 .fchk input{width:18px;height:18px;accent-color:var(--pink);flex-shrink:0}
 .stepper-row{display:flex;align-items:center;gap:10px;margin-top:9px}
 .stepper-row .slabel{width:38px;flex-shrink:0;font-size:13px;color:var(--muted);font-weight:500}
-.stepper{display:flex;align-items:center;flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.stepper{display:flex;align-items:center;flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
 .stepper button{width:48px;height:52px;flex-shrink:0;font-size:24px;line-height:1;color:var(--navy);background:var(--bg);display:flex;align-items:center;justify-content:center}
 .stepper button:active{background:var(--line)}
 .stepper input{flex:1;min-width:0;width:100%;border:none;outline:none;text-align:center;height:52px;font-size:16px;padding:0;background:#fff;-moz-appearance:textfield;appearance:textfield}
 .stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 
 /* 우측 하단 지도 컨트롤 */
-.map-ctrl{position:absolute;right:12px;bottom:calc(var(--sb-bot) + 16px);z-index:20;display:flex;flex-direction:column;gap:8px}
-.map-ctrl button{width:42px;height:42px;background:#fff;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.16);
-  display:flex;align-items:center;justify-content:center;color:var(--navy)}
+.map-ctrl{position:absolute;right:12px;bottom:calc(var(--sb-bot) + 16px);z-index:20;display:flex;flex-direction:column;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.18);overflow:hidden}
+.map-ctrl button{width:46px;height:46px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--navy)}
+.map-ctrl button:active{background:var(--bg)}
+.map-ctrl button + button{border-top:1px solid var(--line2)}
 
 /* ===== 바텀시트 ===== */
 #sheet{position:absolute;left:0;right:0;bottom:0;height:88vh;z-index:40;background:#fff;
@@ -195,7 +196,13 @@ input{font-family:inherit;font-size:16px}
 .modal .chk{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px}
 .modal .chk input{width:18px;height:18px}
 .modal .btns{display:flex;gap:10px;margin-top:20px}
-.modal .btns button{flex:1;height:48px;border-radius:12px;font-size:15px;font-weight:700}
+.modal .btns button{flex:1;height:52px;border-radius:10px;font-size:15px;font-weight:700}
+.li-card{margin-top:4px;padding:14px;background:var(--bg);border-radius:10px}
+.li-title{font-size:14px;font-weight:700;color:var(--ink)}
+.li-desc{font-size:12.5px;color:var(--muted);line-height:1.55;margin:5px 0 11px}
+.li-desc b{color:var(--ink);font-weight:600}
+.li-btn{width:100%;height:46px;border-radius:9px;background:var(--navy);color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px}
+.li-btn:active{opacity:.9}
 .modal .btn-cancel{background:var(--bg);color:var(--muted)}
 .modal .btn-save{background:var(--pink);color:#fff}
 .modal .btn-save:active{background:var(--pink-d)}
@@ -223,7 +230,7 @@ input{font-family:inherit;font-size:16px}
 #backToList:active{transform:translateX(-50%) scale(.96)}
 
 /* 임대공실 — 출처/발행월 그룹 카드 (leaseinfo 스타일) */
-.vgroup{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:10px}
+.vgroup{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:10px}
 .vghead{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--bg);border-bottom:1px solid var(--line2)}
 .src-badge{font-size:11.5px;font-weight:700;color:#fff;padding:3px 10px;border-radius:6px;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vgmonth{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);font-weight:500;flex-shrink:0}
@@ -611,7 +618,7 @@ function resultFloorLabel(b){
 function stepInput(id,dir){ const inp=$(id); if(!inp) return; const step=10; let v=parseFloat(inp.value)||0; v = dir==='+'? v+step : Math.max(0, v-step); inp.value=v||''; }
 function filterModal(){
   const f=S.filters;
-  const regions=[...new Set(S.all.map(b=>b.region).filter(Boolean))].sort();
+  const regions=[...new Set(S.all.map(b=>b.region).filter(Boolean))].sort((a,b)=>{ if(a==='Others')return 1; if(b==='Others')return -1; return a.localeCompare(b); });
   const chips=regions.map(r=>`<button class="freg ${f.region.includes(r)?'on':''}" data-act="freg" data-r="${esc(r)}">${esc(r)}</button>`).join('');
   openModal(`<h3>상세 검색</h3>
     <label>권역</label>
@@ -1086,10 +1093,12 @@ $('results').addEventListener('click',e=>{
 $('menuBtn').addEventListener('click',()=>{
   openModal(`<h3>${esc(S.user?.name||S.user?.email||'사용자')}</h3>
     <div style="color:var(--muted);font-size:13px;margin:-8px 0 16px">${esc(S.user?.email||'')} · ${esc(S.user?.role||'viewer')}</div>
-    <div class="btns" style="flex-direction:column">
-      <button class="btn-cancel" onclick="location.href='portal.html'" style="height:48px">🖥️ PC 버전으로 보기</button>
-      <button class="btn-save" data-act="logout" style="background:#dc2626;height:48px">로그아웃</button>
+    <div class="li-card">
+      <div class="li-title">임대안내문 빠른 검색</div>
+      <div class="li-desc">공실 빌딩을 지도로 탐색할 땐 이 앱을, <b>임대안내문만 빠르게 찾을 땐</b> leaseinfo가 더 편해요.</div>
+      <button class="li-btn" onclick="window.open('https://oram-lee.github.io/leaseinfo/','_blank')">leaseinfo 바로가기<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M9 7h8v8"/></svg></button>
     </div>
+    <div class="btns" style="flex-direction:column"><button class="btn-save" data-act="logout" style="background:#dc2626">로그아웃</button></div>
     <div class="btns"><button class="btn-cancel" data-act="m-cancel">닫기</button></div>`);
 });
 
