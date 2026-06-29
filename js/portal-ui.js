@@ -23,15 +23,32 @@ export const getStarredBuildings = () => state.allBuildings.filter(b => state.st
 //   publishDate 포맷이 일정치 않을 수 있어(YYYY-MM-DD / YYYY.MM / YYYY/MM 등) 정규식으로 연·월만 추출.
 function latestVacancyYM(b) {
     const vacs = (b && b.vacancies) || [];
-    let bestKey = '';   // 비교용 YYYYMM
+    let bestKey = -1;   // 비교용 정수 YYYYMM
     let disp = '';      // 표시용 YY.MM
     for (const v of vacs) {
-        const m = String((v && v.publishDate) || '').match(/(\d{4})\D?(\d{1,2})/);
-        if (!m) continue;
-        const key = m[1] + m[2].padStart(2, '0');
+        const raw = String((v && v.publishDate) || '').trim();
+        if (!raw) continue;
+        const nums = raw.match(/\d+/g) || [];
+        let yyyy = '', mm = '';
+        if (nums.length >= 2) {
+            // "25.03"(YY.MM) / "2026.05"(YYYY.MM) / "2026-05-15"(YYYY-MM-DD)
+            yyyy = nums[0].length >= 4 ? nums[0].slice(0, 4) : ('20' + nums[0].padStart(2, '0').slice(-2));
+            mm = nums[1].padStart(2, '0');
+        } else if (nums.length === 1 && nums[0].length === 6) {   // "202605"(YYYYMM)
+            yyyy = nums[0].slice(0, 4);
+            mm = nums[0].slice(4, 6);
+        } else if (nums.length === 1 && nums[0].length === 4) {   // "2503"(YYMM, 구분자 없음)
+            yyyy = '20' + nums[0].slice(0, 2);
+            mm = nums[0].slice(2, 4);
+        } else {
+            continue;
+        }
+        const monthNum = parseInt(mm, 10);
+        if (!(monthNum >= 1 && monthNum <= 12)) continue;   // 유효한 월만
+        const key = parseInt(yyyy + mm, 10);
         if (key > bestKey) {
             bestKey = key;
-            disp = m[1].slice(2) + '.' + m[2].padStart(2, '0');
+            disp = yyyy.slice(2) + '.' + mm;   // YY.MM
         }
     }
     return disp;
