@@ -227,9 +227,9 @@ export function renderTableView() {
                     <div class="info-item"><span class="info-label">층수</span><span class="info-value">${formatFloors(b)}</span></div>
                     <div class="info-item"><span class="info-label">준공</span><span class="info-value">${b.completionYear || '-'}</span></div>
                     <div class="info-item"><span class="info-label">역세권</span><span class="info-value">${formatStation(b)}</span></div>
-                    <div class="info-item"><span class="info-label">보증금</span><span class="info-value">${b.depositPy ? formatNumber(b.depositPy) : '-'}</span></div>
-                    <div class="info-item"><span class="info-label">임대료</span><span class="info-value price">${b.rentPy ? formatNumber(b.rentPy) : '-'}</span></div>
-                    <div class="info-item"><span class="info-label">관리비</span><span class="info-value">${b.maintenancePy ? formatNumber(b.maintenancePy) : '-'}</span></div>
+                    <div class="info-item"><span class="info-label">보증금</span><span class="info-value">${b.depositPy || '-'}</span></div>
+                    <div class="info-item"><span class="info-label">임대료</span><span class="info-value price">${b.rentPy || '-'}</span></div>
+                    <div class="info-item"><span class="info-label">관리비</span><span class="info-value">${b.maintenancePy || '-'}</span></div>
                 </div>
                 
                 <!-- 공실 -->
@@ -472,9 +472,9 @@ function renderVacancyRow(building, v, idx) {
             <td class="floor-cell">${v.floor || '-'}</td>
             <td class="area-cell">${v.rentArea ? formatNumber(v.rentArea) + '평' : '-'}</td>
             <td class="area-cell">${v.exclusiveArea ? formatNumber(v.exclusiveArea) + '평' : '-'}</td>
-            <td class="price-cell">${v.depositPy ? formatNumber(v.depositPy) : '-'}</td>
-            <td class="price-cell">${v.rentPy ? formatNumber(v.rentPy) : '-'}</td>
-            <td class="price-cell">${v.maintenancePy ? formatNumber(v.maintenancePy) : '-'}</td>
+            <td class="price-cell">${v.depositPy || '-'}</td>
+            <td class="price-cell">${v.rentPy || '-'}</td>
+            <td class="price-cell">${v.maintenancePy || '-'}</td>
             <td>${v.moveInDate || '-'}</td>
             <td>
                 <button class="star-btn ${v.starred ? 'starred' : ''}" onclick="event.stopPropagation(); toggleVacancyStar('${building.id}', '${v._key || idx}')">

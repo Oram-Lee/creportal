@@ -2369,8 +2369,6 @@ export function renderDocumentSection() {
     let vacancyTableHtml = '';
     if (vacanciesWithId.length > 0) {
         const selectedCount = state.selectedVacancyIds?.size || 0;
-        // ★ '구분'(동/타워) 컬럼: 현재 테이블의 공실 중 tower 값이 하나라도 있을 때만 노출
-        const _hasTower = vacanciesWithId.some(v => v.tower && String(v.tower).trim() !== '');
         vacancyTableHtml = `
             <div class="doc-vacancy-table" style="margin-top: 16px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
@@ -2444,7 +2442,6 @@ export function renderDocumentSection() {
                                 <th style="padding: 8px 6px; text-align: left; border-bottom: 1px solid var(--border-color); white-space: nowrap; cursor: pointer;" onclick="toggleVacancySortOrder()" title="클릭하여 정렬 변경">
                                     층 <span style="font-size: 10px; opacity: 0.7;">${state.vacancySortOrder === 'asc' ? '↑' : '↓'}</span>
                                 </th>
-                                ${_hasTower ? `<th style="padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border-color); white-space: nowrap;">구분</th>` : ''}
                                 <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap;">임대면적</th>
                                 <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap;">전용면적</th>
                                 <th style="padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border-color); white-space: nowrap;">보증금/평</th>
@@ -2470,12 +2467,11 @@ export function renderDocumentSection() {
                                                style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color);">
                                     </td>
                                     <td style="padding: 8px 6px; font-weight: 600; color: var(--accent-color);">${v.floor || '-'}</td>
-                                    ${_hasTower ? `<td style="padding: 8px 6px; text-align: center; color: var(--text-muted);">${v.tower || '-'}</td>` : ''}
                                     <td style="padding: 8px 6px; text-align: right;">${formatArea(v.rentArea)}</td>
                                     <td style="padding: 8px 6px; text-align: right;">${formatArea(v.exclusiveArea)}</td>
-                                    <td style="padding: 8px 6px; text-align: right;">${v.depositPy ? formatNumber(v.depositPy) : '-'}</td>
-                                    <td style="padding: 8px 6px; text-align: right; color: var(--accent-color); font-weight: 500;">${v.rentPy ? formatNumber(v.rentPy) : '-'}</td>
-                                    <td style="padding: 8px 6px; text-align: right;">${v.maintenancePy ? formatNumber(v.maintenancePy) : '-'}</td>
+                                    <td style="padding: 8px 6px; text-align: right;">${v.depositPy || '-'}</td>
+                                    <td style="padding: 8px 6px; text-align: right; color: var(--accent-color); font-weight: 500;">${v.rentPy || '-'}</td>
+                                    <td style="padding: 8px 6px; text-align: right;">${v.maintenancePy || '-'}</td>
                                     <td style="padding: 8px 6px; text-align: center;">${v.moveInDate || '-'}</td>
                                     <td style="padding: 4px 2px; text-align: center;">
                                         <div style="display: flex; gap: 2px; justify-content: center;">
@@ -3490,12 +3486,12 @@ export function showInlineVacancyForm(mode) {
                 <input type="number" id="inlineVacancyExclusiveArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
             </div>
             <div>
-                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">보증금/평</label>
-                <input type="number" id="inlineVacancyDepositPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
-            </div>
-            <div>
                 <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">임대료/평 *</label>
                 <input type="number" id="inlineVacancyRentPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">보증금/평</label>
+                <input type="number" id="inlineVacancyDepositPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
             </div>
             <div>
                 <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">관리비/평</label>
@@ -4024,7 +4020,7 @@ function renderFloorOutline(container, data, label) {
     
     sorted.forEach((item, idx) => {
         const floorLabel = item.flrGbCdNm === '지하' ? `B${item.flrNo}` : `${item.flrNo}F`;
-        const areaPy = item.area ? (item.area / 3.3058).toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1}) : '-';
+        const areaPy = item.area ? (item.area / 3.3058).toFixed(1) : '-';
         const usage = item.mainPurpsCdNm || item.etcPurps || '-';
         const bgColor = idx % 2 === 0 ? 'white' : '#f9fafb';
         const isBelow = item.flrGbCdNm === '지하';
@@ -4141,7 +4137,7 @@ window.showUnitDetailModal = function(dataIdx) {
     
     // 면적 변환 (㎡ → 평)
     const areaSqm = unit.area || 0;
-    const areaPy = areaSqm ? (areaSqm / 3.3058).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '-';
+    const areaPy = areaSqm ? (areaSqm / 3.3058).toFixed(2) : '-';
     
     // 같은 층의 다른 호실 목록 (네비게이션용)
     const sameFloor = data.filter(d => d.flrGbCdNm === unit.flrGbCdNm && d.flrNo === unit.flrNo);
@@ -4290,7 +4286,7 @@ function renderExposeAreaInfo(container, data, label) {
     
     units.forEach((item, idx) => {
         const floorLabel = item.flrGbCdNm === '지하' ? `B${item.flrNo}` : `${item.flrNo}F`;
-        const areaPy = item.totalArea ? (item.totalArea / 3.3058).toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1}) : '-';
+        const areaPy = item.totalArea ? (item.totalArea / 3.3058).toFixed(1) : '-';
         const usage = item.mainPurpsCdNm || item.etcPurps || '-';
         const bgColor = idx % 2 === 0 ? 'white' : '#f9fafb';
         const isBelow = item.flrGbCdNm === '지하';
@@ -4309,7 +4305,7 @@ function renderExposeAreaInfo(container, data, label) {
     // 공용면적 합계 행
     if (publicOnly.length > 0) {
         const publicArea = publicOnly.reduce((sum, d) => sum + (d.area || 0), 0);
-        const publicPy = (publicArea / 3.3058).toLocaleString('en-US', {minimumFractionDigits: 1, maximumFractionDigits: 1});
+        const publicPy = (publicArea / 3.3058).toFixed(1);
         html += `
             <tr style="background: #f0fdf4; font-weight: 600;">
                 <td colspan="3" style="padding: 5px 8px; text-align: right; border-top: 2px solid #e5e7eb; font-size: 10px; color: #059669;">공용면적 합계</td>
