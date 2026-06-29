@@ -156,7 +156,7 @@ function formatParkingComposition(b) {
  */
 function formatArea(value, forceDecimal = false) {
     if (!value && value !== 0) return '-';
-    const num = parseFloat(value);
+    const num = parseFloat(String(value).replace(/,/g, ''));
     if (isNaN(num)) return '-';
     
     // 강제 소숫점 또는 토글 ON인 경우 소숫점 2자리까지
@@ -178,6 +178,45 @@ function formatMoney(value) {
     const num = parseFloat(String(value).replace(/[, ]/g, ''));
     if (isNaN(num)) return String(value);
     return num.toLocaleString('en-US');
+}
+
+/**
+ * 숫자 입력칸용 천단위 콤마 포맷 (소수점 허용). 순수 문자열 변환 — prefill/라이브 공용.
+ *  "520000" → "520,000", "2119.45" → "2,119.45", "" → ""
+ */
+function commaFormat(raw) {
+    let s = String(raw == null ? '' : raw).replace(/[^\d.]/g, '');
+    const firstDot = s.indexOf('.');
+    let intPart, decPart;
+    if (firstDot === -1) { intPart = s; decPart = ''; }
+    else {
+        intPart = s.slice(0, firstDot);
+        decPart = '.' + s.slice(firstDot + 1).replace(/\./g, ''); // 두 번째 점 이후 제거
+    }
+    intPart = intPart.replace(/^0+(?=\d)/, ''); // 선행 0 제거
+    const intF = intPart ? intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : intPart;
+    return (intF || (decPart ? '0' : '')) + decPart;
+}
+
+/**
+ * 숫자 입력칸 oninput 핸들러 — 입력 즉시 콤마 적용 + 커서 위치 보존.
+ *  사용: <input type="text" inputmode="decimal" oninput="formatNumberInputLive(this)">
+ */
+function formatNumberInputLive(el) {
+    if (!el) return;
+    const old = el.value;
+    const sel = (el.selectionStart != null) ? el.selectionStart : old.length;
+    const digitsBefore = old.slice(0, sel).replace(/[^\d]/g, '').length; // 커서 앞 숫자 개수
+    const formatted = commaFormat(old);
+    if (formatted === old) return;
+    el.value = formatted;
+    if (digitsBefore <= 0) { try { el.setSelectionRange(0, 0); } catch (e) {} return; }
+    let pos = formatted.length, cnt = 0;
+    for (let i = 0; i < formatted.length; i++) {
+        if (/\d/.test(formatted[i])) cnt++;
+        if (cnt >= digitsBefore) { pos = i + 1; break; }
+    }
+    try { el.setSelectionRange(pos, pos); } catch (e) {}
 }
 
 /**
@@ -3435,6 +3474,8 @@ export function registerDetailGlobals() {
     window.onCopyGuideChange = onCopyGuideChange;
     window.executeVacancyCopy = executeVacancyCopy;
     window.closeCopyModal = closeCopyModal;
+    // 숫자 입력칸 라이브 콤마
+    window.formatNumberInputLive = formatNumberInputLive;
     window.validateExclusiveArea = validateExclusiveArea;
     
     // ★ v2.1: 기준가 통합 기능
@@ -3560,23 +3601,23 @@ export function showInlineVacancyForm(mode) {
             </div>
             <div>
                 <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">임대면적(평)</label>
-                <input type="number" id="inlineVacancyRentArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                <input type="text" inputmode="decimal" oninput="formatNumberInputLive(this)" id="inlineVacancyRentArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
             </div>
             <div>
                 <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">전용면적(평)</label>
-                <input type="number" id="inlineVacancyExclusiveArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                <input type="text" inputmode="decimal" oninput="formatNumberInputLive(this)" id="inlineVacancyExclusiveArea" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
             </div>
             <div>
                 <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">보증금/평</label>
-                <input type="number" id="inlineVacancyDepositPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                <input type="text" inputmode="decimal" oninput="formatNumberInputLive(this)" id="inlineVacancyDepositPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
             </div>
             <div>
                 <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">임대료/평 *</label>
-                <input type="number" id="inlineVacancyRentPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                <input type="text" inputmode="decimal" oninput="formatNumberInputLive(this)" id="inlineVacancyRentPy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
             </div>
             <div>
                 <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">관리비/평</label>
-                <input type="number" id="inlineVacancyMaintenancePy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
+                <input type="text" inputmode="decimal" oninput="formatNumberInputLive(this)" id="inlineVacancyMaintenancePy" placeholder="0" style="width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; box-sizing: border-box;">
             </div>
             <div>
                 <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">입주시기</label>
@@ -3626,7 +3667,7 @@ export async function saveInlineVacancy() {
     
     // 입력값 수집
     const floor = document.getElementById('inlineVacancyFloor')?.value?.trim();
-    const rentPyStr = document.getElementById('inlineVacancyRentPy')?.value?.trim();
+    const rentPyStr = (document.getElementById('inlineVacancyRentPy')?.value || '').replace(/,/g, '').trim();
     
     // 필수값 확인 - 공실층
     if (!floor) {
@@ -3643,8 +3684,8 @@ export async function saveInlineVacancy() {
     }
     
     const rentPy = parseFloat(rentPyStr);
-    const depositPyStr = document.getElementById('inlineVacancyDepositPy')?.value?.trim();
-    const maintenancePyStr = document.getElementById('inlineVacancyMaintenancePy')?.value?.trim();
+    const depositPyStr = (document.getElementById('inlineVacancyDepositPy')?.value || '').replace(/,/g, '').trim();
+    const maintenancePyStr = (document.getElementById('inlineVacancyMaintenancePy')?.value || '').replace(/,/g, '').trim();
     
     // ★ 출처/기간 정보
     const source = document.getElementById('inlineVacancySource')?.value || '직접입력';
@@ -3654,8 +3695,8 @@ export async function saveInlineVacancy() {
     const now = new Date();
     const vacancyData = {
         floor: floor,
-        rentArea: parseFloat(document.getElementById('inlineVacancyRentArea')?.value) || 0,
-        exclusiveArea: parseFloat(document.getElementById('inlineVacancyExclusiveArea')?.value) || 0,
+        rentArea: parseFloat((document.getElementById('inlineVacancyRentArea')?.value || '').replace(/,/g, '')) || 0,
+        exclusiveArea: parseFloat((document.getElementById('inlineVacancyExclusiveArea')?.value || '').replace(/,/g, '')) || 0,
         rentPy: formatNumber(rentPy),
         depositPy: depositPyStr && !isNaN(parseFloat(depositPyStr)) ? formatNumber(parseFloat(depositPyStr)) : '',
         maintenancePy: maintenancePyStr && !isNaN(parseFloat(maintenancePyStr)) ? formatNumber(parseFloat(maintenancePyStr)) : '',
@@ -5298,14 +5339,14 @@ export function openVacancyEditModal(idx) {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
                     <div>
                         <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">임대면적 (평)</label>
-                        <input type="number" step="0.01" id="editVacRentArea" value="${vacancy.rentArea || ''}" 
-                               onchange="validateExclusiveArea()"
+                        <input type="text" inputmode="decimal" id="editVacRentArea" value="${commaFormat(vacancy.rentArea || '')}" 
+                               oninput="formatNumberInputLive(this); validateExclusiveArea()"
                                style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; box-sizing: border-box;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">전용면적 (평)</label>
-                        <input type="number" step="0.01" id="editVacExclusiveArea" value="${vacancy.exclusiveArea || ''}" 
-                               onchange="validateExclusiveArea()"
+                        <input type="text" inputmode="decimal" id="editVacExclusiveArea" value="${commaFormat(vacancy.exclusiveArea || '')}" 
+                               oninput="formatNumberInputLive(this); validateExclusiveArea()"
                                placeholder="임대면적보다 작아야 함"
                                style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; box-sizing: border-box;">
                         <div id="exclusiveAreaError" style="display: none; color: #dc2626; font-size: 11px; margin-top: 4px;">
@@ -5317,17 +5358,17 @@ export function openVacancyEditModal(idx) {
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 12px;">
                     <div>
                         <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">보증금/평</label>
-                        <input type="text" id="editVacDeposit" value="${vacancy.depositPy || ''}" placeholder="80"
+                        <input type="text" inputmode="decimal" oninput="formatNumberInputLive(this)" id="editVacDeposit" value="${commaFormat(vacancy.depositPy || '')}" placeholder="80"
                                style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; box-sizing: border-box;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">임대료/평 <span style="color:#dc2626">*</span></label>
-                        <input type="text" id="editVacRent" value="${vacancy.rentPy || ''}" placeholder="8.5"
+                        <input type="text" inputmode="decimal" oninput="formatNumberInputLive(this)" id="editVacRent" value="${commaFormat(vacancy.rentPy || '')}" placeholder="8.5"
                                style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; box-sizing: border-box;">
                     </div>
                     <div>
                         <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">관리비/평</label>
-                        <input type="text" id="editVacMaintenance" value="${vacancy.maintenancePy || ''}" placeholder="3.5"
+                        <input type="text" inputmode="decimal" oninput="formatNumberInputLive(this)" id="editVacMaintenance" value="${commaFormat(vacancy.maintenancePy || '')}" placeholder="3.5"
                                style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; box-sizing: border-box;">
                     </div>
                 </div>
@@ -5406,8 +5447,8 @@ export function openVacancyEditModal(idx) {
  * 전용면적 유효성 검사
  */
 export function validateExclusiveArea() {
-    const rentArea = parseFloat(document.getElementById('editVacRentArea')?.value) || 0;
-    const exclusiveArea = parseFloat(document.getElementById('editVacExclusiveArea')?.value) || 0;
+    const rentArea = parseFloat((document.getElementById('editVacRentArea')?.value || '').replace(/,/g, '')) || 0;
+    const exclusiveArea = parseFloat((document.getElementById('editVacExclusiveArea')?.value || '').replace(/,/g, '')) || 0;
     const errorDiv = document.getElementById('exclusiveAreaError');
     const exclusiveInput = document.getElementById('editVacExclusiveArea');
     
@@ -5477,8 +5518,8 @@ export async function saveVacancyEditFromModal() {
     try {
         const updatedData = {
             floor: document.getElementById('editVacFloor')?.value || '',
-            rentArea: document.getElementById('editVacRentArea')?.value || '',
-            exclusiveArea: document.getElementById('editVacExclusiveArea')?.value || '',
+            rentArea: (document.getElementById('editVacRentArea')?.value || '').replace(/,/g, ''),
+            exclusiveArea: (document.getElementById('editVacExclusiveArea')?.value || '').replace(/,/g, ''),
             depositPy: document.getElementById('editVacDeposit')?.value || '',
             rentPy: document.getElementById('editVacRent')?.value || '',
             maintenancePy: document.getElementById('editVacMaintenance')?.value || '',
