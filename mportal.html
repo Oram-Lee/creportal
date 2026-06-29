@@ -32,11 +32,11 @@ input{font-family:inherit;font-size:16px}
 #loginScreen h1{color:#fff;font-size:20px;margin:0;font-weight:700}
 #loginScreen p{color:#aeb6c2;font-size:13px;margin:0 0 12px}
 #loginScreen .field{width:100%;max-width:340px;position:relative}
-#loginScreen input{width:100%;height:50px;border-radius:12px;border:1px solid #3a424f;
+#loginScreen input{width:100%;height:50px;border-radius:8px;border:1px solid #3a424f;
   background:#222933;color:#fff;padding:0 16px;outline:none}
 #loginScreen input::placeholder{color:#7a8493}
 #loginScreen input:focus{border-color:var(--pink)}
-#loginBtn{width:100%;max-width:340px;height:50px;border-radius:12px;background:var(--pink);
+#loginBtn{width:100%;max-width:340px;height:50px;border-radius:8px;background:var(--pink);
   color:#fff;font-size:16px;font-weight:700;margin-top:4px}
 #loginBtn:active{background:var(--pink-d)}
 #loginScreen .login-foot{position:absolute;left:0;right:0;bottom:0;padding:16px 22px calc(16px + env(safe-area-inset-bottom,0px));text-align:center;pointer-events:none}
@@ -50,7 +50,7 @@ input{font-family:inherit;font-size:16px}
 .map-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;color:var(--muted);gap:8px;text-align:center;padding:20px}
 .mk-label{background:#fff;border:1.5px solid var(--navy);color:var(--navy);font-size:11.5px;font-weight:700;
-  padding:3px 10px;border-radius:14px;white-space:nowrap;box-shadow:0 2px 7px rgba(0,0,0,.22);cursor:pointer;
+  padding:3px 10px;border-radius:8px;white-space:nowrap;box-shadow:0 2px 7px rgba(0,0,0,.22);cursor:pointer;
   max-width:160px;overflow:hidden;text-overflow:ellipsis}
 .mk-label.has-vac{border-color:var(--pink);color:var(--pink-d)}
 .mk-label:active{transform:scale(.96)}
@@ -59,58 +59,58 @@ input{font-family:inherit;font-size:16px}
 #topbar{position:absolute;top:calc(var(--sb-top) + 10px);left:10px;right:10px;z-index:30;
   display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .search-row{display:flex;gap:8px;align-items:center;pointer-events:auto}
-.search-box{flex:1;min-width:0;height:46px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.12);
+.search-box{flex:1;min-width:0;height:46px;background:#fff;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.12);
   display:flex;align-items:center;padding:0 12px;gap:8px}
 .search-box svg{flex-shrink:0}
 .search-box input{flex:1;width:0;min-width:0;border:none;outline:none;background:none;font-size:15px;color:var(--ink)}
 .search-box .clear{padding:4px;color:var(--muted);display:none}
-.icon-btn{width:46px;height:46px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.12);
+.icon-btn{width:46px;height:46px;background:#fff;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.12);
   display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--navy)}
 .chips{display:flex;gap:6px;pointer-events:auto;overflow-x:auto;padding-bottom:2px;-ms-overflow-style:none;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
-.chip{flex-shrink:0;height:36px;padding:0 14px;border-radius:10px;background:#fff;
+.chip{flex-shrink:0;height:36px;padding:0 14px;border-radius:6px;background:#fff;
   box-shadow:0 1px 6px rgba(0,0,0,.1);font-size:13px;color:var(--ink);display:flex;align-items:center;gap:5px;font-weight:500}
 .chip.on{background:var(--navy);color:#fff}
 .chip.on .dot{background:var(--pink)}
 
 /* 검색 결과 패널 */
 #results{position:absolute;top:calc(var(--sb-top) + 108px);left:10px;right:10px;z-index:29;
-  background:#fff;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:60vh;overflow-y:auto;display:none}
+  background:#fff;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.18);max-height:60vh;overflow-y:auto;display:none}
 #results .rhead{padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line2);position:sticky;top:0;background:#fff}
 .ritem{padding:11px 14px;border-bottom:1px solid var(--line2);display:flex;align-items:center;gap:10px}
 .ritem:active{background:var(--bg)}
 .ritem .nm{font-weight:500;font-size:14px}
 .ritem .ad{font-size:12px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ritem .meta{flex:1;min-width:0}
-.gbadge{flex-shrink:0;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:#eef2ff;color:var(--blue)}
+.gbadge{flex-shrink:0;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;background:#eef2ff;color:var(--blue)}
 .gbadge.prime{background:#fdf2f8;color:var(--pink-d)}
 .rfloor{font-size:12px;color:var(--pink-d);font-weight:600;margin-top:3px}
 .rpager{display:flex;align-items:center;justify-content:center;gap:16px;padding:11px;border-top:1px solid var(--line2);font-size:13px;color:var(--muted);position:sticky;bottom:0;background:#fff}
-.rpager button{padding:6px 16px;border:1px solid var(--line);border-radius:8px;font-size:13px;font-weight:600;color:var(--navy);background:#fff}
+.rpager button{padding:6px 16px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-weight:600;color:var(--navy);background:#fff}
 .rpager button:disabled{opacity:.4}
 .fcount{font-size:11px;font-weight:500;opacity:.85}
 .freg-wrap{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
-.freg{padding:9px 15px;border:1px solid var(--line);border-radius:8px;font-size:13.5px;color:var(--ink);background:#fff}
+.freg{padding:9px 15px;border:1px solid var(--line);border-radius:4px;font-size:13.5px;color:var(--ink);background:#fff}
 .freg.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .fchk{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:14px;cursor:pointer}
 .fchk input{width:18px;height:18px;accent-color:var(--pink);flex-shrink:0}
 .stepper-row{display:flex;align-items:center;gap:10px;margin-top:9px}
 .stepper-row .slabel{width:38px;flex-shrink:0;font-size:13px;color:var(--muted);font-weight:500}
-.stepper{display:flex;align-items:center;flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+.stepper{display:flex;align-items:center;flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff}
 .stepper button{width:48px;height:52px;flex-shrink:0;font-size:24px;line-height:1;color:var(--navy);background:var(--bg);display:flex;align-items:center;justify-content:center}
 .stepper button:active{background:var(--line)}
 .stepper input{flex:1;min-width:0;width:100%;border:none;outline:none;text-align:center;height:52px;font-size:16px;padding:0;background:#fff;-moz-appearance:textfield;appearance:textfield}
 .stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 
 /* 우측 하단 지도 컨트롤 */
-.map-ctrl{position:absolute;right:12px;bottom:calc(var(--sb-bot) + 16px);z-index:20;display:flex;flex-direction:column;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.18);overflow:hidden}
+.map-ctrl{position:absolute;right:12px;bottom:calc(var(--sb-bot) + 16px);z-index:20;display:flex;flex-direction:column;background:#fff;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.18);overflow:hidden}
 .map-ctrl button{width:46px;height:46px;background:#fff;display:flex;align-items:center;justify-content:center;color:var(--navy)}
 .map-ctrl button:active{background:var(--bg)}
 .map-ctrl button + button{border-top:1px solid var(--line2)}
 
 /* ===== 바텀시트 ===== */
 #sheet{position:absolute;left:0;right:0;bottom:0;height:88vh;z-index:40;background:#fff;
-  border-radius:18px 18px 0 0;box-shadow:0 -6px 30px rgba(0,0,0,.2);
+  border-radius:12px 12px 0 0;box-shadow:0 -6px 30px rgba(0,0,0,.2);
   transform:translateY(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);
   display:flex;flex-direction:column;will-change:transform;touch-action:none}
 #sheet.show{display:flex}
@@ -126,9 +126,10 @@ input{font-family:inherit;font-size:16px}
 .sheet-head .sub.vac .vt.off,.sheet-head .sub.vac .vo{color:var(--muted);font-weight:400}
 .vd{width:7px;height:7px;border-radius:50%;flex-shrink:0;background:var(--ok)}
 .vd.off{background:#cbd5e1}
+.vd.none{background:#94a3b8}
 .sheet-head .close{padding:4px;color:var(--muted);flex-shrink:0;margin-top:2px}
 .sheet-head .badges{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
-.tag{font-size:11.5px;font-weight:500;padding:3px 9px;border-radius:6px;background:var(--bg);color:var(--muted)}
+.tag{font-size:11.5px;font-weight:500;padding:3px 9px;border-radius:4px;background:var(--bg);color:var(--muted)}
 .tag.v{background:var(--okbg);color:var(--ok)}
 .tag.g{background:#eef2ff;color:var(--blue)}
 
@@ -147,16 +148,22 @@ input{font-family:inherit;font-size:16px}
 .drow .val{flex:1;color:var(--ink);word-break:break-word}
 .drow .val a{color:var(--blue);text-decoration:none}
 .price-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:4px 0 6px}
-.price-cell{background:var(--bg);border-radius:10px;padding:11px 10px;text-align:center}
+.price-cell{background:var(--bg);border-radius:6px;padding:11px 10px;text-align:center}
 .price-cell .lbl{font-size:11px;color:var(--muted)}
 .price-cell .num{font-size:16px;font-weight:700;margin-top:2px}
 .price-cell .unit{font-size:10px;color:var(--muted);font-weight:400}
 
-.vac-card{border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:8px}
+.vac-card{border:1px solid var(--line);border-radius:6px;padding:11px 12px;margin-bottom:8px}
 .vac-card .vh{display:flex;justify-content:space-between;align-items:center}
 .vac-card .fl{font-weight:700;font-size:14px}
 .vac-card .vmeta{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.6}
 .empty{text-align:center;color:var(--muted);font-size:13px;padding:24px 0}
+.vacstate{border:1px solid var(--line);border-radius:6px;padding:13px 14px;margin-bottom:10px}
+.vacstate b{display:block;font-size:14px;font-weight:700;color:var(--ink)}
+.vacstate span{display:block;font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+.vacstate.none b{color:var(--navy)}
+.vacstate.unknown{background:var(--bg);border-style:dashed}
+.vacstate.unknown b{color:var(--muted)}
 
 /* 메모/연락처 카드 */
 .editable-head{display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px}
@@ -164,7 +171,7 @@ input{font-family:inherit;font-size:16px}
 .add-btn{display:flex;align-items:center;gap:4px;font-size:12.5px;font-weight:700;color:var(--pink-d);
   background:#fdf2f8;padding:6px 11px;border-radius:8px}
 .add-btn:active{background:#fce7f3}
-.note-card{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:11px 12px;margin-bottom:8px}
+.note-card{background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:11px 12px;margin-bottom:8px}
 .note-card.contact{background:#fff;border-color:var(--line)}
 .note-card .nbody{font-size:14px;white-space:pre-wrap;word-break:break-word}
 .note-card .nfoot{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11.5px;color:var(--muted)}
@@ -172,7 +179,7 @@ input{font-family:inherit;font-size:16px}
 .note-card .nacts button{color:var(--muted);font-size:12px;font-weight:500}
 .note-card .nacts button.del{color:#dc2626}
 .c-name{font-weight:700;font-size:14.5px;display:flex;align-items:center;gap:7px}
-.c-type{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:#eef2ff;color:var(--blue)}
+.c-type{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:4px;background:#eef2ff;color:var(--blue)}
 .c-type.sni{background:#fdf2f8;color:var(--pink-d)}
 .c-rows{margin-top:6px;font-size:13px;color:#374151;line-height:1.8}
 .c-rows a{color:var(--blue);text-decoration:none}
@@ -182,26 +189,26 @@ input{font-family:inherit;font-size:16px}
 #modalWrap{position:fixed;inset:0;z-index:60;display:none;align-items:flex-end}
 #modalWrap.show{display:flex}
 #modalWrap .ov{position:absolute;inset:0;background:rgba(0,0,0,.45)}
-.modal{position:relative;width:100%;background:#fff;border-radius:18px 18px 0 0;
+.modal{position:relative;width:100%;background:#fff;border-radius:12px 12px 0 0;
   padding:18px 18px calc(var(--sb-bot) + 18px);max-height:90vh;overflow-y:auto;
   animation:slideUp .25s ease}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .modal h3{margin:0 0 14px;font-size:17px;font-weight:700}
 .modal label{display:block;font-size:12.5px;color:var(--muted);font-weight:500;margin:12px 0 5px}
 .modal input[type=text],.modal input[type=tel],.modal input[type=email],.modal textarea{
-  width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:15px;outline:none;background:#fff}
+  width:100%;border:1px solid var(--line);border-radius:6px;padding:11px 12px;font-size:15px;outline:none;background:#fff}
 .modal input:focus,.modal textarea:focus{border-color:var(--pink)}
 .modal textarea{min-height:96px;resize:vertical;line-height:1.6}
-.modal select{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:15px;background:#fff}
+.modal select{width:100%;border:1px solid var(--line);border-radius:6px;padding:11px 12px;font-size:15px;background:#fff}
 .modal .chk{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px}
 .modal .chk input{width:18px;height:18px}
 .modal .btns{display:flex;gap:10px;margin-top:20px}
-.modal .btns button{flex:1;height:52px;border-radius:10px;font-size:15px;font-weight:700}
-.li-card{margin-top:4px;padding:14px;background:var(--bg);border-radius:10px}
+.modal .btns button{flex:1;height:52px;border-radius:6px;font-size:15px;font-weight:700}
+.li-card{margin-top:4px;padding:14px;background:var(--bg);border-radius:6px}
 .li-title{font-size:14px;font-weight:700;color:var(--ink)}
 .li-desc{font-size:12.5px;color:var(--muted);line-height:1.55;margin:5px 0 11px}
 .li-desc b{color:var(--ink);font-weight:600}
-.li-btn{width:100%;height:46px;border-radius:9px;background:var(--navy);color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px}
+.li-btn{width:100%;height:46px;border-radius:6px;background:var(--navy);color:#fff;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:6px}
 .li-btn:active{opacity:.9}
 .modal .btn-cancel{background:var(--bg);color:var(--muted)}
 .modal .btn-save{background:var(--pink);color:#fff}
@@ -230,14 +237,14 @@ input{font-family:inherit;font-size:16px}
 #backToList:active{transform:translateX(-50%) scale(.96)}
 
 /* 임대공실 — 출처/발행월 그룹 카드 (leaseinfo 스타일) */
-.vgroup{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:10px}
+.vgroup{border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-bottom:10px}
 .vghead{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--bg);border-bottom:1px solid var(--line2)}
-.src-badge{font-size:11.5px;font-weight:700;color:#fff;padding:3px 10px;border-radius:6px;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.src-badge{font-size:11.5px;font-weight:700;color:#fff;padding:3px 10px;border-radius:4px;max-width:62%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .vgmonth{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);font-weight:500;flex-shrink:0}
 .vrows{padding:0}
 .vrow{padding:12px 12px;border-bottom:1px solid #bcc4cd}
 .vrow:last-child{border-bottom:none}
-.floor-badge{display:inline-block;background:var(--navy);color:#fff;font-size:13px;font-weight:700;padding:3px 12px;border-radius:6px}
+.floor-badge{display:inline-block;background:var(--navy);color:#fff;font-size:13px;font-weight:700;padding:3px 12px;border-radius:4px}
 .vl1{display:flex;align-items:center;gap:8px 13px;flex-wrap:wrap}
 .vl2{display:flex;align-items:baseline;gap:8px 14px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
 .m{display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap}
@@ -447,8 +454,8 @@ const _srcCache=new Map();
 function srcColor(s){ if(!s)return _SRC_COLORS[0]; if(_srcCache.has(s))return _srcCache.get(s); let h=0; for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h&=h;} const c=_SRC_COLORS[Math.abs(h)%_SRC_COLORS.length]; _srcCache.set(s,c); return c; }
 function vacEmpty(v){ return [v.exclusiveArea,v.rentArea,v.depositPy,v.rentPy,v.maintenancePy].every(x=>!x||x==='-'||x===''||parseFloat(x)===0); }
 // 빌딩 공실 → 출처+발행월 그룹 (출처별 최신월만 노출, 과월호는 뷰어에서 전환)
-function groupVac(vacs){
-  const valid=(vacs||[]).filter(v=> v && typeof v==='object' && !vacEmpty(v));
+function groupBy(vacs, keep){
+  const valid=(vacs||[]).filter(v=> v && typeof v==='object' && keep(v));
   const map=new Map();
   valid.forEach(v=>{
     const m=normMonth(v.publishDate); const key=((v.source||'').trim())+'__'+m;
@@ -463,15 +470,23 @@ function groupVac(vacs){
   const show=[...latest.values()].sort((a,b)=>(b.month||'').localeCompare(a.month||''));
   return { show, all:groups };
 }
+function groupVac(vacs){ return groupBy(vacs, v=>!vacEmpty(v)); }        // 실제 공실(데이터 有)
+function groupNotice(vacs){ return groupBy(vacs, v=>!!v.pageImageUrl); } // 안내문 원본(이미지) 有
 // peek 요약: 공실 유무 + 최신 임대안내문(출처·발행월) 인지 (탭과 동일한 groupVac 사용)
 function vacPeek(b){
   const vg=groupVac(b.vacancies);
-  if(!vg.show.length) return `<span class="vd off"></span><span class="vt off">공실 없음</span>`;
-  const g=vg.show[0];                              // 월 내림차순 정렬 → 최신 안내문
-  const src=esc(((g.source||'').trim())||'출처미상');
-  const lbl=esc(g.label||'-');
-  const others=vg.show.length-1;                   // 다른 출처(안내문) 수
-  return `<span class="vd on"></span>공실정보 · ${src} <b>${lbl}</b>${others>0?`<span class="vo"> 외 ${others}건</span>`:''}`;
+  if(vg.show.length){                              // ① 공실 있음
+    const g=vg.show[0]; const src=esc(((g.source||'').trim())||'출처미상'); const lbl=esc(g.label||'-'); const others=vg.show.length-1;
+    return `<span class="vd on"></span>공실정보 · ${src} <b>${lbl}</b>${others>0?`<span class="vo"> 외 ${others}건</span>`:''}`;
+  }
+  const ng=groupNotice(b.vacancies);
+  if(ng.show.length){                              // ② 공실 없음(확인) — 안내문 원본 有
+    const g=ng.show[0]; const src=esc(((g.source||'').trim())||'출처미상'); const lbl=esc(g.label||'-');
+    return `<span class="vd none"></span>공실 없음 <span class="vo">· ${src} ${lbl}</span>`;
+  }
+  const anyRec=(b.vacancies||[]).some(v=>v && (v.source||v.publishDate||v.pageImageUrl));
+  if(anyRec) return `<span class="vd none"></span><span class="vt off">공실 없음</span>`;
+  return `<span class="vd off"></span><span class="vt off">공실 정보 미등록</span>`;   // ③ null
 }
 
 // ===== 인증 (users 노드 매칭 — 데스크톱과 동일) =====
@@ -568,7 +583,7 @@ function processBuildings(){
       nearbyStation:b.nearbyStation||'', pm:b.pm||'', owner:b.owner||'',
       homepage:b.homepage||b.url||'',
       contactPoints:b.contactPoints, floorPricing:asArr(b.floorPricing),
-      vacancies, hasVacancy:vacancies.length>0, rentrolls, memos, incentives,
+      vacancies, hasVacancy:(vacancies||[]).some(v=>v&&!vacEmpty(v)), rentrolls, memos, incentives,
       hasData: rentrolls.length>0||memos.length>0||incentives.length>0||vacancies.length>0,
       _raw:b
     };
@@ -859,12 +874,32 @@ function tplInfo(b){
     ${b.owner? row('소유', esc(b.owner)) : ''}`;
 }
 
+function vacNoneOrUnknown(b){
+  const ng=groupNotice(b.vacancies);                       // 원본 이미지가 있는 안내문
+  if(ng.show.length){                                       // 공실 없음(확인) — 안내문 원본 열람 가능
+    S._vacAll=ng.all;
+    let h=`<div class="sec-title">공실정보</div><div class="vacstate none"><b>공실 없음</b><span>최신 임대안내문 확인 결과, 등록된 공실이 없습니다.</span></div>`;
+    h+=ng.show.map(g=>{
+      const col=srcColor(g.source); const archCnt=ng.all.filter(x=>x.source===g.source).length;
+      return `<div class="vgroup"><div class="vghead">
+          <span class="src-badge" style="background:${col}">${esc(g.source||'-')}</span>
+          <span class="vgmonth"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>${esc(g.label)}</span>
+        </div>
+        <button class="vimg-btn" data-act="view-img" data-gid="${esc(g.key)}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>임대안내문 원본보기${archCnt>1?` · 과월호 ${archCnt}`:''}</button>
+      </div>`;
+    }).join('');
+    return h;
+  }
+  const anyRec=(b.vacancies||[]).some(v=>v && (v.source||v.publishDate||v.pageImageUrl));
+  if(anyRec) return '<div class="sec-title">공실정보</div><div class="vacstate none"><b>공실 없음</b><span>등록된 공실이 없습니다.</span></div>';
+  return '<div class="sec-title">공실정보</div><div class="vacstate unknown"><b>공실 정보 미등록</b><span>아직 공실 정보가 등록되지 않았습니다. (상태 미확인)</span></div>';
+}
 function tplLease(b){
   const vg=groupVac(b.vacancies);
   S._vacAll=vg.all;   // 과월호 조회용
   const total=vg.show.reduce((s,g)=>s+g.rows.length,0);
 
-  if(!vg.show.length) return '<div class="sec-title">공실정보</div><div class="empty">등록된 공실이 없습니다</div>';
+  if(!vg.show.length) return vacNoneOrUnknown(b);
 
   let html=`<div class="sec-title">공실 ${total}건 · 출처 ${vg.show.length}곳</div>`;
   html+=vg.show.map(g=>{
