@@ -208,17 +208,9 @@ export function applyFilters() {
     });
     
     // 렌더링
-    // ★ 지도영역(viewport) 탭이면 viewportBuildings를 재계산해야 검색/필터 결과가
-    //   리스트에 즉시 반영된다. (renderBuildingList는 viewport 탭일 때 viewportBuildings를
-    //   그리는데, 그 값은 지도 idle 때만 갱신되므로 filteredBuildings만 바꾸면 화면이 안 변함)
-    //   updateViewportBuildings 내부에서 renderBuildingList + updateMapMarkers를 호출한다.
-    if (state.currentListTab === 'viewport' && window.updateViewportBuildings) {
-        window.updateViewportBuildings();
-    } else {
-        if (window.renderBuildingList) window.renderBuildingList();
-        if (window.updateMapMarkers) window.updateMapMarkers();
-    }
+    if (window.renderBuildingList) window.renderBuildingList();
     if (state.currentViewMode === 'list' && window.renderTableView) window.renderTableView();
+    if (window.updateMapMarkers) window.updateMapMarkers();
 }
 
 // 검색 이벤트 설정

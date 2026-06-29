@@ -14,7 +14,6 @@ import { formatNumber, showToast } from './portal-utils.js';
 import { panToBuilding } from './portal-map.js';
 import { toggleStar } from './portal-ui.js';
 import { db, ref, update, remove, set, get, push } from './portal-firebase.js';
-import { processBuildings } from './portal-data.js'; // ★ Bug2 fix: 새로고침 시 안내문 병합 보존용
 
 // ★ v3.10: state를 전역으로 노출 (portal.html의 담당자 CRUD 함수에서 사용)
 window.state = state;
@@ -769,36 +768,21 @@ export async function refreshInfoSection() {
         const snapshot = await get(ref(db, `buildings/${buildingId}`));
         if (snapshot.exists()) {
             const freshData = snapshot.val();
-
-            // ★ Bug2 fix (안내문 리스트 소실):
-            //   기존 코드는 state.selectedBuilding = freshData(raw buildings 문서)로 통째 교체했다.
-            //   raw 문서에는 processBuildings()가 병합해주는 leasingGuideVacancies /
-            //   leasingGuideInfo / documents 가 없어서, 교체 즉시 안내문 탭의
-            //   "등록된 안내문 리스트"가 사라졌다(allBuildings[idx]까지 raw로 오염).
-            //   → dataCache.buildings만 최신으로 갱신한 뒤 processBuildings()로 재가공한다.
-            //     processBuildings()는 leasingGuides를 다시 병합하고, 끝에서
-            //     selectedBuilding을 새 가공 객체로 자동 재연결한다(portal-data.js).
-            if (state.dataCache && state.dataCache.buildings) {
-                state.dataCache.buildings[buildingId] = freshData;
+            freshData.id = buildingId;
+            freshData._raw = freshData;
+            
+            // state 업데이트
+            state.selectedBuilding = freshData;
+            
+            // allBuildings에서도 업데이트
+            const idx = state.allBuildings.findIndex(b => b.id === buildingId);
+            if (idx >= 0) {
+                state.allBuildings[idx] = freshData;
             }
-
-            // processBuildings()는 filteredBuildings를 allBuildings 전체로 리셋하므로(L473),
-            // 기본정보 새로고침이 좌측 리스트의 검색/필터를 풀어버리지 않도록 현재 집합을 보존한다.
-            const _prevIds = (state.filteredBuildings || []).map(b => b.id);
-            const _wasFiltered = _prevIds.length > 0 && _prevIds.length < (state.allBuildings?.length || 0);
-
-            processBuildings(); // allBuildings 재구축 + selectedBuilding 재연결(병합 필드 보존)
-
-            // 메인 리스트 필터/검색 상태 복원 (새 가공 객체로 매핑)
-            if (_wasFiltered) {
-                const _idSet = new Set(_prevIds);
-                state.filteredBuildings = state.allBuildings.filter(b => _idSet.has(b.id));
-            }
-
-            // 화면 다시 렌더링 (정보 섹션 + 메인 리스트 동기화)
+            
+            // 화면 다시 렌더링
             renderInfoSection();
-            if (window.renderBuildingList) window.renderBuildingList();
-
+            
             if (window.showToast) {
                 showToast('기본정보가 새로고침 되었습니다', 'success');
             }

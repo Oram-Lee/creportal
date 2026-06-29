@@ -6705,21 +6705,6 @@
         const _researchOnly = document.getElementById('listResearchFilter')?.checked || false;
         if (_researchOnly) list = list.filter(b => b.isResearchTarget === true);
 
-        // ★ Bug1 fix: 검색어를 라이브로 적용 (탭 전환/정렬 시에도 검색 보존)
-        //   검색 리스너(setupSearchListener→applyFilters)와 별개 funnel이므로,
-        //   #searchInput 값을 직접 읽어 동일하게 필터링한다.
-        //   → 지도영역 탭에서 검색 후 전체 탭으로 이동/정렬해도 검색 결과가 유지된다.
-        //   ※ 매칭 로직은 portal-filter.js의 applyFilters와 100% 동일하게 맞춤
-        //     (빌딩명/주소/지번주소/인근역을 연결 후 공백 제거하고 부분일치)
-        const _kw = (document.getElementById('searchInput')?.value || '').toLowerCase().replace(/\s/g, '');
-        if (_kw) {
-            list = list.filter(b => {
-                const _s = [b.name, b.address, b.addressJibun, b.nearbyStation]
-                    .filter(Boolean).join('').toLowerCase().replace(/\s/g, '');
-                return _s.includes(_kw);
-            });
-        }
-
         // ★ 정렬 적용
         list.sort((a, b) => {
             // NEW 빌딩 항상 최상위
@@ -6745,18 +6730,11 @@
         });
         
         window.state.filteredBuildings = list;
-        // ★ Bug1 fix: 지도영역(viewport) 탭이면 viewport를 재계산해 검색 결과를 반영
-        //   (renderBuildingList는 viewport 탭일 때 viewportBuildings를 그리므로,
-        //    filteredBuildings만 갱신하면 화면이 안 바뀐다 → updateViewportBuildings로 재계산)
-        if (window.state.currentListTab === 'viewport' && typeof window.updateViewportBuildings === 'function') {
-            window.updateViewportBuildings();
-        } else if (typeof window.renderBuildingList === 'function') {
-            window.renderBuildingList();
-        }
+        if (typeof window.renderBuildingList === 'function') window.renderBuildingList();
         
-        // 카운트 업데이트 (viewport는 renderBuildingList가 viewport 개수로 설정하므로 덮어쓰지 않음)
+        // 카운트 업데이트
         const countEl = document.getElementById('buildingCount');
-        if (countEl && window.state.currentListTab !== 'viewport') countEl.textContent = list.length + '개';
+        if (countEl) countEl.textContent = list.length + '개';
     };
     
     // 탭 전환 시 소팅바/그룹바 토글
