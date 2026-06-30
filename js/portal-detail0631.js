@@ -775,29 +775,15 @@ export function renderInfoSection() {
                     }
                     
                     return `
-                    <div style="padding: 10px 12px; background: var(--bg-primary); border: 1px solid ${fp.isOfficial ? '#7c3aed' : 'var(--border-color)'}; border-radius: 6px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px;">
-                            <div style="min-width: 0;">
-                                <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${fp.label || fp.floorRange || '기준가'}${fp.isOfficial ? ' <span style="color:#7c3aed; font-size:10px; font-weight:700;">⭐공식</span>' : ''}</div>
-                                <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">📅 ${displayDate}${fp.sourceCompany ? ' · ' + fp.sourceCompany : ''}</div>
-                            </div>
-                            <button onclick="setOfficialPricing('${fp.id}')" ${fp.isOfficial ? 'disabled' : ''} style="padding: 5px 10px; font-size: 11px; font-weight: 600; background: ${fp.isOfficial ? '#ede9fe' : '#7c3aed'}; color: ${fp.isOfficial ? '#7c3aed' : '#fff'}; border: 1px solid #7c3aed; border-radius: 5px; cursor: ${fp.isOfficial ? 'default' : 'pointer'}; white-space: nowrap; flex-shrink: 0;">${fp.isOfficial ? '✓ 적용됨' : '바로 적용하기'}</button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px;">
+                        <div>
+                            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary);">${fp.label || fp.floorRange || '기준가'}</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">📅 ${displayDate}${fp.sourceCompany ? ' · ' + fp.sourceCompany : ''}</div>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; text-align: center;">
-                            <div style="background: var(--bg-secondary); border-radius: 4px; padding: 5px 4px;">
-                                <div style="font-size: 10px; color: var(--text-muted);">보증금</div>
-                                <div style="font-size: 12px; font-weight: 600; color: #2563eb;">${fp.depositPy ? formatNumber(fp.depositPy) : '-'}</div>
-                            </div>
-                            <div style="background: var(--bg-secondary); border-radius: 4px; padding: 5px 4px;">
-                                <div style="font-size: 10px; color: var(--text-muted);">임대료</div>
-                                <div style="font-size: 12px; font-weight: 600; color: var(--accent-color);">${fp.rentPy ? formatNumber(fp.rentPy) : '-'}</div>
-                            </div>
-                            <div style="background: var(--bg-secondary); border-radius: 4px; padding: 5px 4px;">
-                                <div style="font-size: 10px; color: var(--text-muted);">관리비</div>
-                                <div style="font-size: 12px; font-weight: 600; color: #16a34a;">${fp.maintenancePy ? formatNumber(fp.maintenancePy) : '-'}</div>
-                            </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 14px; font-weight: 600; color: var(--accent-color);">${fp.rentPy ? formatNumber(fp.rentPy) + '원/평' : '-'}</div>
+                            <div style="font-size: 10px; color: var(--text-muted);">임대료</div>
                         </div>
-                        <div style="font-size: 9px; color: var(--text-muted); text-align: right; margin-top: 3px;">단위: 원/평</div>
                     </div>
                 `}).join('')}
                 ${pricingCount > 5 ? `<div style="text-align: center; font-size: 11px; color: var(--text-muted); padding: 6px;">+${pricingCount - 5}개 더 있음</div>` : ''}
@@ -3490,8 +3476,6 @@ export function registerDetailGlobals() {
     window.closeCopyModal = closeCopyModal;
     // 숫자 입력칸 라이브 콤마
     window.formatNumberInputLive = formatNumberInputLive;
-    window.commaFormat = commaFormat;
-    window.toWon = toWon;
     window.validateExclusiveArea = validateExclusiveArea;
     
     // ★ v2.1: 기준가 통합 기능
@@ -6453,33 +6437,6 @@ export function closeCopyModal() {
     state.copyVacancies = null;
     state.copyTargetBuilding = null;
 }
-
-// ★ 이 빌딩 새로고침: 전체 데이터 재로딩(Firebase) 후 현재 빌딩의 모든 하위 탭 재렌더
-export async function handleBuildingRefresh() {
-    if (!state.selectedBuilding) {
-        showToast('선택된 빌딩이 없습니다', 'error');
-        return;
-    }
-    const id = state.selectedBuilding.id;
-    const btn = document.getElementById('detailRefreshBtn');
-    const prev = btn ? btn.innerHTML : '';
-    if (btn) { btn.disabled = true; btn.innerHTML = '🔄 갱신중...'; }
-    try {
-        if (window.loadData) {
-            await window.loadData(); // Firebase 전체 재로딩 → dataCache → processBuildings → 리스트/지도 갱신
-        }
-        if (state.allBuildings.find(b => b.id === id)) {
-            openDetail(id); // 기준가/렌트롤/메모/인센티브/안내문/담당자/기본정보 전 탭 재렌더
-        }
-        showToast('새로고침 완료', 'success');
-    } catch (e) {
-        console.error('빌딩 새로고침 오류:', e);
-        showToast('새로고침 실패: ' + (e?.message || ''), 'error');
-    } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = prev || '🔄 새로고침'; }
-    }
-}
-window.handleBuildingRefresh = handleBuildingRefresh;
 
 // ===== ★ v2.1: 기준가 통합 기능 =====
 

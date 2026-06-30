@@ -1727,14 +1727,12 @@ export function openPricingModal(id = null) {
                 document.getElementById('pricingFloorEnd').value = fp.floorEnd || '';
             }
             
-            // 필드 ID를 HTML에 맞게 수정 (금액은 원 단위로 환산 + 콤마, 면적은 콤마)
-            const _cf = window.commaFormat || (v => v ?? '');
-            const _won = window.toWon || (v => v);
-            document.getElementById('pricingDeposit').value = fp.depositPy ? _cf(_won(fp.depositPy)) : '';
-            document.getElementById('pricingRent').value = fp.rentPy ? _cf(_won(fp.rentPy)) : '';
-            document.getElementById('pricingMaintenance').value = fp.maintenancePy ? _cf(_won(fp.maintenancePy)) : '';
-            document.getElementById('pricingRentArea').value = fp.rentArea ? _cf(fp.rentArea) : '';
-            document.getElementById('pricingExclusiveArea').value = fp.exclusiveArea ? _cf(fp.exclusiveArea) : '';
+            // 필드 ID를 HTML에 맞게 수정
+            document.getElementById('pricingDeposit').value = fp.depositPy || '';
+            document.getElementById('pricingRent').value = fp.rentPy || '';
+            document.getElementById('pricingMaintenance').value = fp.maintenancePy || '';
+            document.getElementById('pricingRentArea').value = fp.rentArea || '';
+            document.getElementById('pricingExclusiveArea').value = fp.exclusiveArea || '';
             document.getElementById('pricingEffectiveDate').value = fp.effectiveDate || '';
             document.getElementById('pricingNotes').value = fp.notes || '';
             
@@ -2498,11 +2496,11 @@ function setupFormListeners() {
                 floorRange: `${floorStart}-${floorEnd}`,
                 floorStart: floorStart.toUpperCase().replace('B', '-').replace('F', ''),
                 floorEnd: floorEnd.toUpperCase().replace('B', '-').replace('F', ''),
-                rentArea: parseFloat(String(document.getElementById('pricingRentArea').value || '').replace(/,/g, '')) || null,
-                exclusiveArea: parseFloat(String(document.getElementById('pricingExclusiveArea').value || '').replace(/,/g, '')) || null,
-                depositPy: (window.toWon ? window.toWon(document.getElementById('pricingDeposit').value) : parseFloat(String(document.getElementById('pricingDeposit').value||'').replace(/,/g,''))) || null,
-                rentPy: (window.toWon ? window.toWon(document.getElementById('pricingRent').value) : parseFloat(String(document.getElementById('pricingRent').value||'').replace(/,/g,''))) || null,
-                maintenancePy: (window.toWon ? window.toWon(document.getElementById('pricingMaintenance').value) : parseFloat(String(document.getElementById('pricingMaintenance').value||'').replace(/,/g,''))) || null,
+                rentArea: parseFloat(document.getElementById('pricingRentArea').value) || null,
+                exclusiveArea: parseFloat(document.getElementById('pricingExclusiveArea').value) || null,
+                depositPy: parseFloat(document.getElementById('pricingDeposit').value) || null,
+                rentPy: parseFloat(document.getElementById('pricingRent').value) || null,
+                maintenancePy: parseFloat(document.getElementById('pricingMaintenance').value) || null,
                 effectiveDate: document.getElementById('pricingEffectiveDate').value || defaultEffectiveDate,  // ★ 기본값 적용
                 sourceCompany: 'manual',  // ★ 출처: 수동 입력
                 sourceType: 'manual',
