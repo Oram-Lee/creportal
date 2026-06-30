@@ -2636,8 +2636,6 @@ function setupFormListeners() {
                     // 기준층 정보
                     typicalFloorPy: parseFloat((document.getElementById('editTypicalFloorPy')?.value || '').replace(/,/g, '')) || null,
                     typicalFloorLeasePy: parseFloat((document.getElementById('editTypicalFloorLeasePy')?.value || '').replace(/,/g, '')) || null,
-                    typicalFloorExclusive: parseFloat((document.getElementById('editTypicalFloorPy')?.value || '').replace(/,/g, '')) || null,
-                    typicalFloorRent: parseFloat((document.getElementById('editTypicalFloorLeasePy')?.value || '').replace(/,/g, '')) || null,
                     exclusiveRate: parseFloat(document.getElementById('editExclusiveRate')?.value) || null,
                     
                     // 임대조건

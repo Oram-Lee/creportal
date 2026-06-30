@@ -6480,18 +6480,6 @@
                     }
                 }
                 
-                // ★ 기준면적(전용/임대)·전용률을 OCR 빌딩정보에서 각 기준가에 부착 (값 없을 때만)
-                const _toNum = (v) => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isNaN(x) ? null : x; };
-                const _baseRentArea = _toNum(buildingData.typicalFloorRent);
-                const _baseExclusiveArea = _toNum(buildingData.typicalFloorExclusive);
-                let _baseRate = _toNum(buildingData.exclusiveRate);
-                if (_baseRate == null && _baseRentArea && _baseExclusiveArea) _baseRate = Math.round(_baseExclusiveArea / _baseRentArea * 1000) / 10;
-                newPricings.forEach(p => {
-                    if (p.rentArea == null && _baseRentArea != null) p.rentArea = _baseRentArea;
-                    if (p.exclusiveArea == null && _baseExclusiveArea != null) p.exclusiveArea = _baseExclusiveArea;
-                    if (p.exclusiveRate == null && _baseRate != null) p.exclusiveRate = _baseRate;
-                });
-                
                 if (newPricings.length === 0) return;
                 
                 // 기존 floorPricing 조회

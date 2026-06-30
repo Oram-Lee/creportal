@@ -220,23 +220,6 @@ function formatNumberInputLive(el) {
 }
 
 /**
- * 단위가 섞인 자유 텍스트(예: "12500000원/㎡", "500억원")에서
- * 선행 숫자부에만 천단위 콤마를 적용하고 단위는 그대로 둔다. (blur 시 호출)
- */
-function formatBondNumberOnBlur(el) {
-    if (!el) return;
-    const raw = el.value || '';
-    const m = raw.match(/^(\s*)([\d,]+(?:\.\d+)?)(.*)$/);
-    if (!m) return;
-    const cleanNum = m[2].replace(/,/g, '');
-    if (!cleanNum || cleanNum === '.') return;
-    const [intP, decP] = cleanNum.split('.');
-    if (!intP) return;
-    const intF = intP.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    el.value = m[1] + (decP !== undefined ? intF + '.' + decP : intF) + m[3];
-}
-
-/**
  * 소숫점 표기 토글
  */
 export function toggleDecimalArea() {
@@ -734,9 +717,9 @@ export function renderInfoSection() {
 
         <!-- 기준층/전용률 정보 -->
         <div class="info-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 8px;">
-            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const v = b.typicalFloorExclusive ?? b.area?.typicalFloorExclusive ?? b.area?.typicalFloorPy ?? b.typicalFloorPy ?? b.area?.exclusiveFloorPy ?? b.exclusiveFloorPy; return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
-            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${(() => { const v = b.typicalFloorRent ?? b.area?.typicalFloorRent ?? b.area?.typicalFloorLeasePy ?? b.typicalFloorLeasePy; return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
-            <div class="info-card"><div class="label">전용률</div><div class="value">${(b.typicalFloorExclusive && b.typicalFloorRent ? Math.round(b.typicalFloorExclusive / b.typicalFloorRent * 1000) / 10 : (b.exclusiveRate ?? b.area?.exclusiveRate)) || '-'}<span class="unit">%</span></div></div>
+            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const v = b.area?.typicalFloorPy ?? b.typicalFloorPy ?? b.area?.exclusiveFloorPy ?? b.exclusiveFloorPy; return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${(() => { const v = b.area?.typicalFloorLeasePy ?? b.typicalFloorLeasePy; return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">전용률</div><div class="value">${(b.area?.exclusiveRate ?? b.exclusiveRate) || '-'}<span class="unit">%</span></div></div>
         </div>
         
         <!-- 건물 기본정보 -->
@@ -1245,21 +1228,18 @@ export function renderPricingSection() {
                         </div>
                     </div>
                     
-                    ${(() => {
-                        const _num = (v) => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isNaN(x) ? null : x; };
-                        const fpHasArea = (fp.rentArea != null && fp.rentArea !== '') || (fp.exclusiveArea != null && fp.exclusiveArea !== '');
-                        const ra = _num(fp.rentArea) ?? _num(b.typicalFloorRent);
-                        const ea = _num(fp.exclusiveArea) ?? _num(b.typicalFloorExclusive);
-                        let rate = _num(fp.exclusiveRate) ?? ((ra && ea) ? Math.round(ea / ra * 1000) / 10 : _num(b.exclusiveRate));
-                        if (!ra && !ea && !rate) return '';
-                        const fromBldg = !fpHasArea && (ra || ea);
-                        return `<div style="display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
-                            ${ra ? `<span>임대면적: <strong>${formatNumber(ra)}평</strong></span>` : ''}
-                            ${ea ? `<span>전용면적: <strong>${formatNumber(ea)}평</strong></span>` : ''}
-                            ${rate ? `<span>전용률: <strong>${rate}%</strong></span>` : ''}
-                            ${fromBldg ? `<span style="font-size:10px; color:var(--text-muted); background:var(--bg-tertiary); padding:1px 6px; border-radius:4px;" title="기준가 레코드에 면적이 없어 건물 기준층 OCR 값으로 표시">건물 기준층값</span>` : ''}
-                        </div>`;
-                    })()}
+                    ${(fp.rentArea || fp.exclusiveArea || fp.exclusiveRate) ? `
+                    <div style="display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; flex-wrap: wrap;">
+                        ${fp.rentArea ? `<span>임대면적: <strong>${formatNumber(fp.rentArea)}평</strong></span>` : ''}
+                        ${fp.exclusiveArea ? `<span>전용면적: <strong>${formatNumber(fp.exclusiveArea)}평</strong></span>` : ''}
+                        ${(() => {
+                            const r = parseFloat(String(fp.rentArea ?? '').replace(/,/g, ''));
+                            const e = parseFloat(String(fp.exclusiveArea ?? '').replace(/,/g, ''));
+                            const rate = fp.exclusiveRate || ((r > 0 && e > 0) ? Math.round(e / r * 1000) / 10 : null);
+                            return rate ? `<span>전용률: <strong>${rate}%</strong></span>` : '';
+                        })()}
+                    </div>
+                    ` : ''}
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted); padding-top: 8px; border-top: 1px solid ${isOfficial ? '#fde68a' : 'var(--border-color)'};">
                         <span>📅 ${displayDate}${fp.sourceCompany ? ' · <strong style="color: var(--text-secondary)">' + fp.sourceCompany + '</strong>' : ''}</span>
@@ -1356,8 +1336,8 @@ export async function setOfficialPricing(pricingId) {
         const _leaseArea = _n(officialPricing.rentArea);      // 임대면적
         let _excRate = _n(officialPricing.exclusiveRate);
         if (_excRate == null && _excArea && _leaseArea) _excRate = Math.round(_excArea / _leaseArea * 1000) / 10;
-        if (_excArea != null)  { updateData.typicalFloorExclusive = _excArea; updateData.typicalFloorPy = _excArea; updateData['area/typicalFloorPy'] = _excArea; }
-        if (_leaseArea != null){ updateData.typicalFloorRent = _leaseArea; updateData.typicalFloorLeasePy = _leaseArea; updateData['area/typicalFloorLeasePy'] = _leaseArea; }
+        if (_excArea != null)  { updateData.typicalFloorPy = _excArea;       updateData['area/typicalFloorPy'] = _excArea; }
+        if (_leaseArea != null){ updateData.typicalFloorLeasePy = _leaseArea; updateData['area/typicalFloorLeasePy'] = _leaseArea; }
         if (_excRate != null)  { updateData.exclusiveRate = _excRate;        updateData['area/exclusiveRate'] = _excRate; }
         
         await update(ref(db, `buildings/${b.id}`), updateData);
@@ -1391,8 +1371,8 @@ export async function setOfficialPricing(pricingId) {
         // 면적/전용률 로컬 반영 (루트 + area 둘 다)
         const _applyArea = (obj) => {
             if (!obj) return;
-            if (_excArea != null) { obj.typicalFloorExclusive = _excArea; obj.typicalFloorPy = _excArea; }
-            if (_leaseArea != null) { obj.typicalFloorRent = _leaseArea; obj.typicalFloorLeasePy = _leaseArea; }
+            if (_excArea != null) obj.typicalFloorPy = _excArea;
+            if (_leaseArea != null) obj.typicalFloorLeasePy = _leaseArea;
             if (_excRate != null) obj.exclusiveRate = _excRate;
             if (_excArea != null || _leaseArea != null || _excRate != null) {
                 obj.area = obj.area || {};
@@ -3545,7 +3525,6 @@ export function registerDetailGlobals() {
     // 숫자 입력칸 라이브 콤마
     window.formatNumberInputLive = formatNumberInputLive;
     window.commaFormat = commaFormat;
-    window.formatBondNumberOnBlur = formatBondNumberOnBlur;
     window.toWon = toWon;
     window.validateExclusiveArea = validateExclusiveArea;
     
@@ -7569,15 +7548,15 @@ window.openBuildingEditModal = function() {
 
     // 연면적 (평)
     setBiHint('bi_grossFloorPy', bi_grossPy ? `${Number(bi_grossPy).toLocaleString()}평 (${Number(bi_grossSqm.toFixed(1)).toLocaleString()}㎡)` : '');
-    setVal('editGrossFloorPy', (window.commaFormat||(x=>x))(getNum(building.area?.grossFloorPy, building.grossFloorPy, raw.area?.grossFloorPy, raw.grossFloorPy, bi_grossPy||'')));
+    setVal('editGrossFloorPy', getNum(building.area?.grossFloorPy, building.grossFloorPy, raw.area?.grossFloorPy, raw.grossFloorPy, bi_grossPy||''));
 
     // 대지면적 (㎡)
     setBiHint('bi_landAreaSqm', bi_landSqm ? `${Number(bi_landSqm.toFixed(1)).toLocaleString()}㎡` : '');
-    setVal('editLandAreaSqm', (window.commaFormat||(x=>x))(getNum(building.area?.landArea, building.landArea, raw.area?.landArea, raw.landArea, bi_landSqm||'')));
+    setVal('editLandAreaSqm', getNum(building.area?.landArea, building.landArea, raw.area?.landArea, raw.landArea, bi_landSqm||''));
 
     // 건축면적 (㎡)
     setBiHint('bi_buildingAreaSqm', bi_archSqm ? `${Number(bi_archSqm.toFixed(1)).toLocaleString()}㎡` : '');
-    setVal('editBuildingAreaSqm', (window.commaFormat||(x=>x))(getNum(building.area?.buildingArea, building.buildingArea, raw.area?.buildingArea, raw.buildingArea, bi_archSqm||'')));
+    setVal('editBuildingAreaSqm', getNum(building.area?.buildingArea, building.buildingArea, raw.area?.buildingArea, raw.buildingArea, bi_archSqm||''));
 
     // 용적률
     setBiHint('bi_vlRat', bi_vlRat ? `${bi_vlRat}%` : '');

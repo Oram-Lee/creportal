@@ -712,19 +712,25 @@
             <div class="form-row">
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
                     <div>
-                        <small style="color: var(--text-muted); display:block; margin-bottom:3px;">연면적 (평)</small>
-                        <input type="text" inputmode="decimal" id="editGrossFloorPy" placeholder="자동계산" oninput="formatNumberInputLive(this)" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
-                        <small id="bi_grossFloorPy" style="font-size:10px; color:#94a3b8; display:block; margin-top:4px;"></small>
+                        <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">연면적 (평)</small>
+                        </div>
+                        <small id="bi_grossFloorPy" style="font-size:10px; color:#94a3b8; display:block; margin-bottom:4px;"></small>
+                        <input type="number" id="editGrossFloorPy" placeholder="자동계산" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
                     </div>
                     <div>
-                        <small style="color: var(--text-muted); display:block; margin-bottom:3px;">대지면적 (㎡)</small>
-                        <input type="text" inputmode="decimal" id="editLandAreaSqm" placeholder="㎡" oninput="formatNumberInputLive(this)" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
-                        <small id="bi_landAreaSqm" style="font-size:10px; color:#94a3b8; display:block; margin-top:4px;"></small>
+                        <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">대지면적 (㎡)</small>
+                        </div>
+                        <small id="bi_landArea" style="font-size:10px; color:#94a3b8; display:block; margin-bottom:4px;"></small>
+                        <input type="number" id="editLandAreaSqm" placeholder="㎡" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
                     </div>
                     <div>
-                        <small style="color: var(--text-muted); display:block; margin-bottom:3px;">건축면적 (㎡)</small>
-                        <input type="text" inputmode="decimal" id="editBuildingAreaSqm" placeholder="㎡" oninput="formatNumberInputLive(this)" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
-                        <small id="bi_buildingAreaSqm" style="font-size:10px; color:#94a3b8; display:block; margin-top:4px;"></small>
+                        <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">건축면적 (㎡)</small>
+                        </div>
+                        <small id="bi_buildingArea" style="font-size:10px; color:#94a3b8; display:block; margin-bottom:4px;"></small>
+                        <input type="number" id="editBuildingAreaSqm" placeholder="㎡" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
                     </div>
                 </div>
             </div>
@@ -733,14 +739,18 @@
             <div class="form-row">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <div>
-                        <small style="color: var(--text-muted); display:block; margin-bottom:3px;">용적률 (%)</small>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">용적률 (%)</small>
+                            <small id="bi_vlRat" style="font-size:10px; color:#94a3b8;"></small>
+                        </div>
                         <input type="number" id="editVlRat" placeholder="예: 799.85" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
-                        <small id="bi_vlRat" style="font-size:10px; color:#94a3b8; display:block; margin-top:4px;"></small>
                     </div>
                     <div>
-                        <small style="color: var(--text-muted); display:block; margin-bottom:3px;">건폐율 (%)</small>
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                            <small style="color: var(--text-muted);">건폐율 (%)</small>
+                            <small id="bi_bcRat" style="font-size:10px; color:#94a3b8;"></small>
+                        </div>
                         <input type="number" id="editBcRat" placeholder="예: 59.93" step="0.01" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
-                        <small id="bi_bcRat" style="font-size:10px; color:#94a3b8; display:block; margin-top:4px;"></small>
                     </div>
                 </div>
             </div>
@@ -919,7 +929,7 @@
                     </div>
                     <div>
                         <small style="color: var(--text-muted);">공동담보 총 대지지분</small>
-                        <input type="text" id="editJointCollateral" onblur="formatBondNumberOnBlur(this)" placeholder="예: 1,234.56㎡">
+                        <input type="text" id="editJointCollateral" placeholder="예: 1,234.56㎡">
                     </div>
                 </div>
             </div>
@@ -927,11 +937,11 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <div>
                         <small style="color: var(--text-muted);">선순위 담보 총액</small>
-                        <input type="text" id="editSeniorLien" onblur="formatBondNumberOnBlur(this)" placeholder="예: 500억원">
+                        <input type="text" id="editSeniorLien" placeholder="예: 500억원">
                     </div>
                     <div>
                         <small style="color: var(--text-muted);">공시지가 대비 담보율</small>
-                        <input type="text" id="editCollateralRatio" onblur="formatBondNumberOnBlur(this)" placeholder="예: 45%">
+                        <input type="text" id="editCollateralRatio" placeholder="예: 45%">
                     </div>
                 </div>
             </div>
@@ -939,11 +949,11 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <div>
                         <small style="color: var(--text-muted);">개별공시지가 (25년 1월 기준)</small>
-                        <input type="text" id="editOfficialLandPrice" onblur="formatBondNumberOnBlur(this)" placeholder="예: 12,500,000원/㎡">
+                        <input type="text" id="editOfficialLandPrice" placeholder="예: 12,500,000원/㎡">
                     </div>
                     <div>
                         <small style="color: var(--text-muted);">토지가격 적용</small>
-                        <input type="text" id="editLandPriceApplied" onblur="formatBondNumberOnBlur(this)" placeholder="예: 15,000,000원/㎡">
+                        <input type="text" id="editLandPriceApplied" placeholder="예: 15,000,000원/㎡">
                     </div>
                 </div>
             </div>
@@ -3368,9 +3378,9 @@
                     completionYear: document.getElementById('editCompletionYear')?.value || '',
                     remodelNote: document.getElementById('editRemodelNote')?.value || '',
                     floorsDisplay: document.getElementById('editFloors')?.value || '',
-                    grossFloorPy: (document.getElementById('editGrossFloorPy')?.value || '').replace(/,/g, ''),
-                    landAreaSqm: (document.getElementById('editLandAreaSqm')?.value || '').replace(/,/g, ''),
-                    buildingAreaSqm: (document.getElementById('editBuildingAreaSqm')?.value || '').replace(/,/g, ''),
+                    grossFloorPy: document.getElementById('editGrossFloorPy')?.value || '',
+                    landAreaSqm: document.getElementById('editLandAreaSqm')?.value || '',
+                    buildingAreaSqm: document.getElementById('editBuildingAreaSqm')?.value || '',
                     vlRat: document.getElementById('editVlRat')?.value || '',
                     bcRat: document.getElementById('editBcRat')?.value || '',
                     structure: document.getElementById('editStructure')?.value || '',
@@ -3510,8 +3520,8 @@
         setVal('editAliases', (Array.isArray(aliases) ? aliases : []).join(', '));
         
         // ★ 기준층 정보 - area 하위 또는 루트 레벨 모두 확인 + _raw fallback
-        setVal('editTypicalFloorPy', (window.commaFormat||(x=>x))(getNum(building.typicalFloorExclusive, raw.typicalFloorExclusive, building.area?.typicalFloorPy, building.typicalFloorPy, raw.area?.typicalFloorPy, raw.typicalFloorPy)));
-        setVal('editTypicalFloorLeasePy', (window.commaFormat||(x=>x))(getNum(building.typicalFloorRent, raw.typicalFloorRent, building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy, raw.area?.typicalFloorLeasePy, raw.typicalFloorLeasePy)));
+        setVal('editTypicalFloorPy', (window.commaFormat||(x=>x))(getNum(building.area?.typicalFloorPy, building.typicalFloorPy, raw.area?.typicalFloorPy, raw.typicalFloorPy)));
+        setVal('editTypicalFloorLeasePy', (window.commaFormat||(x=>x))(getNum(building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy, raw.area?.typicalFloorLeasePy, raw.typicalFloorLeasePy)));
         setVal('editExclusiveRate', getNum(building.area?.exclusiveRate, building.exclusiveRate, raw.area?.exclusiveRate, raw.exclusiveRate));
         
         // ★ 임대조건 - 원 단위 그대로 표시 (변환 없음)
@@ -3677,10 +3687,6 @@
             updates['area/typicalFloorPy'] = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
             updates['area/typicalFloorLeasePy'] = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
             updates['area/exclusiveRate'] = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
-            // ★ 기본정보가 읽는 OCR 필드명(전용=typicalFloorExclusive / 임대=typicalFloorRent)에도 동기화
-            updates.typicalFloorExclusive = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
-            updates.typicalFloorRent = formData.typicalFloorLeasePy ? parseFloat(formData.typicalFloorLeasePy) : null;
-            updates.exclusiveRate = formData.exclusiveRate ? parseFloat(formData.exclusiveRate) : null;
             
             // 호환성을 위해 루트 레벨에도 저장
             updates.typicalFloorPy = formData.typicalFloorPy ? parseFloat(formData.typicalFloorPy) : null;
