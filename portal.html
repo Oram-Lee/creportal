@@ -280,7 +280,7 @@
             <button class="close-btn" onclick="closeDetail()" style="position: absolute; top: 0; right: 0; background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted, #888); z-index: 10;">×</button>
             <div style="display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 8px; padding-right: 30px;">
                 <!-- ★ 새로고침 버튼: 이 빌딩 모든 하위 탭 갱신 -->
-                <button id="detailRefreshBtn" class="detail-action-btn" onclick="handleBuildingRefresh()" title="이 빌딩 새로고침 (모든 탭)" style="padding: 4px 10px; border: 1px solid #2563eb; border-radius: 4px; background: transparent; color: #2563eb; font-size: 12px; cursor: pointer;">🔄 새로고침</button>
+                <button id="detailRefreshBtn" class="detail-action-btn" onclick="handleBuildingRefresh()" title="이 빌딩 새로고침 (모든 탭)" style="padding: 5px 12px; border: 1px solid rgba(255,255,255,0.7); border-radius: 6px; background: rgba(255,255,255,0.95); color: #2563eb; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.12);">🔄 새로고침</button>
                 <!-- ★ 숨기기 버튼 (isHidden 처리) -->
                 <button id="detailHideBtn" class="detail-action-btn" onclick="handleBuildingHide()" title="숨기기" style="display:none; padding: 4px 10px; border: 1px solid #f59e0b; border-radius: 4px; background: transparent; color: #f59e0b; font-size: 12px; cursor: pointer;">🚫 숨기기</button>
                 <!-- ★ 완전삭제 버튼 (Firebase에서 삭제) -->
@@ -5527,7 +5527,7 @@
         if (!document.getElementById('authGateStyle')) {
             const st = document.createElement('style');
             st.id = 'authGateStyle';
-            st.textContent = '.login-hidden{display:none !important;}';
+            st.textContent = '.login-hidden{display:none !important;} @keyframes refreshSpin{to{transform:rotate(360deg);}} .refresh-spin{display:inline-block;animation:refreshSpin 0.8s linear infinite;}';
             document.head.appendChild(st);
         }
         function loggedOut() {

@@ -717,9 +717,9 @@ export function renderInfoSection() {
 
         <!-- 기준층/전용률 정보 -->
         <div class="info-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 8px;">
-            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const excPy = b.area?.exclusiveFloorPy || b.exclusiveFloorPy; if (excPy) return formatNumber(excPy); const floorPy = b.area?.typicalFloorPy || b.typicalFloorPy || 0; const rate = b.area?.exclusiveRate || b.exclusiveRate || 0; return floorPy && rate ? formatNumber(Math.round(floorPy * rate / 100 * 1000) / 1000) : '-'; })()}<span class="unit">평</span></div></div>
-            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${formatNumber(b.area?.typicalFloorPy || b.typicalFloorPy || b.typicalFloorLeasePy) || '-'}<span class="unit">평</span></div></div>
-            <div class="info-card"><div class="label">전용률</div><div class="value">${b.area?.exclusiveRate || b.exclusiveRate || '-'}<span class="unit">%</span></div></div>
+            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const v = b.area?.typicalFloorPy ?? b.typicalFloorPy ?? b.area?.exclusiveFloorPy ?? b.exclusiveFloorPy; return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${(() => { const v = b.area?.typicalFloorLeasePy ?? b.typicalFloorLeasePy; return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">전용률</div><div class="value">${(b.area?.exclusiveRate ?? b.exclusiveRate) || '-'}<span class="unit">%</span></div></div>
         </div>
         
         <!-- 건물 기본정보 -->
@@ -1228,10 +1228,16 @@ export function renderPricingSection() {
                         </div>
                     </div>
                     
-                    ${(fp.rentArea || fp.exclusiveArea) ? `
-                    <div style="display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+                    ${(fp.rentArea || fp.exclusiveArea || fp.exclusiveRate) ? `
+                    <div style="display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; flex-wrap: wrap;">
                         ${fp.rentArea ? `<span>임대면적: <strong>${formatNumber(fp.rentArea)}평</strong></span>` : ''}
                         ${fp.exclusiveArea ? `<span>전용면적: <strong>${formatNumber(fp.exclusiveArea)}평</strong></span>` : ''}
+                        ${(() => {
+                            const r = parseFloat(String(fp.rentArea ?? '').replace(/,/g, ''));
+                            const e = parseFloat(String(fp.exclusiveArea ?? '').replace(/,/g, ''));
+                            const rate = fp.exclusiveRate || ((r > 0 && e > 0) ? Math.round(e / r * 1000) / 10 : null);
+                            return rate ? `<span>전용률: <strong>${rate}%</strong></span>` : '';
+                        })()}
                     </div>
                     ` : ''}
                     
@@ -1323,6 +1329,17 @@ export async function setOfficialPricing(pricingId) {
             'pricing/maintenancePy': officialPricing.maintenancePy || b.maintenancePy
         };
         
+        // ★ 기준면적(전용=typicalFloorPy / 임대=typicalFloorLeasePy)·전용률도 함께 반영
+        //    (OCR 기준가에 면적 정보가 있는 경우에만 — 없으면 기존값 유지)
+        const _n = (v) => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isNaN(x) ? null : x; };
+        const _excArea = _n(officialPricing.exclusiveArea);   // 전용면적
+        const _leaseArea = _n(officialPricing.rentArea);      // 임대면적
+        let _excRate = _n(officialPricing.exclusiveRate);
+        if (_excRate == null && _excArea && _leaseArea) _excRate = Math.round(_excArea / _leaseArea * 1000) / 10;
+        if (_excArea != null)  { updateData.typicalFloorPy = _excArea;       updateData['area/typicalFloorPy'] = _excArea; }
+        if (_leaseArea != null){ updateData.typicalFloorLeasePy = _leaseArea; updateData['area/typicalFloorLeasePy'] = _leaseArea; }
+        if (_excRate != null)  { updateData.exclusiveRate = _excRate;        updateData['area/exclusiveRate'] = _excRate; }
+        
         await update(ref(db, `buildings/${b.id}`), updateData);
         
         // 로컬 상태 업데이트
@@ -1350,6 +1367,23 @@ export async function setOfficialPricing(pricingId) {
             buildingInAll.rentPy = updateData.rentPy;
             buildingInAll.maintenancePy = updateData.maintenancePy;
         }
+        
+        // 면적/전용률 로컬 반영 (루트 + area 둘 다)
+        const _applyArea = (obj) => {
+            if (!obj) return;
+            if (_excArea != null) obj.typicalFloorPy = _excArea;
+            if (_leaseArea != null) obj.typicalFloorLeasePy = _leaseArea;
+            if (_excRate != null) obj.exclusiveRate = _excRate;
+            if (_excArea != null || _leaseArea != null || _excRate != null) {
+                obj.area = obj.area || {};
+                if (_excArea != null) obj.area.typicalFloorPy = _excArea;
+                if (_leaseArea != null) obj.area.typicalFloorLeasePy = _leaseArea;
+                if (_excRate != null) obj.area.exclusiveRate = _excRate;
+            }
+        };
+        _applyArea(state.selectedBuilding);
+        _applyArea(state.selectedBuilding?._raw);
+        _applyArea(buildingInAll);
         
         showToast(`'${officialPricing.label || '기준가'}'가 공식 기준가로 적용되었습니다`, 'success');
         renderPricingSection();
@@ -6462,8 +6496,13 @@ export async function handleBuildingRefresh() {
     }
     const id = state.selectedBuilding.id;
     const btn = document.getElementById('detailRefreshBtn');
-    const prev = btn ? btn.innerHTML : '';
-    if (btn) { btn.disabled = true; btn.innerHTML = '🔄 갱신중...'; }
+    const prevHTML = btn ? btn.innerHTML : '';
+    const prevStyle = btn ? btn.getAttribute('style') : null;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="refresh-spin">🔄</span> 갱신중…';
+        btn.setAttribute('style', 'padding: 5px 12px; border: 1px solid #1e40af; border-radius: 6px; background: #1e40af; color: #fff; font-size: 12px; font-weight: 600; cursor: progress; box-shadow: 0 1px 3px rgba(0,0,0,0.2);');
+    }
     try {
         if (window.loadData) {
             await window.loadData(); // Firebase 전체 재로딩 → dataCache → processBuildings → 리스트/지도 갱신
@@ -6476,7 +6515,7 @@ export async function handleBuildingRefresh() {
         console.error('빌딩 새로고침 오류:', e);
         showToast('새로고침 실패: ' + (e?.message || ''), 'error');
     } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = prev || '🔄 새로고침'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = prevHTML || '🔄 새로고침'; if (prevStyle != null) btn.setAttribute('style', prevStyle); }
     }
 }
 window.handleBuildingRefresh = handleBuildingRefresh;
