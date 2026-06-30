@@ -985,6 +985,54 @@ export async function refreshVacanciesSection() {
 
 // ===== 기준가 섹션 =====
 
+// 기준가 레코드/빌딩에 면적이 없을 때, 같은 출처·발행월(가능하면 해당 층)의 공실에서 대표 기준면적 추정
+function deriveAreaFromVacancies(b, fp) {
+    const _num = (v) => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isNaN(x) ? null : x; };
+    const vacs = (b && b.vacancies) || [];
+    if (!vacs.length) return { rentArea: null, exclusiveArea: null, derived: false };
+    const norm = (s) => String(s || '').replace(/\s+/g, '').toLowerCase();
+    const ymOf = (s) => {
+        const d = String(s || '');
+        let m = d.match(/(\d{2})[.\-](\d{2})/); if (m) return m[1] + m[2];
+        m = d.match(/(\d{4})-(\d{2})/); if (m) return m[1].slice(-2) + m[2];
+        return '';
+    };
+    const floorNum = (f) => {
+        const s = String(f || '').toUpperCase().trim();
+        const bm = s.match(/^B(\d+)/); if (bm) return -parseInt(bm[1]);
+        const fm = s.match(/(\d+)/); return fm ? parseInt(fm[1]) : NaN;
+    };
+    let cand = vacs.filter(v => _num(v.rentArea) || _num(v.exclusiveArea));
+    if (!cand.length) return { rentArea: null, exclusiveArea: null, derived: false };
+    // 출처 일치 우선
+    const fpSrc = norm(fp.sourceCompany);
+    if (fpSrc && fpSrc !== 'manual') { const bySrc = cand.filter(v => norm(v.source) === fpSrc); if (bySrc.length) cand = bySrc; }
+    // 발행월 일치 우선
+    const fpYM = ymOf(fp.effectiveDate);
+    if (fpYM) { const byYM = cand.filter(v => ymOf(v.publishDate) === fpYM); if (byYM.length) cand = byYM; }
+    // 해당 층 범위 매칭 우선
+    const fs = floorNum(fp.floorStart), fe = floorNum(fp.floorEnd);
+    if (!isNaN(fs)) {
+        const lo = Math.min(fs, isNaN(fe) ? fs : fe), hi = Math.max(fs, isNaN(fe) ? fs : fe);
+        const inRange = cand.filter(v => { const n = floorNum(v.floor); return !isNaN(n) && n >= lo && n <= hi; });
+        if (inRange.length) cand = inRange;
+    }
+    // 대표값: 최빈 임대면적(표준층) + 짝 전용면적
+    const r1 = (x) => Math.round(x * 10) / 10;
+    const freq = {};
+    cand.forEach(v => { const r = _num(v.rentArea); if (r) { const k = r1(r); freq[k] = (freq[k] || 0) + 1; } });
+    let ra = null, best = 0;
+    Object.keys(freq).forEach(k => { if (freq[k] > best) { best = freq[k]; ra = parseFloat(k); } });
+    let ea = null;
+    if (ra != null) { const mt = cand.find(v => r1(_num(v.rentArea)) === ra && _num(v.exclusiveArea)); ea = mt ? _num(mt.exclusiveArea) : null; }
+    if (ra == null && ea == null) {
+        const fe2 = {};
+        cand.forEach(v => { const e = _num(v.exclusiveArea); if (e) { const k = r1(e); fe2[k] = (fe2[k] || 0) + 1; } });
+        let best2 = 0; Object.keys(fe2).forEach(k => { if (fe2[k] > best2) { best2 = fe2[k]; ea = parseFloat(k); } });
+    }
+    return { rentArea: ra, exclusiveArea: ea, derived: (ra != null || ea != null) };
+}
+
 export function renderPricingSection() {
     const b = state.selectedBuilding;
     const allPricing = b.floorPricing || [];
@@ -1248,16 +1296,23 @@ export function renderPricingSection() {
                     ${(() => {
                         const _num = (v) => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isNaN(x) ? null : x; };
                         const fpHasArea = (fp.rentArea != null && fp.rentArea !== '') || (fp.exclusiveArea != null && fp.exclusiveArea !== '');
-                        const ra = _num(fp.rentArea) ?? _num(b.typicalFloorRent);
-                        const ea = _num(fp.exclusiveArea) ?? _num(b.typicalFloorExclusive);
+                        let ra = _num(fp.rentArea) ?? _num(b.typicalFloorRent);
+                        let ea = _num(fp.exclusiveArea) ?? _num(b.typicalFloorExclusive);
+                        const bldgHasArea = !fpHasArea && (ra != null || ea != null);
+                        let derivedFlag = false;
+                        if (ra == null && ea == null) {
+                            const d = deriveAreaFromVacancies(b, fp);
+                            ra = d.rentArea; ea = d.exclusiveArea; derivedFlag = d.derived;
+                        }
                         let rate = _num(fp.exclusiveRate) ?? ((ra && ea) ? Math.round(ea / ra * 1000) / 10 : _num(b.exclusiveRate));
                         if (!ra && !ea && !rate) return '';
-                        const fromBldg = !fpHasArea && (ra || ea);
+                        const tag = derivedFlag ? '안내문 공실 기준' : (bldgHasArea ? '건물 기준층값' : '');
+                        const tagTitle = derivedFlag ? '기준가에 면적이 없어 해당 안내문 공실 데이터로 표시' : '기준가에 면적이 없어 건물 기준층 OCR 값으로 표시';
                         return `<div style="display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
                             ${ra ? `<span>임대면적: <strong>${formatNumber(ra)}평</strong></span>` : ''}
                             ${ea ? `<span>전용면적: <strong>${formatNumber(ea)}평</strong></span>` : ''}
                             ${rate ? `<span>전용률: <strong>${rate}%</strong></span>` : ''}
-                            ${fromBldg ? `<span style="font-size:10px; color:var(--text-muted); background:var(--bg-tertiary); padding:1px 6px; border-radius:4px;" title="기준가 레코드에 면적이 없어 건물 기준층 OCR 값으로 표시">건물 기준층값</span>` : ''}
+                            ${tag ? `<span style="font-size:10px; color:var(--text-muted); background:var(--bg-tertiary); padding:1px 6px; border-radius:4px;" title="${tagTitle}">${tag}</span>` : ''}
                         </div>`;
                     })()}
                     
@@ -1352,9 +1407,14 @@ export async function setOfficialPricing(pricingId) {
         // ★ 기준면적(전용=typicalFloorPy / 임대=typicalFloorLeasePy)·전용률도 함께 반영
         //    (OCR 기준가에 면적 정보가 있는 경우에만 — 없으면 기존값 유지)
         const _n = (v) => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isNaN(x) ? null : x; };
-        const _excArea = _n(officialPricing.exclusiveArea);   // 전용면적
-        const _leaseArea = _n(officialPricing.rentArea);      // 임대면적
+        let _excArea = _n(officialPricing.exclusiveArea);   // 전용면적
+        let _leaseArea = _n(officialPricing.rentArea);      // 임대면적
         let _excRate = _n(officialPricing.exclusiveRate);
+        // 기준가에 면적이 없으면 같은 안내문 공실에서 추정
+        if (_excArea == null && _leaseArea == null) {
+            const _d = deriveAreaFromVacancies(b, officialPricing);
+            if (_d.derived) { _excArea = _n(_d.exclusiveArea); _leaseArea = _n(_d.rentArea); }
+        }
         if (_excRate == null && _excArea && _leaseArea) _excRate = Math.round(_excArea / _leaseArea * 1000) / 10;
         if (_excArea != null)  { updateData.typicalFloorExclusive = _excArea; updateData.typicalFloorPy = _excArea; updateData['area/typicalFloorPy'] = _excArea; }
         if (_leaseArea != null){ updateData.typicalFloorRent = _leaseArea; updateData.typicalFloorLeasePy = _leaseArea; updateData['area/typicalFloorLeasePy'] = _leaseArea; }
