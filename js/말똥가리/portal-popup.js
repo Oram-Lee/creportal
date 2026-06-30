@@ -315,13 +315,6 @@ export function openRentrollDetailModal(buildingId) {
 
 // ===== 공실 팝업 =====
 
-// 콤마 포함 문자열도 안전하게 천단위 콤마 표시 (NaN 방지)
-function fmtMoney(v) {
-    if (v === null || v === undefined || v === '') return '-';
-    const n = parseFloat(String(v).replace(/,/g, ''));
-    return isNaN(n) ? String(v) : n.toLocaleString('en-US');
-}
-
 export function showVacancyPopup(buildingId) {
     const building = state.allBuildings.find(b => b.id === buildingId);
     if (!building) return;
@@ -376,15 +369,21 @@ export function showVacancyPopup(buildingId) {
         <div style="display: flex; gap: 0; height: calc(80vh - 70px); min-height: 400px;">
             <!-- 좌측: 공실 리스트 -->
             <div style="flex: 1; min-width: 0; overflow-y: auto; border-right: 1px solid var(--border-color); padding: 16px;">
-                <!-- 출처(안내문) 선택 -->
+                <!-- 출처 탭 -->
                 ${sortedGroups.length > 1 ? `
-                <div style="margin-bottom: 12px;">
-                    <select id="vacancyPopupGroupSelect" onchange="switchVacancyPopupTab(parseInt(this.value))"
-                            style="width:100%; padding:9px 12px; border:1px solid var(--border-color); border-radius:8px; font-size:13px; background:var(--bg-primary); color:var(--text-primary); font-weight:600; cursor:pointer;">
-                        ${sortedGroups.map((g, i) => `
-                            <option value="${i}" ${i === 0 ? 'selected' : ''}>${g.source} ${g.publishDate} (${g.items.length}건)</option>
-                        `).join('')}
-                    </select>
+                <div style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;">
+                    ${sortedGroups.map((g, i) => `
+                        <button class="vacancy-popup-tab ${i === 0 ? 'active' : ''}" 
+                                data-group-idx="${i}"
+                                onclick="switchVacancyPopupTab(${i})"
+                                style="padding: 6px 12px; border: 1px solid ${i === 0 ? 'var(--accent-color)' : 'var(--border-color)'}; 
+                                       border-radius: 16px; font-size: 12px; cursor: pointer; white-space: nowrap;
+                                       background: ${i === 0 ? 'var(--accent-color)' : 'var(--bg-secondary)'}; 
+                                       color: ${i === 0 ? '#fff' : 'var(--text-primary)'}; font-weight: 600;">
+                            ${g.source} <span style="opacity:0.8;">${g.publishDate}</span> 
+                            <span style="font-weight:700;">${g.items.length}</span>
+                        </button>
+                    `).join('')}
                 </div>` : ''}
                 
                 <!-- 그룹별 테이블 -->
@@ -406,9 +405,9 @@ export function showVacancyPopup(buildingId) {
                                     <td style="font-weight:600; color:var(--accent-color);">${v.floor || '-'}</td>
                                     <td style="text-align:right;">${v.rentArea ? formatNumber(v.rentArea) + '평' : '-'}</td>
                                     <td style="text-align:right;">${v.exclusiveArea ? formatNumber(v.exclusiveArea) + '평' : '-'}</td>
-                                    <td style="text-align:right;">${fmtMoney(v.depositPy)}</td>
-                                    <td style="text-align:right;">${fmtMoney(v.rentPy)}</td>
-                                    <td style="text-align:right;">${fmtMoney(v.maintenancePy)}</td>
+                                    <td style="text-align:right;">${v.depositPy ? formatNumber(v.depositPy) : '-'}</td>
+                                    <td style="text-align:right;">${v.rentPy ? formatNumber(v.rentPy) : '-'}</td>
+                                    <td style="text-align:right;">${v.maintenancePy ? formatNumber(v.maintenancePy) : '-'}</td>
                                     <td style="text-align:center;">${v.moveInDate || '-'}</td>
                                 </tr>
                             `).join('')}</tbody>

@@ -2634,14 +2634,14 @@ function setupFormListeners() {
                     grade: document.getElementById('editGrade')?.value || '',
                     
                     // 기준층 정보
-                    typicalFloorPy: parseFloat((document.getElementById('editTypicalFloorPy')?.value || '').replace(/,/g, '')) || null,
-                    typicalFloorLeasePy: parseFloat((document.getElementById('editTypicalFloorLeasePy')?.value || '').replace(/,/g, '')) || null,
+                    typicalFloorPy: parseFloat(document.getElementById('editTypicalFloorPy')?.value) || null,
+                    typicalFloorLeasePy: parseFloat(document.getElementById('editTypicalFloorLeasePy')?.value) || null,
                     exclusiveRate: parseFloat(document.getElementById('editExclusiveRate')?.value) || null,
                     
                     // 임대조건
-                    depositPy: (document.getElementById('editDepositPy')?.value || '').replace(/,/g, ''),
-                    rentPy: (document.getElementById('editRentPy')?.value || '').replace(/,/g, ''),
-                    maintenancePy: (document.getElementById('editMaintenancePy')?.value || '').replace(/,/g, ''),
+                    depositPy: document.getElementById('editDepositPy')?.value || '',
+                    rentPy: document.getElementById('editRentPy')?.value || '',
+                    maintenancePy: document.getElementById('editMaintenancePy')?.value || '',
                     
                     // 시설 정보
                     hvac: document.getElementById('editHvac')?.value || '',

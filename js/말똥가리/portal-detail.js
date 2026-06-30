@@ -7254,21 +7254,16 @@ function _applyDecimalDisplay(input) {
     const rawVal = input.value;
     if (rawVal === '' || rawVal === null) return;
 
-    const _cf = (v) => (window.commaFormat ? window.commaFormat(v) : String(v));
-    const clean = String(rawVal).replace(/,/g, '');
-    const num = parseFloat(clean);
+    const num = parseFloat(rawVal);
     if (isNaN(num)) return;
 
     const rounded = parseFloat(num.toFixed(2));
-    // 소수점 3자리 미만이면 토글 불필요 — 콤마만 적용하고 종료
-    if (Math.abs(num - rounded) < 1e-9) {
-        input.value = _cf(clean);
-        return;
-    }
+    // 소수점 3자리 미만이면 처리 불필요
+    if (Math.abs(num - rounded) < 1e-9) return;
 
     // 원본값 보존 + step="any" 강제 (브라우저 유효성 차단)
-    input.dataset.actualValue = clean;
-    input.value = _cf(num.toFixed(2));
+    input.dataset.actualValue = rawVal;
+    input.value = num.toFixed(2);
     input.setAttribute('step', 'any');
 
     // 이미 토글 버튼이 붙어있으면 스킵
@@ -7296,11 +7291,11 @@ function _applyDecimalDisplay(input) {
 
     btn.addEventListener('click', function () {
         if (this.dataset.mode === 'rounded') {
-            input.value = _cf(input.dataset.actualValue);
+            input.value = input.dataset.actualValue;
             this.textContent = `반올림 보기 (2자리: ${rounded.toFixed(2)})`;
             this.dataset.mode = 'actual';
         } else {
-            input.value = _cf(rounded.toFixed(2));
+            input.value = rounded.toFixed(2);
             this.textContent = `실제값 보기 (원본: ${num})`;
             this.dataset.mode = 'rounded';
         }
@@ -7330,7 +7325,7 @@ function _applyDecimalDisplayToModal(modalEl) {
     // 소수점 3자리 이상인 필드 탐색 (number + 숫자형 text 모두)
     modalEl.querySelectorAll('input[type="number"], input[type="text"]').forEach(input => {
         const val = (input.value || '').trim();
-        if (/^[\d,]+\.\d{3,}$/.test(val)) {
+        if (/^\d+\.\d{3,}$/.test(val)) {
             _applyDecimalDisplay(input);
         }
     });
@@ -7347,7 +7342,7 @@ function _restoreActualValues(modalEl) {
     modalEl.querySelectorAll('[data-actual-value]').forEach(input => {
         const actual = input.dataset.actualValue;
         if (!actual) return;
-        const displayed = parseFloat(String(input.value).replace(/,/g, ''));
+        const displayed = parseFloat(input.value);
         const rounded   = parseFloat(parseFloat(actual).toFixed(2));
         // 표시값이 반올림값과 같은 경우(=사용자가 건드리지 않음) → 원본 복원
         if (Math.abs(displayed - rounded) < 0.005) {

@@ -811,12 +811,12 @@
             <div class="form-row">
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
                     <div>
-                        <small style="color: var(--text-muted);">기준층 임대면적 (평)</small>
-                        <input type="text" inputmode="decimal" id="editTypicalFloorLeasePy" placeholder="450" oninput="formatNumberInputLive(this)">
+                        <small style="color: var(--text-muted);">기준층 면적 (평)</small>
+                        <input type="number" id="editTypicalFloorPy" placeholder="500" step="0.01">
                     </div>
                     <div>
-                        <small style="color: var(--text-muted);">기준층 전용면적 (평)</small>
-                        <input type="text" inputmode="decimal" id="editTypicalFloorPy" placeholder="500" oninput="formatNumberInputLive(this)">
+                        <small style="color: var(--text-muted);">기준층 임대면적 (평)</small>
+                        <input type="number" id="editTypicalFloorLeasePy" placeholder="450" step="0.01">
                     </div>
                     <div>
                         <small style="color: var(--text-muted);">전용률 (%)</small>
@@ -831,15 +831,15 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
                     <div>
                         <small style="color: var(--text-muted);">보증금</small>
-                        <input type="text" inputmode="decimal" id="editDepositPy" placeholder="800000" oninput="formatNumberInputLive(this)">
+                        <input type="number" id="editDepositPy" placeholder="800000" step="1">
                     </div>
                     <div>
                         <small style="color: var(--text-muted);">임대료</small>
-                        <input type="text" inputmode="decimal" id="editRentPy" placeholder="85000" oninput="formatNumberInputLive(this)">
+                        <input type="number" id="editRentPy" placeholder="85000" step="1">
                     </div>
                     <div>
                         <small style="color: var(--text-muted);">관리비</small>
-                        <input type="text" inputmode="decimal" id="editMaintenancePy" placeholder="35000" oninput="formatNumberInputLive(this)">
+                        <input type="number" id="editMaintenancePy" placeholder="35000" step="1">
                     </div>
                 </div>
             </div>
@@ -3387,14 +3387,14 @@
                     buildingUse: document.getElementById('editBuildingUse')?.value || '',
                     
                     // 기준층 정보
-                    typicalFloorPy: (document.getElementById('editTypicalFloorPy')?.value || '').replace(/,/g, ''),
-                    typicalFloorLeasePy: (document.getElementById('editTypicalFloorLeasePy')?.value || '').replace(/,/g, ''),
+                    typicalFloorPy: document.getElementById('editTypicalFloorPy')?.value || '',
+                    typicalFloorLeasePy: document.getElementById('editTypicalFloorLeasePy')?.value || '',
                     exclusiveRate: document.getElementById('editExclusiveRate')?.value || '',
                     
                     // 임대조건
-                    depositPy: (document.getElementById('editDepositPy')?.value || '').replace(/,/g, ''),
-                    rentPy: (document.getElementById('editRentPy')?.value || '').replace(/,/g, ''),
-                    maintenancePy: (document.getElementById('editMaintenancePy')?.value || '').replace(/,/g, ''),
+                    depositPy: document.getElementById('editDepositPy')?.value || '',
+                    rentPy: document.getElementById('editRentPy')?.value || '',
+                    maintenancePy: document.getElementById('editMaintenancePy')?.value || '',
                     
                     // 시설 정보
                     hvac: document.getElementById('editHvac')?.value || '',
@@ -3520,8 +3520,8 @@
         setVal('editAliases', (Array.isArray(aliases) ? aliases : []).join(', '));
         
         // ★ 기준층 정보 - area 하위 또는 루트 레벨 모두 확인 + _raw fallback
-        setVal('editTypicalFloorPy', (window.commaFormat||(x=>x))(getNum(building.area?.typicalFloorPy, building.typicalFloorPy, raw.area?.typicalFloorPy, raw.typicalFloorPy)));
-        setVal('editTypicalFloorLeasePy', (window.commaFormat||(x=>x))(getNum(building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy, raw.area?.typicalFloorLeasePy, raw.typicalFloorLeasePy)));
+        setVal('editTypicalFloorPy', getNum(building.area?.typicalFloorPy, building.typicalFloorPy, raw.area?.typicalFloorPy, raw.typicalFloorPy));
+        setVal('editTypicalFloorLeasePy', getNum(building.area?.typicalFloorLeasePy, building.typicalFloorLeasePy, raw.area?.typicalFloorLeasePy, raw.typicalFloorLeasePy));
         setVal('editExclusiveRate', getNum(building.area?.exclusiveRate, building.exclusiveRate, raw.area?.exclusiveRate, raw.exclusiveRate));
         
         // ★ 임대조건 - 원 단위 그대로 표시 (변환 없음)
@@ -3529,9 +3529,9 @@
         const rawRent = getNum(building.rentPy, building.pricing?.rentPy, raw.rentPy, raw.pricing?.rentPy);
         const rawMaint = getNum(building.maintenancePy, building.pricing?.maintenancePy, raw.maintenancePy, raw.pricing?.maintenancePy);
         console.log('  - 임대조건 raw:', { deposit: rawDeposit, rent: rawRent, maint: rawMaint });
-        setVal('editDepositPy', (window.commaFormat||(x=>x))(rawDeposit));
-        setVal('editRentPy', (window.commaFormat||(x=>x))(rawRent));
-        setVal('editMaintenancePy', (window.commaFormat||(x=>x))(rawMaint));
+        setVal('editDepositPy', rawDeposit);
+        setVal('editRentPy', rawRent);
+        setVal('editMaintenancePy', rawMaint);
         
         // 시설 정보 (★ _raw fallback)
         setVal('editHvac', getVal(building.hvac, raw.hvac, raw.specs?.hvac));
@@ -5477,78 +5477,6 @@
             }, 200);
             setTimeout(() => clearInterval(timer), 10000);
         })();
-    </script>
-    
-    <!-- ★ Comp List 버튼 드래그 이동 + 로그인 화면 플로팅 UI 숨김 -->
-    <script>
-    (function makeCompListDraggable() {
-        function init() {
-            const btn = document.getElementById('compListFloatingBtn');
-            if (!btn || btn._draggable) return;
-            btn._draggable = true;
-            let down = false, moved = false, sx = 0, sy = 0, ox = 0, oy = 0;
-            btn.style.touchAction = 'none';
-            btn.addEventListener('pointerdown', e => {
-                down = true; moved = false;
-                sx = e.clientX; sy = e.clientY;
-                const r = btn.getBoundingClientRect();
-                ox = r.left; oy = r.top;
-                try { btn.setPointerCapture(e.pointerId); } catch (_) {}
-            });
-            btn.addEventListener('pointermove', e => {
-                if (!down) return;
-                const dx = e.clientX - sx, dy = e.clientY - sy;
-                if (!moved && Math.hypot(dx, dy) > 5) moved = true;
-                if (moved) {
-                    let nx = Math.max(4, Math.min(window.innerWidth - btn.offsetWidth - 4, ox + dx));
-                    let ny = Math.max(4, Math.min(window.innerHeight - btn.offsetHeight - 4, oy + dy));
-                    btn.style.left = nx + 'px'; btn.style.top = ny + 'px';
-                    btn.style.right = 'auto'; btn.style.bottom = 'auto';
-                    e.preventDefault();
-                }
-            });
-            btn.addEventListener('pointerup', e => {
-                down = false;
-                if (moved) { btn._justDragged = true; setTimeout(() => { btn._justDragged = false; }, 60); }
-                try { btn.releasePointerCapture(e.pointerId); } catch (_) {}
-            });
-            // 드래그 직후의 click은 패널 토글되지 않도록 억제
-            btn.addEventListener('click', e => {
-                if (btn._justDragged) { e.preventDefault(); e.stopImmediatePropagation(); }
-            }, true);
-        }
-        const t = setInterval(() => { if (document.getElementById('compListFloatingBtn')) { init(); clearInterval(t); } }, 300);
-        setTimeout(() => clearInterval(t), 15000);
-    })();
-
-    (function gateFloatingUIByAuth() {
-        // 로그인 화면(미인증)에서는 그리기 도구/Comp List 플로팅 버튼 숨김
-        const IDS = ['drawingToggleBtn', 'drawingToolsPanel', 'compListFloatingBtn', 'compListFloatingPanel'];
-        if (!document.getElementById('authGateStyle')) {
-            const st = document.createElement('style');
-            st.id = 'authGateStyle';
-            st.textContent = '.login-hidden{display:none !important;}';
-            document.head.appendChild(st);
-        }
-        function loggedOut() {
-            const el = document.getElementById('loginScreen');
-            return !!(el && getComputedStyle(el).display !== 'none' && el.offsetParent !== null);
-        }
-        function sync() {
-            const out = loggedOut();
-            IDS.forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.classList.toggle('login-hidden', out);
-            });
-        }
-        sync();
-        ['loginScreen', 'appContainer'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) { try { new MutationObserver(sync).observe(el, { attributes: true, attributeFilter: ['style', 'class'] }); } catch (_) {} }
-        });
-        const t = setInterval(sync, 400);
-        setTimeout(() => clearInterval(t), 20000);
-    })();
     </script>
     
     <!-- ★ 연층(복수층) 공실 전용면적 필터 패치 -->
