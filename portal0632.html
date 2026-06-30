@@ -4066,7 +4066,7 @@
             
             // 데이터 새로고침
             if (window.loadData) {
-                setTimeout(() => window.loadDataProgressive(), 2000);
+                setTimeout(() => window.loadData(), 2000);
             }
             
         } catch (error) {
@@ -4361,7 +4361,7 @@
             } else {
                 // fallback: 전체 데이터 리로드
                 if (window.loadData) {
-                    setTimeout(() => window.loadDataProgressive(), 500);
+                    setTimeout(() => window.loadData(), 500);
                 }
             }
             
