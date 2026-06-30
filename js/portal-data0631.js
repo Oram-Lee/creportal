@@ -87,89 +87,6 @@ export async function loadData() {
     }
 }
 
-// ============================================================
-// ★ 단계 로딩 (첫 화면 빠르게)
-//   1단계: buildings + users 만 받아 리스트/클러스터 즉시 렌더
-//   2단계: 나머지 7개 컬렉션(공실/렌트롤/메모/인센티브/관리/문서/안내문)을
-//          백그라운드로 받아 재렌더 — 공실 배지·필터 등이 잠시 뒤 채워짐
-// ============================================================
-export async function loadDataProgressive() {
-    try {
-        const t0 = performance.now();
-        // 1단계: 위치/리스트/클러스터에 필요한 최소 데이터만
-        const [b, u] = await Promise.all([
-            get(ref(db, 'buildings')),
-            get(ref(db, 'users'))
-        ]);
-        state.dataCache = {
-            buildings: b.val() || {},
-            users: u.val() || {},
-            // 나머지는 빈 객체로 채워 processBuildings가 안전하게 동작 (2단계에서 교체)
-            rentrolls: {}, memos: {}, incentives: {}, managements: {},
-            documents: {}, leasingGuides: {}, vacancies: {}
-        };
-        processBuildings();
-        processLeasingGuideBuildings();
-        if (window.renderBuildingList) window.renderBuildingList();
-        if (state.currentViewMode === 'list' && window.renderTableView) window.renderTableView();
-        if (state.kakaoMap && state.clusterer) {
-            if (window.updateMapMarkers) window.updateMapMarkers();
-        } else {
-            setTimeout(() => {
-                if (state.kakaoMap && state.clusterer && window.updateMapMarkers) window.updateMapMarkers();
-            }, 500);
-        }
-        const t1 = performance.now();
-        console.log(`  ⚡ 1단계(빌딩 ${state.allBuildings.length}개) 첫 렌더: ${Math.round(t1 - t0)}ms`);
-        showToast(`빌딩 ${state.allBuildings.length}개 로드 · 상세 데이터 불러오는 중…`, 'info');
-
-        // 2단계: 나머지 컬렉션 백그라운드 로딩 (await 안 함)
-        loadRemainingData();
-    } catch (e) {
-        console.error('1단계 로드 실패 → 전체 로드로 폴백:', e);
-        return loadData();
-    }
-}
-
-// 2단계: 나머지 컬렉션을 받아 dataCache 채우고 재렌더
-async function loadRemainingData() {
-    try {
-        const t0 = performance.now();
-        const [r, m, i, mg, docs, lg, vac] = await Promise.all([
-            get(ref(db, 'rentrolls')),
-            get(ref(db, 'memos')),
-            get(ref(db, 'incentives')),
-            get(ref(db, 'managements')),
-            get(ref(db, 'documents')),
-            get(ref(db, 'leasingGuides')),
-            get(ref(db, 'vacancies'))
-        ]);
-        state.dataCache.rentrolls = r.val() || {};
-        state.dataCache.memos = m.val() || {};
-        state.dataCache.incentives = i.val() || {};
-        state.dataCache.managements = mg.val() || {};
-        state.dataCache.documents = docs.val() || {};
-        state.dataCache.leasingGuides = lg.val() || {};
-        state.dataCache.vacancies = vac.val() || {};
-
-        processBuildings();
-        processLeasingGuideBuildings();
-        if (window.renderBuildingList) window.renderBuildingList();
-        if (state.currentViewMode === 'list' && window.renderTableView) window.renderTableView();
-        if (state.kakaoMap && state.clusterer && window.updateMapMarkers) window.updateMapMarkers();
-        // 1단계 도중 상세를 이미 연 경우, 최신 데이터로 다시 렌더
-        if (state.selectedBuilding && window.openDetail) {
-            window.openDetail(state.selectedBuilding.id);
-        }
-        const t1 = performance.now();
-        console.log(`  📦 2단계(나머지 7개 컬렉션) 로드+재렌더: ${Math.round(t1 - t0)}ms`);
-        showToast('전체 데이터 로드 완료', 'success');
-    } catch (e) {
-        console.error('2단계(나머지) 로드 실패:', e);
-        showToast('상세 데이터 로드 실패 — 새로고침 해주세요', 'error');
-    }
-}
-
 // 임대안내문 포함 빌딩 목록 처리
 // ★ 정식 프로세스: leasingGuides 컬렉션에 최종 저장된 임대안내문의 빌딩만 포함
 export function processLeasingGuideBuildings() {
@@ -623,4 +540,3 @@ function buildDocuments(vacancies, externalDocs) {
 
 // window에 등록
 window.loadData = loadData;
-window.loadDataProgressive = loadDataProgressive;
