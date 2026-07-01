@@ -7932,6 +7932,14 @@ window.saveBuildingEdit = async function(formData) {
     // editModal이 없는 환경(구형 portal.html fallback)을 위해 전달된 formData도 병합
     formData = Object.assign({}, formData, refreshedFormData);
 
+    // ★ 핵심 수정: 프리필 시 붙은 천단위 콤마 제거.
+    //   getFieldVal은 콤마 포함 원문("25,208")을 반환하므로 parseFloat("25,208")=25 가 되어
+    //   수정하지 않은 숫자 필드까지 엉뚱한 값(25 등)으로 저장되던 문제를 막는다.
+    ['grossFloorPy', 'landAreaSqm', 'buildingAreaSqm', 'vlRat', 'bcRat',
+     'typicalFloorLeasePy', 'typicalFloorPy', 'exclusiveRate',
+     'depositPy', 'rentPy', 'maintenancePy', 'ceilingHeight', 'floorLoad'
+    ].forEach(k => { if (typeof formData[k] === 'string') formData[k] = formData[k].replace(/,/g, '').trim(); });
+
     console.log('💾 [v4.2] 빌딩 정보 저장 (소수점 복원 포함):', formData);
     
     try {
@@ -7960,9 +7968,12 @@ window.saveBuildingEdit = async function(formData) {
             if (!isNaN(gPy)) {
                 updates['area/grossFloorPy'] = gPy;
                 updates.grossFloorPy = gPy;
-                // ㎡도 역산 저장
-                updates['area/grossFloorSqm'] = parseFloat((gPy * 3.30579).toFixed(2));
-                updates.grossFloorSqm = parseFloat((gPy * 3.30579).toFixed(2));
+                // ㎡는 평이 실제로 변경된 경우에만 역산 저장 (건축물대장 원본 ㎡ 보존)
+                const _storedPy = parseFloat(String(building.area?.grossFloorPy ?? building.grossFloorPy ?? '').replace(/,/g, ''));
+                if (isNaN(_storedPy) || Math.abs(_storedPy - gPy) > 0.5) {
+                    updates['area/grossFloorSqm'] = parseFloat((gPy * 3.30579).toFixed(2));
+                    updates.grossFloorSqm = parseFloat((gPy * 3.30579).toFixed(2));
+                }
             }
         }
         // 대지면적 (㎡)
