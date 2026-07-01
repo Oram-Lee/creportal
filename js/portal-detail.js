@@ -456,10 +456,18 @@ export function updateDeleteButtons() {
 export function renderInfoSection() {
     const b = state.selectedBuilding;
     // ★ 마이그레이션 호환: toWon()으로 원 단위 정규화, * 10000 제거
+    // F-NOC = (임대료 + 관리비) ÷ 전용률 — 셋 중 하나라도 누락되면 계산하지 않음
+    const _fnocPresent = (v) => v !== undefined && v !== null && String(v).trim() !== '';
+    const _fnocEffRaw = parseFloat(String(b.exclusiveRate ?? '').replace(/[^\d.]/g, ''));
+    const _fnocMissing = [];
+    if (!_fnocPresent(b.rentPy)) _fnocMissing.push('임대료');
+    if (!_fnocPresent(b.maintenancePy)) _fnocMissing.push('관리비');
+    if (!_fnocPresent(b.exclusiveRate) || !(_fnocEffRaw > 0)) _fnocMissing.push('전용률');
+    const _fnocOk = _fnocMissing.length === 0;
     const rentVal = toWon(b.rentPy);
     const mgmtVal = toWon(b.maintenancePy);
-    const eff = (b.exclusiveRate || 55) / 100;
-    const fnoc = eff > 0 ? (rentVal + mgmtVal) / eff : 0;
+    const eff = _fnocEffRaw / 100;
+    const fnoc = _fnocOk ? (rentVal + mgmtVal) / eff : null;
     
     // 복수 기준가 정보
     const floorPricing = b.floorPricing || [];
@@ -829,7 +837,9 @@ export function renderInfoSection() {
         </div>
         <div class="noc-card">
             <div class="title">NOC (Net Occupancy Cost)</div>
-            <div class="noc-row"><span>F-NOC (전용면적 기준)</span><span class="value">${formatNumber(fnoc)}원/평</span></div>
+            <div class="noc-row"><span>F-NOC (전용면적 기준)</span><span class="value">${_fnocOk ? formatNumber(fnoc) + '원/평' : '-'}</span></div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.5;">공식: (임대료 + 관리비) ÷ 전용률</div>
+            ${!_fnocOk ? `<div style="font-size: 11px; color: #dc2626; margin-top: 4px; font-weight: 600;">⚠️ 계산 불가 · 누락: ${_fnocMissing.join(', ')}</div>` : ''}
         </div>
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
             <span>🏢 빌딩 상세</span>
@@ -1443,17 +1453,18 @@ export async function setOfficialPricing(pricingId) {
         
         // 기본 임대조건도 업데이트
         const officialPricing = b.floorPricing[pricingIdx];
-        const updateData = {
-            floorPricing: b.floorPricing,
-            // 루트 레벨 업데이트
-            depositPy: officialPricing.depositPy || b.depositPy,
-            rentPy: officialPricing.rentPy || b.rentPy,
-            maintenancePy: officialPricing.maintenancePy || b.maintenancePy,
-            // pricing 객체도 업데이트
-            'pricing/depositPy': officialPricing.depositPy || b.depositPy,
-            'pricing/rentPy': officialPricing.rentPy || b.rentPy,
-            'pricing/maintenancePy': officialPricing.maintenancePy || b.maintenancePy
+        // 가격: 기준가 값 우선, 없으면 빌딩 기존값. 빈값/undefined면 미기록(Firebase undefined 오류 방지)
+        const _pick = (a, bb) => {
+            const x = (a === undefined || a === null || a === '') ? bb : a;
+            return (x === undefined || x === null || x === '') ? null : x;
         };
+        const _pd = _pick(officialPricing.depositPy, b.depositPy);
+        const _pr = _pick(officialPricing.rentPy, b.rentPy);
+        const _pm = _pick(officialPricing.maintenancePy, b.maintenancePy);
+        const updateData = { floorPricing: b.floorPricing };
+        if (_pd != null) { updateData.depositPy = _pd; updateData['pricing/depositPy'] = _pd; }
+        if (_pr != null) { updateData.rentPy = _pr; updateData['pricing/rentPy'] = _pr; }
+        if (_pm != null) { updateData.maintenancePy = _pm; updateData['pricing/maintenancePy'] = _pm; }
         
         // ★ 기준면적(전용=typicalFloorPy / 임대=typicalFloorLeasePy)·전용률도 함께 반영
         //    (OCR 기준가에 면적 정보가 있는 경우에만 — 없으면 기존값 유지)
@@ -1471,32 +1482,33 @@ export async function setOfficialPricing(pricingId) {
         if (_leaseArea != null){ updateData.typicalFloorRent = _leaseArea; updateData.typicalFloorLeasePy = _leaseArea; updateData['area/typicalFloorLeasePy'] = _leaseArea; }
         if (_excRate != null)  { updateData.exclusiveRate = _excRate;        updateData['area/exclusiveRate'] = _excRate; }
         
+        // Firebase는 undefined 값을 거부 — 방어적으로 undefined 키 제거
+        Object.keys(updateData).forEach(k => { if (updateData[k] === undefined) delete updateData[k]; });
         await update(ref(db, `buildings/${b.id}`), updateData);
         
-        // 로컬 상태 업데이트
-        state.selectedBuilding.depositPy = updateData.depositPy;
-        state.selectedBuilding.rentPy = updateData.rentPy;
-        state.selectedBuilding.maintenancePy = updateData.maintenancePy;
+        // 로컬 상태 업데이트 (정의된 값만)
+        if (_pd != null) state.selectedBuilding.depositPy = _pd;
+        if (_pr != null) state.selectedBuilding.rentPy = _pr;
+        if (_pm != null) state.selectedBuilding.maintenancePy = _pm;
         
         // _raw도 업데이트
         if (state.selectedBuilding._raw) {
-            state.selectedBuilding._raw.depositPy = updateData.depositPy;
-            state.selectedBuilding._raw.rentPy = updateData.rentPy;
-            state.selectedBuilding._raw.maintenancePy = updateData.maintenancePy;
-            if (!state.selectedBuilding._raw.pricing) {
-                state.selectedBuilding._raw.pricing = {};
-            }
-            state.selectedBuilding._raw.pricing.depositPy = updateData.depositPy;
-            state.selectedBuilding._raw.pricing.rentPy = updateData.rentPy;
-            state.selectedBuilding._raw.pricing.maintenancePy = updateData.maintenancePy;
+            const _raw = state.selectedBuilding._raw;
+            if (_pd != null) _raw.depositPy = _pd;
+            if (_pr != null) _raw.rentPy = _pr;
+            if (_pm != null) _raw.maintenancePy = _pm;
+            _raw.pricing = _raw.pricing || {};
+            if (_pd != null) _raw.pricing.depositPy = _pd;
+            if (_pr != null) _raw.pricing.rentPy = _pr;
+            if (_pm != null) _raw.pricing.maintenancePy = _pm;
         }
         
         // allBuildings에서도 업데이트 (목록 표시용)
         const buildingInAll = state.allBuildings.find(bd => bd.id === b.id);
         if (buildingInAll) {
-            buildingInAll.depositPy = updateData.depositPy;
-            buildingInAll.rentPy = updateData.rentPy;
-            buildingInAll.maintenancePy = updateData.maintenancePy;
+            if (_pd != null) buildingInAll.depositPy = _pd;
+            if (_pr != null) buildingInAll.rentPy = _pr;
+            if (_pm != null) buildingInAll.maintenancePy = _pm;
         }
         
         // 면적/전용률 로컬 반영 (루트 + area 둘 다)
