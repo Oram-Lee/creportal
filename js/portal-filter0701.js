@@ -112,8 +112,6 @@ export function resetAllFilters() {
     };
     
     document.getElementById('searchInput').value = '';
-    const _clearBtn = document.getElementById('searchClearBtn');
-    if (_clearBtn) _clearBtn.style.display = 'none';
     document.getElementById('hasVacancyCheck').checked = true;
     const lgCheck = document.getElementById('leasingGuideCheck');
     if (lgCheck) lgCheck.checked = false;
@@ -155,9 +153,9 @@ export function applyFilters() {
     const _sortBy = document.getElementById('listSortBy')?.value || 'area_desc';
 
     state.filteredBuildings = state.allBuildings.filter(b => {
-        // 검색어 (빌딩명·주소·지번·인근역 + 별칭)
+        // 검색어
         if (q) {
-            const searchStr = [b.name, b.address, b.addressJibun, b.nearbyStation, ...(Array.isArray(b.aliases) ? b.aliases : [])]
+            const searchStr = [b.name, b.address, b.addressJibun, b.nearbyStation]
                 .filter(Boolean).join('').toLowerCase().replace(/\s/g, '');
             if (!searchStr.includes(q)) return false;
         }
@@ -268,33 +266,10 @@ export function applyFilters() {
 // 검색 이벤트 설정
 export function setupSearchListener() {
     const searchInput = document.getElementById('searchInput');
-    const clearBtn = document.getElementById('searchClearBtn');
     if (searchInput) {
-        const runFilter = debounce(applyFilters, 300);
-        searchInput.addEventListener('input', () => {
-            const val = searchInput.value;
-            // X(clear) 버튼 표시/숨김 — 즉시
-            if (clearBtn) clearBtn.style.display = val ? 'flex' : 'none';
-            // 검색 시 '지도영역' 탭이면 '전체' 리스트로 전환 (지도 밖 빌딩도 검색되도록) — 즉시
-            if (val.trim() && state.currentListTab === 'viewport' && window.setListTab) {
-                window.setListTab('all');
-            }
-            runFilter();
-        });
-        // 초기 X 버튼 상태 동기화
-        if (clearBtn) clearBtn.style.display = searchInput.value ? 'flex' : 'none';
+        searchInput.addEventListener('input', debounce(applyFilters, 300));
     }
 }
-
-// 검색어 지우기 (입력란 우측 X 버튼)
-export function clearSearchInput() {
-    const searchInput = document.getElementById('searchInput');
-    const clearBtn = document.getElementById('searchClearBtn');
-    if (searchInput) { searchInput.value = ''; searchInput.focus(); }
-    if (clearBtn) clearBtn.style.display = 'none';
-    applyFilters();
-}
-window.clearSearchInput = clearSearchInput;
 
 // ===== 상세 필터 =====
 
