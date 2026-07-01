@@ -444,10 +444,11 @@ export function renderBuildingEditor(item, building) {
                                 <!-- ★ v4.6: 로드뷰/캡처 버튼을 지도 밖으로 이동 -->
                                 ${item.mapMode === 'auto' ? `
                                     ${building.lat && building.lng ? `<button class="info-action-btn" onclick="event.stopPropagation(); openRoadview(${building.lat}, ${building.lng})" title="로드뷰 보기" style="font-size:11px; padding:4px 8px;">👁️ 로드뷰</button>` : ''}
-                                    <button class="info-action-btn" onclick="event.stopPropagation(); captureLiveMapToManual(${idx})" title="지금 보이는 지도 화면 그대로 캡쳐 → 수동 이미지로 자동 삽입" style="font-size:11px; padding:4px 8px; color:#ec4899; border-color:#ec4899; font-weight:600;">📷 화면캡쳐</button>
+                                    <button class="info-action-btn" onclick="event.stopPropagation(); pasteMapFromClipboard(${idx})" title="복사한 스크린샷을 지도에 바로 붙여넣기" style="font-size:11px; padding:4px 8px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
                                     <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="빌딩 중심 기본 지도 자동 생성·저장" style="font-size:11px; padding:4px 8px;">📸 지도생성</button>
                                 ` : `
-                                    <!-- 수동 모드: 네이버 지도 생성 + 삭제/기본값 -->
+                                    <!-- 수동 모드: 붙여넣기 + 네이버 지도 생성 + 삭제/기본값 -->
+                                    <button class="info-action-btn" onclick="event.stopPropagation(); pasteMapFromClipboard(${idx})" title="복사한 스크린샷을 지도에 바로 붙여넣기" style="font-size:11px; padding:4px 8px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
                                     <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="네이버 지도 생성·저장 (핑크 마커)" style="font-size:11px; padding:4px 8px; color:#0369a1;">📸 지도생성</button>
                                     ${item.mapImage ? `
                                         <button class="info-action-btn" onclick="event.stopPropagation(); removeMapImage(${idx})" title="업로드 이미지 삭제" style="font-size:11px; padding:4px 8px; color:#dc2626;">🗑️ 삭제</button>
@@ -1450,6 +1451,40 @@ async function processLocationImage(file, idx) {
     } catch (error) {
         console.error('이미지 처리 오류:', error);
         showToast('이미지 처리 중 오류가 발생했습니다', 'error');
+    }
+}
+
+// ★ v6.6: 클립보드에서 이미지를 직접 읽어 지도(수동)에 삽입 — 포커스/paste 이벤트 불필요, 버튼 클릭만으로 동작
+//   Win+Shift+S 등으로 캡쳐 → 이 버튼 클릭 → 지도 영역에 바로 삽입. Ctrl+V 라우팅 quirk를 우회하는 확실한 경로.
+export async function pasteMapFromClipboard(idx) {
+    const item = state.tocItems[idx];
+    if (!item) return;
+
+    if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+        showToast('이 브라우저는 클립보드 읽기를 지원하지 않습니다. Ctrl+V를 사용해주세요.', 'warning');
+        return;
+    }
+
+    try {
+        const clipboardItems = await navigator.clipboard.read();
+        for (const clipItem of clipboardItems) {
+            const imgType = (clipItem.types || []).find(t => t.startsWith('image/'));
+            if (imgType) {
+                const blob = await clipItem.getType(imgType);
+                const ext = imgType.split('/')[1] || 'png';
+                const file = new File([blob], `pasted-map.${ext}`, { type: imgType });
+                // 수동 모드 보장 + 붙여넣기 타깃 동기화 후, 기존 지도 이미지 처리 경로 재사용
+                item.mapMode = 'manual';
+                state._pasteTarget = { idx, kind: 'map' };
+                await processLocationImage(file, idx);
+                return;
+            }
+        }
+        showToast('클립보드에 이미지가 없습니다. 먼저 지도를 캡쳐(Win+Shift+S)하세요.', 'warning');
+    } catch (err) {
+        console.error('[클립보드 붙여넣기] 실패:', err);
+        // 대개 권한 거부(NotAllowedError). 주소창 좌측 자물쇠/아이콘에서 클립보드 허용 안내
+        showToast('클립보드 읽기 권한이 필요합니다. 주소창 좌측 아이콘에서 클립보드를 허용해주세요.', 'error');
     }
 }
 
@@ -2534,4 +2569,6 @@ export function registerBuildingFunctions() {
     window.selectAllGuideVacancies = selectAllGuideVacancies;
     // ★ v5.1: 지도 자동 생성
     window.generateLocationMap = generateLocationMap;
+    // ★ v6.6: 클립보드 직접 붙여넣기
+    window.pasteMapFromClipboard = pasteMapFromClipboard;
 }

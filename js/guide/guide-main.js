@@ -18,9 +18,9 @@ import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-ut
 import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.7';
 import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.1';
 import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.8';
-import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.5';
+import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.7';
 import { registerVacancyFunctions } from './guide-vacancy.js?v=5.12';
-import { registerMapFunctions } from './guide-map.js?v=5.3';
+import { registerMapFunctions } from './guide-map.js?v=5.5';
 import { registerNoteFunctions } from './guide-note.js?v=5.1';
 import { registerDividerFunctions } from './guide-divider.js?v=5.1';
 import { registerModalFunctions } from './guide-modal.js?v=5.1';
