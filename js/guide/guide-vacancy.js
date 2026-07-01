@@ -459,19 +459,27 @@ export function startVacancyRowEdit(idx, vacancyId, type, btn) {
     const rent = vacancy.rent ?? vacancy.rentPy ?? '';
     const maint = vacancy.maintenance ?? vacancy.maintenancePy ?? '';
     const moveIn = vacancy.moveIn ?? vacancy.moveInDate ?? '';
+    const srcName = (vacancy.source || vacancy.company) || '';
+    const srcDate = (vacancy.publishDate || vacancy.date) || '';
+
+    // 공통 인풋 스타일 (기준가 편집과 동일 기준: 채우기 + 넉넉한 패딩 + 라운드 6px)
+    const inBase = 'width:100%; box-sizing:border-box; font-size:13px; padding:7px 6px; border:1px solid #2563eb; border-radius:6px; outline:none;';
+    const numStyle = inBase + ' text-align:right;';
+    const ctrStyle = inBase + ' text-align:center;';
 
     targetRow.innerHTML = `
-        <td><input id="veFloor_${idx}" value="${vacancy.floor || ''}" style="width:52px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veExcl_${idx}" value="${vacancy.exclusiveArea || vacancy.area || ''}" style="width:60px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veRentArea_${idx}" value="${vacancy.rentArea || vacancy.area || ''}" style="width:60px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veDep_${idx}" value="${dep}" placeholder="문의" style="width:64px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veRent_${idx}" value="${rent}" placeholder="문의" style="width:64px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veMaint_${idx}" value="${maint}" placeholder="문의" style="width:64px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
-        <td><input id="veMoveIn_${idx}" value="${moveIn}" style="width:64px; font-size:13px; border:1px solid #2563eb; border-radius:4px; padding:4px 6px; outline:none; box-sizing:border-box;"></td>
+        <td><input id="veFloor_${idx}" value="${vacancy.floor || ''}" style="${ctrStyle} min-width:50px;"></td>
+        <td><input id="veExcl_${idx}" class="js-comma" inputmode="decimal" value="${vacancy.exclusiveArea || vacancy.area || ''}" style="${numStyle} min-width:60px;"></td>
+        <td><input id="veRentArea_${idx}" class="js-comma" inputmode="decimal" value="${vacancy.rentArea || vacancy.area || ''}" style="${numStyle} min-width:60px;"></td>
+        <td><input id="veDep_${idx}" class="js-comma" inputmode="decimal" value="${dep}" placeholder="문의" style="${numStyle} min-width:70px;"></td>
+        <td><input id="veRent_${idx}" class="js-comma" inputmode="decimal" value="${rent}" placeholder="문의" style="${numStyle} min-width:70px;"></td>
+        <td><input id="veMaint_${idx}" class="js-comma" inputmode="decimal" value="${maint}" placeholder="문의" style="${numStyle} min-width:70px;"></td>
+        <td><input id="veMoveIn_${idx}" value="${moveIn}" placeholder="협의" style="${ctrStyle} min-width:76px;"></td>
+        <td style="font-size:11px; color:#64748b; line-height:1.35;">${srcName || '<span style="color:#cbd5e1;">-</span>'}${srcDate ? '<br><span style="color:#94a3b8;">' + srcDate + '</span>' : ''}</td>
         <td>
-            <div class="actions" style="display:flex; gap:4px; white-space:nowrap;">
-                <button onclick="saveVacancyRowEdit(${idx}, '${vacancyId}', '${type}', this)" style="font-size:12px; padding:5px 11px; border-radius:4px; background:#2563eb; color:#fff; border:none; cursor:pointer; font-weight:700;">저장</button>
-                <button onclick="cancelVacancyRowEdit(${idx}, '${vacancyId}')" style="font-size:12px; padding:5px 9px; border-radius:4px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer;">취소</button>
+            <div class="actions" style="display:flex; gap:4px; white-space:nowrap; justify-content:center;">
+                <button onclick="saveVacancyRowEdit(${idx}, '${vacancyId}', '${type}', this)" style="font-size:13px; padding:7px 12px; border-radius:6px; background:#2563eb; color:#fff; border:none; cursor:pointer; font-weight:700;">저장</button>
+                <button onclick="cancelVacancyRowEdit(${idx}, '${vacancyId}')" style="font-size:13px; padding:7px 10px; border-radius:6px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer;">취소</button>
             </div>
         </td>
     `;
@@ -494,12 +502,13 @@ export function saveVacancyRowEdit(idx, vacancyId, type, btn) {
     }
     if (!vacancy) return;
 
+    const stripComma = (s) => (s === undefined || s === null) ? s : String(s).replace(/,/g, '');
     const floorVal = document.getElementById(`veFloor_${idx}`)?.value ?? vacancy.floor;
-    const exclVal  = document.getElementById(`veExcl_${idx}`)?.value ?? '';
-    const rentAreaVal = document.getElementById(`veRentArea_${idx}`)?.value ?? '';
-    const depVal   = document.getElementById(`veDep_${idx}`)?.value;
-    const rentVal  = document.getElementById(`veRent_${idx}`)?.value;
-    const maintVal = document.getElementById(`veMaint_${idx}`)?.value;
+    const exclVal  = stripComma(document.getElementById(`veExcl_${idx}`)?.value ?? '');
+    const rentAreaVal = stripComma(document.getElementById(`veRentArea_${idx}`)?.value ?? '');
+    const depVal   = stripComma(document.getElementById(`veDep_${idx}`)?.value ?? '');
+    const rentVal  = stripComma(document.getElementById(`veRent_${idx}`)?.value ?? '');
+    const maintVal = stripComma(document.getElementById(`veMaint_${idx}`)?.value ?? '');
     const moveInVal = document.getElementById(`veMoveIn_${idx}`)?.value ?? '';
 
     // 빈 문자열 → '문의' 처리
