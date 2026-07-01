@@ -440,22 +440,16 @@ export function renderBuildingEditor(item, building) {
                     <div>
                         <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                             <span>LOCATION</span>
-                            <div style="display:flex; gap:4px; align-items:center;">
+                            <div style="display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
                                 <!-- ★ v4.6: 로드뷰/캡처 버튼을 지도 밖으로 이동 -->
                                 ${item.mapMode === 'auto' ? `
-                                    ${building.lat && building.lng ? `<button class="info-action-btn" onclick="event.stopPropagation(); openRoadview(${building.lat}, ${building.lng})" title="로드뷰 보기" style="font-size:11px; padding:4px 8px;">👁️ 로드뷰</button>` : ''}
-                                    <button class="info-action-btn" onclick="event.stopPropagation(); pasteMapFromClipboard(${idx})" title="복사한 스크린샷을 지도에 바로 붙여넣기" style="font-size:11px; padding:4px 8px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
-                                    <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="빌딩 중심 기본 지도 자동 생성·저장" style="font-size:11px; padding:4px 8px;">📸 지도생성</button>
+                                    ${building.lat && building.lng ? `<button class="info-action-btn" onclick="event.stopPropagation(); openRoadview(${building.lat}, ${building.lng})" title="로드뷰 보기" style="font-size:11px; padding:3px 7px;">👁️ 로드뷰</button>` : ''}
+                                    <button class="info-action-btn" onclick="event.stopPropagation(); pasteMapFromClipboard(${idx})" title="복사한 스크린샷을 지도에 바로 붙여넣기" style="font-size:11px; padding:3px 7px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
+                                    <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="빌딩 중심 기본 지도 자동 생성·저장" style="font-size:11px; padding:3px 7px;">📸 지도생성</button>
                                 ` : `
-                                    <!-- 수동 모드: 붙여넣기 + 네이버 지도 생성 + 삭제/기본값 -->
-                                    <button class="info-action-btn" onclick="event.stopPropagation(); pasteMapFromClipboard(${idx})" title="복사한 스크린샷을 지도에 바로 붙여넣기" style="font-size:11px; padding:4px 8px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
-                                    <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="네이버 지도 생성·저장 (핑크 마커)" style="font-size:11px; padding:4px 8px; color:#0369a1;">📸 지도생성</button>
-                                    ${item.mapImage ? `
-                                        <button class="info-action-btn" onclick="event.stopPropagation(); removeMapImage(${idx})" title="업로드 이미지 삭제" style="font-size:11px; padding:4px 8px; color:#dc2626;">🗑️ 삭제</button>
-                                        ${building.images?.location ? `<button class="info-action-btn" onclick="event.stopPropagation(); resetToStorageMapImage(${idx}, '${building.id}')" title="Firebase Storage 이미지로 복원" style="font-size:11px; padding:4px 8px; color:#2563eb;">🔄 기본값</button>` : ''}
-                                    ` : (building.images?.location ? `
-                                        <span style="font-size:10px; color:#6b7280; padding:4px;">📦 Storage</span>
-                                    ` : '')}
+                                    <!-- 수동 모드: 붙여넣기 + (붙여넣은 경우만) 기본값 복원 -->
+                                    <button class="info-action-btn" onclick="event.stopPropagation(); pasteMapFromClipboard(${idx})" title="복사한 스크린샷을 지도에 붙여넣기" style="font-size:11px; padding:3px 7px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
+                                    ${item.mapImage ? `<button class="info-action-btn" onclick="event.stopPropagation(); resetToStorageMapImage(${idx}, '${building.id}')" title="붙여넣기 취소 → 저장된 기본 지도로 복원 (없으면 빈 상태)" style="font-size:11px; padding:3px 7px; color:#6b7280;">↩️ 기본값</button>` : ''}
                                 `}
                                 <div class="location-mode-toggle">
                                     <button class="location-mode-btn ${item.mapMode !== 'auto' ? 'active' : ''}" onclick="setMapMode(${idx}, 'manual')">📷수동</button>
@@ -1320,28 +1314,16 @@ export function removeMapImage(idx) {
     showToast('지도 이미지가 삭제되었습니다', 'success');
 }
 
-// ★ v4.7: Firebase Storage 이미지로 복원
+// ★ v6.7: 기본값 = 붙여넣기 취소 → 저장된 기본 지도(building.images.location)로 복원. 없으면 빈 상태.
 export function resetToStorageMapImage(idx, buildingId) {
     const item = state.tocItems[idx];
     if (!item) return;
-    
-    const building = state.allBuildings.find(b => b.id === buildingId) || {};
-    
-    if (!building.images?.location) {
-        showToast('기본 이미지가 없습니다', 'error');
-        return;
-    }
-    
-    // 확인 다이얼로그
-    const confirmed = confirm(
-        `업로드한 이미지를 삭제하고\nFirebase Storage 이미지로 복원하시겠습니까?`
-    );
-    
-    if (confirmed) {
-        item.mapImage = null;  // 업로드 이미지 삭제 → Storage 이미지 사용
-        renderBuildingEditor(item, building);
-        showToast('기본 이미지로 복원되었습니다', 'success');
-    }
+
+    const building = state.allBuildings.find(b => b.id === (buildingId || item.buildingId)) || {};
+
+    item.mapImage = null;  // 붙여넣기 override 제거 → 저장된 기본 이미지 or 빈 상태 표시
+    renderBuildingEditor(item, building);
+    showToast(building.images?.location ? '저장된 기본 지도로 복원되었습니다' : '지도를 비웠습니다', 'success');
 }
 
 // ★ v5.2: LOCATION 영역 드래그앤드롭 + Ctrl+V 설정
