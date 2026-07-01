@@ -7163,7 +7163,114 @@
                 if (typeof showToast === 'function')
                     showToast('임대안내문에서 빌딩 정보가 업데이트되었습니다', 'success');
             }
+
+            // ★ v6.11: 안내문 직접입력 공실/기준가 노출 데이터 반영
+            if (data && (data.guideVacancy !== undefined || data.guideFloorPricing !== undefined)) {
+                if (window.state?.allBuildings) {
+                    const gi = window.state.allBuildings.findIndex(b => b.id === buildingId);
+                    if (gi >= 0) {
+                        if (data.guideVacancy !== undefined) window.state.allBuildings[gi].guideVacancy = data.guideVacancy;
+                        if (data.guideFloorPricing !== undefined) window.state.allBuildings[gi].guideFloorPricing = data.guideFloorPricing;
+                    }
+                }
+                if (window.state?.selectedBuilding?.id === buildingId) {
+                    if (data.guideVacancy !== undefined) window.state.selectedBuilding.guideVacancy = data.guideVacancy;
+                    if (data.guideFloorPricing !== undefined) window.state.selectedBuilding.guideFloorPricing = data.guideFloorPricing;
+                    if (typeof window.refreshGuideManualBlocks === 'function') window.refreshGuideManualBlocks();
+                }
+            }
         }
+
+        // ── ★ v6.11: 안내문 직접입력 공실/기준가 → 상세 패널 노출 (portal-main.js 비의존, 자체 주입) ──
+        const _guideFmt = (v) => {
+            if (v === null || v === undefined) return '-';
+            const s = String(v).replace(/,/g, '').trim();
+            if (s === '' || s === '문의' || s === '협의' || isNaN(Number(s))) return (v === '' ? '-' : v);
+            return Number(s).toLocaleString('ko-KR');
+        };
+        const _guideEsc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+        function _renderGuideVacancyBlock(gv) {
+            const rows = (gv.vacancies || []).map(v => `
+                <tr>
+                    <td style="padding:7px 8px; text-align:center; border-bottom:1px solid #eef2f7;">${_guideEsc(v.floor)}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.exclusiveArea)}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.rentArea)}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.deposit)}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.rent)}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.maintenance)}</td>
+                    <td style="padding:7px 8px; text-align:center; border-bottom:1px solid #eef2f7;">${_guideEsc(v.moveIn)}</td>
+                </tr>`).join('');
+            const upd = gv.updatedAt ? new Date(gv.updatedAt).toLocaleDateString('ko-KR') : '';
+            return `
+            <div class="guide-manual-vacancy" style="margin-bottom:16px; border:1px solid #bfdbfe; border-radius:10px; overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#eff6ff;">
+                    <div style="font-size:13px; font-weight:700; color:#1d4ed8;">📄 안내문 공실 <span style="font-size:11px; font-weight:600; color:#2563eb; background:#dbeafe; padding:2px 8px; border-radius:10px; margin-left:4px;">직접입력</span></div>
+                    <div style="font-size:11px; color:#94a3b8;">${gv.vacancies?.length || 0}건${upd ? ' · ' + upd : ''}</div>
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <thead><tr style="background:#f8fafc; color:#64748b; font-weight:600;">
+                        <th style="padding:8px; text-align:center;">층</th><th style="padding:8px; text-align:right;">전용(평)</th><th style="padding:8px; text-align:right;">임대(평)</th><th style="padding:8px; text-align:right;">보증금</th><th style="padding:8px; text-align:right;">임대료</th><th style="padding:8px; text-align:right;">관리비</th><th style="padding:8px; text-align:center;">입주시기</th>
+                    </tr></thead>
+                    <tbody>${rows || '<tr><td colspan="7" style="padding:12px; text-align:center; color:#94a3b8;">공실 없음</td></tr>'}</tbody>
+                </table>
+            </div>`;
+        }
+
+        function _renderGuidePricingBlock(gfp) {
+            const rows = (gfp.rows || []).map(r => `
+                <tr>
+                    <td style="padding:7px 8px; border-bottom:1px solid #eef2f7;">${_guideEsc(r.label)}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(r.deposit)}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(r.rent)}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(r.maintenance)}</td>
+                </tr>`).join('');
+            const upd = gfp.updatedAt ? new Date(gfp.updatedAt).toLocaleDateString('ko-KR') : '';
+            return `
+            <div class="guide-manual-pricing" style="margin-bottom:16px; border:1px solid #bfdbfe; border-radius:10px; overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#eff6ff;">
+                    <div style="font-size:13px; font-weight:700; color:#1d4ed8;">📄 안내문 기준가 <span style="font-size:11px; font-weight:600; color:#2563eb; background:#dbeafe; padding:2px 8px; border-radius:10px; margin-left:4px;">직접입력</span></div>
+                    <div style="font-size:11px; color:#94a3b8;">${upd}</div>
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <thead><tr style="background:#f8fafc; color:#64748b; font-weight:600;">
+                        <th style="padding:8px; text-align:left;">구분</th><th style="padding:8px; text-align:right;">보증금(원/평)</th><th style="padding:8px; text-align:right;">임대료(원/평)</th><th style="padding:8px; text-align:right;">관리비(원/평)</th>
+                    </tr></thead>
+                    <tbody>${rows || '<tr><td colspan="4" style="padding:12px; text-align:center; color:#94a3b8;">기준가 없음</td></tr>'}</tbody>
+                </table>
+            </div>`;
+        }
+
+        function injectGuideManualBlocks() {
+            const b = window.state?.selectedBuilding;
+            const dSec = document.getElementById('sectionDocument');
+            if (dSec) {
+                const ex = dSec.querySelector('.guide-manual-vacancy');
+                if (b?.guideVacancy?.show) { if (!ex) dSec.insertAdjacentHTML('afterbegin', _renderGuideVacancyBlock(b.guideVacancy)); }
+                else if (ex) ex.remove();
+            }
+            const pSec = document.getElementById('sectionPricing');
+            if (pSec) {
+                const ex = pSec.querySelector('.guide-manual-pricing');
+                if (b?.guideFloorPricing?.show) { if (!ex) pSec.insertAdjacentHTML('afterbegin', _renderGuidePricingBlock(b.guideFloorPricing)); }
+                else if (ex) ex.remove();
+            }
+        }
+        function refreshGuideManualBlocks() {
+            document.querySelectorAll('.guide-manual-vacancy, .guide-manual-pricing').forEach(el => el.remove());
+            injectGuideManualBlocks();
+        }
+        window.injectGuideManualBlocks = injectGuideManualBlocks;
+        window.refreshGuideManualBlocks = refreshGuideManualBlocks;
+
+        try {
+            ['sectionDocument', 'sectionPricing'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) new MutationObserver(() => injectGuideManualBlocks()).observe(el, { childList: true });
+            });
+            document.querySelectorAll('.detail-tab').forEach(t => t.addEventListener('click', () => setTimeout(injectGuideManualBlocks, 30)));
+            setTimeout(injectGuideManualBlocks, 800);
+        } catch (_) { /* noop */ }
 
         // ── 통계/리서치 모달 ESC 키: portal-stats.js에서 처리 (_srEscRegistered guard) ──
 

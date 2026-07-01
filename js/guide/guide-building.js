@@ -115,6 +115,7 @@ export function refreshVacancyListTable(idx) {
                 <td>
                     <div class="actions">
                         <button onclick="startVacancyRowEdit(${idx}, '${v.id}', '${v.type}', this)" title="인라인 편집" style="font-size:13px; padding:2px 6px; border:1px solid #e2e8f0; border-radius:4px; background:#fff; color:#64748b; cursor:pointer;">✏️</button>
+                        <button onclick="copyVacancyRow(${idx}, '${v.id}', '${v.type}')" title="이 공실 복사(행 추가)" style="font-size:13px; padding:2px 6px; border:1px solid #bbf7d0; border-radius:4px; background:#fff; color:#16a34a; cursor:pointer; margin-left:3px;">⧉</button>
                         <button onclick="removeSelectedVacancy(${idx}, '${v.id}', '${v.type}')" title="삭제" style="font-size:13px; padding:2px 7px; border:1px solid #fecaca; border-radius:4px; background:#fff; color:#dc2626; cursor:pointer; margin-left:3px;">×</button>
                     </div>
                 </td>
@@ -722,6 +723,10 @@ export function renderBuildingEditor(item, building) {
                         기준가 정보가 미입력된 경우 직접 입력하거나 하단 기준가를 선택·반영하세요.
                         저장 시 CRE Portal 해당 빌딩 기준가에 <strong style="color:#0369a1;">직접입력</strong> 구분으로 저장됩니다.
                     </div>
+                    <label style="display:flex; align-items:center; gap:7px; margin-top:8px; padding:8px 10px; background:#fff; border:1px solid #bae6fd; border-radius:6px; font-size:12px; color:#334155; cursor:pointer;">
+                        <input type="checkbox" ${building.guideFloorPricing?.show ? 'checked' : ''} onchange="toggleFloorPricingPortalExpose(${idx}, '${building.id}', this.checked)" style="width:15px; height:15px; cursor:pointer; accent-color:#2563eb;">
+                        <span>📤 선택·반영된 기준가를 <strong>Portal 빌딩 상세 · 안내문</strong>에 직접입력으로 노출 <span style="color:#94a3b8;">(반영 후 다시 체크하면 갱신)</span></span>
+                    </label>
                 </div>
                 <!-- 직접입력 행 목록 -->
                 <div id="directInputRows_${idx}">
@@ -840,19 +845,43 @@ export function renderBuildingEditor(item, building) {
                         </button>
                     </div>
                     
-                    <!-- 직접 입력 -->
+                    <!-- 직접 입력 (수동입력) -->
                     <div id="addVacancyDirect_${idx}" class="vacancy-add-content">
-                        <div class="vacancy-add-grid">
-                            <input type="text" id="newVacFloor" placeholder="층 (예: 15)">
-                            <input type="text" id="newVacExclusive" class="js-comma" inputmode="decimal" placeholder="전용면적">
-                            <input type="text" id="newVacArea" class="js-comma" inputmode="decimal" placeholder="임대면적">
-                            <input type="text" id="newVacDeposit" class="js-comma" inputmode="decimal" placeholder="보증금">
-                            <input type="text" id="newVacRent" class="js-comma" inputmode="decimal" placeholder="임대료">
-                            <input type="text" id="newVacMaintenance" class="js-comma" inputmode="decimal" placeholder="관리비">
-                            <input type="text" id="newVacMoveIn" placeholder="입주시기">
-                            <input type="text" id="newVacCompany" placeholder="회사명(출처)">
-                            <input type="text" id="newVacPublishDate" placeholder="발행(26.02)">
-                            <button class="btn btn-primary btn-sm" onclick="addDirectVacancy(${idx})">추가</button>
+                        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px 10px;">
+                            <div style="display:flex; flex-direction:column; gap:4px;">
+                                <label style="font-size:11px; font-weight:600; color:#64748b;">층</label>
+                                <input type="text" id="newVacFloor" placeholder="예: 15" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; text-align:center;">
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:4px;">
+                                <label style="font-size:11px; font-weight:600; color:#64748b;">전용면적(평)</label>
+                                <input type="text" id="newVacExclusive" class="js-comma" inputmode="decimal" placeholder="0" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; text-align:right;">
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:4px;">
+                                <label style="font-size:11px; font-weight:600; color:#64748b;">임대면적(평)</label>
+                                <input type="text" id="newVacArea" class="js-comma" inputmode="decimal" placeholder="0" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; text-align:right;">
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:4px;">
+                                <label style="font-size:11px; font-weight:600; color:#64748b;">보증금(원/평)</label>
+                                <input type="text" id="newVacDeposit" class="js-comma" inputmode="decimal" placeholder="문의" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; text-align:right;">
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:4px;">
+                                <label style="font-size:11px; font-weight:600; color:#64748b;">임대료(원/평)</label>
+                                <input type="text" id="newVacRent" class="js-comma" inputmode="decimal" placeholder="문의" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; text-align:right;">
+                            </div>
+                            <div style="display:flex; flex-direction:column; gap:4px;">
+                                <label style="font-size:11px; font-weight:600; color:#64748b;">관리비(원/평)</label>
+                                <input type="text" id="newVacMaintenance" class="js-comma" inputmode="decimal" placeholder="문의" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px; text-align:right;">
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:flex-end; margin-top:12px;">
+                            <div style="display:flex; flex-direction:column; gap:4px; width:200px;">
+                                <label style="font-size:11px; font-weight:600; color:#64748b;">입주시기</label>
+                                <div style="position:relative;">
+                                    <input type="text" id="newVacMoveIn" value="즉시" style="width:100%; box-sizing:border-box; padding:8px 32px 8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;">
+                                    <button type="button" onclick="clearMoveInField('newVacMoveIn')" title="지우고 직접 입력" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); width:20px; height:20px; border:none; background:#e2e8f0; color:#64748b; border-radius:50%; cursor:pointer; font-size:12px; line-height:1; display:flex; align-items:center; justify-content:center; padding:0;">×</button>
+                                </div>
+                            </div>
+                            <button onclick="addDirectVacancy(${idx})" style="flex-shrink:0; padding:9px 26px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer;">+ 추가</button>
                         </div>
                     </div>
                     
@@ -922,6 +951,10 @@ export function renderBuildingEditor(item, building) {
                 <!-- 선택된 공실 목록 (기준가 선택 패널과 동일 스타일 카드) -->
                 <div style="margin-top:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px;">
                     <div style="font-size:13px; font-weight:700; color:#0369a1; margin-bottom:8px; display:flex; align-items:center; gap:8px;">✓ 선택된 공실 <span style="font-weight:400; color:#64748b; font-size:11px;">출력에 반영될 공실 목록</span></div>
+                    <label style="display:flex; align-items:center; gap:7px; margin-bottom:10px; padding:8px 10px; background:#fff; border:1px solid #bae6fd; border-radius:6px; font-size:12px; color:#334155; cursor:pointer;">
+                        <input type="checkbox" ${building.guideVacancy?.show ? 'checked' : ''} onchange="toggleVacancyPortalExpose(${idx}, '${building.id}', this.checked)" style="width:15px; height:15px; cursor:pointer; accent-color:#2563eb;">
+                        <span>📤 이 공실을 <strong>Portal 빌딩 상세 · 안내문</strong>에 직접입력으로 노출 <span style="color:#94a3b8;">(수정 후 다시 체크하면 갱신)</span></span>
+                    </label>
                     <table class="vacancy-list-table">
                     <thead>
                         <tr>
@@ -950,6 +983,7 @@ export function renderBuildingEditor(item, building) {
                                 <td>
                                     <div class="actions">
                                         <button onclick="startVacancyRowEdit(${idx}, '${v.id}', '${v.type}', this)" title="인라인 편집" style="font-size:13px; padding:2px 6px; border:1px solid #e2e8f0; border-radius:4px; background:#fff; color:#64748b; cursor:pointer;">✏️</button>
+                                        <button onclick="copyVacancyRow(${idx}, '${v.id}', '${v.type}')" title="이 공실 복사(행 추가)" style="font-size:13px; padding:2px 6px; border:1px solid #bbf7d0; border-radius:4px; background:#fff; color:#16a34a; cursor:pointer; margin-left:3px;">⧉</button>
                                         <button onclick="removeSelectedVacancy(${idx}, '${v.id}', '${v.type}')" title="삭제" style="font-size:13px; padding:2px 7px; border:1px solid #fecaca; border-radius:4px; background:#fff; color:#dc2626; cursor:pointer; margin-left:3px;">×</button>
                                     </div>
                                 </td>
@@ -2502,6 +2536,91 @@ export async function saveNoteInline(idx, buildingId) {
     }
 }
 
+// ★ v6.11: 안내문 공실/기준가를 Portal 빌딩 상세에 '직접입력'으로 노출 (옵션)
+//   buildings/{id}/guideVacancy · guideFloorPricing 에 스냅샷 저장 + cre_portal_sync 브로드캐스트.
+//   portal.html이 이 필드를 읽어 상세 패널 안내문/기준가 영역에 렌더한다.
+export async function toggleVacancyPortalExpose(idx, buildingId, checked) {
+    const item = state.tocItems[idx];
+    if (!item || !buildingId) { showToast('빌딩 정보가 없습니다', 'error'); return; }
+
+    let payload;
+    if (checked) {
+        const all = [
+            ...(item.customVacancies || []),
+            ...(item.selectedExternalVacancies || []),
+            ...(item.leasingGuideVacancies || [])
+        ];
+        payload = {
+            show: true,
+            vacancies: all.map(v => ({
+                floor: v.floor || '',
+                exclusiveArea: v.exclusiveArea ?? v.area ?? '',
+                rentArea: v.rentArea ?? v.area ?? '',
+                deposit: v.deposit ?? v.depositPy ?? '문의',
+                rent: v.rent ?? v.rentPy ?? '문의',
+                maintenance: v.maintenance ?? v.maintenancePy ?? '문의',
+                moveIn: v.moveIn ?? v.moveInDate ?? '즉시',
+                source: v.source || v.company || '수동입력'
+            })),
+            guideId: state.currentGuide?.id || '',
+            updatedAt: new Date().toISOString()
+        };
+    } else {
+        payload = { show: false, updatedAt: new Date().toISOString() };
+    }
+
+    try {
+        await update(ref(db, `buildings/${buildingId}`), { guideVacancy: payload });
+        const b = state.allBuildings.find(x => x.id === buildingId); if (b) b.guideVacancy = payload;
+        try { const bc = new BroadcastChannel('cre_portal_sync'); bc.postMessage({ type: 'buildingUpdated', buildingId, data: { guideVacancy: payload } }); bc.close(); } catch (_) {}
+        showToast(checked ? '✅ Portal 빌딩 상세 안내문에 공실이 노출됩니다' : 'Portal 상세 공실 노출을 해제했습니다', 'success');
+    } catch (e) {
+        console.error('toggleVacancyPortalExpose 오류:', e);
+        showToast('Portal 반영에 실패했습니다', 'error');
+    }
+}
+
+export async function toggleFloorPricingPortalExpose(idx, buildingId, checked) {
+    const item = state.tocItems[idx];
+    if (!item || !buildingId) { showToast('빌딩 정보가 없습니다', 'error'); return; }
+
+    let payload;
+    if (checked) {
+        const ids = item.selectedFloorPricingIds || [];
+        const fps = item.floorPricing || [];
+        let rows;
+        if (ids.length) {
+            rows = ids.map(id => fps.find((fp, i) => (fp.id || String(i)) === id)).filter(Boolean);
+        } else {
+            rows = fps;
+        }
+        payload = {
+            show: true,
+            rows: rows.map(fp => ({
+                label: fp.label || fp.floorRange || '기준층',
+                deposit: fp.depositPy ?? '',
+                rent: fp.rentPy ?? '',
+                maintenance: fp.maintenancePy ?? '',
+                source: fp.source || fp.company || '수동입력'
+            })),
+            guideId: state.currentGuide?.id || '',
+            updatedAt: new Date().toISOString()
+        };
+    } else {
+        payload = { show: false, updatedAt: new Date().toISOString() };
+    }
+
+    try {
+        await update(ref(db, `buildings/${buildingId}`), { guideFloorPricing: payload });
+        const b = state.allBuildings.find(x => x.id === buildingId); if (b) b.guideFloorPricing = payload;
+        try { const bc = new BroadcastChannel('cre_portal_sync'); bc.postMessage({ type: 'buildingUpdated', buildingId, data: { guideFloorPricing: payload } }); bc.close(); } catch (_) {}
+        showToast(checked ? '✅ Portal 빌딩 상세에 기준가가 노출됩니다' : 'Portal 상세 기준가 노출을 해제했습니다', 'success');
+    } catch (e) {
+        console.error('toggleFloorPricingPortalExpose 오류:', e);
+        showToast('Portal 반영에 실패했습니다', 'error');
+    }
+}
+
 export function registerBuildingFunctions() {
     bindCommaInputs();  // ★ [B-6] 숫자 입력 실시간 콤마 (이벤트 위임, 1회 등록)
     bindGuideImagePaste();  // ★ [B-1] 클립보드 이미지 붙여넣기 (활성 탭 라우팅, 1회 등록)
@@ -2556,6 +2675,9 @@ export function registerBuildingFunctions() {
     window.selectAllGuideVacancies = selectAllGuideVacancies;
     // ★ v5.1: 지도 자동 생성
     window.generateLocationMap = generateLocationMap;
+    // ★ v6.11: 안내문 → Portal 상세 노출 옵션
+    window.toggleVacancyPortalExpose = toggleVacancyPortalExpose;
+    window.toggleFloorPricingPortalExpose = toggleFloorPricingPortalExpose;
     // ★ v6.6: 클립보드 직접 붙여넣기
     window.pasteMapFromClipboard = pasteMapFromClipboard;
 }
