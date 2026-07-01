@@ -444,8 +444,7 @@ export function renderBuildingEditor(item, building) {
                                 <!-- ★ v4.6: 로드뷰/캡처 버튼을 지도 밖으로 이동 -->
                                 ${item.mapMode === 'auto' ? `
                                     ${building.lat && building.lng ? `<button class="info-action-btn" onclick="event.stopPropagation(); openRoadview(${building.lat}, ${building.lng})" title="로드뷰 보기" style="font-size:11px; padding:4px 8px;">👁️ 로드뷰</button>` : ''}
-                                    <button class="info-action-btn" onclick="event.stopPropagation(); captureLiveMapToManual(${idx})" title="지금 보이는 지도 화면 그대로 캡쳐 → 수동 이미지로 자동 삽입" style="font-size:11px; padding:4px 8px; color:#ec4899; border-color:#ec4899; font-weight:600;">📷 화면캡쳐</button>
-                                    <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="빌딩 중심 기본 지도 자동 생성·저장" style="font-size:11px; padding:4px 8px;">📸 지도생성</button>
+                                    <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="네이버 지도 생성·저장 (핑크 마커)" style="font-size:11px; padding:4px 8px;">📸 지도생성</button>
                                 ` : `
                                     <!-- 수동 모드: 네이버 지도 생성 + 삭제/기본값 -->
                                     <button class="info-action-btn" onclick="event.stopPropagation(); generateLocationMap(${idx}, '${building.id}')" title="네이버 지도 생성·저장 (핑크 마커)" style="font-size:11px; padding:4px 8px; color:#0369a1;">📸 지도생성</button>
@@ -1519,15 +1518,7 @@ function bindGuideImagePaste() {
                 const file = ci.getAsFile();
                 if (file) {
                     e.preventDefault();
-                    // ★ v6.5 라우팅 우선순위: 최근 지정 붙여넣기 타깃(_pasteTarget) > 활성 이미지 탭 > exterior
-                    //   LOCATION '수동' 토글 시 setMapMode가 _pasteTarget을 map으로 지정 → 지도 영역에 정확히 붙음
-                    let activeType;
-                    const pt = state._pasteTarget;
-                    if (pt && pt.idx === idx && pt.kind) {
-                        activeType = pt.kind;
-                    } else {
-                        activeType = document.querySelector('.image-tab.active')?.dataset?.type || 'exterior';
-                    }
+                    const activeType = document.querySelector('.image-tab.active')?.dataset?.type || 'exterior';
                     if (activeType === 'map') processLocationImage(file, idx);
                     else processGuideImage(file, idx, activeType);
                     return;
@@ -1623,9 +1614,6 @@ export async function generateLocationMap(idx, buildingId) {
 export function switchImageTab(idx, type, btn) {
     const item = state.tocItems[idx];
     if (!item) return;
-    
-    // ★ v6.5: 이미지 탭 클릭 = 붙여넣기 타깃을 이 탭으로 동기화 (외관/평면도/지도)
-    state._pasteTarget = { idx, kind: type };
     
     // 탭 버튼 활성화
     document.querySelectorAll('.image-tab').forEach(t => t.classList.remove('active'));

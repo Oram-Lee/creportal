@@ -28,17 +28,7 @@ export function setMapMode(idx, mode) {
     
     // 자동 모드일 때 카카오맵 초기화
     if (mode === 'auto') {
-        // ★ v5.3: 자동 전환 → 지도 붙여넣기 타깃 해제 (이미지 탭 라우팅으로 복귀)
-        if (state._pasteTarget && state._pasteTarget.kind === 'map') state._pasteTarget = null;
         setTimeout(() => initBuildingKakaoMap(idx, building), 100);
-    } else {
-        // ★ v5.3: 수동 전환 → 이 지도 슬롯을 Ctrl+V 붙여넣기 타깃으로 지정 + 자동 포커스
-        //   화면 아무 데서나 Ctrl+V 해도 지도 영역에 붙음. 클릭(공통 대화상자) 불필요.
-        state._pasteTarget = { idx, kind: 'map' };
-        setTimeout(() => {
-            const el = document.getElementById(`locationMap_${idx}`);
-            if (el) { try { el.focus({ preventScroll: true }); } catch (_) { el.focus(); } }
-        }, 120);
     }
 }
 
@@ -153,98 +143,6 @@ function renderKakaoMap(container, idx, building, lat, lng) {
 export function openRoadview(lat, lng) {
     const roadviewUrl = `https://map.kakao.com/link/roadview/${lat},${lng}`;
     window.open(roadviewUrl, '_blank');
-}
-
-// ★ v5.3: 지금 보고 있는 자동지도 화면을 그대로 캡쳐 → 수동 이미지로 즉시 삽입
-//   드래그 선택/모달 없이 현재 지도 중심·줌(WYSIWYG)을 StaticMap으로 재현 → Firebase 저장 → 미리보기 반영
-export async function captureLiveMapToManual(idx) {
-    const item = state.tocItems[idx];
-    if (!item) { showToast('항목을 찾을 수 없습니다', 'error'); return; }
-
-    const mapInstance = kakaoMapInstances[idx];
-    if (!mapInstance) {
-        showToast('지도가 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.', 'warning');
-        return;
-    }
-
-    // 현재 화면(사용자가 잡은 구도) 그대로 읽기
-    const center = mapInstance.getCenter();
-    const centerLat = center.getLat();
-    const centerLng = center.getLng();
-    const level = mapInstance.getLevel();
-
-    // 지도 컨테이너 비율에 맞춰 출력 크기 결정 (해상도 2배, 상한 800×600)
-    const container = document.getElementById(`kakaoMapContainer_${idx}`);
-    const cw = container?.offsetWidth || 600;
-    const ch = container?.offsetHeight || 400;
-    const outW = Math.round(Math.min(800, Math.max(300, cw * 2)));
-    const outH = Math.round(Math.min(600, Math.max(200, ch * 2)));
-
-    const appKey = getKakaoAppKey();
-    if (!appKey) { showToast('카카오맵 키를 찾을 수 없습니다', 'error'); return; }
-
-    const building = item.buildingId ? state.allBuildings.find(b => b.id === item.buildingId) : null;
-    const buildingName = building?.name || '지도';
-
-    showToast('현재 지도 화면을 캡쳐하는 중...', 'info');
-
-    try {
-        // ★ CORS 회피: dapi.kakao.com 직접 fetch 불가 → Flask 프록시 경유 (captureMap과 동일 경로)
-        const API_BASE = window.CONFIG?.API_BASE || 'https://portal-dsyl.onrender.com';
-        const res = await fetch(`${API_BASE}/api/kakao-staticmap-proxy`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ appkey: appKey, lat: centerLat, lng: centerLng, width: outW, height: outH, level })
-        });
-        if (!res.ok) {
-            const errText = await res.text().catch(() => '');
-            throw new Error(`프록시 HTTP ${res.status}: ${errText}`);
-        }
-        const blob = await res.blob();
-
-        // Firebase Storage 우선(URL만 저장 → 가벼움), 함수 없으면 dataURL 임베드로 폴백
-        let finalUrl;
-        if (typeof window.uploadToFirebaseStorage === 'function') {
-            const safeName = buildingName.replace(/[^a-zA-Z0-9가-힣]/g, '_');
-            const filename = `${safeName}_map_${new Date().toISOString().slice(0, 10)}_${Date.now()}.png`;
-            finalUrl = await window.uploadToFirebaseStorage(blob, `maps/${filename}`);
-        } else {
-            finalUrl = await compressBlobToDataURL(blob, 800, 0.82);
-        }
-
-        // ★ 수동 모드로 전환 + 캡쳐 이미지 즉시 삽입 + 붙여넣기 타깃 동기화
-        item.mapImage = finalUrl;
-        item.mapMode = 'manual';
-        state._pasteTarget = { idx, kind: 'map' };
-        if (window.renderBuildingEditor) window.renderBuildingEditor(item, building || {});
-
-        showToast('✅ 현재 지도 화면이 수동 이미지로 삽입되었습니다', 'success');
-    } catch (err) {
-        console.error('[지도캡쳐] 실패:', err);
-        showToast('지도 캡쳐에 실패했습니다. 콘솔을 확인해주세요.', 'error');
-    }
-}
-
-// Blob → (필요 시 축소) → dataURL (Firebase 미사용 환경 폴백)
-function compressBlobToDataURL(blob, maxSize = 800, quality = 0.82) {
-    return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(blob);
-        const img = new Image();
-        img.onload = () => {
-            let { width, height } = img;
-            if (width > maxSize || height > maxSize) {
-                if (width >= height) { height = Math.round(height * maxSize / width); width = maxSize; }
-                else { width = Math.round(width * maxSize / height); height = maxSize; }
-            }
-            const canvas = document.createElement('canvas');
-            canvas.width = width; canvas.height = height;
-            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-            URL.revokeObjectURL(url);
-            resolve(canvas.toDataURL('image/jpeg', quality));
-        };
-        img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
-        img.src = url;
-    });
 }
 
 // ★ v5.4: 자동 모드 지도 캡쳐 — 선택 영역 오버레이 방식
@@ -525,5 +423,4 @@ export function registerMapFunctions() {
     window.setMapMode = setMapMode;
     window.openRoadview = openRoadview;
     window.captureMap = captureMap;
-    window.captureLiveMapToManual = captureLiveMapToManual;  // ★ v5.3
 }
