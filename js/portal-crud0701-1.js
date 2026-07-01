@@ -1827,32 +1827,30 @@ export async function savePricing(formData) {
 
 export function openContactModal(id = null) {
     const form = document.getElementById('contactForm');
-    if (form) form.reset();
-    const setVal = (elid, v) => { const el = document.getElementById(elid); if (el) el.value = v; };
-    const setChk = (elid, v) => { const el = document.getElementById(elid); if (el) el.checked = v; };
-    const setTxt = (elid, v) => { const el = document.getElementById(elid); if (el) el.textContent = v; };
-
-    setVal('contactId', id || '');
-    setTxt('contactModalTitle', id ? '담당자 수정' : '담당자 추가');
-    setChk('contactIsOurManager', false);
-
+    form.reset();
+    document.getElementById('contactId').value = id || '';
+    document.getElementById('contactModalTitle').textContent = id ? '담당자 수정' : '담당자 추가';
+    
+    // 우리 담당자 체크박스 표시
+    document.getElementById('contactIsOurManager').checked = false;
+    
     if (id && state.selectedBuilding) {
         const c = state.selectedBuilding.contactPoints?.find(p => p.id === id);
         if (c) {
-            setVal('contactName', c.name || '');
-            setVal('contactType', c.type || 'other');
-            setVal('contactPhone', c.phone || '');
-            setVal('contactEmail', c.email || '');
-            setVal('contactCompany', c.company || '');
-            setVal('contactPosition', c.position || '');       // 필드 없으면 무시(null-safe)
-            setChk('contactPrimary', c.isPrimary || false);    // 실제 id는 contactPrimary
-            setChk('contactIsOurManager', c.isOurManager || c.type === 'sni');
-            setVal('contactNotes', c.notes || '');
+            document.getElementById('contactName').value = c.name || '';
+            document.getElementById('contactType').value = c.type || 'other';
+            document.getElementById('contactPhone').value = c.phone || '';
+            document.getElementById('contactEmail').value = c.email || '';
+            document.getElementById('contactCompany').value = c.company || '';
+            document.getElementById('contactPosition').value = c.position || '';
+            document.getElementById('contactIsPrimary').checked = c.isPrimary || false;
+            document.getElementById('contactIsOurManager').checked = c.isOurManager || c.type === 'sni';
+            document.getElementById('contactNotes').value = c.notes || '';
         }
     }
-
-    document.getElementById('contactModal')?.classList.add('show');
-    document.getElementById('modalOverlay')?.classList.add('show');
+    
+    document.getElementById('contactModal').classList.add('show');
+    document.getElementById('modalOverlay').classList.add('show');
 }
 
 export function editContact(id) {

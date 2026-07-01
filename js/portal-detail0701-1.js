@@ -1033,112 +1033,6 @@ function deriveAreaFromVacancies(b, fp) {
     return { rentArea: ra, exclusiveArea: ea, derived: (ra != null || ea != null) };
 }
 
-// ★ 기준가 카드 1개 렌더 (아코디언 그룹 내부에서 사용)
-function renderPricingCard(fp, idx, b) {
-    const d = fp.effectiveDate || fp.createdAt || '';
-    let displayDate = '-';
-    if (d.includes('-')) { const [y, m] = d.split('-'); displayDate = `${y.slice(-2)}.${m}`; }
-    else if (d) { displayDate = d.slice(0, 5); }
-    const isOfficial = fp.isOfficial;
-    const isOcr = fp.sourceType === 'ocr';
-    return `
-                <div class="pricing-card" style="background: ${isOfficial ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)' : 'var(--bg-secondary)'}; 
-                     border-radius: 10px; padding: 16px; 
-                     border: 2px solid ${isOfficial ? '#eab308' : (isOcr ? '#3b82f6' : 'var(--border-color)')}; 
-                     position: relative;">
-                    
-                    <div style="position: absolute; top: -10px; right: 12px; display: flex; gap: 4px;">
-                        ${isOfficial ? `<span style="padding: 2px 8px; background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); color: white; font-size: 10px; border-radius: 4px; font-weight: 600;">⭐ 공식</span>` : ''}
-                        ${isOcr ? `<span style="padding: 2px 8px; background: #3b82f6; color: white; font-size: 10px; border-radius: 4px;">OCR</span>` : ''}
-                    </div>
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                        <div>
-                            <div style="font-size: 15px; font-weight: 600; color: var(--text-primary);">${fp.label || '기준가 ' + (idx + 1)}</div>
-                            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">📍 ${fp.floorRange || '-'}</div>
-                        </div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px;">
-                        <div style="text-align: center; padding: 6px 8px; background: ${isOfficial ? 'white' : 'var(--bg-primary)'}; border-radius: 6px;">
-                            <div style="font-size: 11px; color: var(--text-muted);">보증금</div>
-                            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">${fp.depositPy ? formatNumber(fp.depositPy) + '원/평' : '-'}</div>
-                        </div>
-                        <div style="text-align: center; padding: 6px 8px; background: ${isOfficial ? 'white' : 'var(--bg-primary)'}; border-radius: 6px;">
-                            <div style="font-size: 11px; color: var(--text-muted);">임대료</div>
-                            <div style="font-size: 14px; font-weight: 600; color: ${isOfficial ? '#d97706' : 'var(--accent-color)'};">${fp.rentPy ? formatNumber(fp.rentPy) + '원/평' : '-'}</div>
-                        </div>
-                        <div style="text-align: center; padding: 6px 8px; background: ${isOfficial ? 'white' : 'var(--bg-primary)'}; border-radius: 6px;">
-                            <div style="font-size: 11px; color: var(--text-muted);">관리비</div>
-                            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">${fp.maintenancePy ? formatNumber(fp.maintenancePy) + '원/평' : '-'}</div>
-                        </div>
-                    </div>
-                    
-                    ${(() => {
-                        const _num = (v) => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isNaN(x) ? null : x; };
-                        const fpHasArea = (fp.rentArea != null && fp.rentArea !== '') || (fp.exclusiveArea != null && fp.exclusiveArea !== '');
-                        let ra = _num(fp.rentArea) ?? _num(b.typicalFloorRent);
-                        let ea = _num(fp.exclusiveArea) ?? _num(b.typicalFloorExclusive);
-                        const bldgHasArea = !fpHasArea && (ra != null || ea != null);
-                        let derivedFlag = false;
-                        if (ra == null && ea == null) {
-                            const dd = deriveAreaFromVacancies(b, fp);
-                            ra = dd.rentArea; ea = dd.exclusiveArea; derivedFlag = dd.derived;
-                        }
-                        let rate = _num(fp.exclusiveRate) ?? ((ra && ea) ? Math.round(ea / ra * 1000) / 10 : _num(b.exclusiveRate));
-                        if (!ra && !ea && !rate) return '';
-                        const tag = derivedFlag ? '안내문 공실 기준' : (bldgHasArea ? '건물 기준층값' : '');
-                        const tagTitle = derivedFlag ? '기준가에 면적이 없어 해당 안내문 공실 데이터로 표시' : '기준가에 면적이 없어 건물 기준층 OCR 값으로 표시';
-                        const cells = [];
-                        if (ra) cells.push({ l: '임대면적', v: formatNumber(ra) + '평', c: 'var(--text-primary)' });
-                        if (ea) cells.push({ l: '전용면적', v: formatNumber(ea) + '평', c: 'var(--text-primary)' });
-                        if (rate) cells.push({ l: '전용률', v: rate + '%', c: '#2563eb' });
-                        return `
-                        <div style="margin-bottom: 12px;">
-                            ${tag ? `<div style="text-align:right; margin-bottom:4px;"><span style="font-size:10px; color:var(--text-muted); background:var(--bg-tertiary); padding:1px 6px; border-radius:4px;" title="${tagTitle}">${tag}</span></div>` : ''}
-                            <div style="display:grid; grid-template-columns:repeat(${cells.length},1fr); gap:8px;">
-                                ${cells.map(c => `
-                                    <div style="text-align:center; padding:8px 6px; background:${isOfficial ? '#fffdf5' : 'var(--bg-tertiary)'}; border:1px dashed ${isOfficial ? '#fde68a' : 'var(--border-color)'}; border-radius:6px;">
-                                        <div style="font-size:11px; color:var(--text-muted); margin-bottom:2px;">${c.l}</div>
-                                        <div style="font-size:16px; font-weight:700; color:${c.c};">${c.v}</div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>`;
-                    })()}
-                    
-                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted); padding-top: 8px; border-top: 1px solid ${isOfficial ? '#fde68a' : 'var(--border-color)'};">
-                        <span>📅 ${displayDate}${fp.sourceCompany ? ' · <strong style="color: var(--text-secondary)">' + fp.sourceCompany + '</strong>' : ''}</span>
-                        <span>${fp.notes || ''}</span>
-                    </div>
-                    
-                    <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed ${isOfficial ? '#fde68a' : 'var(--border-color)'};">
-                        ${!isOfficial ? `
-                            <button onclick="setOfficialPricing('${fp.id}')" 
-                                    style="flex: 1; padding: 8px 12px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
-                                ⭐ 공식 기준가로 적용
-                            </button>
-                        ` : `
-                            <button onclick="unsetOfficialPricing('${fp.id}')" 
-                                    style="flex: 1; padding: 8px 12px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer;">
-                                ✕ 공식 해제
-                            </button>
-                        `}
-                        <button onclick="editPricing('${fp.id}')" 
-                                style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; cursor: pointer;" 
-                                title="수정">
-                            ✏️
-                        </button>
-                        <button onclick="deletePricing('${fp.id}')" 
-                                style="padding: 8px 12px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; font-size: 12px; cursor: pointer; color: #dc2626;" 
-                                title="삭제">
-                            🗑️
-                        </button>
-                    </div>
-                </div>
-            `;
-}
-
 export function renderPricingSection() {
     const b = state.selectedBuilding;
     const allPricing = b.floorPricing || [];
@@ -1349,54 +1243,112 @@ export function renderPricingSection() {
         <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 13px;">
             선택한 필터 조건에 해당하는 기준가가 없습니다.
         </div>
-        ` : (() => {
-            // 안내문(출처+연월)별 그룹화
-            const monthOf = (fp) => { const dd = fp.effectiveDate || fp.createdAt || ''; if (dd.includes('-')) { const [y, m] = dd.split('-'); return `${y.slice(-2)}.${m}`; } return (dd || '').slice(0, 5); };
-            const gmap = {};
-            sortedPricing.forEach((fp, idx) => {
-                const mon = monthOf(fp) || '-';
-                const src = fp.sourceCompany || '직접입력';
-                const key = src + '||' + mon;
-                if (!gmap[key]) gmap[key] = { src, mon, items: [], hasOfficial: false };
-                gmap[key].items.push({ fp, idx });
-                if (fp.isOfficial) gmap[key].hasOfficial = true;
-            });
-            let groups = Object.values(gmap);
-            groups.sort((a, c) => {
-                if (a.hasOfficial !== c.hasOfficial) return a.hasOfficial ? -1 : 1;
-                if (a.mon !== c.mon) return c.mon.localeCompare(a.mon);
-                return a.src.localeCompare(c.src);
-            });
-            const latestMon = groups.reduce((mx, g) => (g.mon > mx ? g.mon : mx), '');
-            // 그룹이 하나뿐이면 아코디언 헤더 없이 카드만
-            if (groups.length <= 1) {
-                return `<div style="display:flex; flex-direction:column; gap:12px;">${(groups[0] ? groups[0].items : []).map(({ fp, idx }) => renderPricingCard(fp, idx, b)).join('')}</div>`;
-            }
-            return `<div style="display:flex; flex-direction:column; gap:10px;">
-                ${groups.map((g, gi) => {
-                    // 기본 펼침: 최신월 또는 공식 포함 그룹
-                    const expanded = (g.mon === latestMon) || g.hasOfficial;
-                    const gid = 'pg_' + gi;
-                    return `
-                    <div class="pricing-group" data-pricing-group="${gid}" style="border:1px solid var(--border-color); border-radius:10px; overflow:hidden;">
-                        <button onclick="togglePricingGroup('${gid}')" style="width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:11px 14px; background:var(--bg-secondary); border:none; cursor:pointer; text-align:left;">
-                            <span style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--text-primary); flex-wrap:wrap;">
-                                <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#8b5cf6; flex-shrink:0;"></span>
-                                <span>${g.src}</span>
-                                <span style="color:var(--text-muted); font-weight:500;">${g.mon}</span>
-                                <span style="font-size:11px; color:var(--text-secondary); background:var(--bg-primary); padding:1px 7px; border-radius:8px; font-weight:500;">${g.items.length}개 구간</span>
-                                ${g.hasOfficial ? '<span style="font-size:10px; color:#ca8a04; background:#fef3c7; padding:1px 6px; border-radius:4px; font-weight:700;">⭐공식</span>' : ''}
-                                ${(g.mon === latestMon) ? '<span style="font-size:10px; color:#2563eb; background:#dbeafe; padding:1px 6px; border-radius:4px; font-weight:600;">최신</span>' : ''}
-                            </span>
-                            <span class="pricing-group-chevron" style="font-size:11px; color:var(--text-muted); transition:transform 0.15s; transform:rotate(${expanded ? 90 : 0}deg); flex-shrink:0;">▶</span>
-                        </button>
-                        <div class="pricing-group-body" data-pricing-group-body="${gid}" style="display:${expanded ? 'flex' : 'none'}; flex-direction:column; gap:12px; padding:12px; border-top:1px solid var(--border-color);">
-                            ${g.items.map(({ fp, idx }) => renderPricingCard(fp, idx, b)).join('')}
+        ` : `
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            ${sortedPricing.map((fp, idx) => {
+                // 날짜 포맷팅
+                const d = fp.effectiveDate || fp.createdAt || '';
+                let displayDate = '-';
+                if (d.includes('-')) {
+                    const [y, m] = d.split('-');
+                    displayDate = `${y.slice(-2)}.${m}`;
+                } else if (d) {
+                    displayDate = d.slice(0, 5);
+                }
+                
+                const isOfficial = fp.isOfficial;
+                const isOcr = fp.sourceType === 'ocr';
+                
+                return `
+                <div class="pricing-card" style="background: ${isOfficial ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)' : 'var(--bg-secondary)'}; 
+                     border-radius: 10px; padding: 16px; 
+                     border: 2px solid ${isOfficial ? '#eab308' : (isOcr ? '#3b82f6' : 'var(--border-color)')}; 
+                     position: relative;">
+                    
+                    ${/* 배지 */ ''}
+                    <div style="position: absolute; top: -10px; right: 12px; display: flex; gap: 4px;">
+                        ${isOfficial ? `<span style="padding: 2px 8px; background: linear-gradient(135deg, #eab308 0%, #ca8a04 100%); color: white; font-size: 10px; border-radius: 4px; font-weight: 600;">⭐ 공식</span>` : ''}
+                        ${isOcr ? `<span style="padding: 2px 8px; background: #3b82f6; color: white; font-size: 10px; border-radius: 4px;">OCR</span>` : ''}
+                    </div>
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                        <div>
+                            <div style="font-size: 15px; font-weight: 600; color: var(--text-primary);">${fp.label || '기준가 ' + (idx + 1)}</div>
+                            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">📍 ${fp.floorRange || '-'}</div>
                         </div>
-                    </div>`;
-                }).join('')}
-            </div>`;
-        })()}
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px;">
+                        <div style="text-align: center; padding: 10px; background: ${isOfficial ? 'white' : 'var(--bg-primary)'}; border-radius: 6px;">
+                            <div style="font-size: 11px; color: var(--text-muted);">보증금</div>
+                            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">${fp.depositPy ? formatNumber(fp.depositPy) + '원/평' : '-'}</div>
+                        </div>
+                        <div style="text-align: center; padding: 10px; background: ${isOfficial ? 'white' : 'var(--bg-primary)'}; border-radius: 6px;">
+                            <div style="font-size: 11px; color: var(--text-muted);">임대료</div>
+                            <div style="font-size: 14px; font-weight: 600; color: ${isOfficial ? '#d97706' : 'var(--accent-color)'};">${fp.rentPy ? formatNumber(fp.rentPy) + '원/평' : '-'}</div>
+                        </div>
+                        <div style="text-align: center; padding: 10px; background: ${isOfficial ? 'white' : 'var(--bg-primary)'}; border-radius: 6px;">
+                            <div style="font-size: 11px; color: var(--text-muted);">관리비</div>
+                            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">${fp.maintenancePy ? formatNumber(fp.maintenancePy) + '원/평' : '-'}</div>
+                        </div>
+                    </div>
+                    
+                    ${(() => {
+                        const _num = (v) => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isNaN(x) ? null : x; };
+                        const fpHasArea = (fp.rentArea != null && fp.rentArea !== '') || (fp.exclusiveArea != null && fp.exclusiveArea !== '');
+                        let ra = _num(fp.rentArea) ?? _num(b.typicalFloorRent);
+                        let ea = _num(fp.exclusiveArea) ?? _num(b.typicalFloorExclusive);
+                        const bldgHasArea = !fpHasArea && (ra != null || ea != null);
+                        let derivedFlag = false;
+                        if (ra == null && ea == null) {
+                            const d = deriveAreaFromVacancies(b, fp);
+                            ra = d.rentArea; ea = d.exclusiveArea; derivedFlag = d.derived;
+                        }
+                        let rate = _num(fp.exclusiveRate) ?? ((ra && ea) ? Math.round(ea / ra * 1000) / 10 : _num(b.exclusiveRate));
+                        if (!ra && !ea && !rate) return '';
+                        const tag = derivedFlag ? '안내문 공실 기준' : (bldgHasArea ? '건물 기준층값' : '');
+                        const tagTitle = derivedFlag ? '기준가에 면적이 없어 해당 안내문 공실 데이터로 표시' : '기준가에 면적이 없어 건물 기준층 OCR 값으로 표시';
+                        return `<div style="display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; flex-wrap: wrap; align-items: center;">
+                            ${ra ? `<span>임대면적: <strong>${formatNumber(ra)}평</strong></span>` : ''}
+                            ${ea ? `<span>전용면적: <strong>${formatNumber(ea)}평</strong></span>` : ''}
+                            ${rate ? `<span>전용률: <strong>${rate}%</strong></span>` : ''}
+                            ${tag ? `<span style="font-size:10px; color:var(--text-muted); background:var(--bg-tertiary); padding:1px 6px; border-radius:4px;" title="${tagTitle}">${tag}</span>` : ''}
+                        </div>`;
+                    })()}
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-muted); padding-top: 8px; border-top: 1px solid ${isOfficial ? '#fde68a' : 'var(--border-color)'};">
+                        <span>📅 ${displayDate}${fp.sourceCompany ? ' · <strong style="color: var(--text-secondary)">' + fp.sourceCompany + '</strong>' : ''}</span>
+                        <span>${fp.notes || ''}</span>
+                    </div>
+                    
+                    ${/* ★ 액션 버튼 영역 */ ''}
+                    <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed ${isOfficial ? '#fde68a' : 'var(--border-color)'};">
+                        ${!isOfficial ? `
+                            <button onclick="setOfficialPricing('${fp.id}')" 
+                                    style="flex: 1; padding: 8px 12px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                                ⭐ 공식 기준가로 적용
+                            </button>
+                        ` : `
+                            <button onclick="unsetOfficialPricing('${fp.id}')" 
+                                    style="flex: 1; padding: 8px 12px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer;">
+                                ✕ 공식 해제
+                            </button>
+                        `}
+                        <button onclick="editPricing('${fp.id}')" 
+                                style="padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; cursor: pointer;" 
+                                title="수정">
+                            ✏️
+                        </button>
+                        <button onclick="deletePricing('${fp.id}')" 
+                                style="padding: 8px 12px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; font-size: 12px; cursor: pointer; color: #dc2626;" 
+                                title="삭제">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `}).join('')}
+        </div>
+        `}
         
         ${/* 공실 정보에서 기준가 추출 안내 */ ''}
         ${allPricing.length === 0 ? `
@@ -1742,7 +1694,6 @@ export function renderContactSection() {
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
             <span style="flex-shrink: 0;">👤 담당자 목록</span>
             <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                <button class="btn btn-secondary btn-sm" style="padding: 6px 12px; white-space: nowrap;" onclick="refreshContactSection()" title="새로고침">🔄</button>
                 <button class="btn btn-sm" style="background: var(--bg-tertiary); color: var(--text-primary); padding: 6px 12px; white-space: nowrap;" onclick="openAssignManagerModal()">📋 담당자 지정</button>
                 <button class="btn btn-primary btn-sm" style="padding: 6px 12px; white-space: nowrap;" onclick="openContactModal()">+ 추가</button>
             </div>
@@ -1997,7 +1948,6 @@ export async function refreshIncentiveSection() {
 export async function refreshContactSection() {
     if (!state.selectedBuilding) return;
     const bid = state.selectedBuilding.id;
-    console.log('🔄 담당자 새로고침:', bid, state.selectedBuilding.name || '');
     try {
         const snap = await get(ref(db, `buildings/${bid}/contactPoints`));
         const val = snap.val() || [];
@@ -2006,8 +1956,7 @@ export async function refreshContactSection() {
         const idx = state.allBuildings.findIndex(b => b.id === bid);
         if (idx >= 0) state.allBuildings[idx].contactPoints = arr;
         renderContactSection();
-        showToast(`담당자 ${arr.length}명 새로고침`, 'success');
-    } catch (e) { console.error('담당자 새로고침 실패:', e); showToast('담당자 새로고침 실패', 'error'); }
+    } catch (e) { console.error('담당자 새로고침 실패:', e); }
 }
 
 // ★ v3.2: 메모 새로고침 (Firebase에서 최신 데이터 다시 불러오기)
@@ -3602,14 +3551,6 @@ export function registerDetailGlobals() {
     window.filterRentrollByDate = filterRentrollByDate;
     window.filterPricingByDate = filterPricingByDate;  // ★ 기준가 날짜 필터
     window.filterPricingBySource = filterPricingBySource;  // ★ 기준가 출처 필터
-    window.togglePricingGroup = function (gid) {  // ★ 안내문 아코디언 토글
-        const body = document.querySelector(`[data-pricing-group-body="${gid}"]`);
-        const chev = document.querySelector(`[data-pricing-group="${gid}"] .pricing-group-chevron`);
-        if (!body) return;
-        const open = body.style.display !== 'none';
-        body.style.display = open ? 'none' : 'flex';
-        if (chev) chev.style.transform = open ? 'rotate(0deg)' : 'rotate(90deg)';
-    };
     window.setOfficialPricing = setOfficialPricing;  // ★ 공식 기준가 등록
     window.unsetOfficialPricing = unsetOfficialPricing;  // ★ 공식 기준가 해제
     window.editPricing = editPricing;  // ★ 기준가 수정 모달
