@@ -1229,10 +1229,7 @@ export function renderPricingSection() {
     document.getElementById('sectionPricing').innerHTML = `
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
             <span style="flex-shrink: 0;">💰 층별 기준가</span>
-            <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center;">
-                <button class="btn btn-secondary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 12px; white-space: nowrap;" onclick="refreshPricingSection()" title="새로고침">🔄</button>
-                <button class="btn btn-primary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 16px; white-space: nowrap;" onclick="openPricingModal()">+ 추가</button>
-            </div>
+            <button class="btn btn-primary btn-sm" style="flex-shrink: 0; padding: 6px 16px; white-space: nowrap;" onclick="openPricingModal()">+ 추가</button>
         </div>
         
         ${/* 공식 기준가 요약 */ ''}
@@ -1744,10 +1741,10 @@ export function renderContactSection() {
     document.getElementById('sectionContact').innerHTML = `
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
             <span style="flex-shrink: 0;">👤 담당자 목록</span>
-            <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center;">
-                <button class="btn btn-secondary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 12px; white-space: nowrap;" onclick="refreshContactSection()" title="새로고침">🔄</button>
-                <button class="btn btn-sm" style="width: auto; flex: 0 0 auto; background: var(--bg-tertiary); color: var(--text-primary); padding: 6px 12px; white-space: nowrap;" onclick="openAssignManagerModal()">📋 담당자 지정</button>
-                <button class="btn btn-primary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 16px; white-space: nowrap;" onclick="openContactModal()">+ 추가</button>
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                <button class="btn btn-secondary btn-sm" style="padding: 6px 12px; white-space: nowrap;" onclick="refreshContactSection()" title="새로고침">🔄</button>
+                <button class="btn btn-sm" style="background: var(--bg-tertiary); color: var(--text-primary); padding: 6px 12px; white-space: nowrap;" onclick="openAssignManagerModal()">📋 담당자 지정</button>
+                <button class="btn btn-primary btn-sm" style="padding: 6px 12px; white-space: nowrap;" onclick="openContactModal()">+ 추가</button>
             </div>
         </div>
         
@@ -1887,10 +1884,7 @@ export function renderRentrollSection() {
     document.getElementById('sectionRentroll').innerHTML = `
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px;">
             <span style="flex-shrink: 0;">렌트롤 목록</span>
-            <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center;">
-                <button class="btn btn-secondary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 12px; white-space: nowrap;" onclick="refreshRentrollSection()" title="새로고침">🔄</button>
-                <button class="btn btn-primary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 16px; white-space: nowrap;" onclick="openRentrollModal()">+ 추가</button>
-            </div>
+            <button class="btn btn-primary btn-sm" style="flex-shrink: 0; padding: 6px 16px; white-space: nowrap;" onclick="openRentrollModal()">+ 추가</button>
         </div>
         
         ${availableDates.length > 0 ? `
@@ -2071,9 +2065,9 @@ export function renderMemoSection() {
         
         const headerHtml = `<div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px;">
             <span style="flex-shrink: 0;">메모 목록</span>
-            <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center;">
-                <button class="btn btn-secondary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 12px; white-space: nowrap;" onclick="refreshMemoSection()" title="새로고침">🔄</button>
-                <button class="btn btn-primary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 16px; white-space: nowrap;" onclick="openMemoModal()">+ 추가</button>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary btn-sm" style="padding: 6px 12px;" onclick="refreshMemoSection()" title="새로고침">🔄</button>
+                <button class="btn btn-primary btn-sm" style="flex-shrink: 0; padding: 6px 16px; white-space: nowrap;" onclick="openMemoModal()">+ 추가</button>
             </div>
         </div>`;
         
@@ -2325,12 +2319,9 @@ export function renderIncentiveSection() {
     
     if (list.length === 0) {
         document.getElementById('sectionIncentive').innerHTML = `
-            <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
+            <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
                 <span style="flex-shrink: 0;">🎁 인센티브</span>
-                <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center;">
-                    <button class="btn btn-secondary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 12px; white-space: nowrap;" onclick="refreshIncentiveSection()" title="새로고침">🔄</button>
-                    <button class="btn btn-primary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 16px; white-space: nowrap;" onclick="openIncentiveModal()">+ 추가</button>
-                </div>
+                <button class="btn btn-primary btn-sm" style="flex-shrink: 0; padding: 6px 16px; white-space: nowrap;" onclick="openIncentiveModal()">+ 추가</button>
             </div>
             <div class="empty-state" style="text-align: center; padding: 40px 20px;">
                 <div style="font-size: 48px; margin-bottom: 16px;">🎁</div>
@@ -2350,10 +2341,7 @@ export function renderIncentiveSection() {
     document.getElementById('sectionIncentive').innerHTML = `
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
             <span style="flex-shrink: 0;">🎁 인센티브</span>
-            <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center;">
-                <button class="btn btn-secondary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 12px; white-space: nowrap;" onclick="refreshIncentiveSection()" title="새로고침">🔄</button>
-                <button class="btn btn-primary btn-sm" style="width: auto; flex: 0 0 auto; padding: 6px 16px; white-space: nowrap;" onclick="openIncentiveModal()">+ 추가</button>
-            </div>
+            <button class="btn btn-primary btn-sm" style="flex-shrink: 0; padding: 6px 16px; white-space: nowrap;" onclick="openIncentiveModal()">+ 추가</button>
         </div>
         
         <div style="display: flex; flex-direction: column; gap: 12px;">

@@ -2566,7 +2566,6 @@ function setupFormListeners() {
                     phone: document.getElementById('contactPhone').value.trim(),
                     email: document.getElementById('contactEmail').value.trim() || null,
                     company: document.getElementById('contactCompany').value.trim() || null,
-                    position: document.getElementById('contactPosition')?.value.trim() || null,
                     type: contactType,
                     isPrimary,
                     isOurManager: false,
