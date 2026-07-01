@@ -74,6 +74,13 @@ function _parseFloorNumForSort(floor) {
     if (above) return parseInt(above[1]);
     return 0;
 }
+// ★ v6.9: 공실 금액/면적 표시 — 숫자면 천단위 콤마, 아니면(문의 등 텍스트) 원문 유지
+function fmtVacMoney(v, fallback = '문의') {
+    if (v === undefined || v === null || v === '') return fallback;
+    const n = Number(String(v).replace(/,/g, ''));
+    return isNaN(n) ? String(v) : n.toLocaleString();
+}
+
 export function refreshVacancyListTable(idx) {
     const item = state.tocItems?.[idx];
     if (!item) return;
@@ -98,11 +105,11 @@ export function refreshVacancyListTable(idx) {
         tbody.innerHTML = all.map((v, i) => `
             <tr id="vacRow_${idx}_${i}" data-vacid="${v.id}" data-vactype="${v.type}">
                 <td class="floor">${formatFloorDisplay(v.floor)}</td>
-                <td>${v.exclusiveArea || v.area || '-'}</td>
-                <td>${v.rentArea || v.area || '-'}</td>
-                <td>${v.deposit ?? v.depositPy ?? '문의'}</td>
-                <td>${v.rent ?? v.rentPy ?? '문의'}</td>
-                <td>${v.maintenance ?? v.maintenancePy ?? '문의'}</td>
+                <td>${fmtVacMoney(v.exclusiveArea || v.area, '-')}</td>
+                <td>${fmtVacMoney(v.rentArea || v.area, '-')}</td>
+                <td>${fmtVacMoney(v.deposit ?? v.depositPy)}</td>
+                <td>${fmtVacMoney(v.rent ?? v.rentPy)}</td>
+                <td>${fmtVacMoney(v.maintenance ?? v.maintenancePy)}</td>
                 <td>${v.moveIn || v.moveInDate || '협의'}</td>
                 <td style="font-size:11px; line-height:1.35;">${(v.source || v.company) ? (v.source || v.company) : '<span style="color:#cbd5e1;">-</span>'}${(v.publishDate || v.date) ? '<br><span style="color:#94a3b8;">' + (v.publishDate || v.date) + '</span>' : ''}</td>
                 <td>
@@ -721,11 +728,11 @@ export function renderBuildingEditor(item, building) {
                     ${renderDirectInputRows(idx, building)}
                 </div>
                 <!-- 헤더 라벨 + 추가 버튼 -->
-                <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:6px; align-items:center; padding:4px 8px; margin-bottom:4px;">
-                    <span style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">구분</span>
-                    <span style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">보증금(원/평)</span>
-                    <span style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">임대료(원/평)</span>
-                    <span style="font-size:10px; color:#94a3b8; font-weight:600; text-transform:uppercase;">관리비(원/평)</span>
+                <div style="display:grid; grid-template-columns:1.1fr 1fr 1fr 1fr auto; gap:8px; align-items:center; padding:2px 8px; margin-bottom:4px;">
+                    <span style="font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase;">구분</span>
+                    <span style="font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase; text-align:right;">보증금(원/평)</span>
+                    <span style="font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase; text-align:right;">임대료(원/평)</span>
+                    <span style="font-size:11px; color:#94a3b8; font-weight:600; text-transform:uppercase; text-align:right;">관리비(원/평)</span>
                     <button onclick="addDirectRow(${idx}, '${building.id}')"
                         style="padding:4px 10px; background:#f0f9ff; color:#0369a1; border:1px dashed #7dd3fc; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; white-space:nowrap;">
                         + 행 추가
@@ -743,8 +750,6 @@ export function renderBuildingEditor(item, building) {
                                 ✓ 반영
                             </button>
                         </div>
-                        <input type="text" id="fpSearch_${idx}" oninput="filterFloorPricingRows(${idx}, this.value)" placeholder="🔍 구분·출처 검색"
-                            style="width:100%; box-sizing:border-box; font-size:13px; padding:7px 10px; border:1px solid #bae6fd; border-radius:6px; background:#fff; margin-bottom:8px;">
                         <table style="width:100%; border-collapse:collapse; font-size:13px;">
                             <thead>
                                 <tr style="background:#e0f2fe;">
@@ -935,11 +940,11 @@ export function renderBuildingEditor(item, building) {
                         ${allVacancies.length > 0 ? allVacancies.map((v, i) => `
                             <tr id="vacRow_${idx}_${i}" data-vacid="${v.id}" data-vactype="${v.type}">
                                 <td class="floor">${formatFloorDisplay(v.floor)}</td>
-                                <td>${v.exclusiveArea || v.area || '-'}</td>
-                                <td>${v.rentArea || v.area || '-'}</td>
-                                <td>${v.deposit ?? v.depositPy ?? '문의'}</td>
-                                <td>${v.rent ?? v.rentPy ?? '문의'}</td>
-                                <td>${v.maintenance ?? v.maintenancePy ?? '문의'}</td>
+                                <td>${fmtVacMoney(v.exclusiveArea || v.area, '-')}</td>
+                                <td>${fmtVacMoney(v.rentArea || v.area, '-')}</td>
+                                <td>${fmtVacMoney(v.deposit ?? v.depositPy)}</td>
+                                <td>${fmtVacMoney(v.rent ?? v.rentPy)}</td>
+                                <td>${fmtVacMoney(v.maintenance ?? v.maintenancePy)}</td>
                                 <td>${v.moveIn || v.moveInDate || '협의'}</td>
                                 <td style="font-size:11px; line-height:1.35;">${(v.source || v.company) ? (v.source || v.company) : '<span style="color:#cbd5e1;">-</span>'}${(v.publishDate || v.date) ? '<br><span style="color:#94a3b8;">' + (v.publishDate || v.date) + '</span>' : ''}</td>
                                 <td>
@@ -2076,14 +2081,14 @@ function renderDirectInputRows(idx, building) {
     }
     return rows.map((row, ri) => {
         const bId = building.id || '';
-        return '<div class="direct-input-row" id="dirRow_' + idx + '_' + ri + '" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr auto; gap:6px; align-items:center; padding:6px 8px; margin-bottom:4px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;">'
-            + '<input type="text" value="' + (row.label || '') + '" placeholder="구분명 (예: 기준층)" data-field="label" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'label\', this.value)">'
-            + '<input type="text" class="js-comma" inputmode="decimal" value="' + (row.depositPy || '') + '" placeholder="보증금" data-field="depositPy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'depositPy\', this.value)">'
-            + '<input type="text" class="js-comma" inputmode="decimal" value="' + (row.rentPy || '') + '" placeholder="임대료" data-field="rentPy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'rentPy\', this.value)">'
-            + '<input type="text" class="js-comma" inputmode="decimal" value="' + (row.maintenancePy || '') + '" placeholder="관리비" data-field="maintenancePy" data-ri="' + ri + '" style="padding:5px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'maintenancePy\', this.value)">'
-            + '<div style="display:flex; gap:4px; flex-shrink:0;">'
-            +   '<button onclick="saveDirectRow(' + idx + ', ' + ri + ', \'' + bId + '\')" title="이 행 저장" style="padding:4px 8px; background:#2563eb; color:white; border:none; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;">💾</button>'
-            +   '<button onclick="deleteDirectRow(' + idx + ', ' + ri + ', \'' + bId + '\')" title="이 행 삭제" style="padding:4px 8px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:4px; font-size:11px; cursor:pointer;">🗑</button>'
+        return '<div class="direct-input-row" id="dirRow_' + idx + '_' + ri + '" style="display:grid; grid-template-columns:1.1fr 1fr 1fr 1fr auto; gap:8px; align-items:center; padding:8px; margin-bottom:6px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">'
+            + '<input type="text" value="' + (row.label || '') + '" placeholder="구분명 (예: 기준층)" data-field="label" data-ri="' + ri + '" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'label\', this.value)">'
+            + '<input type="text" class="js-comma" inputmode="decimal" value="' + (row.depositPy || '') + '" placeholder="보증금" data-field="depositPy" data-ri="' + ri + '" style="width:100%; box-sizing:border-box; text-align:right; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'depositPy\', this.value)">'
+            + '<input type="text" class="js-comma" inputmode="decimal" value="' + (row.rentPy || '') + '" placeholder="임대료" data-field="rentPy" data-ri="' + ri + '" style="width:100%; box-sizing:border-box; text-align:right; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'rentPy\', this.value)">'
+            + '<input type="text" class="js-comma" inputmode="decimal" value="' + (row.maintenancePy || '') + '" placeholder="관리비" data-field="maintenancePy" data-ri="' + ri + '" style="width:100%; box-sizing:border-box; text-align:right; padding:8px 10px; border:1px solid #cbd5e1; border-radius:6px; font-size:13px;" onchange="updateDirectRow(' + idx + ', ' + ri + ', \'maintenancePy\', this.value)">'
+            + '<div style="display:flex; gap:6px; flex-shrink:0;">'
+            +   '<button onclick="saveDirectRow(' + idx + ', ' + ri + ', \'' + bId + '\')" title="이 행 저장" style="padding:7px 11px; background:#2563eb; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer;">💾</button>'
+            +   '<button onclick="deleteDirectRow(' + idx + ', ' + ri + ', \'' + bId + '\')" title="이 행 삭제" style="padding:7px 11px; background:#fee2e2; color:#dc2626; border:1px solid #fca5a5; border-radius:6px; font-size:13px; cursor:pointer;">🗑</button>'
             + '</div>'
             + '</div>';
     }).join('');
@@ -2391,21 +2396,21 @@ export function editFloorPricingInline(itemIdx, fpIdx) {
             <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleFloorPricing(${itemIdx}, '${fpId}')" style="cursor:pointer; width:15px; height:15px;">
         </td>
         <td style="padding:6px 8px;">
-            <input type="text" id="fpLabel_${itemIdx}_${fpIdx}" value="${label}" placeholder="구분명" style="width:100%; box-sizing:border-box; font-size:13px; padding:5px 7px; border:1px solid #2563eb; border-radius:4px; outline:none;">
+            <input type="text" id="fpLabel_${itemIdx}_${fpIdx}" value="${label}" placeholder="구분명" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 10px; border:1px solid #2563eb; border-radius:6px; outline:none;">
         </td>
         <td style="padding:6px 8px;">
-            <input type="text" id="fpDep_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.depositPy || ''}" placeholder="보증금" style="width:100%; box-sizing:border-box; text-align:right; font-size:13px; padding:5px 7px; border:1px solid #2563eb; border-radius:4px; outline:none;">
+            <input type="text" id="fpDep_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.depositPy || ''}" placeholder="보증금" style="width:100%; box-sizing:border-box; text-align:right; font-size:13px; padding:8px 10px; border:1px solid #2563eb; border-radius:6px; outline:none;">
         </td>
         <td style="padding:6px 8px;">
-            <input type="text" id="fpRent_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.rentPy || ''}" placeholder="임대료" style="width:100%; box-sizing:border-box; text-align:right; font-size:13px; padding:5px 7px; border:1px solid #2563eb; border-radius:4px; outline:none;">
+            <input type="text" id="fpRent_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.rentPy || ''}" placeholder="임대료" style="width:100%; box-sizing:border-box; text-align:right; font-size:13px; padding:8px 10px; border:1px solid #2563eb; border-radius:6px; outline:none;">
         </td>
         <td style="padding:6px 8px;">
-            <input type="text" id="fpMaint_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.maintenancePy || ''}" placeholder="관리비" style="width:100%; box-sizing:border-box; text-align:right; font-size:13px; padding:5px 7px; border:1px solid #2563eb; border-radius:4px; outline:none;">
+            <input type="text" id="fpMaint_${itemIdx}_${fpIdx}" class="js-comma" inputmode="decimal" value="${fp.maintenancePy || ''}" placeholder="관리비" style="width:100%; box-sizing:border-box; text-align:right; font-size:13px; padding:8px 10px; border:1px solid #2563eb; border-radius:6px; outline:none;">
         </td>
         <td style="padding:6px 6px;"></td>
         <td colspan="2" style="padding:6px 6px; text-align:center; white-space:nowrap;">
-            <button onclick="saveFloorPricingInline(${itemIdx}, ${fpIdx})" style="font-size:12px; padding:5px 11px; border-radius:4px; background:#2563eb; color:#fff; border:none; cursor:pointer; font-weight:700;">저장</button>
-            <button onclick="cancelFloorPricingInline(${itemIdx})" style="font-size:12px; padding:5px 9px; border-radius:4px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer; margin-left:4px;">취소</button>
+            <button onclick="saveFloorPricingInline(${itemIdx}, ${fpIdx})" style="font-size:13px; padding:7px 13px; border-radius:6px; background:#2563eb; color:#fff; border:none; cursor:pointer; font-weight:700;">저장</button>
+            <button onclick="cancelFloorPricingInline(${itemIdx})" style="font-size:13px; padding:7px 11px; border-radius:6px; background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; cursor:pointer; margin-left:4px;">취소</button>
         </td>
     `;
 }
