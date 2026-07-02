@@ -6632,7 +6632,7 @@
                 <!-- 기본 담당자 탭 -->
                 <div class="contact-change-panel" id="contactPanelDefault">
                     <div class="contact-change-notice">
-                        ⚠️ 기본 담당자는 담당자가 지정되지 않은 모든 빌딩에 공통 적용됩니다
+                        ⚠️ 기본 담당자는 모든 장표(빌딩)에 공통 적용됩니다. 이 장표에서 <strong>체크를 해제</strong>하면 그 항목은 <strong>이 장표에서만</strong> 숨겨집니다. (⭐ 등록 항목은 🗑으로 기본값에서 완전 삭제)
                     </div>
                     <div id="contactDefaultList">
                         <!-- 기본 담당자 목록 -->
@@ -6664,6 +6664,10 @@
                             <label style="font-size:12px; font-weight:500; color:var(--text-secondary); margin-bottom:4px; display:block;">이메일</label>
                             <input type="email" id="customContactEmail" placeholder="example@company.com" style="width:100%; padding:10px 12px; border:1px solid var(--border-color); border-radius:6px;">
                         </div>
+                        <label style="display:flex; align-items:flex-start; gap:8px; margin-top:4px; padding:10px 12px; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; font-size:12px; color:#334155; cursor:pointer;">
+                            <input type="checkbox" id="customContactAsDefault" style="width:15px; height:15px; margin-top:1px; accent-color:#d97706; cursor:pointer;">
+                            <span>⭐ <strong>기본값으로 등록</strong> — 모든 장표(빌딩)에 자동 포함됩니다.<br><span style="color:#94a3b8;">특정 장표에서만 [기본 담당자] 탭에서 체크를 해제하면 그 장표에서만 숨겨져요.</span></span>
+                        </label>
                         <button class="btn btn-secondary" onclick="addCustomContact()" style="margin-top:8px;">+ 담당자 추가</button>
                     </div>
                 </div>
@@ -6696,6 +6700,27 @@
             { name: '소나무 파트너', phone: '010-7608-5142', email: 'pinetree@sni.co.kr' },
             { name: '남민준 파트너', phone: '010-4938-4313', email: 'singsong@sni.co.kr' }
         ];
+
+        // ★ v6.15: 기본 제공(하드코딩) 기본 담당자 식별용 — 이 목록의 이메일만 삭제 불가
+        window.HARDCODED_DEFAULT_EMAILS = window.DEFAULT_CONTACT_POINTS.map(c => c.email);
+        // 담당자 식별 키 (이메일 우선, 없으면 이름+연락처)
+        window._contactKey = function(c) {
+            if (!c) return '';
+            return (c.email && String(c.email).trim()) ? String(c.email).trim().toLowerCase() : ((c.name || '') + '|' + (c.phone || ''));
+        };
+        // 현재 안내문에 저장된 승격 기본값을 DEFAULT_CONTACT_POINTS로 병합 (재로드 시 유지)
+        window._syncDefaultContactsFromGuide = function() {
+            const gd = window.guideState?.currentGuide?.defaultContactPoints;
+            if (!Array.isArray(gd) || !gd.length) return;
+            const have = new Set(window.DEFAULT_CONTACT_POINTS.map(c => window._contactKey(c)));
+            gd.forEach(c => {
+                const k = window._contactKey(c);
+                if (c && c.name && !have.has(k)) {
+                    window.DEFAULT_CONTACT_POINTS.push({ name: c.name, phone: c.phone || '', email: c.email || '' });
+                    have.add(k);
+                }
+            });
+        };
         
         // 담당자 정보가 없을 때 기본값 사용하는 헬퍼 함수
         window.getContactPointsWithDefault = function(buildingContacts) {
@@ -6730,6 +6755,8 @@
         
         // 담당자 변경 모달 열기
         window.openContactChangeModal = function(buildingId, buildingName, tocIndex, currentContacts) {
+            // ★ 저장된 승격 기본값 동기화 (재로드 후에도 유지)
+            window._syncDefaultContactsFromGuide();
             window.contactChangeState = {
                 buildingId: buildingId,
                 buildingName: buildingName,
@@ -6823,32 +6850,36 @@
         // 기본 담당자 목록 렌더링
         window.renderDefaultContactList = function() {
             const container = document.getElementById('contactDefaultList');
-            const selectedEmails = window.contactChangeState.selectedContacts.map(c => c.email);
-            
+            const selKeys = window.contactChangeState.selectedContacts.map(c => window._contactKey(c));
+            const hardcoded = window.HARDCODED_DEFAULT_EMAILS.map(e => e.toLowerCase());
+
             container.innerHTML = window.DEFAULT_CONTACT_POINTS.map(contact => {
-                const isSelected = selectedEmails.includes(contact.email);
+                const key = window._contactKey(contact);
+                const isSelected = selKeys.includes(key);
+                const isPromoted = !hardcoded.includes(key);
                 return `
-                    <div class="contact-option ${isSelected ? 'selected' : ''}" onclick="toggleDefaultContact('${contact.email}')">
-                        <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleDefaultContact('${contact.email}')">
+                    <div class="contact-option ${isSelected ? 'selected' : ''}" onclick="toggleDefaultContact('${key}')">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleDefaultContact('${key}')">
                         <div class="info">
                             <div class="name">${contact.name}</div>
-                            <div class="detail">${contact.phone} · ${contact.email}</div>
+                            <div class="detail">${contact.phone} · ${contact.email || '(이메일 없음)'}</div>
                         </div>
-                        <span class="badge">기본</span>
+                        <span class="badge" style="${isPromoted ? 'background:#fef3c7; color:#92400e;' : ''}">${isPromoted ? '⭐ 등록' : '기본'}</span>
+                        ${isPromoted ? `<button onclick="event.stopPropagation(); removeDefaultContact('${key}')" title="기본값에서 삭제 (모든 장표에서 제거)" style="margin-left:6px; border:none; background:none; color:#dc2626; cursor:pointer; font-size:14px;">🗑</button>` : ''}
                     </div>
                 `;
             }).join('');
         };
         
-        // 기본 담당자 토글
-        window.toggleDefaultContact = function(email) {
-            const contact = window.DEFAULT_CONTACT_POINTS.find(c => c.email === email);
+        // 기본 담당자 토글 (key 기반)
+        window.toggleDefaultContact = function(key) {
+            const contact = window.DEFAULT_CONTACT_POINTS.find(c => window._contactKey(c) === key);
             if (!contact) return;
-            
-            const idx = window.contactChangeState.selectedContacts.findIndex(c => c.email === email);
-            
+
+            const idx = window.contactChangeState.selectedContacts.findIndex(c => window._contactKey(c) === key);
+
             if (idx >= 0) {
-                // 이미 선택됨 → 제거
+                // 이미 선택됨 → 제거 (이 장표에서 숨김)
                 window.contactChangeState.selectedContacts.splice(idx, 1);
             } else {
                 // 선택 안됨 → 추가 (최대 4명)
@@ -6858,7 +6889,7 @@
                 }
                 window.contactChangeState.selectedContacts.push({ ...contact });
             }
-            
+
             window.contactChangeState.isDefault = false;
             renderCurrentContacts();
             renderDefaultContactList();
@@ -6935,7 +6966,8 @@
             const name = document.getElementById('customContactName').value.trim();
             const phone = document.getElementById('customContactPhone').value.trim();
             const email = document.getElementById('customContactEmail').value.trim();
-            
+            const asDefault = document.getElementById('customContactAsDefault')?.checked;
+
             if (!name) {
                 showToast('담당자명을 입력하세요', 'error');
                 return;
@@ -6944,28 +6976,123 @@
                 showToast('연락처를 입력하세요', 'error');
                 return;
             }
-            
+
+            // ★ 기본값으로 등록 → 모든 장표에 반영
+            if (asDefault) {
+                window.addContactToAllPagesAsDefault({ name, phone, email: email || '' });
+                document.getElementById('customContactName').value = '';
+                document.getElementById('customContactPhone').value = '';
+                document.getElementById('customContactEmail').value = '';
+                document.getElementById('customContactAsDefault').checked = false;
+                return;
+            }
+
+            // 이 장표에만 추가 (기존 동작)
             if (window.contactChangeState.selectedContacts.length >= 4) {
                 showToast('담당자는 최대 4명까지 선택 가능합니다', 'warning');
                 return;
             }
-            
-            // 중복 체크
             if (email && window.contactChangeState.selectedContacts.some(c => c.email === email)) {
                 showToast('이미 추가된 담당자입니다', 'warning');
                 return;
             }
-            
+
             window.contactChangeState.selectedContacts.push({ name, phone, email: email || '' });
             window.contactChangeState.isDefault = false;
-            
-            // 입력 필드 초기화
+
             document.getElementById('customContactName').value = '';
             document.getElementById('customContactPhone').value = '';
             document.getElementById('customContactEmail').value = '';
-            
+
             renderCurrentContacts();
             showToast(`${name} 담당자가 추가되었습니다`, 'success');
+        };
+
+        // ★ v6.15: 직접입력 담당자를 기본값으로 등록 → 모든 장표(빌딩)에 반영
+        window.addContactToAllPagesAsDefault = function(contact) {
+            if (!contact || !contact.name) return;
+            const key = window._contactKey(contact);
+
+            // 1) 기본값 목록에 추가 (중복 방지)
+            if (!window.DEFAULT_CONTACT_POINTS.some(c => window._contactKey(c) === key)) {
+                window.DEFAULT_CONTACT_POINTS.push({ name: contact.name, phone: contact.phone || '', email: contact.email || '' });
+            }
+            // 2) 현재 안내문에 영속 (가이드 저장 시 함께 저장 → 재로드 후 유지)
+            const cg = window.guideState?.currentGuide;
+            if (cg) {
+                if (!Array.isArray(cg.defaultContactPoints)) cg.defaultContactPoints = [];
+                if (!cg.defaultContactPoints.some(c => window._contactKey(c) === key)) {
+                    cg.defaultContactPoints.push({ name: contact.name, phone: contact.phone || '', email: contact.email || '' });
+                }
+            }
+            // 3) 모든 장표(빌딩 페이지)의 contactPoints에 실제 반영 (materialize → 영속·출력 안전)
+            const items = window.guideState?.tocItems || [];
+            let applied = 0, skipped = 0;
+            items.forEach(item => {
+                if (!item || !item.buildingId) return; // 빌딩 페이지만 (구분선/노트 제외)
+                let list;
+                if (Array.isArray(item.contactPoints) && item.contactPoints.length) {
+                    list = item.contactPoints.map(c => ({ ...c }));
+                } else {
+                    // 기본값(null) 페이지: 새 항목 제외한 현재 기본값을 baseline으로
+                    list = window.DEFAULT_CONTACT_POINTS.filter(c => window._contactKey(c) !== key).map(c => ({ ...c }));
+                }
+                if (list.some(c => window._contactKey(c) === key)) return; // 이미 포함
+                if (list.length >= 4) { skipped++; return; }
+                list.push({ name: contact.name, phone: contact.phone || '', email: contact.email || '' });
+                item.contactPoints = list;
+                item.useDefaultContacts = window.isDefaultContactPoints(list);
+                applied++;
+            });
+            // 4) 모달 현재 선택에도 반영
+            const sel = window.contactChangeState.selectedContacts;
+            if (sel && !sel.some(c => window._contactKey(c) === key)) {
+                if (sel.length < 4) sel.push({ name: contact.name, phone: contact.phone || '', email: contact.email || '' });
+            }
+            renderCurrentContacts();
+            renderDefaultContactList();
+            // 5) 현재 편집 화면 갱신
+            const cur = window.guideState?.tocItems?.[window.contactChangeState.tocIndex];
+            const building = cur && window.guideState?.allBuildings?.find(b => b.id === cur.buildingId);
+            if (cur && building && typeof window.renderBuildingEditor === 'function') window.renderBuildingEditor(cur, building);
+
+            let msg = `${contact.name} 담당자를 기본값으로 등록 — ${applied}개 장표에 반영`;
+            if (skipped) msg += ` (${skipped}개 장표는 이미 4명이라 제외)`;
+            showToast(msg, 'success');
+        };
+
+        // ★ v6.15: 승격된 기본 담당자 삭제 (기본값 목록 + 모든 장표에서 제거)
+        window.removeDefaultContact = function(key) {
+            const hardcoded = window.HARDCODED_DEFAULT_EMAILS.map(e => e.toLowerCase());
+            if (hardcoded.includes(key)) {
+                showToast('기본 제공 담당자는 삭제할 수 없습니다', 'warning');
+                return;
+            }
+            if (!confirm('이 담당자를 기본값에서 삭제할까요?\n모든 장표에서도 제거됩니다.')) return;
+
+            window.DEFAULT_CONTACT_POINTS = window.DEFAULT_CONTACT_POINTS.filter(c => window._contactKey(c) !== key);
+            const cg = window.guideState?.currentGuide;
+            if (cg && Array.isArray(cg.defaultContactPoints)) {
+                cg.defaultContactPoints = cg.defaultContactPoints.filter(c => window._contactKey(c) !== key);
+            }
+            (window.guideState?.tocItems || []).forEach(item => {
+                if (item && Array.isArray(item.contactPoints)) {
+                    const next = item.contactPoints.filter(c => window._contactKey(c) !== key);
+                    item.contactPoints = next.length ? next : null;
+                    if (item.contactPoints) item.useDefaultContacts = window.isDefaultContactPoints(item.contactPoints);
+                }
+            });
+            const sel = window.contactChangeState.selectedContacts;
+            const si = sel.findIndex(c => window._contactKey(c) === key);
+            if (si >= 0) sel.splice(si, 1);
+
+            renderCurrentContacts();
+            renderDefaultContactList();
+            const cur = window.guideState?.tocItems?.[window.contactChangeState.tocIndex];
+            const building = cur && window.guideState?.allBuildings?.find(b => b.id === cur.buildingId);
+            if (cur && building && typeof window.renderBuildingEditor === 'function') window.renderBuildingEditor(cur, building);
+
+            showToast('기본값에서 삭제되었습니다', 'success');
         };
         
         // 기본값으로 초기화
