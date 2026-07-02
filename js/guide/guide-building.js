@@ -508,7 +508,7 @@ export function renderBuildingEditor(item, building) {
                     <div>
                         <div class="preview-section-title">TYPICAL FLOOR PLAN</div>
                         <!-- ★ 수정: 권장 크기 표시 -->
-                        <div class="preview-floor-plan preview-editable" onclick="uploadImage(${idx}, 'floorplan')">
+                        <div class="preview-floor-plan preview-editable" id="floorPlanBox_${idx}" tabindex="0" title="클릭 업로드 · 드래그&드롭 · Ctrl+V 붙여넣기" onclick="uploadImage(${idx}, 'floorplan')">
                             ${floorPlanImg ? `<img src="${typeof floorPlanImg === 'string' ? floorPlanImg : (floorPlanImg.url || floorPlanImg)}" alt="평면도">` : `
                                 <div class="upload-placeholder">
                                     <span class="placeholder-icon">📐</span>
@@ -1018,6 +1018,12 @@ export function renderBuildingEditor(item, building) {
             }
         }, 100);
     }
+
+    // ★ v6.12: 평면도 미리보기 박스 드래그앤드롭 + Ctrl+V 붙여넣기 (지도와 동일)
+    setTimeout(() => {
+        const fpBox = document.getElementById(`floorPlanBox_${idx}`);
+        if (fpBox) setupFloorPlanDropAndPaste(fpBox, idx);
+    }, 100);
     
     // 자동 모드일 때 카카오맵 초기화
     if (item.mapMode === 'auto') {
@@ -1437,6 +1443,67 @@ function setupLocationDropAndPaste(container, idx) {
         container.style.boxShadow = '';
     });
     
+    container.setAttribute('data-dnd-bound', 'true');
+}
+
+// ★ v6.12: 평면도 영역 드래그앤드롭 + Ctrl+V 설정 (지도 setupLocationDropAndPaste와 동일 패턴, 대상만 floorplan)
+function setupFloorPlanDropAndPaste(container, idx) {
+    if (container.getAttribute('data-dnd-bound') === 'true') return;
+
+    container.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        container.style.outline = '2px dashed #3b82f6';
+        container.style.outlineOffset = '-2px';
+        container.style.background = 'rgba(59, 130, 246, 0.05)';
+    });
+
+    container.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        container.style.outline = '';
+        container.style.outlineOffset = '';
+        container.style.background = '';
+    });
+
+    container.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        container.style.outline = '';
+        container.style.outlineOffset = '';
+        container.style.background = '';
+
+        const files = e.dataTransfer?.files;
+        if (files && files.length > 0) {
+            const file = files[0];
+            if (file.type.startsWith('image/')) {
+                processGuideImage(file, idx, 'floorplan');
+            } else {
+                showToast('이미지 파일만 업로드 가능합니다', 'warning');
+            }
+        }
+    });
+
+    // Ctrl+V (박스가 포커스된 상태에서 수신) — 문서 레벨 핸들러와 충돌 없게 stopPropagation
+    container.addEventListener('paste', (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        for (const clipItem of items) {
+            if (clipItem.type.startsWith('image/')) {
+                const file = clipItem.getAsFile();
+                if (file) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    processGuideImage(file, idx, 'floorplan');
+                    return;
+                }
+            }
+        }
+    });
+
+    container.addEventListener('focus', () => { container.style.boxShadow = '0 0 0 2px rgba(59, 130, 246, 0.3)'; });
+    container.addEventListener('blur', () => { container.style.boxShadow = ''; });
+
     container.setAttribute('data-dnd-bound', 'true');
 }
 
