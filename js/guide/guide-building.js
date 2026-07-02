@@ -433,7 +433,10 @@ export function renderBuildingEditor(item, building) {
                 <!-- 좌측: 빌딩 사진 + 지도 -->
                 <div class="preview-col-left">
                     <div>
-                        <div class="preview-section-title">BUILDING PHOTO</div>
+                        <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>BUILDING PHOTO</span>
+                            <button class="info-action-btn" onclick="event.stopPropagation(); pasteExteriorFromClipboard(${idx})" title="복사한 외관 이미지를 바로 붙여넣기" style="font-size:11px; padding:3px 7px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
+                        </div>
                         <!-- ★ 수정: 권장 크기 표시 -->
                         <div class="preview-building-photo preview-editable" onclick="uploadImage(${idx}, 'exterior')">
                             ${mainImg ? `<img src="${typeof mainImg === 'string' ? mainImg : (mainImg.url || mainImg)}" alt="빌딩 외관">` : `
@@ -506,7 +509,10 @@ export function renderBuildingEditor(item, building) {
                         </table>
                     </div>
                     <div>
-                        <div class="preview-section-title">TYPICAL FLOOR PLAN</div>
+                        <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>TYPICAL FLOOR PLAN</span>
+                            <button class="info-action-btn" onclick="event.stopPropagation(); pasteFloorPlanFromClipboard(${idx})" title="복사한 평면도 이미지를 바로 붙여넣기" style="font-size:11px; padding:3px 7px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
+                        </div>
                         <!-- ★ 수정: 권장 크기 표시 -->
                         <div class="preview-floor-plan preview-editable" id="floorPlanBox_${idx}" tabindex="0" title="클릭 업로드 · 드래그&드롭 · Ctrl+V 붙여넣기" onclick="uploadImage(${idx}, 'floorplan')">
                             ${floorPlanImg ? `<img src="${typeof floorPlanImg === 'string' ? floorPlanImg : (floorPlanImg.url || floorPlanImg)}" alt="평면도">` : `
@@ -1572,6 +1578,64 @@ export async function pasteMapFromClipboard(idx) {
     } catch (err) {
         console.error('[클립보드 붙여넣기] 실패:', err);
         // 대개 권한 거부(NotAllowedError). 주소창 좌측 자물쇠/아이콘에서 클립보드 허용 안내
+        showToast('클립보드 읽기 권한이 필요합니다. 주소창 좌측 아이콘에서 클립보드를 허용해주세요.', 'error');
+    }
+}
+
+// ★ v6.13: 평면도 클립보드 붙여넣기 (📋 버튼) — pasteMapFromClipboard와 동일 패턴, 대상만 floorplan
+export async function pasteFloorPlanFromClipboard(idx) {
+    const item = state.tocItems[idx];
+    if (!item) return;
+
+    if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+        showToast('이 브라우저는 클립보드 읽기를 지원하지 않습니다. Ctrl+V를 사용해주세요.', 'warning');
+        return;
+    }
+
+    try {
+        const clipboardItems = await navigator.clipboard.read();
+        for (const clipItem of clipboardItems) {
+            const imgType = (clipItem.types || []).find(t => t.startsWith('image/'));
+            if (imgType) {
+                const blob = await clipItem.getType(imgType);
+                const ext = imgType.split('/')[1] || 'png';
+                const file = new File([blob], `pasted-floorplan.${ext}`, { type: imgType });
+                await processGuideImage(file, idx, 'floorplan');
+                return;
+            }
+        }
+        showToast('클립보드에 이미지가 없습니다. 먼저 평면도를 캡쳐(Win+Shift+S)하세요.', 'warning');
+    } catch (err) {
+        console.error('[평면도 클립보드 붙여넣기] 실패:', err);
+        showToast('클립보드 읽기 권한이 필요합니다. 주소창 좌측 아이콘에서 클립보드를 허용해주세요.', 'error');
+    }
+}
+
+// ★ v6.13: 외관 클립보드 붙여넣기 (📋 버튼) — pasteFloorPlanFromClipboard와 동일 패턴, 대상만 exterior
+export async function pasteExteriorFromClipboard(idx) {
+    const item = state.tocItems[idx];
+    if (!item) return;
+
+    if (!navigator.clipboard || typeof navigator.clipboard.read !== 'function') {
+        showToast('이 브라우저는 클립보드 읽기를 지원하지 않습니다. Ctrl+V를 사용해주세요.', 'warning');
+        return;
+    }
+
+    try {
+        const clipboardItems = await navigator.clipboard.read();
+        for (const clipItem of clipboardItems) {
+            const imgType = (clipItem.types || []).find(t => t.startsWith('image/'));
+            if (imgType) {
+                const blob = await clipItem.getType(imgType);
+                const ext = imgType.split('/')[1] || 'png';
+                const file = new File([blob], `pasted-exterior.${ext}`, { type: imgType });
+                await processGuideImage(file, idx, 'exterior');
+                return;
+            }
+        }
+        showToast('클립보드에 이미지가 없습니다. 먼저 외관 이미지를 캡쳐(Win+Shift+S)하세요.', 'warning');
+    } catch (err) {
+        console.error('[외관 클립보드 붙여넣기] 실패:', err);
         showToast('클립보드 읽기 권한이 필요합니다. 주소창 좌측 아이콘에서 클립보드를 허용해주세요.', 'error');
     }
 }
@@ -2747,4 +2811,7 @@ export function registerBuildingFunctions() {
     window.toggleFloorPricingPortalExpose = toggleFloorPricingPortalExpose;
     // ★ v6.6: 클립보드 직접 붙여넣기
     window.pasteMapFromClipboard = pasteMapFromClipboard;
+    // ★ v6.13: 평면도 클립보드 붙여넣기
+    window.pasteFloorPlanFromClipboard = pasteFloorPlanFromClipboard;
+    window.pasteExteriorFromClipboard = pasteExteriorFromClipboard;
 }
