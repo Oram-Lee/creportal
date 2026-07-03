@@ -59,7 +59,7 @@ import {
 // ═══════════════════════════════════════════════════════════════
 // 배포 검증 마커 — 콘솔에서 window.__SC_BUILD 로 즉시 확인 가능
 // (파이프라인 반영/캐시 여부 판별용. 로직에 영향 없음)
-window.__SC_BUILD = 'DEPLOY-CHECK-20260703-071501';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
+window.__SC_BUILD = 'DEPLOY-CHECK-20260703-080320';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
 console.log('%c[portal-stats-compare] BUILD ' + window.__SC_BUILD + ' · v1.8.0 · commonFix=ON · perMonthNoVac=ON',
             'color:#16a34a; font-weight:bold;');
 
@@ -4390,6 +4390,8 @@ const _scSnapState = {
     newCands: [],             // 최근 계산에서 모은 신규 후보
     excludeLowFloors: true,   // 지하·1F 제외(오피스 공실률) — 신규 시점 자동집계에 적용, 사용자 토글
     changeBase: 'prev',       // 변화 비교 기준: 'prev'(직전 시점) | 'first'(기준=첫 시점)
+    zeroGross: [],            // 공통이지만 연면적 0 이라 계산에서 빠진 빌딩 [{id,name,region}]
+    _render: null,            // 최근 렌더 데이터 stash (엑셀 내보내기용) { months, infoByMonth, perMonth }
 };
 
 /** 현재 A/B 큐레이션 → 스냅샷 캡쳐.
@@ -4530,6 +4532,7 @@ window._scSnapRender = function () {
 
     const present = SR_REGIONS.filter(r => perMonth.some(pm => (pm.map.get(r)?.gross || 0) > 0));
     const regionsToPlot = ['TOTAL', ...present];
+    _scSnapState._render = { months: months.slice(), infoByMonth, perMonth };   // 엑셀 내보내기용 stash
     const svg = _scTrendChartSVG(perMonth, regionsToPlot, 'reported');
     const table = _scTrendTable(perMonth, regionsToPlot);
     const basisUI = _scSnapBasisToggle(basis, divergent);
@@ -4586,69 +4589,171 @@ window._scSnapSetBasis = function (b) { _scSnapState.basis = (b === 'count' ? 'c
 window._scSnapSetExcludeLow = function (on) { _scSnapState.excludeLowFloors = !!on; window._scSnapRender(); };
 window._scSnapSetChangeBase = function (b) { _scSnapState.changeBase = (b === 'first' ? 'first' : 'prev'); window._scSnapRender(); };
 
+/** 빌딩별 변화 표 + 상세를 엑셀로 다운로드 (5시트) */
+window._scSnapExportExcel = function () {
+    if (!window.XLSX) { alert('SheetJS(XLSX) 가 로드되지 않았습니다.'); return; }
+    const R = _scSnapState._render;
+    if (!R || !R.months || R.months.length < 2) { alert('시점을 2개 이상 선택하고 [추이 계산]을 먼저 실행하세요.'); return; }
+    const data = _scSnapComputeChanges(R.months, R.infoByMonth);
+    if (!data) { alert('변화 데이터를 계산할 수 없습니다.'); return; }
+    const { baseM, curM, buildings, added, removed, regionAgg, totals } = data;
+    const r1 = n => Math.round(n || 0);
+    const wb = window.XLSX.utils.book_new();
+
+    // 시트 1: 빌딩별 변화 (급변 순)
+    const h1 = ['순위', '빌딩명', '권역', '구분', '입주시기', `직전 ${baseM} 공실(평)`, `현재 ${curM} 공실(평)`, '차이(평)', '신규층수', '해소층수', '신규층', '해소층', '대표회사'];
+    const rows1 = buildings.map((x, i) => [
+        i + 1, x.name, x.region, x.dir, x.moveLabel || '-',
+        r1(x.baseArea), r1(x.curArea), r1(x.diff),
+        x.addCnt, x.remCnt, x.addFloors.join(', '), x.remFloors.join(', '), x.source || '',
+    ]);
+    const ws1 = window.XLSX.utils.aoa_to_sheet([h1, ...rows1]);
+    ws1['!cols'] = [{ wch: 5 }, { wch: 22 }, { wch: 7 }, { wch: 7 }, { wch: 12 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 18 }, { wch: 18 }, { wch: 14 }];
+    window.XLSX.utils.book_append_sheet(wb, ws1, '빌딩별 변화');
+
+    // 시트 2: 층별 상세 (신규 + 해소)
+    const h2 = ['구분', '빌딩명', '권역', '층', '면적(평)', '임대면적여부', '입주시기', '입주상태', '회사'];
+    const miKo = k => k === 'immediate' ? '즉시' : (k === 'planned' ? '예정' : '미기재');
+    const rows2 = added.map(x => ['신규', x.name, x.region, x.floor, r1(x.area), x.hasRent === false ? '전용' : '임대', x.moveLabel || '-', miKo(x.moveKind), x.source || ''])
+        .concat(removed.map(x => ['해소', x.name, x.region, x.floor, r1(x.area), x.hasRent === false ? '전용' : '임대', x.moveLabel || '-', miKo(x.moveKind), x.source || '']));
+    const ws2 = window.XLSX.utils.aoa_to_sheet([h2, ...rows2]);
+    ws2['!cols'] = [{ wch: 6 }, { wch: 22 }, { wch: 7 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 9 }, { wch: 14 }];
+    window.XLSX.utils.book_append_sheet(wb, ws2, '층별 상세');
+
+    // 시트 3: 권역별 순증감
+    const h3 = ['권역', '신규 건수', '신규 면적(평)', '해소 건수', '해소 면적(평)', '순증감(평)'];
+    const rows3 = SR_REGIONS.filter(r => regionAgg.has(r)).map(r => {
+        const g = regionAgg.get(r);
+        return [r, g.addCnt, r1(g.addArea), g.remCnt, r1(g.remArea), r1(g.addArea - g.remArea)];
+    });
+    rows3.push(['전체', totals.addCnt, r1(totals.addArea), totals.remCnt, r1(totals.remArea), r1(totals.net)]);
+    const ws3 = window.XLSX.utils.aoa_to_sheet([h3, ...rows3]);
+    ws3['!cols'] = [{ wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 12 }];
+    window.XLSX.utils.book_append_sheet(wb, ws3, '권역별 순증감');
+
+    // 시트 4: 시점별 공실률 (권역 × 월)
+    const pm = R.perMonth || [];
+    const present = ['TOTAL', ...SR_REGIONS.filter(r => pm.some(p => (p.map.get(r)?.gross || 0) > 0))];
+    const h4 = ['권역', ...pm.map(p => `${p.month} 공실률(%)`)];
+    const rows4 = present.map(r => [r === 'TOTAL' ? '전체' : r, ...pm.map(p => {
+        const bk = p.map.get(r); return bk && bk.gross > 0 ? +(bk.vac / bk.gross * 100).toFixed(2) : '';
+    })]);
+    const ws4 = window.XLSX.utils.aoa_to_sheet([h4, ...rows4]);
+    ws4['!cols'] = [{ wch: 8 }, ...pm.map(() => ({ wch: 14 }))];
+    window.XLSX.utils.book_append_sheet(wb, ws4, '시점별 공실률');
+
+    // 시트 5: 연면적 0 제외 (있을 때만)
+    const zg = _scSnapState.zeroGross || [];
+    if (zg.length) {
+        const ws5 = window.XLSX.utils.aoa_to_sheet([['빌딩명', '권역', '비고'], ...zg.map(z => [z.name, z.region, '연면적 0 — 계산 제외'])]);
+        ws5['!cols'] = [{ wch: 22 }, { wch: 8 }, { wch: 20 }];
+        window.XLSX.utils.book_append_sheet(wb, ws5, '연면적0 제외');
+    }
+
+    const fname = `공실변화_${baseM}_to_${curM}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    window.XLSX.writeFile(wb, fname);
+};
+
 /** 변화 식별 — 요약카드 + 권역별 순증감표 + 빌딩별 목록 (기준: 직전/첫 시점 선택) */
+/** 변화 계산 (공용) — 빌딩단위 표 + 층단위 상세 + 권역 집계 + 합계. 화면/엑셀 공유. */
+function _scSnapComputeChanges(months, infoByMonth) {
+    if (!months || months.length < 2) return null;
+    const regOf = r => (SR_REGIONS.includes(r) ? r : 'ETC');
+    const baseMode = _scSnapState.changeBase === 'first' ? 'first' : 'prev';
+    const baseM = baseMode === 'first' ? months[0] : months[months.length - 2];
+    const curM  = months[months.length - 1];
+    const baseInfo = infoByMonth[baseM] || new Map();
+    const curInfo  = infoByMonth[curM]  || new Map();
+
+    const buildings = [];              // 빌딩단위 행
+    const added = [], removed = [];    // 층단위 상세
+    const regionAgg = new Map();
+    const ensureReg = r => { if (!regionAgg.has(r)) regionAgg.set(r, { addCnt: 0, addArea: 0, remCnt: 0, remArea: 0 }); return regionAgg.get(r); };
+    let addCnt = 0, addArea = 0, remCnt = 0, remArea = 0;
+
+    _scSnapState.snapshot.forEach((entry, bid) => {
+        const region = regOf(entry.region || 'ETC');
+        const bMap = (baseInfo.get(String(bid)) || {}).floors || new Map();
+        const cMap = (curInfo.get(String(bid))  || {}).floors || new Map();
+        let baseAreaB = 0, curAreaB = 0;
+        const addF = [], remF = [];
+        cMap.forEach((fd, f) => {
+            curAreaB += fd.area || 0;
+            if (!bMap.has(f)) {
+                addF.push(Object.assign({ floor: f }, fd));
+                added.push(Object.assign({ name: entry.name, region, floor: f }, fd));
+                addCnt++; addArea += fd.area || 0; const rg = ensureReg(region); rg.addCnt++; rg.addArea += fd.area || 0;
+            }
+        });
+        bMap.forEach((fd, f) => {
+            baseAreaB += fd.area || 0;
+            if (!cMap.has(f)) {
+                remF.push(Object.assign({ floor: f }, fd));
+                removed.push(Object.assign({ name: entry.name, region, floor: f }, fd));
+                remCnt++; remArea += fd.area || 0; const rg = ensureReg(region); rg.remCnt++; rg.remArea += fd.area || 0;
+            }
+        });
+        if (addF.length || remF.length) {
+            const diff = curAreaB - baseAreaB;                       // 빌딩 공실 순변화(임대평)
+            const dir = (addF.length && remF.length) ? '혼재' : (addF.length ? '발생' : '해소');
+            let moveLabel = '-', moveKind = '';
+            if (addF.length) { const im = addF.find(x => x.moveKind === 'immediate') || addF[0]; moveLabel = im.moveLabel || '즉시'; moveKind = im.moveKind || 'immediate'; }
+            const src = (addF[0] || remF[0] || {}).source || '';
+            buildings.push({
+                id: String(bid), name: entry.name, region, dir, moveLabel, moveKind, source: src,
+                baseArea: baseAreaB, curArea: curAreaB, diff,
+                addCnt: addF.length, remCnt: remF.length,
+                addFloors: addF.map(x => x.floor), remFloors: remF.map(x => x.floor),
+            });
+        }
+    });
+    buildings.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff) || b.curArea - a.curArea);   // 급변 빌딩 우선
+    return { baseM, curM, buildings, added, removed, regionAgg,
+             totals: { addCnt, addArea, remCnt, remArea, net: addArea - remArea } };
+}
+
 function _scSnapRenderChanges(months, infoByMonth) {
     const fmtA = n => Math.round(n || 0).toLocaleString();
     const baseMode = _scSnapState.changeBase === 'first' ? 'first' : 'prev';
-    // 기준 시점 토글 (항상 표시)
     const baseToggle = `<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
         <span style="font-size:12px; font-weight:700; color:#475569;">변화 비교 기준</span>
         <label style="font-size:12px; cursor:pointer;"><input type="radio" name="sc-snap-cbase" ${baseMode === 'prev' ? 'checked' : ''} onchange="window._scSnapSetChangeBase('prev')"> 직전 시점</label>
         <label style="font-size:12px; cursor:pointer;"><input type="radio" name="sc-snap-cbase" ${baseMode === 'first' ? 'checked' : ''} onchange="window._scSnapSetChangeBase('first')"> 기준(첫) 시점</label>
     </div>`;
 
-    if (!months || months.length < 2) {
+    // 연면적 0(계산 제외) 빌딩 경고 — 항상 표시 (공통엔 있으나 gross≤0 라 스냅샷에서 빠짐)
+    const zg = _scSnapState.zeroGross || [];
+    const zeroNote = zg.length ? `<div style="margin-bottom:10px; padding:8px 12px; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; font-size:12px; color:#92400e;">
+        ⚠ 연면적 0(계산 제외) 빌딩 <b>${zg.length}개</b> — ${zg.map(z => `${z.name}<span style="color:#c9a45b;">(${z.region})</span>`).join(', ')}
+        <span style="color:#b45309;"> · 공통 셋엔 있으나 연면적이 0이라 분모·분자에서 빠짐.</span>
+    </div>` : '';
+
+    const data = _scSnapComputeChanges(months, infoByMonth);
+    if (!data) {
         return `<div style="margin-bottom:16px; padding:14px; background:#f1f5f9; border:1px dashed #cbd5e1; border-radius:10px;">
-            ${baseToggle}
+            ${baseToggle}${zeroNote}
             <div style="font-size:12px; color:#64748b; text-align:center; padding-top:4px;">🔁 변화를 보려면 시점을 <b>2개 이상</b> 선택하세요.</div>
         </div>`;
     }
-
-    const baseM = baseMode === 'first' ? months[0] : months[months.length - 2];
-    const curM  = months[months.length - 1];
-    const baseInfo = infoByMonth[baseM] || new Map();
-    const curInfo  = infoByMonth[curM]  || new Map();
-
-    // 집계: 신규(cur 에만) = 공실 증가 / 해소(base 에만) = 공실 감소
-    const regOf = r => (SR_REGIONS.includes(r) ? r : 'ETC');
-    const regionAgg = new Map();
-    const ensureReg = r => { if (!regionAgg.has(r)) regionAgg.set(r, { addCnt: 0, addArea: 0, remCnt: 0, remArea: 0 }); return regionAgg.get(r); };
-    const added = [], removed = [];
-    let addCnt = 0, addArea = 0, remCnt = 0, remArea = 0;
-    _scSnapState.snapshot.forEach((entry, bid) => {
-        const region = regOf(entry.region || 'ETC');
-        const bf = (baseInfo.get(String(bid)) || {}).floors || new Map();
-        const cf = (curInfo.get(String(bid))  || {}).floors || new Map();
-        cf.forEach((fd, f) => { if (!bf.has(f)) {
-            added.push(Object.assign({ name: entry.name, region, floor: f }, fd));
-            const a = fd.area || 0; addCnt++; addArea += a;
-            const rg = ensureReg(region); rg.addCnt++; rg.addArea += a;
-        } });
-        bf.forEach((fd, f) => { if (!cf.has(f)) {
-            removed.push(Object.assign({ name: entry.name, region, floor: f }, fd));
-            const a = fd.area || 0; remCnt++; remArea += a;
-            const rg = ensureReg(region); rg.remCnt++; rg.remArea += a;
-        } });
-    });
-    const netArea = addArea - remArea;
-    const netColor = netArea > 0 ? '#dc2626' : (netArea < 0 ? '#16a34a' : '#64748b');
+    const { baseM, curM, buildings, regionAgg, totals } = data;
+    const netColor = totals.net > 0 ? '#dc2626' : (totals.net < 0 ? '#16a34a' : '#64748b');
 
     // (c) 요약 카드 3종
     const summary = `<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px;">
         <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:9px; padding:10px 12px;">
             <div style="font-size:11px; font-weight:700; color:#b91c1c;">⊕ 신규 공실 <span style="font-weight:400; color:#f0a8a8;">(공실↑)</span></div>
-            <div style="font-size:18px; font-weight:800; color:#dc2626; margin-top:3px;">${fmtA(addArea)}<span style="font-size:11px; font-weight:600;">평</span></div>
-            <div style="font-size:11px; color:#9ca3af;">${addCnt}개 층</div>
+            <div style="font-size:18px; font-weight:800; color:#dc2626; margin-top:3px;">${fmtA(totals.addArea)}<span style="font-size:11px; font-weight:600;">평</span></div>
+            <div style="font-size:11px; color:#9ca3af;">${totals.addCnt}개 층</div>
         </div>
         <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:9px; padding:10px 12px;">
             <div style="font-size:11px; font-weight:700; color:#15803d;">⊖ 해소 공실 <span style="font-weight:400; color:#86c99a;">(공실↓)</span></div>
-            <div style="font-size:18px; font-weight:800; color:#16a34a; margin-top:3px;">${fmtA(remArea)}<span style="font-size:11px; font-weight:600;">평</span></div>
-            <div style="font-size:11px; color:#9ca3af;">${remCnt}개 층</div>
+            <div style="font-size:18px; font-weight:800; color:#16a34a; margin-top:3px;">${fmtA(totals.remArea)}<span style="font-size:11px; font-weight:600;">평</span></div>
+            <div style="font-size:11px; color:#9ca3af;">${totals.remCnt}개 층</div>
         </div>
         <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:9px; padding:10px 12px;">
             <div style="font-size:11px; font-weight:700; color:#475569;">Δ 순증감</div>
-            <div style="font-size:18px; font-weight:800; color:${netColor}; margin-top:3px;">${netArea > 0 ? '+' : (netArea < 0 ? '−' : '')}${fmtA(Math.abs(netArea))}<span style="font-size:11px; font-weight:600;">평</span></div>
-            <div style="font-size:11px; color:#9ca3af;">공실 ${netArea > 0 ? '증가' : (netArea < 0 ? '감소' : '변화없음')}</div>
+            <div style="font-size:18px; font-weight:800; color:${netColor}; margin-top:3px;">${totals.net > 0 ? '+' : (totals.net < 0 ? '−' : '')}${fmtA(Math.abs(totals.net))}<span style="font-size:11px; font-weight:600;">평</span></div>
+            <div style="font-size:11px; color:#9ca3af;">공실 ${totals.net > 0 ? '증가' : (totals.net < 0 ? '감소' : '변화없음')}</div>
         </div>
     </div>`;
 
@@ -4678,34 +4783,60 @@ function _scSnapRenderChanges(months, infoByMonth) {
         </table>
     </div>` : '';
 
-    // (b) 빌딩별 변화 목록
+    // (b) 빌딩단위 변화 표 — 차이 큰 순
+    const dirBadge = d => {
+        const m = { '발생': ['#dc2626', '#fef2f2'], '해소': ['#16a34a', '#f0fdf4'], '혼재': ['#ea580c', '#fff7ed'] };
+        const [c, bg] = m[d] || ['#64748b', '#f8fafc'];
+        return `<span style="font-size:10px; font-weight:700; color:${c}; background:${bg}; border:1px solid ${c}44; border-radius:4px; padding:1px 6px;">${d}</span>`;
+    };
     const miBadge = (k, l) => {
         const c = k === 'immediate' ? '#16a34a' : (k === 'planned' ? '#ea580c' : '#9ca3af');
         const i = k === 'immediate' ? '🟢' : (k === 'planned' ? '🟡' : '⚪');
-        return `<span style="font-size:10px; font-weight:700; color:${c};">${i} ${l || '미기재'}</span>`;
+        return `<span style="font-size:10px; color:${c};">${i} ${l || '-'}</span>`;
     };
-    const row = (x, sign, color) => `<div style="display:flex; align-items:center; gap:8px; padding:5px 10px; border-top:1px solid #eef2f7; font-size:12px; flex-wrap:wrap;">
-        <span style="font-weight:800; color:${color}; width:52px;">${sign}</span>
-        <span style="font-weight:600; color:#1e293b; min-width:140px;">${x.name}</span>
-        <span style="font-size:10px; color:#94a3b8;">${x.region}</span>
-        <span style="color:#475569;">${x.floor} · ${fmtA(x.area)}평 ${x.hasRent === false ? '<span style="font-size:9px;color:#9ca3af;">(전용)</span>' : ''}</span>
-        ${miBadge(x.moveKind, x.moveLabel)}
-        <span style="font-size:10px; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; padding:1px 6px;">📄 ${x.source || '-'}</span>
-    </div>`;
-    const listBody = (added.length || removed.length)
-        ? added.map(x => row(x, '⊕ 신규', '#dc2626')).join('') + removed.map(x => row(x, '⊖ 해소', '#16a34a')).join('')
-        : `<div style="padding:14px; text-align:center; color:#94a3b8; font-size:12px;">두 시점 간 공실 변화 없음</div>`;
-    const buildingList = `<div style="background:#fff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
-        <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#0f172a; background:#f8fafc;">🏢 빌딩별 변화 — <span style="color:#dc2626;">⊕ 신규 ${addCnt}</span> / <span style="color:#16a34a;">⊖ 해소 ${remCnt}</span></div>
-        ${listBody}
+    const bRows = buildings.map(x => {
+        const c = SR_REGION_COLOR[x.region] || '#64748b';
+        const dc = x.diff > 0 ? '#dc2626' : (x.diff < 0 ? '#16a34a' : '#64748b');
+        const chg = [x.addCnt ? `<span style="color:#dc2626;">신규 ${x.addCnt}</span>` : '', x.remCnt ? `<span style="color:#16a34a;">해소 ${x.remCnt}</span>` : ''].filter(Boolean).join(' / ');
+        return `<tr style="border-top:1px solid #eef2f7;">
+            <td style="padding:6px 8px; font-weight:600; color:#1e293b;">${x.name}</td>
+            <td style="padding:6px 8px; font-weight:700; color:${c};">${x.region}</td>
+            <td style="padding:6px 8px;">${dirBadge(x.dir)}</td>
+            <td style="padding:6px 8px;">${miBadge(x.moveKind, x.moveLabel)}</td>
+            <td style="padding:6px 8px; text-align:right; color:#64748b;">${fmtA(x.baseArea)}</td>
+            <td style="padding:6px 8px; text-align:right; color:#1e293b; font-weight:600;">${fmtA(x.curArea)}</td>
+            <td style="padding:6px 8px; text-align:right; font-weight:800; color:${dc};">${x.diff > 0 ? '+' : (x.diff < 0 ? '−' : '')}${fmtA(Math.abs(x.diff))}</td>
+            <td style="padding:6px 8px; text-align:center; font-size:11px;">${chg || '-'}</td>
+        </tr>`;
+    }).join('');
+    const buildingTable = `<div style="background:#fff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+        <div style="padding:8px 12px; display:flex; align-items:center; justify-content:space-between; background:#f8fafc; gap:10px; flex-wrap:wrap;">
+            <span style="font-size:12px; font-weight:700; color:#0f172a;">🏢 빌딩별 변화 — 차이 큰 순 (${buildings.length}개 빌딩)</span>
+            <button onclick="window._scSnapExportExcel()" style="padding:5px 12px; background:#16a34a; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;">⬇ 엑셀 다운로드</button>
+        </div>
+        <div style="max-height:440px; overflow-y:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+            <thead><tr style="position:sticky; top:0; background:#f1f5f9; color:#64748b; font-size:10px;">
+                <th style="padding:6px 8px; text-align:left;">빌딩명</th>
+                <th style="padding:6px 8px; text-align:left;">권역</th>
+                <th style="padding:6px 8px; text-align:left;">구분</th>
+                <th style="padding:6px 8px; text-align:left;">입주시기</th>
+                <th style="padding:6px 8px; text-align:right;">직전 ${baseM}<br>공실(평)</th>
+                <th style="padding:6px 8px; text-align:right;">현재 ${curM}<br>공실(평)</th>
+                <th style="padding:6px 8px; text-align:right;">차이(평)</th>
+                <th style="padding:6px 8px; text-align:center;">변화 층</th>
+            </tr></thead>
+            <tbody>${bRows || `<tr><td colspan="8" style="padding:14px; text-align:center; color:#94a3b8;">두 시점 간 공실 변화 없음</td></tr>`}</tbody>
+        </table>
+        </div>
     </div>`;
 
     return `<div style="margin-bottom:16px; padding:12px 14px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px;">
-        ${baseToggle}
+        ${baseToggle}${zeroNote}
         <div style="font-size:12px; font-weight:700; color:#0f172a; margin-bottom:10px;">🔁 <b>${baseM}</b> → <b>${curM}</b> 공실 변화 <span style="font-weight:400; color:#94a3b8;">· 스냅샷 ${_scSnapState.snapshot.size}개 빌딩 (분모 고정)</span></div>
         ${summary}
         ${regionTable}
-        ${buildingList}
+        ${buildingTable}
     </div>`;
 }
 
@@ -4762,6 +4893,12 @@ function _scInjectSnapModal() {
 window._scSnapCapture = function () {
     const snap = _scSnapCaptureFromSelection();
     _scSnapState.snapshot = snap;
+    // 연면적 0(계산 제외) 빌딩 식별 — 공통이지만 gross≤0 이라 스냅샷에서 빠진 것
+    const { common } = _scGetCommonBuildingIds();
+    _scSnapState.zeroGross = common.map(String).filter(bid => !snap.has(bid)).map(bid => {
+        const b = _scIdxBldg(bid);
+        return { id: bid, name: b ? (b.name || b.buildingName || bid) : bid, region: b ? (b._region || 'ETC') : 'ETC' };
+    });
     _scSnapState.includedExtra = new Set();
     _scSnapState.subAlt = {};
     _scSnapState.newCands = [];
@@ -4826,6 +4963,7 @@ function _scSnapBuildPayload(title) {
         version: (_scSnapState.version || 0) + 1,
         months: (_scSnapState.months || []).slice(),
         excludeLowFloors: _scSnapState.excludeLowFloors !== false,
+        zeroGross: (_scSnapState.zeroGross || []).map(z => ({ id: z.id, name: z.name, region: z.region })),
         buildings, includedExtra: extra, subAlt,
     };
 }
@@ -4866,6 +5004,7 @@ function _scSnapRestoreFromPayload(p) {
     _scSnapState.subAlt = subAlt;
     _scSnapState.title = p.title || '';
     _scSnapState.excludeLowFloors = p.excludeLowFloors !== false;   // 저장값 복원 (기본 ON)
+    _scSnapState.zeroGross = Array.isArray(p.zeroGross) ? p.zeroGross.slice() : [];
 }
 
 window._scSnapSave = async function () {
