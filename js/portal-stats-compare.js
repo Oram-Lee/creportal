@@ -55,6 +55,13 @@ import {
 } from './portal-stats.js';
 
 // ═══════════════════════════════════════════════════════════════
+// 배포 검증 마커 — 콘솔에서 window.__SC_BUILD 로 즉시 확인 가능
+// (파이프라인 반영/캐시 여부 판별용. 로직에 영향 없음)
+window.__SC_BUILD = 'DEPLOY-CHECK-20260703-021820';
+console.log('%c[portal-stats-compare] BUILD ' + window.__SC_BUILD + ' · v1.8.0 · commonFix=ON · perMonthNoVac=ON',
+            'color:#16a34a; font-weight:bold;');
+
+// ═══════════════════════════════════════════════════════════════
 // 1. 전역 상태
 // ═══════════════════════════════════════════════════════════════
 
