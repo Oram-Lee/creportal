@@ -1,10 +1,5 @@
 /**
- * portal-stats-compare.js  v1.8.0  (선택 기반 다시점 정확성·변화 UI 개선)
- * ═══════════════════════════════════════════════════════════════
- * v1.8.0 변경 (2026-07, snap 전용 — 2시점/추이 경로는 불변):
- *   1) 신규 시점 자동집계: 즉시공실만 반영(예정공실 제외) → 2시점 감각과 정합. 원(선택)시점은 저장된 수기 선택 그대로.
- *   2) 지하·1F 제외 사용자 토글(_scSnapState.excludeLowFloors, 기본 ON, 저장·복원) + 층 판정 규칙을 portal-detail.js isLowFloor 와 통일(G/GF·B-1 보강).
- *   3) 변화 식별 UI 개편(_scSnapRenderChanges): 요약카드 3종 + 권역별 순증감표 + 빌딩별 목록 + 비교 기준(직전/첫 시점) 토글.
+ * portal-stats-compare.js  v1.7.14  (공실면적=임대면적 우선 적용 + 면적 동일 시 표시 개선)
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -4306,29 +4301,25 @@ window._scTrendSetMode = function (v) { _scTrendState.mode = v; window._scTrendR
 //    저장: (다음 단계) 새 노드 /statsTrend
 // ═══════════════════════════════════════════════════════════════
 
-// ── 층 제외 (지하 + 1층/G) — portal-detail.js isLowFloor 규칙과 통일 ──
-// 흡수: B1, B1F, B-1, B-1F, B01, B01F, 지하1, 지하1층, 지하1F, 1F, 01F, 1층, B동1층, G, GF
+// ── 층 제외 (지하 + 1층) — editor _seIsUnderground 규칙 복제 + 1층 추가 ──
 function _scIsUndergroundFloor(floor) {
-    const raw = String(floor || '').trim();
-    if (!raw || raw === '-') return false;
-    if (raw.includes('지하')) return true;                 // 한국어 지하 (지하1층 등)
-    const f = raw.toUpperCase().replace(/\s+/g, '');
-    if (/^B-?\d+F?$/.test(f)) return true;                 // B1, B1F, B-1, B-1F, B01, B01F
-    if (/^BASEMENT/.test(f)) return true;
+    if (!floor) return false;
+    const s = String(floor).trim();
+    if (!s || s === '-') return false;
+    if (s.includes('지하')) return true;
+    if (/^B\d+F?$/i.test(s)) return true;       // B1F, B2, b1
+    if (/^basement/i.test(s)) return true;
     return false;
 }
 function _scIsGroundFloor(floor) {
-    const raw = String(floor || '').trim();
-    if (!raw) return false;
-    if (raw.includes('지하')) return false;                // 지하는 underground 로 처리 (지하1층 오판 방지)
-    const f = raw.toUpperCase().replace(/\s+/g, '');
-    if (/^GF?$/.test(f)) return true;                      // G / GF (그라운드)
-    if (/^1$/.test(f)) return true;                        // "1"
-    const m = f.match(/(\d+)(?:F|층)/);                    // 1F / 01F / 1층 / B동1층 → 첫 숫자
+    const s = String(floor || '').trim();
+    if (!s) return false;
+    const m = s.match(/(\d+)\s*(?:F|층)/i);     // "1F","1층","B동 1층" → 1 / "11F" → 11
     if (m && parseInt(m[1], 10) === 1) return true;
+    if (/^1$/.test(s)) return true;
     return false;
 }
-/** 지하 또는 1층/G(리테일) → 오피스 공실률 계산 제외 */
+/** 지하 또는 1층 → 공실률 계산 제외 (리테일) */
 function _scFloorExcluded(floor) {
     return _scIsUndergroundFloor(floor) || _scIsGroundFloor(floor);
 }
@@ -4379,8 +4370,6 @@ const _scSnapState = {
     months: [],               // 선택 월 (오름차순)
     includedExtra: new Set(), // 포함하기로 한 신규 공실 "bid|normFloor"
     newCands: [],             // 최근 계산에서 모은 신규 후보
-    excludeLowFloors: true,   // 지하·1F 제외(오피스 공실률) — 신규 시점 자동집계에 적용, 사용자 토글
-    changeBase: 'prev',       // 변화 비교 기준: 'prev'(직전 시점) | 'first'(기준=첫 시점)
 };
 
 /** 현재 A/B 큐레이션 → 스냅샷 캡쳐.
@@ -4447,12 +4436,10 @@ function _scSnapApplyMonth(yyyymm, basis) {
                     });
                 info.rep = bm.source; info.repByCount = bm.source; info.repByArea = bm.source;   // 수기 선택 고정 (토글 영향 없음)
             } else {
-                // 신규 시점 — 대표회사 자동선택 (즉시공실만, 지하·1F 옵션 제외)
-                const _exLow = _scSnapState.excludeLowFloors !== false;
+                // 신규 시점 — 대표회사 자동선택 (지하·1층 제외)
                 const vacs = _scVacanciesByMonth(b, yyyymm)
                     .filter(v => !String(v._key || '').endsWith('_meta'))
-                    .filter(v => _scMoveInStatus(v, yyyymm).kind === 'immediate')                     // 즉시(실제공실)만 — 예정공실 제외
-                    .filter(v => { const f = _scNormFloor(v); if (!f) return false; return _exLow ? !_scFloorExcluded(f) : true; });
+                    .filter(v => { const f = _scNormFloor(v); return f && !_scFloorExcluded(f); });   // 지하·1층 제외
                 if (vacs.length) {
                     const byCo = new Map();   // 회사 → Map<floor, vacancy> (회사 내 층 dedup)
                     vacs.forEach(v => {
@@ -4518,36 +4505,20 @@ window._scSnapRender = function () {
     const svg = _scTrendChartSVG(perMonth, regionsToPlot, 'reported');
     const table = _scTrendTable(perMonth, regionsToPlot);
     const basisUI = _scSnapBasisToggle(basis, divergent);
-    const optUI = _scSnapOptionsBar();
     const changeUI = _scSnapRenderChanges(months, infoByMonth);
 
-    const _exLowOn = _scSnapState.excludeLowFloors !== false;
     area.innerHTML = `
         ${basisUI}
-        ${optUI}
         <div style="padding:2px 2px 12px; font-size:12px; color:#64748b;">
-            📌 선택 스냅샷 <b>${_scSnapState.snapshot.size}개 빌딩</b> 기준 · 대표회사 자동선택(<b>${basis === 'count' ? '건수' : '면적'}</b>) · 신규 시점=즉시공실만 · ${_exLowOn ? '지하·1F 제외' : '전층 포함'} · 해소 공실 0.
+            📌 선택 스냅샷 <b>${_scSnapState.snapshot.size}개 빌딩</b> 기준 · 대표회사 자동선택(<b>${basis === 'count' ? '건수' : '면적'}</b>) · 지하·1층(리테일) 제외 · 해소 공실 0.
         </div>
         ${changeUI}
         ${svg}
         <div style="margin-top:18px;">${table}</div>
         <div style="margin-top:10px; font-size:11px; color:#94a3b8; line-height:1.6;">
-            산식: 공실률 = Σ공실면적(임대평) ÷ Σ연면적 × 100 (권역 가중) · 신규 시점=빌딩별 <b>대표회사 자동선택</b>(${basis === 'count' ? '공실 층수 최다' : '임대평 합 최대'}, 동률 가나다순) · <b>즉시공실만</b>(해당 시점 실제 공실=즉시 또는 입주월≤시점, 예정공실 제외) · ${_exLowOn ? '지하·1F 제외' : '전층 포함'} · 원(선택)시점은 저장된 수기 선택 유지.
+            산식: 공실률 = Σ공실면적(임대평) ÷ Σ연면적 × 100 (권역 가중) · 시점마다 빌딩별 <b>대표회사 자동선택</b>(${basis === 'count' ? '공실 층수 최다' : '임대평 합 최대'}, 동률 가나다순) · 지하/1층 제외.
         </div>`;
 };
-
-/** 지하·1F 제외 옵션 바 (기본 ON, 사용자가 해제 가능) */
-function _scSnapOptionsBar() {
-    const on = _scSnapState.excludeLowFloors !== false;
-    return `<div style="margin-bottom:12px; padding:9px 14px; background:#fff; border:1px solid #e5e7eb; border-radius:10px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-        <label style="display:inline-flex; align-items:center; gap:7px; cursor:pointer; font-size:12px; font-weight:600; color:#334155;">
-            <input type="checkbox" ${on ? 'checked' : ''} onchange="window._scSnapSetExcludeLow(this.checked)" style="width:15px; height:15px; cursor:pointer;">
-            지하·1F 제외 <span style="font-weight:400; color:#94a3b8;">(오피스 공실률 · 분자만 제외, 연면적 분모 유지)</span>
-        </label>
-        <span style="font-size:11px; color:#cbd5e1;">|</span>
-        <span style="font-size:11px; color:#94a3b8;">신규 시점 자동집계에 적용 · 원(선택)시점은 저장된 선택값 유지</span>
-    </div>`;
-}
 
 /** 대표회사 기준 토글 + 건수↔면적 차이 빌딩 표시 */
 function _scSnapBasisToggle(basis, divergent) {
@@ -4568,129 +4539,42 @@ function _scSnapBasisToggle(basis, divergent) {
     </div>`;
 }
 window._scSnapSetBasis = function (b) { _scSnapState.basis = (b === 'count' ? 'count' : 'area'); window._scSnapRender(); };
-window._scSnapSetExcludeLow = function (on) { _scSnapState.excludeLowFloors = !!on; window._scSnapRender(); };
-window._scSnapSetChangeBase = function (b) { _scSnapState.changeBase = (b === 'first' ? 'first' : 'prev'); window._scSnapRender(); };
 
-/** 변화 식별 — 요약카드 + 권역별 순증감표 + 빌딩별 목록 (기준: 직전/첫 시점 선택) */
+/** 직전 시점 대비 변화 (마지막 전이) — ⊕추가 / ⊖삭제 */
 function _scSnapRenderChanges(months, infoByMonth) {
-    const fmtA = n => Math.round(n || 0).toLocaleString();
-    const baseMode = _scSnapState.changeBase === 'first' ? 'first' : 'prev';
-    // 기준 시점 토글 (항상 표시)
-    const baseToggle = `<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px;">
-        <span style="font-size:12px; font-weight:700; color:#475569;">변화 비교 기준</span>
-        <label style="font-size:12px; cursor:pointer;"><input type="radio" name="sc-snap-cbase" ${baseMode === 'prev' ? 'checked' : ''} onchange="window._scSnapSetChangeBase('prev')"> 직전 시점</label>
-        <label style="font-size:12px; cursor:pointer;"><input type="radio" name="sc-snap-cbase" ${baseMode === 'first' ? 'checked' : ''} onchange="window._scSnapSetChangeBase('first')"> 기준(첫) 시점</label>
-    </div>`;
-
     if (!months || months.length < 2) {
-        return `<div style="margin-bottom:16px; padding:14px; background:#f1f5f9; border:1px dashed #cbd5e1; border-radius:10px;">
-            ${baseToggle}
-            <div style="font-size:12px; color:#64748b; text-align:center; padding-top:4px;">🔁 변화를 보려면 시점을 <b>2개 이상</b> 선택하세요.</div>
-        </div>`;
+        return `<div style="margin-bottom:16px; padding:14px; background:#f1f5f9; border:1px dashed #cbd5e1; border-radius:10px; font-size:12px; color:#64748b; text-align:center;">🔁 직전 시점 대비 변화를 보려면 시점을 <b>2개 이상</b> 선택하세요.</div>`;
     }
-
-    const baseM = baseMode === 'first' ? months[0] : months[months.length - 2];
-    const curM  = months[months.length - 1];
-    const baseInfo = infoByMonth[baseM] || new Map();
-    const curInfo  = infoByMonth[curM]  || new Map();
-
-    // 집계: 신규(cur 에만) = 공실 증가 / 해소(base 에만) = 공실 감소
-    const regOf = r => (SR_REGIONS.includes(r) ? r : 'ETC');
-    const regionAgg = new Map();
-    const ensureReg = r => { if (!regionAgg.has(r)) regionAgg.set(r, { addCnt: 0, addArea: 0, remCnt: 0, remArea: 0 }); return regionAgg.get(r); };
+    const prevM = months[months.length - 2], curM = months[months.length - 1];
+    const prevInfo = infoByMonth[prevM] || new Map();
+    const curInfo = infoByMonth[curM] || new Map();
     const added = [], removed = [];
-    let addCnt = 0, addArea = 0, remCnt = 0, remArea = 0;
     _scSnapState.snapshot.forEach((entry, bid) => {
-        const region = regOf(entry.region || 'ETC');
-        const bf = (baseInfo.get(String(bid)) || {}).floors || new Map();
-        const cf = (curInfo.get(String(bid))  || {}).floors || new Map();
-        cf.forEach((fd, f) => { if (!bf.has(f)) {
-            added.push(Object.assign({ name: entry.name, region, floor: f }, fd));
-            const a = fd.area || 0; addCnt++; addArea += a;
-            const rg = ensureReg(region); rg.addCnt++; rg.addArea += a;
-        } });
-        bf.forEach((fd, f) => { if (!cf.has(f)) {
-            removed.push(Object.assign({ name: entry.name, region, floor: f }, fd));
-            const a = fd.area || 0; remCnt++; remArea += a;
-            const rg = ensureReg(region); rg.remCnt++; rg.remArea += a;
-        } });
+        const pf = (prevInfo.get(String(bid)) || {}).floors || new Map();
+        const cf = (curInfo.get(String(bid)) || {}).floors || new Map();
+        cf.forEach((fd, f) => { if (!pf.has(f)) added.push(Object.assign({ name: entry.name, floor: f }, fd)); });
+        pf.forEach((fd, f) => { if (!cf.has(f)) removed.push(Object.assign({ name: entry.name, floor: f }, fd)); });
     });
-    const netArea = addArea - remArea;
-    const netColor = netArea > 0 ? '#dc2626' : (netArea < 0 ? '#16a34a' : '#64748b');
-
-    // (c) 요약 카드 3종
-    const summary = `<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:12px;">
-        <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:9px; padding:10px 12px;">
-            <div style="font-size:11px; font-weight:700; color:#b91c1c;">⊕ 신규 공실 <span style="font-weight:400; color:#f0a8a8;">(공실↑)</span></div>
-            <div style="font-size:18px; font-weight:800; color:#dc2626; margin-top:3px;">${fmtA(addArea)}<span style="font-size:11px; font-weight:600;">평</span></div>
-            <div style="font-size:11px; color:#9ca3af;">${addCnt}개 층</div>
-        </div>
-        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:9px; padding:10px 12px;">
-            <div style="font-size:11px; font-weight:700; color:#15803d;">⊖ 해소 공실 <span style="font-weight:400; color:#86c99a;">(공실↓)</span></div>
-            <div style="font-size:18px; font-weight:800; color:#16a34a; margin-top:3px;">${fmtA(remArea)}<span style="font-size:11px; font-weight:600;">평</span></div>
-            <div style="font-size:11px; color:#9ca3af;">${remCnt}개 층</div>
-        </div>
-        <div style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:9px; padding:10px 12px;">
-            <div style="font-size:11px; font-weight:700; color:#475569;">Δ 순증감</div>
-            <div style="font-size:18px; font-weight:800; color:${netColor}; margin-top:3px;">${netArea > 0 ? '+' : (netArea < 0 ? '−' : '')}${fmtA(Math.abs(netArea))}<span style="font-size:11px; font-weight:600;">평</span></div>
-            <div style="font-size:11px; color:#9ca3af;">공실 ${netArea > 0 ? '증가' : (netArea < 0 ? '감소' : '변화없음')}</div>
-        </div>
-    </div>`;
-
-    // (a) 권역별 순증감표
-    const regRows = SR_REGIONS.filter(r => regionAgg.has(r)).map(r => {
-        const g = regionAgg.get(r);
-        const net = g.addArea - g.remArea;
-        const nc = net > 0 ? '#dc2626' : (net < 0 ? '#16a34a' : '#94a3b8');
-        const c = SR_REGION_COLOR[r] || '#64748b';
-        return `<tr style="border-top:1px solid #eef2f7;">
-            <td style="padding:5px 8px; font-weight:700; color:${c};">${r}</td>
-            <td style="padding:5px 8px; text-align:right; color:#dc2626;">${g.addCnt ? `+${fmtA(g.addArea)}<span style="font-size:9px; color:#cbd5e1;"> (${g.addCnt})</span>` : '<span style="color:#cbd5e1;">-</span>'}</td>
-            <td style="padding:5px 8px; text-align:right; color:#16a34a;">${g.remCnt ? `−${fmtA(g.remArea)}<span style="font-size:9px; color:#cbd5e1;"> (${g.remCnt})</span>` : '<span style="color:#cbd5e1;">-</span>'}</td>
-            <td style="padding:5px 8px; text-align:right; font-weight:700; color:${nc};">${net > 0 ? '+' : (net < 0 ? '−' : '')}${fmtA(Math.abs(net))}</td>
-        </tr>`;
-    }).join('');
-    const regionTable = regionAgg.size ? `<div style="background:#fff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden; margin-bottom:12px;">
-        <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#0f172a; background:#f8fafc;">📊 권역별 순증감 (임대평)</div>
-        <table style="width:100%; border-collapse:collapse; font-size:12px;">
-            <thead><tr style="color:#94a3b8; font-size:10px;">
-                <th style="padding:4px 8px; text-align:left;">권역</th>
-                <th style="padding:4px 8px; text-align:right;">⊕ 신규 (층)</th>
-                <th style="padding:4px 8px; text-align:right;">⊖ 해소 (층)</th>
-                <th style="padding:4px 8px; text-align:right;">Δ 순증감</th>
-            </tr></thead>
-            <tbody>${regRows}</tbody>
-        </table>
-    </div>` : '';
-
-    // (b) 빌딩별 변화 목록
     const miBadge = (k, l) => {
         const c = k === 'immediate' ? '#16a34a' : (k === 'planned' ? '#ea580c' : '#9ca3af');
         const i = k === 'immediate' ? '🟢' : (k === 'planned' ? '🟡' : '⚪');
         return `<span style="font-size:10px; font-weight:700; color:${c};">${i} ${l || '미기재'}</span>`;
     };
-    const row = (x, sign, color) => `<div style="display:flex; align-items:center; gap:8px; padding:5px 10px; border-top:1px solid #eef2f7; font-size:12px; flex-wrap:wrap;">
-        <span style="font-weight:800; color:${color}; width:52px;">${sign}</span>
-        <span style="font-weight:600; color:#1e293b; min-width:140px;">${x.name}</span>
-        <span style="font-size:10px; color:#94a3b8;">${x.region}</span>
-        <span style="color:#475569;">${x.floor} · ${fmtA(x.area)}평 ${x.hasRent === false ? '<span style="font-size:9px;color:#9ca3af;">(전용)</span>' : ''}</span>
+    const row = (x, sign, color) => `<div style="display:flex; align-items:center; gap:8px; padding:5px 10px; border-top:1px solid #e5e7eb; font-size:12px;">
+        <span style="font-weight:800; color:${color}; width:46px;">${sign}</span>
+        <span style="font-weight:600; color:#1e293b; min-width:150px;">${x.name}</span>
+        <span style="color:#475569;">${x.floor} · ${Math.round(x.area).toLocaleString()}평 ${x.hasRent === false ? '<span style="font-size:9px;color:#9ca3af;">(전용)</span>' : ''}</span>
         ${miBadge(x.moveKind, x.moveLabel)}
         <span style="font-size:10px; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:4px; padding:1px 6px;">📄 ${x.source || '-'}</span>
     </div>`;
-    const listBody = (added.length || removed.length)
-        ? added.map(x => row(x, '⊕ 신규', '#dc2626')).join('') + removed.map(x => row(x, '⊖ 해소', '#16a34a')).join('')
+    const body = (added.length || removed.length)
+        ? added.map(x => row(x, '⊕ 추가', '#16a34a')).join('') + removed.map(x => row(x, '⊖ 삭제', '#dc2626')).join('')
         : `<div style="padding:14px; text-align:center; color:#94a3b8; font-size:12px;">두 시점 간 공실 변화 없음</div>`;
-    const buildingList = `<div style="background:#fff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
-        <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#0f172a; background:#f8fafc;">🏢 빌딩별 변화 — <span style="color:#dc2626;">⊕ 신규 ${addCnt}</span> / <span style="color:#16a34a;">⊖ 해소 ${remCnt}</span></div>
-        ${listBody}
-    </div>`;
-
-    return `<div style="margin-bottom:16px; padding:12px 14px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px;">
-        ${baseToggle}
-        <div style="font-size:12px; font-weight:700; color:#0f172a; margin-bottom:10px;">🔁 <b>${baseM}</b> → <b>${curM}</b> 공실 변화 <span style="font-weight:400; color:#94a3b8;">· 스냅샷 ${_scSnapState.snapshot.size}개 빌딩 (분모 고정)</span></div>
-        ${summary}
-        ${regionTable}
-        ${buildingList}
+    return `<div style="margin-bottom:16px; background:#fff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+        <div style="padding:8px 12px; font-size:12px; font-weight:700; color:#0f172a; background:#f8fafc;">
+            🔁 직전 시점 대비 변화 — <b>${prevM} → ${curM}</b> · <span style="color:#16a34a;">⊕ 추가 ${added.length}</span> / <span style="color:#dc2626;">⊖ 삭제 ${removed.length}</span>
+        </div>
+        ${body}
     </div>`;
 }
 
@@ -4808,7 +4692,6 @@ function _scSnapBuildPayload(title) {
         updatedBy: user,
         version: (_scSnapState.version || 0) + 1,
         months: (_scSnapState.months || []).slice(),
-        excludeLowFloors: _scSnapState.excludeLowFloors !== false,
         buildings, includedExtra: extra, subAlt,
     };
 }
@@ -4849,7 +4732,6 @@ function _scSnapRestoreFromPayload(p) {
     });
     _scSnapState.subAlt = subAlt;
     _scSnapState.title = p.title || '';
-    _scSnapState.excludeLowFloors = p.excludeLowFloors !== false;   // 저장값 복원 (기본 ON)
 }
 
 window._scSnapSave = async function () {
