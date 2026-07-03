@@ -59,7 +59,7 @@ import {
 // ═══════════════════════════════════════════════════════════════
 // 배포 검증 마커 — 콘솔에서 window.__SC_BUILD 로 즉시 확인 가능
 // (파이프라인 반영/캐시 여부 판별용. 로직에 영향 없음)
-window.__SC_BUILD = 'DEPLOY-CHECK-20260703-080320';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
+window.__SC_BUILD = 'DEPLOY-CHECK-20260703-082721';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
 console.log('%c[portal-stats-compare] BUILD ' + window.__SC_BUILD + ' · v1.8.0 · commonFix=ON · perMonthNoVac=ON',
             'color:#16a34a; font-weight:bold;');
 
@@ -4695,7 +4695,7 @@ function _scSnapComputeChanges(months, infoByMonth) {
         });
         if (addF.length || remF.length) {
             const diff = curAreaB - baseAreaB;                       // 빌딩 공실 순변화(임대평)
-            const dir = (addF.length && remF.length) ? '혼재' : (addF.length ? '발생' : '해소');
+            const dir = diff > 0 ? '발생' : (diff < 0 ? '해소' : '변동');   // 부호 = 순증감 방향 (0=면적동일 층교체)
             let moveLabel = '-', moveKind = '';
             if (addF.length) { const im = addF.find(x => x.moveKind === 'immediate') || addF[0]; moveLabel = im.moveLabel || '즉시'; moveKind = im.moveKind || 'immediate'; }
             const src = (addF[0] || remF[0] || {}).source || '';
@@ -4785,7 +4785,7 @@ function _scSnapRenderChanges(months, infoByMonth) {
 
     // (b) 빌딩단위 변화 표 — 차이 큰 순
     const dirBadge = d => {
-        const m = { '발생': ['#dc2626', '#fef2f2'], '해소': ['#16a34a', '#f0fdf4'], '혼재': ['#ea580c', '#fff7ed'] };
+        const m = { '발생': ['#dc2626', '#fef2f2'], '해소': ['#16a34a', '#f0fdf4'], '변동': ['#64748b', '#f1f5f9'] };
         const [c, bg] = m[d] || ['#64748b', '#f8fafc'];
         return `<span style="font-size:10px; font-weight:700; color:${c}; background:${bg}; border:1px solid ${c}44; border-radius:4px; padding:1px 6px;">${d}</span>`;
     };
