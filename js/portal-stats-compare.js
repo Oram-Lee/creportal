@@ -5,6 +5,8 @@
  *   1) 신규 시점 자동집계: 즉시공실만 반영(예정공실 제외) → 2시점 감각과 정합. 원(선택)시점은 저장된 수기 선택 그대로.
  *   2) 지하·1F 제외 사용자 토글(_scSnapState.excludeLowFloors, 기본 ON, 저장·복원) + 층 판정 규칙을 portal-detail.js isLowFloor 와 통일(G/GF·B-1 보강).
  *   3) 변화 식별 UI 개편(_scSnapRenderChanges): 요약카드 3종 + 권역별 순증감표 + 빌딩별 목록 + 비교 기준(직전/첫 시점) 토글.
+ * ─── 재배포 이력 ───
+ *   2026-07-03: GitHub Pages deploy 재트리거용 스탬프 갱신 (DEPLOY-CHECK-20260703-071501). 로직 변경 없음.
  * ═══════════════════════════════════════════════════════════════
  * 두 시점(월 단위) 공실률·평균임대가·평균보증금·평균관리비 비교 모듈
  *
@@ -57,7 +59,7 @@ import {
 // ═══════════════════════════════════════════════════════════════
 // 배포 검증 마커 — 콘솔에서 window.__SC_BUILD 로 즉시 확인 가능
 // (파이프라인 반영/캐시 여부 판별용. 로직에 영향 없음)
-window.__SC_BUILD = 'DEPLOY-CHECK-20260703-021820';
+window.__SC_BUILD = 'DEPLOY-CHECK-20260703-071501';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
 console.log('%c[portal-stats-compare] BUILD ' + window.__SC_BUILD + ' · v1.8.0 · commonFix=ON · perMonthNoVac=ON',
             'color:#16a34a; font-weight:bold;');
 
