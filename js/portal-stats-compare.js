@@ -4390,10 +4390,14 @@ const _scSnapState = {
 function _scSnapCaptureFromSelection() {
     _scBldgIndex = _scBuildBldgIndex();
     const snap = new Map();
+    // 2시점 결과와 동일한 대상 빌딩(교집합, 제외 반영) 으로 제한 → 원시점 수치 정확 재현
+    const { common } = _scGetCommonBuildingIds();
+    const commonSet = new Set(common.map(String));
     ['A', 'B'].forEach(side => {
         const pt = _scState['point' + side];
         if (!pt || !pt.yyyymm) return;
         pt.selections.forEach((sel, bid) => {
+            if (!commonSet.has(String(bid))) return;   // 공통 빌딩만 (2시점 분모와 일치)
             const b = _scIdxBldg(bid);
             if (!b) return;
             const gross = _scGrossPy(b);
@@ -4403,7 +4407,7 @@ function _scSnapCaptureFromSelection() {
                 entry = { name: b.name || b.buildingName || String(bid), region: b._region || 'ETC', gross, noVacancy: false, byMonth: {}, floors: new Set() };
                 snap.set(String(bid), entry);
             }
-            if (sel.noVacancy) { entry.noVacancy = true; return; }     // 0공실 선언: 분모만
+            if (sel.noVacancy) { entry.byMonth[pt.yyyymm] = { noVacancy: true }; return; }   // 0공실 선언: 해당 월만 분자 0
             if (!sel.selectedVacKeys || !sel.selectedVacKeys.size) return;
             // 원본 시점 정확 선택 보관 (기존 _scExtractBuildingMetrics 와 동일 기준)
             entry.byMonth[pt.yyyymm] = { source: sel.chosenSource || '', keys: new Set(sel.selectedVacKeys) };
@@ -4433,9 +4437,11 @@ function _scSnapApplyMonth(yyyymm, basis) {
         if (gross <= 0) return;
         let area = 0;
         const info = { rep: '', repByCount: '', repByArea: '', floors: new Map() };
-        if (!entry.noVacancy && b) {
+        if (b) {
             const bm = entry.byMonth && entry.byMonth[yyyymm];
-            if (bm) {
+            if (bm && bm.noVacancy) {
+                // 0공실 선언월 — 분자 0 (info 비움, 분모 gross 는 아래에서 무조건 가산)
+            } else if (bm) {
                 // 원본 시점(A·B) — 기존 2시점 계산과 100% 동일 (불러오기 값 일치): 선택 회사 + 선택 층만
                 _scVacanciesByMonth(b, yyyymm)
                     .filter(v => _scVacancySource(v) === bm.source && bm.keys.has(_scVacancyKey(v)))
@@ -4779,9 +4785,11 @@ function _scSnapBuildPayload(title) {
     _scSnapState.snapshot.forEach((e, bid) => {
         const byMonth = {};
         Object.keys(e.byMonth || {}).forEach(ym => {
+            const bm = e.byMonth[ym] || {};
+            if (bm.noVacancy) { byMonth[_scEscapeKey(ym)] = { noVacancy: true }; return; }
             const keysObj = {};
-            (e.byMonth[ym].keys || new Set()).forEach(k => { keysObj[_scEscapeKey(k)] = true; });
-            byMonth[_scEscapeKey(ym)] = { source: e.byMonth[ym].source || '', keys: keysObj };
+            (bm.keys || new Set()).forEach(k => { keysObj[_scEscapeKey(k)] = true; });
+            byMonth[_scEscapeKey(ym)] = { source: bm.source || '', keys: keysObj };
         });
         const floorsObj = {};
         (e.floors || new Set()).forEach(f => { floorsObj[_scEscapeKey(f)] = true; });
@@ -4821,10 +4829,9 @@ function _scSnapRestoreFromPayload(p) {
         const byMonth = {};
         Object.keys(v.byMonth || {}).forEach(escYm => {
             const bm = v.byMonth[escYm] || {};
-            byMonth[_scUnescapeKey(escYm)] = {
-                source: bm.source || '',
-                keys: new Set(Object.keys(bm.keys || {}).map(_scUnescapeKey)),
-            };
+            byMonth[_scUnescapeKey(escYm)] = bm.noVacancy
+                ? { noVacancy: true }
+                : { source: bm.source || '', keys: new Set(Object.keys(bm.keys || {}).map(_scUnescapeKey)) };
         });
         snap.set(String(bid), {
             name: v.name || bid, region: v.region || 'ETC', gross: Number(v.gross) || 0,
