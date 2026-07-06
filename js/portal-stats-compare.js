@@ -59,7 +59,7 @@ import {
 // ═══════════════════════════════════════════════════════════════
 // 배포 검증 마커 — 콘솔에서 window.__SC_BUILD 로 즉시 확인 가능
 // (파이프라인 반영/캐시 여부 판별용. 로직에 영향 없음)
-window.__SC_BUILD = 'DEPLOY-CHECK-20260706-005626';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
+window.__SC_BUILD = 'DEPLOY-REALIGN-20260706-A';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
 console.log('%c[portal-stats-compare] BUILD ' + window.__SC_BUILD + ' · v1.8.0 · commonFix=ON · perMonthNoVac=ON',
             'color:#16a34a; font-weight:bold;');
 
@@ -4540,7 +4540,13 @@ window._scSnapRender = function () {
     const changeUI = _scSnapRenderChanges(months, infoByMonth);
 
     const _exLowOn = _scSnapState.excludeLowFloors !== false;
+    const alignUI = _scSnapState._realigned === true
+        ? `<div style="margin-bottom:12px; padding:9px 14px; background:#f0fdf4; border:1px solid #86efac; border-radius:10px; font-size:12px; color:#166534;">✅ 현재 2시점 공통 <b>${_scSnapState.snapshot.size}개 빌딩</b>·현재 연면적/권역 기준으로 <b>재정렬됨</b> — 원시점 수치가 2시점 결과와 일치합니다.</div>`
+        : (_scSnapState._realigned === false
+            ? `<div style="margin-bottom:12px; padding:9px 14px; background:#fefce8; border:1px solid #fde047; border-radius:10px; font-size:12px; color:#854d0e;">⚠️ <b>저장 당시 값</b>으로 표시 중 — 저장 이후 연면적·권역·선택이 바뀌었으면 2시점과 다를 수 있습니다. 정렬하려면 같은 두 시점의 RAW·2시점 세션을 로드해 [공실률 계산] 후 다시 불러오세요. (진단: 콘솔 <b>__scSnapDiag()</b>)</div>`
+            : '');
     area.innerHTML = `
+        ${alignUI}
         ${basisUI}
         ${optUI}
         <div style="padding:2px 2px 12px; font-size:12px; color:#64748b;">
@@ -4614,6 +4620,19 @@ window.__scSnapDiag = function () {
     if (onlyInSnap.length) console.table(onlyInSnap);
     console.log('▶ 현재에만 있음(저장엔 없음):', onlyInCommon.length, '개');
     if (onlyInCommon.length) console.table(onlyInCommon);
+    // 양쪽에 다 있지만 연면적/권역이 저장 당시와 달라진 빌딩 (예: 건축물대장 갱신)
+    const grossDrift = [], regionDrift = [];
+    _scSnapState.snapshot.forEach((e, bid) => {
+        if (!commonIds.has(String(bid))) return;
+        const b = _scIdxBldg(String(bid)); if (!b) return;
+        const g = _scGrossPy(b), r = regOf(b._region || 'ETC');
+        if (Math.abs(g - (e.gross || 0)) > 0.5) grossDrift.push({ name: e.name, region: r, 스냅연면적: Math.round(e.gross || 0), 현재연면적: Math.round(g), 차이: Math.round(g - (e.gross || 0)) });
+        if (r !== regOf(e.region || 'ETC')) regionDrift.push({ name: e.name, 스냅권역: e.region, 현재권역: r });
+    });
+    console.log('▶ 연면적 변경(스냅≠현재):', grossDrift.length, '개');
+    if (grossDrift.length) console.table(grossDrift);
+    console.log('▶ 권역 변경(스냅≠현재):', regionDrift.length, '개');
+    if (regionDrift.length) console.table(regionDrift);
     if (!commonIds.size) console.warn('※ 현재 2시점 공통이 0 — RAW + 2시점 선택을 먼저 로드한 뒤 실행하세요.');
     else if (onlyInCommon.length === 0) console.log('%c판정: 저장 ⊇ 현재공통 → 교집합(빼기)만으로 정렬 가능', 'color:#16a34a;font-weight:bold;');
     else console.log('%c판정: 셋이 엇갈림 → 빼기+더하기(현재 공통 기준 재구성) 필요', 'color:#ea580c;font-weight:bold;');
@@ -4936,6 +4955,7 @@ window._scSnapCapture = function () {
     _scSnapState.months = _scTrendAvailableMonths().slice();   // 신규 캡쳐: 전체 시점 기본
     _scSnapState.snapId = '';                                  // 신규 세션
     _scSnapState.version = 0;
+    _scSnapState._realigned = null;                            // 신규 캡처 = 정의상 현재 기준 → 배너 불필요
     _scInjectSnapModal();
     const m = _scQS('sc-snap-modal');
     if (m) m.style.display = 'flex';
@@ -5107,6 +5127,28 @@ function _scRenderSnapLoadList(list, errMsg) {
         </div>`;
     }).join('');
 }
+/** 라이브 재정렬 — 불러온(얼린) 스냅샷을 현재 2시점 기준으로 재구성.
+ *  드리프트 원인(옛 합집합 캡처, 저장 후 변경된 연면적·권역·선택)을 한 번에 제거.
+ *  전제: 현재 2시점(A·B) 로드 + 저장 세션 시점 목록에 그 두 시점 포함 + 공통 셋 존재.
+ *  아니면 저장본 그대로 유지(_realigned=false → 노란 배너). months·excludeLowFloors·includedExtra·subAlt 는 저장값 유지. */
+function _scSnapRealign() {
+    _scSnapState._realigned = false;
+    const ymA = _scState.pointA?.yyyymm, ymB = _scState.pointB?.yyyymm;
+    if (!ymA || !ymB) return;
+    const saved = _scSnapState.months || [];
+    if (!saved.includes(ymA) || !saved.includes(ymB)) return;   // 다른 2시점이 로드된 상태 — 잘못 덮어쓰기 방지
+    const { common } = _scGetCommonBuildingIds();
+    if (!common.length) return;
+    const fresh = _scSnapCaptureFromSelection();                // 교집합 + 현재 grossFloorPy/권역 + 현재 선택
+    if (!fresh.size) return;
+    _scSnapState.snapshot = fresh;
+    _scSnapState.zeroGross = common.map(String).filter(bid => !fresh.has(bid)).map(bid => {
+        const b = _scIdxBldg(bid);
+        return { id: bid, name: b ? (b.name || b.buildingName || bid) : bid, region: b ? (b._region || 'ETC') : 'ETC' };
+    });
+    _scSnapState._realigned = true;
+}
+
 window._scSnapLoad = async function (id) {
     try {
         const { db, ref, get } = await import('./portal-firebase.js');
@@ -5116,6 +5158,7 @@ window._scSnapLoad = async function (id) {
         _scSnapRestoreFromPayload(val);
         _scSnapState.snapId = id;
         _scSnapState.version = val.version || 0;
+        _scSnapRealign();   // 얼린 스냅샷 → 현재 2시점 공통(교집합·현재 연면적/권역/선택)으로 재정렬 (가능할 때)
         window._scCloseSnapLoad();
         _scInjectSnapModal();
         const m = _scQS('sc-snap-modal'); if (m) m.style.display = 'flex';
