@@ -4639,6 +4639,46 @@ window.__scSnapDiag = function () {
     return { snapCount: snapIds.size, commonCount: commonIds.size, onlyInSnap, onlyInCommon };
 };
 
+/** [진단] 라이브 2시점 권역 해부 — 빌딩별 연면적·선택회사·선택키수·공실면적(A/B) 덤프.
+ *  용도: 기대값(예: YBD 1.85%)과 현재값(2.26%)의 차이를 만드는 빌딩을 실명으로 특정. 콘솔 전용, 계산 로직 무관. */
+window.__scLiveDiag = function (region = 'YBD') {
+    _scBldgIndex = _scBuildBldgIndex();
+    const { common } = _scGetCommonBuildingIds();
+    if (!common.length) { console.warn('※ 공통 셋 0 — RAW + 2시점 선택 로드 후 [공실률 계산] 상태에서 실행하세요.'); return; }
+    const rows = [];
+    let gSum = 0, vA = 0, vB = 0;
+    common.forEach(bid => {
+        const b = _scIdxBldg(String(bid)); if (!b) return;
+        if ((b._region || 'ETC') !== region) return;
+        const gross = _scGrossPy(b); if (gross <= 0) return;
+        const selA = _scState.pointA.selections.get(String(bid)) || {};
+        const selB = _scState.pointB.selections.get(String(bid)) || {};
+        const mA = _scExtractBuildingMetrics('A', bid), mB = _scExtractBuildingMetrics('B', bid);
+        // 중복키 감지: 같은 (선택회사, 키)에 레코드가 2건 이상 매칭 → 면적이 배수로 계산되는 데이터 이슈
+        const dupCnt = (sel, ym) => {
+            if (!sel.selectedVacKeys || !sel.selectedVacKeys.size) return 0;
+            const cnt = new Map();
+            _scVacanciesByMonth(b, ym)
+                .filter(v => _scVacancySource(v) === sel.chosenSource && sel.selectedVacKeys.has(_scVacancyKey(v)))
+                .forEach(v => { const k = _scVacancyKey(v); cnt.set(k, (cnt.get(k) || 0) + 1); });
+            let d = 0; cnt.forEach(n => { if (n > 1) d++; }); return d;
+        };
+        const dupA = dupCnt(selA, _scState.pointA.yyyymm), dupB = dupCnt(selB, _scState.pointB.yyyymm);
+        gSum += gross; vA += mA.vacancyAreaPy; vB += mB.vacancyAreaPy;
+        rows.push({
+            빌딩: b.name || b.buildingName || bid, 연면적: Math.round(gross),
+            A회사: selA.noVacancy ? '(0공실)' : (selA.chosenSource || ''), A키수: selA.selectedVacKeys ? selA.selectedVacKeys.size : 0, A공실평: Math.round(mA.vacancyAreaPy), A중복키: dupA,
+            B회사: selB.noVacancy ? '(0공실)' : (selB.chosenSource || ''), B키수: selB.selectedVacKeys ? selB.selectedVacKeys.size : 0, B공실평: Math.round(mB.vacancyAreaPy), B중복키: dupB,
+            A공실률: gross > 0 ? +(mA.vacancyAreaPy / gross * 100).toFixed(2) : 0,
+        });
+    });
+    rows.sort((a, c) => Math.max(c.A공실평, c.B공실평) - Math.max(a.A공실평, a.B공실평));
+    console.log(`%c[LiveDiag] ${region} · 빌딩 ${rows.length}개 · 연면적 ${Math.round(gSum).toLocaleString()}평`, 'color:#1a73e8;font-weight:bold;');
+    console.log(`A(${_scState.pointA.yyyymm}) 공실 ${Math.round(vA).toLocaleString()}평 → ${(vA / gSum * 100).toFixed(2)}% | B(${_scState.pointB.yyyymm}) 공실 ${Math.round(vB).toLocaleString()}평 → ${(vB / gSum * 100).toFixed(2)}%`);
+    console.table(rows);
+    return { region, gross: gSum, vacA: vA, vacB: vB, rows };
+};
+
 /** 빌딩별 변화 표 + 상세를 엑셀로 다운로드 (5시트) */
 window._scSnapExportExcel = function () {
     if (!window.XLSX) { alert('SheetJS(XLSX) 가 로드되지 않았습니다.'); return; }
