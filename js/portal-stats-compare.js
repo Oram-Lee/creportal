@@ -59,7 +59,7 @@ import {
 // ═══════════════════════════════════════════════════════════════
 // 배포 검증 마커 — 콘솔에서 window.__SC_BUILD 로 즉시 확인 가능
 // (파이프라인 반영/캐시 여부 판별용. 로직에 영향 없음)
-window.__SC_BUILD = 'DEPLOY-CHECK-20260703-082721';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
+window.__SC_BUILD = 'DEPLOY-CHECK-20260706-005626';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
 console.log('%c[portal-stats-compare] BUILD ' + window.__SC_BUILD + ' · v1.8.0 · commonFix=ON · perMonthNoVac=ON',
             'color:#16a34a; font-weight:bold;');
 
@@ -4588,6 +4588,37 @@ function _scSnapBasisToggle(basis, divergent) {
 window._scSnapSetBasis = function (b) { _scSnapState.basis = (b === 'count' ? 'count' : 'area'); window._scSnapRender(); };
 window._scSnapSetExcludeLow = function (on) { _scSnapState.excludeLowFloors = !!on; window._scSnapRender(); };
 window._scSnapSetChangeBase = function (b) { _scSnapState.changeBase = (b === 'first' ? 'first' : 'prev'); window._scSnapRender(); };
+
+/** [진단] 저장 스냅샷 vs 현재 2시점 공통 셋 차이 — 콘솔 확인용 (로직 무관) */
+window.__scSnapDiag = function () {
+    const regOf = r => (SR_REGIONS.includes(r) ? r : 'ETC');
+    const snapIds = new Set([..._scSnapState.snapshot.keys()].map(String));
+    const snapReg = {};
+    _scSnapState.snapshot.forEach(e => { const r = regOf(e.region || 'ETC'); snapReg[r] = (snapReg[r] || 0) + 1; });
+    const { common } = _scGetCommonBuildingIds();
+    const commonIds = new Set(common.map(String));
+    const commonReg = {};
+    common.forEach(bid => { const b = _scIdxBldg(String(bid)); const r = regOf(b ? (b._region || 'ETC') : 'ETC'); commonReg[r] = (commonReg[r] || 0) + 1; });
+    const onlyInSnap = [...snapIds].filter(id => !commonIds.has(id)).map(id => {
+        const e = _scSnapState.snapshot.get(id); const b = _scIdxBldg(id);
+        return { id, name: e ? e.name : (b ? (b.name || id) : id), region: e ? e.region : (b ? (b._region || 'ETC') : 'ETC') };
+    });
+    const onlyInCommon = [...commonIds].filter(id => !snapIds.has(id)).map(id => {
+        const b = _scIdxBldg(id);
+        return { id, name: b ? (b.name || b.buildingName || id) : id, region: b ? (b._region || 'ETC') : 'ETC' };
+    });
+    console.log('%c[SnapDiag] 저장 스냅샷 vs 현재 2시점 공통', 'color:#1a73e8;font-weight:bold;');
+    console.log('스냅샷 빌딩 수:', snapIds.size, '| 권역:', snapReg);
+    console.log('현재 공통 빌딩 수:', commonIds.size, '| 권역:', commonReg);
+    console.log('▶ 저장에만 있음(현재 공통엔 없음):', onlyInSnap.length, '개');
+    if (onlyInSnap.length) console.table(onlyInSnap);
+    console.log('▶ 현재에만 있음(저장엔 없음):', onlyInCommon.length, '개');
+    if (onlyInCommon.length) console.table(onlyInCommon);
+    if (!commonIds.size) console.warn('※ 현재 2시점 공통이 0 — RAW + 2시점 선택을 먼저 로드한 뒤 실행하세요.');
+    else if (onlyInCommon.length === 0) console.log('%c판정: 저장 ⊇ 현재공통 → 교집합(빼기)만으로 정렬 가능', 'color:#16a34a;font-weight:bold;');
+    else console.log('%c판정: 셋이 엇갈림 → 빼기+더하기(현재 공통 기준 재구성) 필요', 'color:#ea580c;font-weight:bold;');
+    return { snapCount: snapIds.size, commonCount: commonIds.size, onlyInSnap, onlyInCommon };
+};
 
 /** 빌딩별 변화 표 + 상세를 엑셀로 다운로드 (5시트) */
 window._scSnapExportExcel = function () {
