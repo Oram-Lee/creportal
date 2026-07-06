@@ -59,7 +59,7 @@ import {
 // ═══════════════════════════════════════════════════════════════
 // 배포 검증 마커 — 콘솔에서 window.__SC_BUILD 로 즉시 확인 가능
 // (파이프라인 반영/캐시 여부 판별용. 로직에 영향 없음)
-window.__SC_BUILD = 'DEPLOY-REALIGN-20260706-C';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
+window.__SC_BUILD = 'DEPLOY-REALIGN-20260706-D';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
 console.log('%c[portal-stats-compare] BUILD ' + window.__SC_BUILD + ' · v1.8.0 · commonFix=ON · perMonthNoVac=ON',
             'color:#16a34a; font-weight:bold;');
 
@@ -4540,11 +4540,23 @@ window._scSnapRender = function () {
     const changeUI = _scSnapRenderChanges(months, infoByMonth);
 
     const _exLowOn = _scSnapState.excludeLowFloors !== false;
-    const alignUI = _scSnapState._realigned === true
-        ? `<div style="margin-bottom:12px; padding:9px 14px; background:#f0fdf4; border:1px solid #86efac; border-radius:10px; font-size:12px; color:#166534;">✅ 현재 2시점 공통 <b>${_scSnapState.snapshot.size}개 빌딩</b>·현재 연면적/권역 기준으로 <b>재정렬됨</b> — 원시점 수치가 2시점 결과와 일치합니다.</div>`
-        : (_scSnapState._realigned === false
-            ? `<div style="margin-bottom:12px; padding:9px 14px; background:#fefce8; border:1px solid #fde047; border-radius:10px; font-size:12px; color:#854d0e;">⚠️ <b>저장 당시 값</b>으로 표시 중 — 저장 이후 연면적·권역·선택이 바뀌었으면 2시점과 다를 수 있습니다. 정렬하려면 같은 두 시점의 RAW·2시점 세션을 로드해 [공실률 계산] 후 다시 불러오세요. (진단: 콘솔 <b>__scSnapDiag()</b>)</div>`
-            : '');
+    const alignUI = (typeof _scSnapState._realigned === 'boolean') ? (() => {
+        const on = _scSnapState._realigned === true;
+        const canToggle = on || !!_scSnapState._frozen;
+        const msg = on
+            ? `✅ <b>정상 계산값</b> — 현재 2시점 공통 <b>${_scSnapState.snapshot.size}개 빌딩</b>·현재 연면적/권역 기준으로 재정렬됨.`
+            : (canToggle
+                ? `⚠️ <b>저장 당시 값</b> 표시 중 — 옛(잘못된) 기준이 포함될 수 있습니다. 이 상태로 저장하면 옛 기준이 다시 저장됩니다.`
+                : `⚠️ <b>저장 당시 값</b> 표시 중 — 정상값으로 보려면 같은 두 시점의 RAW·2시점 세션을 로드해 [공실률 계산] 후 다시 불러오세요.`);
+        const bg = on ? '#f0fdf4' : '#fefce8', bd = on ? '#86efac' : '#fde047', col = on ? '#166534' : '#854d0e';
+        return `<div style="margin-bottom:12px; padding:9px 14px; background:${bg}; border:1px solid ${bd}; border-radius:10px; font-size:12px; color:${col}; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+            <span style="flex:1; min-width:220px;">${msg}</span>
+            <label style="display:flex; align-items:center; gap:6px; cursor:${canToggle ? 'pointer' : 'not-allowed'}; white-space:nowrap; font-weight:700;">
+                <input type="checkbox" ${on ? 'checked' : ''} ${canToggle ? '' : 'disabled'} onchange="window._scSnapSetAlign(this.checked)" style="cursor:inherit;">
+                현재 기준으로 재정렬 (정상 계산값)
+            </label>
+        </div>`;
+    })() : '';
     area.innerHTML = `
         ${alignUI}
         ${basisUI}
@@ -5046,6 +5058,7 @@ window._scSnapCapture = function () {
     _scSnapState.snapId = '';                                  // 신규 세션
     _scSnapState.version = 0;
     _scSnapState._realigned = null;                            // 신규 캡처 = 정의상 현재 기준 → 배너 불필요
+    _scSnapState._frozen = null;
     _scInjectSnapModal();
     const m = _scQS('sc-snap-modal');
     if (m) m.style.display = 'flex';
@@ -5231,6 +5244,7 @@ function _scSnapRealign() {
     if (!common.length) return;
     const fresh = _scSnapCaptureFromSelection();                // 교집합 + 현재 grossFloorPy/권역 + 현재 선택
     if (!fresh.size) return;
+    if (!_scSnapState._frozen) _scSnapState._frozen = { snapshot: _scSnapState.snapshot, zeroGross: (_scSnapState.zeroGross || []).slice() };   // 저장 당시 값 보관 (토글로 복귀 가능)
     _scSnapState.snapshot = fresh;
     _scSnapState.zeroGross = common.map(String).filter(bid => !fresh.has(bid)).map(bid => {
         const b = _scIdxBldg(bid);
@@ -5239,12 +5253,25 @@ function _scSnapRealign() {
     _scSnapState._realigned = true;
 }
 
+/** 토글: 정상(재정렬) ↔ 저장 당시(냉동) 계산값. ON=항상 현재 상태로 재계산, OFF=보관 원본 복원 */
+window._scSnapSetAlign = function (on) {
+    if (on) {
+        _scSnapRealign();   // 전제조건 미충족이면 _realigned=false 유지 → 배너가 사유 안내
+    } else if (_scSnapState._frozen) {
+        _scSnapState.snapshot = _scSnapState._frozen.snapshot;
+        _scSnapState.zeroGross = (_scSnapState._frozen.zeroGross || []).slice();
+        _scSnapState._realigned = false;
+    }
+    window._scSnapRender();
+};
+
 window._scSnapLoad = async function (id) {
     try {
         const { db, ref, get } = await import('./portal-firebase.js');
         const snap = await get(ref(db, `statsTrend/${id}`));
         if (!snap.exists()) { alert('세션을 찾을 수 없습니다.'); return; }
         const val = snap.val();
+        _scSnapState._frozen = null;   // 이전 세션의 보관본 제거
         _scSnapRestoreFromPayload(val);
         _scSnapState.snapId = id;
         _scSnapState.version = val.version || 0;
