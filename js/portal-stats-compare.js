@@ -59,7 +59,7 @@ import {
 // ═══════════════════════════════════════════════════════════════
 // 배포 검증 마커 — 콘솔에서 window.__SC_BUILD 로 즉시 확인 가능
 // (파이프라인 반영/캐시 여부 판별용. 로직에 영향 없음)
-window.__SC_BUILD = 'DEPLOY-REALIGN-20260706-B';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
+window.__SC_BUILD = 'DEPLOY-REALIGN-20260706-C';   // 재배포 트리거용 스탬프 (매 배포 시 갱신)
 console.log('%c[portal-stats-compare] BUILD ' + window.__SC_BUILD + ' · v1.8.0 · commonFix=ON · perMonthNoVac=ON',
             'color:#16a34a; font-weight:bold;');
 
@@ -4677,6 +4677,56 @@ window.__scLiveDiag = function (region = 'YBD') {
     console.log(`A(${_scState.pointA.yyyymm}) 공실 ${Math.round(vA).toLocaleString()}평 → ${(vA / gSum * 100).toFixed(2)}% | B(${_scState.pointB.yyyymm}) 공실 ${Math.round(vB).toLocaleString()}평 → ${(vB / gSum * 100).toFixed(2)}%`);
     console.table(rows);
     return { region, gross: gSum, vacA: vA, vacB: vB, rows };
+};
+
+/** [진단] 저장 다시점 세션(냉동 키) vs 현재 2시점 세션 선택 대조 — "4.79 시절과 무엇이 달라졌나" 실명 특정.
+ *  읽기 전용: Firebase에서 페이로드만 읽고 화면 상태는 건드리지 않음. id 생략 시 최신 세션 자동 선택. */
+window.__scSnapVsLive = async function (region = 'YBD', id = null) {
+    const ymA = _scState.pointA?.yyyymm, ymB = _scState.pointB?.yyyymm;
+    if (!ymA || !ymB) { console.warn('※ 2시점 로드 + 계산 상태에서 실행하세요.'); return; }
+    const { db, ref, get } = await import('./portal-firebase.js');
+    let payload;
+    if (id) payload = (await get(ref(db, `statsTrend/${id}`))).val();
+    else {
+        const all = (await get(ref(db, 'statsTrend'))).val() || {};
+        const es = Object.entries(all).sort((a, c) => String(c[1].updatedAt || '').localeCompare(String(a[1].updatedAt || '')));
+        if (!es.length) { console.warn('저장된 다시점 세션이 없습니다.'); return; }
+        id = es[0][0]; payload = es[0][1];
+    }
+    if (!payload) { console.warn('세션을 읽을 수 없습니다:', id); return; }
+    console.log(`%c[SnapVsLive] 세션 "${payload.title || id}" (저장 ${payload.updatedAt || '?'}) vs 현재 세션 · ${region}`, 'color:#1a73e8;font-weight:bold;');
+    _scBldgIndex = _scBuildBldgIndex();
+    const rows = [];
+    Object.keys(payload.buildings || {}).forEach(escBid => {
+        const fv = payload.buildings[escBid] || {};
+        if ((fv.region || 'ETC') !== region) return;
+        const bid = _scUnescapeKey(escBid);
+        const b = _scIdxBldg(String(bid));
+        const frozen = ym => {
+            const bm = (fv.byMonth || {})[_scEscapeKey(ym)];
+            if (!bm) return null;
+            if (bm.noVacancy) return { noVac: true, source: '', keys: new Set() };
+            return { noVac: false, source: bm.source || '', keys: new Set(Object.keys(bm.keys || {}).map(_scUnescapeKey)) };
+        };
+        const row = { 빌딩: fv.name || (b ? (b.name || bid) : bid), 냉동연면적: Math.round(fv.gross || 0), 현재연면적: b ? Math.round(_scGrossPy(b)) : 0 };
+        [['A', ymA], ['B', ymB]].forEach(([L, ym]) => {
+            const fz = frozen(ym);
+            const sel = _scState['point' + L].selections.get(String(bid)) || {};
+            const liveN = sel.noVacancy ? '0공실' : (sel.selectedVacKeys ? sel.selectedVacKeys.size : 0);
+            if (!fz) { row[L + '키(냉동→현재)'] = '- → ' + liveN; row[L + '동일'] = '-'; return; }
+            const fzN = fz.noVac ? '0공실' : fz.keys.size;
+            const same = fz.noVac ? !!sel.noVacancy
+                : (!sel.noVacancy && sel.chosenSource === fz.source && sel.selectedVacKeys && sel.selectedVacKeys.size === fz.keys.size && [...fz.keys].every(k => sel.selectedVacKeys.has(k)));
+            row[L + '키(냉동→현재)'] = fzN + ' → ' + liveN;
+            row[L + '동일'] = same ? '✓' : '✗';
+        });
+        rows.push(row);
+    });
+    rows.sort((a, c) => ((a.A동일 === '✗' || a.B동일 === '✗') ? -1 : 1) - ((c.A동일 === '✗' || c.B동일 === '✗') ? -1 : 1));
+    const diff = rows.filter(r => r.A동일 === '✗' || r.B동일 === '✗').length;
+    console.log(`권역 ${region} 빌딩 ${rows.length}개 중 선택이 달라진 빌딩: ${diff}개 (✗ 표시, 상단 정렬)`);
+    console.table(rows);
+    return { id, title: payload.title, updatedAt: payload.updatedAt, rows };
 };
 
 /** 빌딩별 변화 표 + 상세를 엑셀로 다운로드 (5시트) */
