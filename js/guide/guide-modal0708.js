@@ -21,12 +21,6 @@ export function openAddBuildingModal() {
     const modal = document.getElementById('addBuildingModal');
     if (modal) {
         modal.classList.add('show');
-        // ★ v5.2 fix: 필터 상태 리셋 — 이전에 ⭐즐겨찾기 등 다른 탭이 active로 남아있으면
-        //   모달 재오픈 시 검색해도 해당 필터에 걸려 "검색 결과가 없습니다"로 보이던 문제
-        const searchInput = document.getElementById('buildingSearch');
-        if (searchInput) searchInput.value = '';
-        document.querySelectorAll('.picker-filter-btn').forEach(b => b.classList.remove('active'));
-        document.querySelector('.picker-filter-btn[data-region="all"]')?.classList.add('active');
         filterBuildingList();
         renderCart();
     }
@@ -67,7 +61,7 @@ export function filterBuildingList() {
         
         // 권역 필터
         if (regionFilter === 'starred') {
-            if (!(state.starredBuildings instanceof Set) || !state.starredBuildings.has(b.id)) return false;
+            if (!state.starredBuildings.has(b.id)) return false;
         } else if (regionFilter !== 'all') {
             if ((b.region || detectRegion(b.address)) !== regionFilter) return false;
         }
@@ -94,7 +88,7 @@ export function filterBuildingList() {
     listContainer.innerHTML = filtered.map(b => {
         const region = b.region || detectRegion(b.address);
         const inCart = buildingCart.includes(b.id);
-        const isStarred = state.starredBuildings instanceof Set && state.starredBuildings.has(b.id);
+        const isStarred = state.starredBuildings.has(b.id);
         
         // ★ 공실 개수 계산
         const vacancyCount = Array.isArray(b.vacancies) ? b.vacancies.length : 0;

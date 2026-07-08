@@ -129,7 +129,7 @@ export function refreshVacancyListTable(idx) {
     }
 }
 
-import { initBuildingKakaoMap } from './guide-map.js?v=6.1';
+import { initBuildingKakaoMap } from './guide-map.js?v=5.2';
 
 // ★ v5.0: 공실 최대 개수 (A4 가로 기준, 헤더/합계 포함)
 const MAX_VACANCIES_PER_BUILDING = 12;
@@ -1662,9 +1662,6 @@ async function processGuideImage(file, idx, type) {
         if (type === 'exterior') {
             if (!item.exteriorImages) item.exteriorImages = [];
             item.exteriorImages.push(newImg);
-            // ★ v6.15 fix: 붙여넣은 이미지를 메인으로 지정 (기존엔 push 후 mainImageIndex=0 유지 →
-            //   BUILDING PHOTO 미리보기가 안 바뀌어 "붙여넣기 안 됨"으로 보이던 문제)
-            item.mainImageIndex = item.exteriorImages.length - 1;
             await syncImageToBuilding(item.buildingId, 'exterior', item.exteriorImages);
             if (building.id) building.exteriorImages = item.exteriorImages;
         } else if (type === 'floorplan') {
