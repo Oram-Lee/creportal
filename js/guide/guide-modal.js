@@ -237,9 +237,10 @@ export function confirmAddBuildings() {
         });
     });
     
+    const addedCount = buildingCart.length;  // ★ v5.3 fix: closeAddBuildingModal이 cart를 비우므로 먼저 확보
     closeAddBuildingModal();
     window.renderToc();
-    showToast(`${buildingCart.length}개 빌딩이 추가되었습니다`, 'success');
+    showToast(`${addedCount}개 빌딩이 추가되었습니다`, 'success');
 }
 
 // 전역 함수 등록

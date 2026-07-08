@@ -1784,6 +1784,10 @@
                 
                 // 활성 권역 (빌딩이 있는 권역만)
                 const activeRegions = REGION_ORDER.filter(r => regionGroups[r] && regionGroups[r].length > 0);
+                // ★ fix: 순서 목록에 없는 권역도 뒤에 이어붙임 (비표준 권역 빌딩 출력 누락 방지)
+                Object.keys(regionGroups).forEach(r => {
+                    if (regionGroups[r] && regionGroups[r].length > 0 && !activeRegions.includes(r)) activeRegions.push(r);
+                });
                 
                 // ★ 전체 목차 페이지
                 if (activeRegions.length > 0) {

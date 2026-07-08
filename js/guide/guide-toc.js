@@ -47,6 +47,16 @@ function groupItemsByRegion() {
     return groups;
 }
 
+// ★ v5.2 fix: 권역 순서 목록에 없는 권역도 뒤에 이어붙여 반환
+//   (신규/비표준 권역 빌딩이 tocItems에는 있지만 좌측 리스트·페이지 시퀀스에서 누락되던 문제)
+function getActiveRegions(regionGroups, regionOrder) {
+    const active = regionOrder.filter(r => regionGroups[r] && regionGroups[r].length > 0);
+    Object.keys(regionGroups).forEach(r => {
+        if (regionGroups[r] && regionGroups[r].length > 0 && !active.includes(r)) active.push(r);
+    });
+    return active;
+}
+
 // ★ 전체 페이지 순서 생성 (네비게이션용)
 function buildPageSequence() {
     const pages = [];
@@ -61,7 +71,7 @@ function buildPageSequence() {
     // 권역별 그룹핑
     const regionGroups = groupItemsByRegion();
     const regionOrder = getRegionOrder();
-    const activeRegions = regionOrder.filter(r => regionGroups[r] && regionGroups[r].length > 0);
+    const activeRegions = getActiveRegions(regionGroups, regionOrder);
     
     if (activeRegions.length > 0) {
         // 2. 전체 목차
@@ -183,7 +193,7 @@ export function renderToc() {
     // 권역별 그룹핑
     const regionGroups = groupItemsByRegion();
     const regionOrder = getRegionOrder();
-    const activeRegions = regionOrder.filter(r => regionGroups[r] && regionGroups[r].length > 0);
+    const activeRegions = getActiveRegions(regionGroups, regionOrder);
     
     // 2. 전체 목차 (자동 생성)
     html += `
@@ -379,7 +389,7 @@ function renderTocFullPreview() {
     
     const regionGroups = groupItemsByRegion();
     const regionOrder = getRegionOrder();
-    const activeRegions = regionOrder.filter(r => regionGroups[r] && regionGroups[r].length > 0);
+    const activeRegions = getActiveRegions(regionGroups, regionOrder);
     
     const cs = state.coverSettings || {};
     

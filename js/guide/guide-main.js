@@ -16,14 +16,14 @@ import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-ut
 
 // Modules
 import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.7';
-import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.1';
+import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.2';
 import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.8';
 import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.16';
 import { registerVacancyFunctions } from './guide-vacancy.js?v=5.14';
 import { registerMapFunctions } from './guide-map.js?v=6.1';
 import { registerNoteFunctions } from './guide-note.js?v=5.1';
 import { registerDividerFunctions } from './guide-divider.js?v=5.1';
-import { registerModalFunctions } from './guide-modal.js?v=5.2';
+import { registerModalFunctions } from './guide-modal.js?v=5.3';
 import { registerContactFunctions } from './guide-contact.js?v=5.1';
 import { registerPreviewFunctions } from './guide-preview.js?v=5.6';
 
@@ -142,14 +142,31 @@ async function loadData() {
             state.allUsers = Object.entries(usersSnapshot.val()).map(([id, u]) => ({ id, ...u }));
         }
         
-        // ★ v6.1: 즐겨찾기 로드 — CRE Portal(portal.html v4.2)과 동일 소스 (users/{uid}/favorites)
-        //   기존엔 이 로드가 없어 state.starredBuildings가 항상 빈 상태 → 모달 ⭐필터에 아무것도 안 나오던 문제
+        // ★ v6.19: 즐겨찾기 로드 — CRE Portal(portal.html v4.2)과 동일 소스 (users/{uid}/favorites)
+        //   crePortalUser에 uid가 없고 email에 '.'이 포함되면 RTDB 경로로 쓸 수 없음 →
+        //   users 노드에서 이메일 매칭으로 실제 노드 키를 찾아 후보 순서대로 시도
         try {
             const cu = state.currentUser || {};
-            const uid = cu.uid || cu.email || 'anonymous';
-            const favSnapshot = await get(ref(db, `users/${uid}/favorites`));
-            state.starredBuildings = new Set(favSnapshot.exists() ? Object.keys(favSnapshot.val()) : []);
-            console.log(`⭐ 즐겨찾기 ${state.starredBuildings.size}건 로드 (uid: ${uid})`);
+            const isValidKey = (k) => k && typeof k === 'string' && !/[.#$\[\]\/]/.test(k);
+            const candidates = [];
+            if (isValidKey(cu.uid)) candidates.push(cu.uid);
+            if (isValidKey(cu.id)) candidates.push(cu.id);
+            const cuEmail = (cu.email || '').toLowerCase();
+            const matched = (state.allUsers || []).find(u => (u.email || '').toLowerCase() === cuEmail && cuEmail);
+            if (matched && isValidKey(matched.id) && !candidates.includes(matched.id)) candidates.push(matched.id);
+            
+            state.starredBuildings = new Set();
+            for (const uid of candidates) {
+                const favSnapshot = await get(ref(db, `users/${uid}/favorites`));
+                if (favSnapshot.exists()) {
+                    state.starredBuildings = new Set(Object.keys(favSnapshot.val()));
+                    console.log(`⭐ 즐겨찾기 ${state.starredBuildings.size}건 로드 (uid: ${uid})`);
+                    break;
+                }
+            }
+            if (state.starredBuildings.size === 0) {
+                console.log(`⭐ 즐겨찾기 0건 (시도한 uid: ${candidates.join(', ') || '없음'})`);
+            }
         } catch (favError) {
             console.warn('즐겨찾기 로드 실패 (무시):', favError);
             state.starredBuildings = new Set();
