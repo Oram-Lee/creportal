@@ -142,31 +142,42 @@ async function loadData() {
             state.allUsers = Object.entries(usersSnapshot.val()).map(([id, u]) => ({ id, ...u }));
         }
         
-        // ★ v6.19: 즐겨찾기 로드 — CRE Portal(portal.html v4.2)과 동일 소스 (users/{uid}/favorites)
-        //   crePortalUser에 uid가 없고 email에 '.'이 포함되면 RTDB 경로로 쓸 수 없음 →
-        //   users 노드에서 이메일 매칭으로 실제 노드 키를 찾아 후보 순서대로 시도
+        // ★ v6.21: 즐겨찾기 로드 — 포털 저장 방식 2세대 혼재 대응 (합집합)
+        //   ① localStorage 'starredBuildings' (포털 현행 저장 방식 — 빌딩 id 배열)
+        //   ② Firebase users/{uid}/favorites (그룹 시스템 v4.2 — uid는 노드키/이메일 쉼표치환 등 혼재)
         try {
+            state.starredBuildings = new Set();
+            
+            // ① localStorage (같은 도메인이라 포털과 공유됨)
+            try {
+                const ls = JSON.parse(localStorage.getItem('starredBuildings') || '[]');
+                if (Array.isArray(ls)) ls.forEach(id => id && state.starredBuildings.add(id));
+            } catch (_) { /* 파싱 실패 무시 */ }
+            const lsCount = state.starredBuildings.size;
+            
+            // ② Firebase 후보 키들 (전부 조회해 합집합)
             const cu = state.currentUser || {};
             const isValidKey = (k) => k && typeof k === 'string' && !/[.#$\[\]\/]/.test(k);
-            const candidates = [];
-            if (isValidKey(cu.uid)) candidates.push(cu.uid);
-            if (isValidKey(cu.id)) candidates.push(cu.id);
+            const candidates = new Set();
+            if (isValidKey(cu.uid)) candidates.add(cu.uid);
+            if (isValidKey(cu.id)) candidates.add(cu.id);
             const cuEmail = (cu.email || '').toLowerCase();
-            const matched = (state.allUsers || []).find(u => (u.email || '').toLowerCase() === cuEmail && cuEmail);
-            if (matched && isValidKey(matched.id) && !candidates.includes(matched.id)) candidates.push(matched.id);
-            
-            state.starredBuildings = new Set();
+            if (cuEmail) {
+                const commaKey = cuEmail.replace(/\./g, ',');  // 예: hyelinshin@sni,co,kr 패턴
+                if (isValidKey(commaKey)) candidates.add(commaKey);
+                const matched = (state.allUsers || []).find(u => (u.email || '').toLowerCase() === cuEmail);
+                if (matched && isValidKey(matched.id)) candidates.add(matched.id);
+            }
             for (const uid of candidates) {
-                const favSnapshot = await get(ref(db, `users/${uid}/favorites`));
-                if (favSnapshot.exists()) {
-                    state.starredBuildings = new Set(Object.keys(favSnapshot.val()));
-                    console.log(`⭐ 즐겨찾기 ${state.starredBuildings.size}건 로드 (uid: ${uid})`);
-                    break;
-                }
+                try {
+                    const favSnapshot = await get(ref(db, `users/${uid}/favorites`));
+                    if (favSnapshot.exists()) {
+                        Object.keys(favSnapshot.val()).forEach(id => state.starredBuildings.add(id));
+                    }
+                } catch (_) { /* 개별 경로 실패 무시 */ }
             }
-            if (state.starredBuildings.size === 0) {
-                console.log(`⭐ 즐겨찾기 0건 (시도한 uid: ${candidates.join(', ') || '없음'})`);
-            }
+            
+            console.log(`⭐ 즐겨찾기 ${state.starredBuildings.size}건 로드 (localStorage: ${lsCount}건, Firebase 후보: ${[...candidates].join(', ') || '없음'})`);
         } catch (favError) {
             console.warn('즐겨찾기 로드 실패 (무시):', favError);
             state.starredBuildings = new Set();
