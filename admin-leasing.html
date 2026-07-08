@@ -717,27 +717,100 @@
             to { transform: translateX(0); opacity: 1; }
         }
         
-        /* 페이지 미리보기 모달 */
+        /* 페이지 미리보기 모달 (v2.7: 상하 레이아웃 + 클릭 확대) */
         .preview-modal .modal {
-            max-width: 900px;
+            max-width: 1200px;
+            width: 92vw;
+        }
+        .preview-modal .modal-body {
+            max-height: 80vh;
+            overflow-y: auto;
         }
         .preview-content {
             display: flex;
-            gap: 20px;
+            flex-direction: column;
+            gap: 16px;
         }
         .preview-image {
-            flex: 1;
             background: var(--bg-tertiary);
             border-radius: 8px;
             overflow: hidden;
+            text-align: center;
+            position: relative;
         }
         .preview-image canvas {
-            width: 100%;
+            max-width: 100%;
+            max-height: 58vh;
+            width: auto;
             height: auto;
+            cursor: zoom-in;
+        }
+        .preview-image .zoom-hint {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            padding: 4px 10px;
+            background: rgba(15, 23, 42, 0.65);
+            color: #fff;
+            font-size: 11px;
+            border-radius: 12px;
+            pointer-events: none;
         }
         .preview-data {
-            width: 350px;
+            width: 100%;
         }
+        .preview-vacancy-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12.5px;
+        }
+        .preview-vacancy-table th,
+        .preview-vacancy-table td {
+            border: 1px solid var(--border-color);
+            padding: 6px 8px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .preview-vacancy-table th {
+            background: var(--bg-secondary);
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .preview-vacancy-table td .empty-val {
+            color: #cbd5e1;
+        }
+        /* 이미지 라이트박스 (클릭 확대 보기) */
+        .image-lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            background: rgba(15, 23, 42, 0.88);
+            overflow: auto;
+            text-align: center;
+            padding: 24px;
+        }
+        .image-lightbox.show { display: block; }
+        .image-lightbox canvas {
+            background: #fff;
+            border-radius: 4px;
+            max-width: none;
+        }
+        .image-lightbox .lightbox-close {
+            position: fixed;
+            top: 16px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            font-size: 22px;
+            cursor: pointer;
+            z-index: 2001;
+        }
+        .image-lightbox .lightbox-close:hover { background: rgba(255, 255, 255, 0.3); }
         .preview-data h4 {
             font-size: 14px;
             font-weight: 600;
@@ -1492,7 +1565,8 @@
             <div class="modal-body">
                 <div class="preview-content">
                     <div class="preview-image">
-                        <canvas id="previewCanvas"></canvas>
+                        <canvas id="previewCanvas" onclick="openImageLightbox()" title="클릭하면 원본 크기로 확대됩니다"></canvas>
+                        <span class="zoom-hint">🔍 클릭하여 확대</span>
                     </div>
                     <div class="preview-data" id="previewData">
                         <!-- 추출 데이터 표시 -->
@@ -1504,6 +1578,12 @@
                 <button class="btn btn-primary" onclick="closeModal('previewModal')">확인</button>
             </div>
         </div>
+    </div>
+    
+    <!-- ★ v2.7: 이미지 확대 라이트박스 -->
+    <div class="image-lightbox" id="imageLightbox" onclick="closeImageLightbox(event)">
+        <button class="lightbox-close" onclick="closeImageLightbox(event, true)">×</button>
+        <canvas id="lightboxCanvas"></canvas>
     </div>
     
     <!-- 토스트 컨테이너 -->
@@ -5383,13 +5463,16 @@
             }
         }
         
-        // 페이지 미리보기
+        // 페이지 미리보기 (★ v2.7: 상하 레이아웃 + 고해상도 렌더 + 테이블형 비교 뷰)
         async function showPagePreview(pageNum) {
             const modal = document.getElementById('previewModal');
             const canvas = document.getElementById('previewCanvas');
             
+            state.previewPageNum = pageNum; // 라이트박스 재렌더용
+            
             const page = await state.pdfDoc.getPage(pageNum);
-            const viewport = page.getViewport({ scale: 1.0 });
+            // 고해상도(1.6x) 렌더 — 표시 크기는 CSS(max-height)가 제한, 선명도 확보
+            const viewport = page.getViewport({ scale: 1.6 });
             
             canvas.width = viewport.width;
             canvas.height = viewport.height;
@@ -5406,31 +5489,89 @@
             const dataDiv = document.getElementById('previewData');
             
             if (pageData) {
+                const fmt = (v) => (v === null || v === undefined || v === '') ? '<span class="empty-val">-</span>' : v;
+                const vacancies = pageData.vacancies || [];
+                const hasTower = vacancies.some(v => v.tower);
+                
+                const rows = vacancies.map(v => `
+                    <tr>
+                        <td><strong>${fmt(v.floor)}</strong></td>
+                        ${hasTower ? `<td>${fmt(v.tower)}</td>` : ''}
+                        <td>${fmt(v.exclusiveArea)}</td>
+                        <td>${fmt(v.rentArea)}</td>
+                        <td>${fmt(v.depositPy)}</td>
+                        <td>${fmt(v.rentPy)}</td>
+                        <td>${fmt(v.maintenancePy)}</td>
+                        <td>${fmt(v.moveInDate)}</td>
+                    </tr>
+                `).join('');
+                
                 dataDiv.innerHTML = `
-                    <h4>추출된 정보</h4>
-                    <div class="preview-field">
-                        <label>빌딩명</label>
-                        <div class="value">${pageData.buildingName || '-'}</div>
-                    </div>
-                    <div class="preview-field">
-                        <label>주소</label>
-                        <div class="value">${pageData.address || '-'}</div>
-                    </div>
-                    <h4 style="margin-top:16px;">공실 정보</h4>
-                    ${pageData.vacancies?.map(v => {
-                        const towerBadge = v.tower ? `<span style="display:inline-block; padding:2px 6px; background:#dbeafe; color:#1e40af; border-radius:4px; font-size:11px; font-weight:600; margin-left:6px;">${v.tower}</span>` : '';
-                        return `
-                        <div class="preview-field">
-                            <label>${v.floor}${towerBadge}</label>
-                            <div class="value">전용 ${v.exclusiveArea}평 / 임대 ${v.rentArea}평<br>임대료 ${v.rentPy}/평</div>
+                    <div style="display:flex; gap:12px; margin-bottom:14px;">
+                        <div class="preview-field" style="flex:1; margin-bottom:0;">
+                            <label>빌딩명</label>
+                            <div class="value">${pageData.buildingName || '-'}</div>
                         </div>
-                    `;}).join('') || '<div class="preview-field"><div class="value">공실 없음</div></div>'}
+                        <div class="preview-field" style="flex:2; margin-bottom:0;">
+                            <label>주소</label>
+                            <div class="value">${pageData.address || '-'}</div>
+                        </div>
+                    </div>
+                    <h4>공실 정보 <span style="font-weight:400; color:var(--text-muted);">(${vacancies.length}건 · 면적: 평 · 가격: 원/평)</span></h4>
+                    ${rows ? `
+                    <table class="preview-vacancy-table">
+                        <thead>
+                            <tr><th>층</th>${hasTower ? '<th>동</th>' : ''}<th>전용면적</th><th>임대면적</th><th>보증금</th><th>임대료</th><th>관리비</th><th>입주시기</th></tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>` : '<div class="preview-field"><div class="value">공실 없음</div></div>'}
                 `;
             } else {
                 dataDiv.innerHTML = '<div class="preview-field"><div class="value">추출된 데이터 없음</div></div>';
             }
             
             modal.classList.add('show');
+        }
+        
+        // ★ v2.7: 페이지 이미지 라이트박스 (클릭 확대 / 재클릭 원본 크기 토글)
+        async function openImageLightbox() {
+            if (!state.pdfDoc || !state.previewPageNum) return;
+            
+            const lightbox = document.getElementById('imageLightbox');
+            const canvas = document.getElementById('lightboxCanvas');
+            
+            const page = await state.pdfDoc.getPage(state.previewPageNum);
+            const viewport = page.getViewport({ scale: 2.2 });
+            
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            
+            await page.render({
+                canvasContext: canvas.getContext('2d'),
+                viewport
+            }).promise;
+            
+            // 초기: 화면 폭에 맞춤 → 클릭 시 원본(2.2x) 크기 토글
+            const fitWidth = Math.min(viewport.width, window.innerWidth - 60);
+            canvas.dataset.zoomed = 'false';
+            canvas.style.width = fitWidth + 'px';
+            canvas.style.cursor = 'zoom-in';
+            canvas.onclick = (e) => {
+                e.stopPropagation();
+                const zoomed = canvas.dataset.zoomed === 'true';
+                canvas.dataset.zoomed = zoomed ? 'false' : 'true';
+                canvas.style.width = zoomed ? fitWidth + 'px' : viewport.width + 'px';
+                canvas.style.cursor = zoomed ? 'zoom-in' : 'zoom-out';
+            };
+            
+            lightbox.classList.add('show');
+        }
+        
+        function closeImageLightbox(event, force = false) {
+            if (force || event.target === document.getElementById('imageLightbox')) {
+                document.getElementById('imageLightbox').classList.remove('show');
+            }
+            if (event) event.stopPropagation();
         }
         
         // Firebase 저장 (프론트엔드 완전 처리)
@@ -7159,15 +7300,39 @@
                             <h3 style="font-size:18px; font-weight:600;">⚠️ OCR 추출 정보 vs 기존 빌딩 정보 비교</h3>
                             <span style="font-size:13px; color:#666;">${conflicts.length}건 차이 발견</span>
                         </div>
-                        <div style="margin-bottom:16px; padding:12px; background:#fef3c7; border-radius:8px; font-size:12px; color:#92400e;">
+                        <div style="margin-bottom:12px; padding:12px; background:#fef3c7; border-radius:8px; font-size:12px; color:#92400e;">
                             OCR로 추출한 정보가 기존 빌딩 정보와 다릅니다. 각 항목별로 사용할 값을 선택해주세요.
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center; margin-bottom:16px; padding:10px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px;">
+                            <span style="font-size:12px; font-weight:600; color:#64748b;">전체 일괄 선택:</span>
+                            <button onclick="setConflictSelection('ocr')"
+                                    style="padding:6px 14px; background:#fff7ed; color:#c2410c; border:1px solid #f59e0b; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer;">
+                                🟠 전체 OCR 추출값
+                            </button>
+                            <button onclick="setConflictSelection('existing')"
+                                    style="padding:6px 14px; background:#eff6ff; color:#1d4ed8; border:1px solid #3b82f6; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer;">
+                                🔵 전체 기존값
+                            </button>
+                            <span id="conflictOcrCount" style="margin-left:auto; font-size:12px; font-weight:600; color:#94a3b8;"></span>
                         </div>
             `;
             
             Object.entries(byBuilding).forEach(([bldgId, bldg]) => {
                 html += `
                     <div style="margin-bottom:16px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
-                        <div style="padding:10px 14px; background:#f1f5f9; font-weight:600; font-size:14px;">🏢 ${bldg.name}</div>
+                        <div style="padding:8px 14px; background:#f1f5f9; font-weight:600; font-size:14px; display:flex; justify-content:space-between; align-items:center;">
+                            <span>🏢 ${bldg.name} <span style="font-weight:400; font-size:12px; color:#94a3b8;">(${bldg.items.length}건)</span></span>
+                            <span style="display:flex; gap:6px;">
+                                <button onclick="setConflictSelection('ocr', '${bldgId}')"
+                                        style="padding:4px 10px; background:#fff7ed; color:#c2410c; border:1px solid #fdba74; border-radius:5px; font-size:11px; font-weight:600; cursor:pointer;">
+                                    OCR값 전체
+                                </button>
+                                <button onclick="setConflictSelection('existing', '${bldgId}')"
+                                        style="padding:4px 10px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; border-radius:5px; font-size:11px; font-weight:600; cursor:pointer;">
+                                    기존값 전체
+                                </button>
+                            </span>
+                        </div>
                         <div style="padding:12px;">
                 `;
                 
@@ -7219,6 +7384,31 @@
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = html;
             document.body.appendChild(tempDiv);
+            
+            // ★ v2.7: 개별 라디오 변경 시에도 선택 카운터 갱신
+            document.getElementById('conflictModalOverlay').addEventListener('change', (e) => {
+                if (e.target.matches('input[type="radio"]')) updateConflictCounter();
+            });
+            updateConflictCounter();
+        }
+        
+        // ★ v2.7: 일괄 선택 (bldgId 없으면 전체, 있으면 해당 빌딩만)
+        function setConflictSelection(choice, bldgId = null) {
+            document.querySelectorAll('#conflictModalOverlay input[type="radio"]').forEach(radio => {
+                if (bldgId && radio.dataset.buildingId !== bldgId) return;
+                if (radio.value === choice) radio.checked = true;
+            });
+            updateConflictCounter();
+        }
+        
+        // ★ v2.7: OCR값 선택 현황 카운터
+        function updateConflictCounter() {
+            const el = document.getElementById('conflictOcrCount');
+            if (!el) return;
+            const checked = document.querySelectorAll('#conflictModalOverlay input[value="ocr"]:checked').length;
+            const total = document.querySelectorAll('#conflictModalOverlay input[value="ocr"]').length;
+            el.textContent = `OCR 추출값 ${checked} / ${total}건 선택됨`;
+            el.style.color = checked > 0 ? '#d97706' : '#94a3b8';
         }
         
         async function applyConflictResolution() {
