@@ -61,6 +61,8 @@ export function prevQuarterOf(q) {          // '2026Q1' → '2025Q4'
   const y = +q.slice(0, 4), n = +q.slice(5);
   return n === 1 ? `${y - 1}Q4` : `${y}Q${n - 1}`;
 }
+// 통계 모듈(statsFilter)의 세션 키 형식: '2026Q1' → '202601' (콘솔 진단으로 확인된 실제 키 형식)
+export const toStatsKey = q => `${q.slice(0, 4)}${String(q.slice(5)).padStart(2, '0')}`;
 export function quarterLabel(q, style = 'dot') {  // '2026Q1' → '26.1Q' | '2026년 1분기'
   const y = q.slice(0, 4), n = q.slice(5);
   return style === 'dot' ? `${y.slice(2)}.${n}Q` : `${y}년 ${n}분기`;
@@ -76,9 +78,10 @@ export async function computeVacancy(quarter) {
   const prevQ = prevQuarterOf(quarter);
 
   const [curRaw, prevRaw] = await Promise.all([
-    srComputeQuarterStandalone(quarter).catch(() => null),
-    srComputeQuarterStandalone(prevQ).catch(() => null),
+    srComputeQuarterStandalone(toStatsKey(quarter)).catch(e => { console.warn(`[mreport] ${quarter} 공실률 계산 실패:`, e); return null; }),
+    srComputeQuarterStandalone(toStatsKey(prevQ)).catch(e => { console.warn(`[mreport] ${prevQ} 공실률 계산 실패:`, e); return null; }),
   ]);
+  console.log(`[mreport] 공실률 계산 결과 ${quarter}:`, curRaw?.summary, '| byRegion:', curRaw?.byRegion);
 
   const pack = (raw) => {
     if (!raw || !raw.summary || raw.summary.totalBuildings === 0) return null;
@@ -109,6 +112,20 @@ const _fmtPy = py => Math.round(parseFloat(py) || 0).toLocaleString();
 // 표기 정규화: 공백 제거 + 법인 접두어 제거 → "무신사 S1"="무신사S1", "(주)딥다이브"="딥다이브"
 const _norm = s => String(s || '').replace(/\s+/g, '').replace(/^(㈜|\(주\)|주식회사)/, '').toLowerCase();
 
+/** 포털 buildings 에서 빌딩명 매칭으로 세부권역(subRegion) 찾기.
+ *  ① nameNormalized/name 정확 일치 → ② aliases 일치 → ③ 포함 관계(폴백) */
+function findSubRegion(bldName) {
+  const n = _norm(bldName);
+  if (!n) return '';
+  const list = window.state?.allBuildings || [];
+  const bn = b => _norm(b.nameNormalized || b.name);
+  const hit =
+    list.find(b => bn(b) === n) ||
+    list.find(b => (b.aliases || []).some(a => _norm(a) === n)) ||
+    list.find(b => { const x = bn(b); return x.length >= 3 && (x.includes(n) || n.includes(x)); });
+  return hit?.subRegion || '';
+}
+
 export async function fetchLeaseContracts(quarter) {
   const year = quarter.slice(0, 4);
   const qq   = `${quarter.slice(5)}Q`;             // '2026Q1' → '1Q'
@@ -121,7 +138,7 @@ export async function fetchLeaseContracts(quarter) {
     const src = data.regions || {};
 
     const toRow = c => ({
-      subRegion: '',                                          // crecons 에 세부권역 없음 → 수동 보완
+      subRegion: findSubRegion(c.building),                   // 포털 buildings.subRegion 자동 매칭 (실패 시 빈칸 → 수동 보완)
       building:  c.building || '',
       areaPy:    c.gla ? `${_fmtPy(c.gla)}평 (${_py2m2(c.gla)}㎡)` : '',
       areaM2:    '',
