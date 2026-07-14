@@ -96,7 +96,26 @@ body {
 .cover-logo img, .back-logo img { height: 34px; }
 
 /* ── 목차 ── */
-.mr-page.toc { background: #ececee; }
+.mr-page.toc { background: #ebebec; }   /* 원본 샘플 (235,235,236) */
+
+/* ── 원본 아트 배경 (목차·Appendix) ── */
+.page-art {
+  position: absolute; z-index: -1; pointer-events: none;
+}
+.art-toc {
+  left: 0; right: 0; bottom: 0; width: 100%;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10%);
+          mask-image: linear-gradient(to bottom, transparent, #000 10%);
+}
+.art-apx {
+  right: 0; bottom: 0; width: 60%;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 10%),
+                      linear-gradient(to bottom, transparent, #000 10%);
+          mask-image: linear-gradient(to right, transparent, #000 10%),
+                      linear-gradient(to bottom, transparent, #000 10%);
+  -webkit-mask-composite: source-in;
+          mask-composite: intersect;
+}
 .toc-badge {
   width: 44px; height: 44px; border-radius: 50%;
   background: var(--si-red); color: #fff;
@@ -342,6 +361,6 @@ table.mr-table .row-del {
 <div id="mrToast"></div>
 <div id="mrLoading"><div class="box" id="mrLoadingBox"></div></div>
 
-<script type="module" src="./js/mreport-main.js?v=1.0.4"></script>
+<script type="module" src="./js/mreport-main.js?v=1.0.7"></script>
 </body>
 </html>
