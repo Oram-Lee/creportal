@@ -90,6 +90,7 @@ function pageCover(qLabel, year) {
 function pageToc() {
   return `
   <div class="mr-page toc">
+    <img src="./mreport-toc-bg.jpg" alt="" class="page-art art-toc" onerror="this.remove()">
     <div class="toc-head"><div class="toc-badge">C</div><div class="word">O N T E N T</div></div>
     <div class="toc-list">
       <div class="toc-part"><div class="pageno">03</div><div>
@@ -306,6 +307,7 @@ function pageAppendix(model, year, qKey) {
   const qMonths = { Q1:['1월 1일','3월 31일'], Q2:['4월 1일','6월 30일'], Q3:['7월 1일','9월 30일'], Q4:['10월 1일','12월 31일'] }[qKey] || ['1월 1일','3월 31일'];   // 방어적 폴백
   return `
   <div class="mr-page">
+    <img src="./mreport-apx-bg.jpg" alt="" class="page-art art-apx" onerror="this.remove()">
     ${secHeader('03', 'APPENDIX', 'S&amp;I Corp. 소개 / 조사 개요')}
     <div class="center-title">S&amp;I Corp. 소개</div>
     <div class="apx-card">
@@ -374,9 +376,13 @@ function pageAppendix(model, year, qKey) {
 
 /* ── 17. 백커버 ── */
 function pageBackCover() {
+  // 원본 PDF 백커버 아트 (로고 포함 전체 페이지) — 파일 누락 시 로고만 폴백 표시
   return `
-  <div class="mr-page backcover">
-    <div class="back-logo">${logoImg('52px')}</div>
+  <div class="mr-page backcover" style="padding:0">
+    <img src="./mreport-back-bg.jpg" alt=""
+         style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+    <div class="back-logo" style="display:none">${logoImg('52px')}</div>
   </div>`;
 }
 
