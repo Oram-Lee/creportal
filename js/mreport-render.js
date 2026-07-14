@@ -29,16 +29,18 @@ let _chart = null;
 export function renderReport(model) {
   const el = $('#mrPages');
   const q = model.quarter, prevQ = model.prevQuarter;
-  const qNum = q.slice(5), year = q.slice(0, 4);
+  const year = q.slice(0, 4);
+  const qKey = q.slice(4);              // 'Q1' — Appendix 조사기간 매핑 키
+  const qLabel = `${q.slice(5)}Q`;      // '1Q' — 표지 표기 (PDF 동일)
 
   el.innerHTML = [
-    pageCover(qNum, year),
+    pageCover(qLabel, year),
     pageToc(),
     pageSummary(model),
     pageLease(model, q, prevQ),
     pageDeal(model),
     ...MR_REGIONS.flatMap(r => [pageRegionA(model, r), pageRegionB(model, r, q)]),
-    pageAppendix(model, year, qNum),
+    pageAppendix(model, year, qKey),
     pageBackCover(),
   ].join('');
 
@@ -47,7 +49,7 @@ export function renderReport(model) {
 }
 
 /* ── 1. 표지 ── */
-function pageCover(qNum, year) {
+function pageCover(qLabel, year) {
   // 그리드 라인 좌표 (PDF 표지 패턴 근사)
   const H = [[24,58],[24,105],[24,152],[24,199],[24,246],[68,58],[68,152],[68,199],[112,58],[112,105],[112,152],[156,105],[156,199],[156,246]];
   const V = [[46,22],[46,115],[46,205],[90,22],[90,70],[90,160],[134,115],[134,205],[178,22],[178,160]];
@@ -63,7 +65,7 @@ function pageCover(qNum, year) {
     <div class="cover-grid">${grid}</div>
     <div class="cover-brand">SPACE &amp;<br>INNOVATION</div>
     <div class="cover-title">
-      <div class="period" contenteditable="true" data-p="_coverPeriod">${qNum} ${year}</div>
+      <div class="period" contenteditable="true" data-p="_coverPeriod">${qLabel} ${year}</div>
       <h1>OFFICE MARKET<br>REPORT</h1>
     </div>
     <div class="cover-logo"><span class="si-logo-red">S&amp;I</span><small> Corp.</small></div>
@@ -285,8 +287,8 @@ function pageRegionB(model, r, q) {
 }
 
 /* ── 16. Appendix ── */
-function pageAppendix(model, year, qNum) {
-  const qMonths = { Q1:['1월 1일','3월 31일'], Q2:['4월 1일','6월 30일'], Q3:['7월 1일','9월 30일'], Q4:['10월 1일','12월 31일'] }[qNum];
+function pageAppendix(model, year, qKey) {
+  const qMonths = { Q1:['1월 1일','3월 31일'], Q2:['4월 1일','6월 30일'], Q3:['7월 1일','9월 30일'], Q4:['10월 1일','12월 31일'] }[qKey] || ['1월 1일','3월 31일'];   // 방어적 폴백
   return `
   <div class="mr-page">
     ${secHeader('03', 'APPENDIX', 'S&amp;I Corp. 소개 / 조사 개요')}
