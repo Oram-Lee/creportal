@@ -4,17 +4,18 @@
  * 역할:
  *   1. buildings + vacancies 로드 → window.state.allBuildings 주입
  *      (portal-stats.js 의 srGetNormBuildings() 가 이 경로를 읽음)
- *   2. 공실률 계산 — portal-stats.js 의 srComputeQuarterStandalone() "그대로" 재사용
- *      → 통계 대시보드/비교 모달과 수치 100% 일치 보장
+ *   2. 공실률 계산 — portal-stats-compare.js 의 저장된 다시점 세션(statsTrend)을
+ *      srTrendRegionRatesForReport() 로 재계산 → 다시점 추이 화면과 수치 100% 일치
+ *      (분기의 대표월 = 분기말 월: 26.1Q → 2026-03)
  *   3. 리포트 모델 생성 / Firebase 저장·로드 (marketReports/{quarter})
  *   4. AI 문구 초안 (BACKEND /api/claude-proxy)
  *
- * ⚠️ 사전 조건: portal-stats.js 에 아래 1줄 export 가 추가되어 있어야 함.
- *    export { _srComputeQuarterStandalone as srComputeQuarterStandalone };
+ * ⚠️ 사전 조건: portal-stats-compare.js 에 srTrendRegionRatesForReport export 가
+ *    추가된 버전이 배포되어 있어야 함 (2026-07 마켓리포트 연동 패치).
  */
 
 import { state } from './portal-state.js';
-import { srComputeQuarterStandalone } from './portal-stats.js';
+import { srTrendRegionRatesForReport } from './portal-stats-compare.js';
 
 export const BACKEND = 'https://portal-dsyl.onrender.com';
 
@@ -61,40 +62,60 @@ export function prevQuarterOf(q) {          // '2026Q1' → '2025Q4'
   const y = +q.slice(0, 4), n = +q.slice(5);
   return n === 1 ? `${y - 1}Q4` : `${y}Q${n - 1}`;
 }
-// 통계 모듈(statsFilter)의 세션 키 형식: '2026Q1' → '202601' (콘솔 진단으로 확인된 실제 키 형식)
+// 통계 모듈(statsFilter)의 세션 키 형식: '2026Q1' → '202601'
 export const toStatsKey = q => `${q.slice(0, 4)}${String(q.slice(5)).padStart(2, '0')}`;
-export function quarterLabel(q, style = 'dot') {  // '2026Q1' → '26.1Q' | '2026년 1분기'
-  const y = q.slice(0, 4), n = q.slice(5);
-  return style === 'dot' ? `${y.slice(2)}.${n}Q` : `${y}년 ${n}분기`;
-}
+// 다시점(statsTrend)은 월 단위 — 분기의 대표월 = 분기말 월 ('2026Q1' → '2026-03')
+export const quarterEndMonth = q =>
+  `${q.slice(0, 4)}-${({ Q1: '03', Q2: '06', Q3: '09', Q4: '12' })[q.slice(4)]}`;
 
 /**
- * 당분기·전분기 공실률 계산 (통계 모듈 함수 재사용)
- * statsFilter 세션이 없으면 rate 가 전부 0/미존재 → null 처리해 수동 입력 유도
- * @returns {{cur, prev, curRaw, prevRaw}}  cur/prev: {total, regions:{CBD..}, buildingCount, status} | null
+ * 당분기·전분기 공실률 계산 — 저장된 다시점 세션(statsTrend) 기반.
+ * 다시점 화면(공실률 계산 및 비교 → 다시점 추이)과 동일 파이프라인이므로 수치가 일치함.
+ * 전분기는 당분기와 "같은 세션"으로 계산해 기준 일관성 보장.
+ * @returns {{cur, prev, meta}}  cur/prev: {total, regions:{CBD..Others}, buildingCount, status} | null
  */
 export async function computeVacancy(quarter) {
   await ensureBuildingsLoaded();
   const prevQ = prevQuarterOf(quarter);
+  const curM = quarterEndMonth(quarter), prevM = quarterEndMonth(prevQ);
 
-  const [curRaw, prevRaw] = await Promise.all([
-    srComputeQuarterStandalone(toStatsKey(quarter)).catch(e => { console.warn(`[mreport] ${quarter} 공실률 계산 실패:`, e); return null; }),
-    srComputeQuarterStandalone(toStatsKey(prevQ)).catch(e => { console.warn(`[mreport] ${prevQ} 공실률 계산 실패:`, e); return null; }),
-  ]);
-  console.log(`[mreport] 공실률 계산 결과 ${quarter}:`, curRaw?.summary, '| byRegion:', curRaw?.byRegion);
+  const curRaw = await srTrendRegionRatesForReport(curM)
+    .catch(e => { console.warn(`[mreport] ${curM} 다시점 집계 실패:`, e); return null; });
+  const prevRaw = curRaw
+    ? await srTrendRegionRatesForReport(prevM, curRaw.trendId)
+        .catch(e => { console.warn(`[mreport] ${prevM} 다시점 집계 실패:`, e); return null; })
+    : null;
+  console.log(`[mreport] 다시점 집계 ${curM}:`, curRaw?.byRegion, `| 세션: ${curRaw?.title}(${curRaw?.trendId})`);
 
   const pack = (raw) => {
-    if (!raw || !raw.summary || raw.summary.totalBuildings === 0) return null;
-    const regions = {};
-    MR_REGIONS.forEach(r => { regions[r] = raw.byRegion?.[r]?.rate ?? null; });
+    const T = raw?.byRegion?.TOTAL;
+    if (!T || !T.buildings) return null;
+    // 리포트의 '기타' = Others + ETC 면적가중 병합
+    const O = raw.byRegion.Others || { gross: 0, vacancyPy: 0 };
+    const E = raw.byRegion.ETC    || { gross: 0, vacancyPy: 0 };
+    const mg = (O.gross || 0) + (E.gross || 0);
+    const mv = (O.vacancyPy || 0) + (E.vacancyPy || 0);
     return {
-      total: raw.summary.overallRate,
-      regions,
-      buildingCount: raw.summary.totalBuildings,
-      status: raw.status || 'draft',
+      total: T.rate,
+      regions: {
+        CBD: raw.byRegion.CBD?.rate ?? null,
+        GBD: raw.byRegion.GBD?.rate ?? null,
+        YBD: raw.byRegion.YBD?.rate ?? null,
+        BBD: raw.byRegion.BBD?.rate ?? null,
+        Others: mg > 0 ? +(mv / mg * 100).toFixed(2) : null,
+      },
+      buildingCount: T.buildings,
+      status: raw.monthInSession ? 'finalized' : 'auto',   // auto = 세션에 없는 월 → 자동집계
     };
   };
-  return { cur: pack(curRaw), prev: pack(prevRaw), curRaw, prevRaw };
+  return {
+    cur: pack(curRaw), prev: pack(prevRaw),
+    meta: curRaw ? { trendId: curRaw.trendId, title: curRaw.title, months: curRaw.months, curM, prevM } : null,
+  };
+}
+export function quarterLabel(q, style = 'dot') {  // '2026Q1' → '26.1Q' | '2026년 1분기'
+  const y = q.slice(0, 4), n = q.slice(5);
+  return style === 'dot' ? `${y.slice(2)}.${n}Q` : `${y}년 ${n}분기`;
 }
 
 /* ═══════════════ 3. 임대차 계약 자동채움 (crecons 계약사례 포털 연동) ═══════════════
@@ -205,7 +226,8 @@ export function emptyModel(quarter) {
 /** 초안 생성: 공실률 자동 계산 + 임대차 어댑터 결과를 모델에 주입 */
 export async function buildDraftModel(quarter) {
   const model = emptyModel(quarter);
-  const { cur, prev } = await computeVacancy(quarter);
+  const { cur, prev, meta } = await computeVacancy(quarter);
+  if (meta) model.vacancy.source = { trendId: meta.trendId, title: meta.title, curM: meta.curM, prevM: meta.prevM };
 
   if (cur) {
     model.vacancy.auto = true;

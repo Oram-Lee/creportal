@@ -56,9 +56,9 @@ const MR = {
       this.applyModel(model, model.vacancy.auto ? '초안 생성 완료 (공실률 자동 반영)' : '초안 생성 완료 (통계 세션 없음 — 수동 입력)');
       const warns = [];
       if (!model.vacancy.auto) {
-        warns.push(`⚠ ${quarterLabel(q, 'kr')}의 공실률 통계 세션이 없습니다. 공실률 카드를 클릭해 직접 입력하거나, 공실률 통계 메뉴에서 세션을 먼저 저장하세요.`);
-      } else if (model.vacancy.statsStatus !== 'finalized') {
-        warns.push(`⚠ ${quarterLabel(q, 'kr')} 통계 세션이 '작업중(draft)' 상태입니다. 최종 확정 전 수치가 변할 수 있습니다.`);
+        warns.push(`⚠ 저장된 다시점 세션(statsTrend)이 없어 공실률을 계산하지 못했습니다. '공실률 계산 및 비교 → 다시점'에서 세션을 저장하거나, 카드를 클릭해 직접 입력하세요.`);
+      } else if (model.vacancy.statsStatus === 'auto') {
+        warns.push(`⚠ ${quarterLabel(q, 'kr')}의 분기말 월이 다시점 세션에 저장돼 있지 않아 자동집계 수치입니다. 다시점 화면에서 해당 월을 추가·저장하면 확정 수치로 대체됩니다.`);
       }
       if (model._leaseApiError) {
         warns.push(`⚠ 계약사례 포털 연동 실패(${model._leaseApiError}) — 임대차 테이블을 수동 입력하세요. (crecons 슬립 상태였다면 잠시 후 초안을 다시 생성해보세요)`);
