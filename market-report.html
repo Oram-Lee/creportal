@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>오피스 마켓 리포트 | CRE Portal</title>
+
+<!-- Chart.js (임대차 시장 요약 막대차트) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════════════════
+   오피스 마켓 리포트 — S&I 1Q 2026 PDF 디자인 재현
+   페이지 규격: A4 세로 210mm × 297mm
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  --si-red:      #e8135c;   /* S&I 매거진 핑크 */
+  --si-red-dk:   #c41042;   /* 넘버 뱃지 진홍 */
+  --si-pink-bg:  #fdedf3;   /* 키워드 카드 배경 */
+  --si-grey-bg:  #f0f0f2;   /* 키포인트 카드 배경 */
+  --si-dark:     #1b1418;   /* 표지 다크 */
+  --si-navy:     #2e4057;   /* 차트 당분기 색 */
+  --si-navy-lt:  #c3cdd9;   /* 차트 전분기 색 */
+  --si-text:     #222;
+  --si-muted:    #9a9aa2;
+  --si-line:     #e3e3e8;
+  --si-thead:    #f5f7fa;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  background: #585a60;
+  color: var(--si-text);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ── 상단 툴바 (인쇄 제외) ── */
+.mr-toolbar {
+  position: sticky; top: 0; z-index: 50;
+  background: #1a3c5e; color: #fff;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 18px; flex-wrap: wrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+.mr-toolbar .title { font-weight: 700; font-size: 15px; margin-right: 8px; }
+.mr-toolbar select, .mr-toolbar button {
+  font: inherit; font-size: 13px; border-radius: 6px; border: none;
+  padding: 7px 12px; cursor: pointer;
+}
+.mr-toolbar select { background: #fff; color: #222; }
+.mr-btn        { background: rgba(255,255,255,.15); color: #fff; }
+.mr-btn:hover  { background: rgba(255,255,255,.28); }
+.mr-btn.primary{ background: var(--si-red); font-weight: 700; }
+.mr-btn.primary:hover { background: #ff2d75; }
+.mr-btn:disabled { opacity: .5; cursor: not-allowed; }
+.mr-status { font-size: 12px; opacity: .85; margin-left: auto; }
+
+/* ── 편집 안내 배너 ── */
+.mr-banner {
+  max-width: 210mm; margin: 12px auto 0; padding: 9px 14px;
+  border-radius: 8px; font-size: 12.5px; display: none;
+}
+.mr-banner.warn { display: block; background: #fff4e0; color: #8a5b00; border: 1px solid #f0d9a8; }
+
+/* ── A4 페이지 ── */
+.mr-pages { padding: 16px 0 60px; }
+.mr-page {
+  width: 210mm; min-height: 297mm; background: #fff;
+  margin: 0 auto 18px; position: relative; overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,.35);
+  padding: 16mm 14mm;
+}
+
+/* ── 표지 ── */
+.mr-page.cover {
+  background: var(--si-dark); color: #fff; padding: 0;
+}
+.cover-grid { position: absolute; inset: 0; }
+.cover-grid .h { position: absolute; height: 1.5px; width: 34mm; background: rgba(255,255,255,.75); }
+.cover-grid .v { position: absolute; width: 1.5px; height: 34mm; background: rgba(255,255,255,.75); }
+.cover-grid .red { background: var(--si-red); }
+.cover-grid .diag {
+  position: absolute; width: 46mm; height: 1.5px; background: var(--si-red);
+  transform-origin: left center;
+}
+.cover-brand { position: absolute; top: 20mm; left: 20mm; font-size: 12px; font-weight: 700; letter-spacing: .5px; line-height: 1.5; }
+.cover-title { position: absolute; top: 118mm; left: 104mm; }
+.cover-title .period { font-size: 26px; font-weight: 400; }
+.cover-title h1 { font-size: 34px; font-weight: 800; line-height: 1.15; letter-spacing: -.5px; }
+.cover-logo { position: absolute; bottom: 18mm; right: 18mm; font-size: 26px; font-weight: 800; }
+.cover-logo small { font-size: 15px; font-weight: 600; margin-left: 2px; }
+.si-logo-red { color: var(--si-red); }
+.cover-logo img, .back-logo img { height: 34px; }
+
+/* ── 목차 ── */
+.mr-page.toc { background: #ececee; }
+.toc-badge {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--si-red); color: #fff;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 22px; font-weight: 800;
+}
+.toc-head { display: flex; align-items: center; gap: 14px; margin: 18mm 0 16mm; }
+.toc-head .word { font-size: 26px; font-weight: 700; letter-spacing: 14px; color: #555; }
+.toc-list { padding-left: 6mm; }
+.toc-part { display: flex; gap: 14px; margin-bottom: 12mm; }
+.toc-part .pageno { width: 34px; font-size: 16px; color: #555; font-weight: 600; }
+.toc-part .part-title { font-size: 16px; font-weight: 800; color: var(--si-red); margin-bottom: 4mm; }
+.toc-part .part-title b { color: #8a8a90; margin-right: 6px; }
+.toc-part ol { list-style: none; }
+.toc-part ol li { font-size: 14px; color: #333; line-height: 2.0; }
+.toc-part ol li::before { content: attr(data-n) '.'; margin-right: 8px; color: #666; }
+
+/* ── 본문 공통 헤더 ── */
+.sec-header {
+  display: flex; align-items: center; gap: 14px;
+  margin: -16mm -14mm 10mm; padding: 0 14mm 0 0;
+  border-bottom: 3px solid #eee; height: 26mm;
+  background: linear-gradient(90deg,#fff,#fff);
+}
+.sec-header .no-block {
+  width: 26mm; height: 26mm; background: #3c3c44; color: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border-right: 4px solid var(--si-red);
+}
+.sec-header .no-block b { font-size: 22px; }
+.sec-header .no-block span { font-size: 10.5px; opacity: .85; }
+.sec-header h2 { font-size: 24px; font-weight: 800; letter-spacing: -.5px; flex: 1; }
+.sec-header h2 small { display:block; font-size: 12px; font-weight: 500; color: #555; margin-top: 2px; }
+.sec-header .si-mark { font-size: 19px; font-weight: 800; }
+.sec-header .si-mark small { font-size: 12px; font-weight: 600; }
+
+.center-title { text-align: center; font-size: 18px; font-weight: 800; margin: 6mm 0; }
+.check-divider {
+  display: flex; align-items: center; gap: 10px; margin: 7mm 0;
+}
+.check-divider::before, .check-divider::after { content: ''; flex: 1; height: 1.5px; background: #444; }
+.check-divider .dot {
+  width: 26px; height: 26px; border-radius: 50%; background: var(--si-red);
+  color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800;
+}
+
+/* ── 키포인트 행 (넘버뱃지 + 좌제목 + 우본문) ── */
+.kp-row {
+  display: flex; align-items: center; gap: 0;
+  background: var(--si-grey-bg); border-radius: 12px;
+  padding: 7mm 8mm; margin-bottom: 5mm;
+}
+.kp-row.pink { background: var(--si-pink-bg); }
+.kp-badge {
+  min-width: 34px; height: 34px; border-radius: 50%;
+  background: var(--si-red-dk); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; margin-right: 7mm;
+}
+.kp-title {
+  width: 34mm; font-size: 13.5px; font-weight: 800; line-height: 1.45;
+  text-align: center; margin-right: 6mm; white-space: pre-line;
+}
+.kp-body {
+  flex: 1; font-size: 12.5px; line-height: 1.75;
+  border-left: 1.5px solid #c9c9cf; padding-left: 6mm;
+}
+.kp-body .hl { color: var(--si-red); font-weight: 700; }
+
+/* ── 공실률 스탯 카드 그리드 ── */
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; }
+.stat-card {
+  border: 1px solid var(--si-line); border-top: 5px solid #8b8b92;
+  background: #fff; padding: 4mm 5mm 5mm; position: relative;
+}
+.stat-card.total { background: var(--si-pink-bg); border-top-color: #7c7c84; }
+.stat-card .row1 { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; font-weight: 700; }
+.stat-card .delta { font-size: 10.5px; font-weight: 800; }
+.stat-card .delta.down { color: #111; }
+.stat-card .value { font-size: 27px; font-weight: 800; color: var(--si-red); margin: 2mm 0 2.5mm; }
+.stat-card .sub { font-size: 10px; color: var(--si-muted); line-height: 1.5; }
+
+/* ── 키워드 3단 카드 ── */
+.kw-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; margin-bottom: 8mm; }
+.kw-card {
+  background: var(--si-pink-bg); border-radius: 10px; text-align: center;
+  padding: 8mm 4mm 7mm;
+}
+.kw-card .big { font-size: 25px; font-weight: 800; color: var(--si-red); line-height: 1.15; word-break: keep-all; }
+.kw-card .big small { font-size: 14px; }
+.kw-card .label { font-size: 12.5px; font-weight: 800; margin-top: 3mm; }
+.kw-card .sub { font-size: 10.5px; color: var(--si-muted); margin-top: 2.5mm; line-height: 1.5; }
+
+/* ── 매입매각 요약 스탯 ── */
+.deal-stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5mm; margin-bottom: 9mm; }
+
+/* ── 테이블 ── */
+.mr-table-wrap { margin-bottom: 4mm; }
+.mr-table-title { text-align: center; font-size: 16px; font-weight: 800; margin: 4mm 0 3mm; position: relative; }
+.mr-table-title .meta { position: absolute; right: 0; bottom: 0; font-size: 10.5px; color: var(--si-muted); font-style: italic; font-weight: 500; }
+table.mr-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+table.mr-table th {
+  background: var(--si-thead); font-weight: 700; padding: 2.6mm 2mm;
+  border-top: 1.5px solid #ccd2da; border-bottom: 1px solid #dfe4ea;
+}
+table.mr-table td { padding: 2.6mm 2mm; text-align: center; border-bottom: 1px solid #edf0f4; }
+table.mr-table td:first-child { color: #777; }
+table.mr-table td.b { font-weight: 700; color: #222; }
+table.mr-table td .arrow { color: #888; }
+table.mr-table .row-del {
+  border: none; background: #ffe3e8; color: #c00; border-radius: 4px;
+  width: 20px; height: 20px; cursor: pointer; font-size: 11px; line-height: 1;
+}
+.tbl-add-btn {
+  display: block; width: 100%; border: 1.5px dashed #cbd2dc; background: #fafbfd;
+  color: #667; border-radius: 6px; padding: 2.4mm; font-size: 11.5px; cursor: pointer; margin-top: 2mm;
+}
+.tbl-add-btn:hover { background: #f0f4fa; }
+
+/* ── 인사이트 박스 ── */
+.insight-box {
+  background: #f4f4f6; border-left: 4px solid var(--si-red);
+  padding: 5mm 6mm; margin: 5mm 0;
+}
+.insight-box h4 { color: var(--si-red); font-size: 13.5px; font-weight: 800; margin-bottom: 2.5mm; }
+.insight-box .ins-title { font-size: 12.5px; font-weight: 800; margin-bottom: 1.5mm; }
+.insight-box .ins-body { font-size: 12px; line-height: 1.8; }
+
+/* ── 서브 인사이트(좌 라벨 + 우 본문) ── */
+.sub-ins {
+  display: flex; align-items: center; background: var(--si-grey-bg);
+  border-radius: 10px; padding: 5mm 6mm; margin-bottom: 4mm;
+}
+.sub-ins .lbl { width: 32mm; text-align: center; font-size: 12px; font-weight: 800; line-height: 1.5; margin-right: 5mm; }
+.sub-ins .txt { flex: 1; font-size: 11.8px; line-height: 1.75; border-left: 1.5px solid #c9c9cf; padding-left: 5mm; }
+
+/* ── 차트 ── */
+.chart-box { margin: 4mm 0 8mm; }
+.chart-box canvas { width: 100% !important; height: 70mm !important; }
+
+/* ── Appendix ── */
+.apx-card { background: #f7f8fa; border: 1px solid var(--si-line); border-radius: 8px; padding: 6mm 7mm; margin-bottom: 7mm; }
+.apx-card h3 { font-size: 16px; margin-bottom: 3mm; }
+.apx-card h3 small { color: var(--si-muted); font-weight: 500; font-size: 11.5px; margin-left: 6px; }
+.apx-card p { font-size: 12px; line-height: 1.9; }
+.apx-h { color: var(--si-red); font-size: 13.5px; font-weight: 800; margin: 5mm 0 2.5mm; }
+.apx-list { list-style: none; font-size: 12px; line-height: 2.0; }
+.apx-list li::before { content: '•'; margin-right: 6px; color: #555; }
+.region-tags { display: grid; gap: 2.4mm; font-size: 12px; }
+.region-tags .rt { display: flex; align-items: center; gap: 8px; }
+.region-tags .tag { background: var(--si-red-dk); color: #fff; font-size: 10px; font-weight: 800; padding: 1.4mm 0; width: 18mm; text-align: center; border-radius: 3px; }
+.grade-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.grade-table th, .grade-table td { border-bottom: 1px solid #e5e8ee; padding: 2mm 2.4mm; text-align: left; }
+.grade-table th { background: var(--si-thead); }
+.grade-table tr.hl td { background: var(--si-pink-bg); font-weight: 700; }
+.apx-2col { display: grid; grid-template-columns: 1fr 1.15fr; gap: 8mm; }
+.disclaimer { background: #f1f2f4; border-radius: 6px; padding: 4mm 5mm; font-size: 10px; color: #777; line-height: 1.8; margin-top: 6mm; }
+
+/* ── 백커버 ── */
+.mr-page.backcover { background: #ececee; }
+.back-logo { position: absolute; top: 60mm; left: 24mm; font-size: 42px; font-weight: 800; color: #333; }
+.back-logo small { font-size: 22px; font-weight: 600; }
+
+/* ── 편집 UX ── */
+[contenteditable="true"] { outline: none; border-radius: 3px; transition: background .12s; }
+[contenteditable="true"]:hover  { background: rgba(46,125,202,.08); box-shadow: 0 0 0 1px rgba(46,125,202,.25); }
+[contenteditable="true"]:focus  { background: #fffbe8; box-shadow: 0 0 0 2px #2e7dca; }
+.edit-only { }           /* 인쇄 시 숨김 대상 마커 */
+.auto-badge {
+  position: absolute; top: 4px; right: 6px; font-size: 9px;
+  color: #2e7dca; background: #e8f2fb; border-radius: 3px; padding: 1px 4px;
+}
+.mr-page .warn-badge {
+  display: inline-block; font-size: 10px; background: #fff4e0; color: #8a5b00;
+  border-radius: 3px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+}
+
+/* ── 토스트 ── */
+#mrToast {
+  position: fixed; bottom: 26px; left: 50%; transform: translateX(-50%);
+  background: #222; color: #fff; padding: 10px 18px; border-radius: 8px;
+  font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 999;
+}
+#mrToast.show { opacity: .95; }
+#mrToast.error { background: #c62828; }
+
+/* ── 로딩 오버레이 ── */
+#mrLoading {
+  position: fixed; inset: 0; background: rgba(20,20,25,.55); z-index: 200;
+  display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+}
+#mrLoading.show { display: flex; }
+#mrLoading .box { background:#fff; border-radius: 12px; padding: 22px 30px; font-size: 14px; min-width: 300px; }
+#mrLoading .step { margin: 4px 0; color:#888; }
+#mrLoading .step.on { color:#1a3c5e; font-weight:700; }
+#mrLoading .step.done { color:#1a8a5a; }
+
+@page { size: A4 portrait; margin: 0; }
+@media print {
+  .mr-toolbar, .mr-banner, .edit-only, .tbl-add-btn, .row-del, .auto-badge, .warn-badge, #mrToast, #mrLoading { display: none !important; }
+  body { background: #fff; }
+  .mr-pages { padding: 0; }
+  .mr-page { margin: 0; box-shadow: none; page-break-after: always; }
+}
+</style>
+</head>
+<body>
+
+<!-- 툴바 -->
+<div class="mr-toolbar">
+  <span class="title">📰 오피스 마켓 리포트</span>
+  <select id="mrYear"></select>
+  <select id="mrQuarter">
+    <option value="Q1">1분기</option><option value="Q2">2분기</option>
+    <option value="Q3">3분기</option><option value="Q4">4분기</option>
+  </select>
+  <button class="mr-btn primary" id="btnDraft"  onclick="MR.generateDraft()">⚡ 초안 생성</button>
+  <button class="mr-btn" id="btnAi"    onclick="MR.generateAiTexts()" disabled>🤖 AI 문구 초안</button>
+  <button class="mr-btn" id="btnSave"  onclick="MR.saveReport()"      disabled>💾 저장</button>
+  <button class="mr-btn" id="btnLoad"  onclick="MR.loadSaved()">📂 저장본 불러오기</button>
+  <button class="mr-btn" id="btnPdf"   onclick="MR.printPDF()"        disabled>📄 PDF 저장</button>
+  <span class="mr-status" id="mrStatus">시기를 선택하고 초안을 생성하세요</span>
+</div>
+
+<div class="mr-banner warn" id="mrBanner"></div>
+
+<!-- 리포트 페이지 컨테이너 (mreport-render.js가 채움) -->
+<div class="mr-pages" id="mrPages"></div>
+
+<div id="mrToast"></div>
+<div id="mrLoading"><div class="box" id="mrLoadingBox"></div></div>
+
+<script type="module" src="./js/mreport-main.js?v=1.0.0"></script>
+</body>
+</html>

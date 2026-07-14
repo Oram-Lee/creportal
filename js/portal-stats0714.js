@@ -4765,10 +4765,3 @@ console.log(
     'color:#1a73e8; font-weight:700;',
     'color:#64748b;'
 );
-
-// ═══════════════════════════════════════════════════════════════
-// 마켓리포트 연동 (2026-07)
-// market-report(js/mreport-data.js)가 공식 분기 집계를 그대로 재사용해
-// 통계 대시보드·비교 모달과 수치를 100% 일치시키기 위한 export.
-// ═══════════════════════════════════════════════════════════════
-export { _srComputeQuarterStandalone as srComputeQuarterStandalone };
