@@ -72,6 +72,7 @@ body {
   margin: 0 auto 18px; position: relative; overflow: hidden;
   box-shadow: 0 4px 24px rgba(0,0,0,.35);
   padding: 16mm 14mm;
+  isolation: isolate;   /* 음수 z-index 아트가 페이지 배경 위에 그려지도록 */
 }
 
 /* ── 표지 ── */
@@ -361,6 +362,6 @@ table.mr-table .row-del {
 <div id="mrToast"></div>
 <div id="mrLoading"><div class="box" id="mrLoadingBox"></div></div>
 
-<script type="module" src="./js/mreport-main.js?v=1.0.7"></script>
+<script type="module" src="./js/mreport-main.js?v=1.0.8"></script>
 </body>
 </html>

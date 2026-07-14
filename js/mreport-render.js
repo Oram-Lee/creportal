@@ -89,7 +89,7 @@ function pageCover(qLabel, year) {
 /* ── 2. 목차 ── */
 function pageToc() {
   return `
-  <div class="mr-page toc">
+  <div class="mr-page toc" style="isolation:isolate">
     <img src="./mreport-toc-bg.jpg" alt="" class="page-art art-toc" onerror="this.remove()"
          style="position:absolute;left:0;right:0;bottom:0;width:100%;z-index:-1;pointer-events:none;-webkit-mask-image:linear-gradient(to bottom,transparent,#000 10%);mask-image:linear-gradient(to bottom,transparent,#000 10%)">
     <div class="toc-head"><div class="toc-badge">C</div><div class="word">O N T E N T</div></div>
@@ -307,7 +307,7 @@ function pageAppendix(model, year, qKey) {
   const q = model.quarter;
   const qMonths = { Q1:['1월 1일','3월 31일'], Q2:['4월 1일','6월 30일'], Q3:['7월 1일','9월 30일'], Q4:['10월 1일','12월 31일'] }[qKey] || ['1월 1일','3월 31일'];   // 방어적 폴백
   return `
-  <div class="mr-page">
+  <div class="mr-page" style="isolation:isolate">
     <img src="./mreport-back-bg.jpg" alt="" class="page-art art-apx" onerror="this.remove()"
          style="position:absolute;right:0;bottom:0;width:58%;height:64%;object-fit:cover;object-position:right bottom;opacity:.14;z-index:-1;pointer-events:none;-webkit-mask-image:linear-gradient(to left,#000 85%,transparent);mask-image:linear-gradient(to left,#000 85%,transparent)">
     ${secHeader('03', 'APPENDIX', 'S&amp;I Corp. 소개 / 조사 개요')}
