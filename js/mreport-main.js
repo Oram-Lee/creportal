@@ -6,8 +6,8 @@
 import {
   buildDraftModel, loadModel, saveModel,
   generateAiDraft, mergeAiDraft, quarterLabel,
-} from './mreport-data.js?v=1.1.1';
-import { renderReport, collectModel } from './mreport-render.js?v=1.1.1';
+} from './mreport-data.js?v=1.1.2';
+import { renderReport, collectModel } from './mreport-render.js?v=1.1.2';
 
 const $ = sel => document.querySelector(sel);
 
