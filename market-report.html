@@ -284,8 +284,27 @@ table.mr-table .row-del {
 .contact-card .c-label { color: var(--si-red); font-size: 10.5px; font-weight: 800; align-self: flex-start; }
 .contact-card .c-name  { font-size: 13px; font-weight: 800; margin-top: 1.5mm; }
 .contact-card .c-desc  { font-size: 9.5px; color: #666; line-height: 1.55; margin: 1.5mm 0 2.5mm; min-height: 8mm; }
-.contact-card .c-qr    { width: 76px; height: 76px; }
-.contact-card .c-qr img, .contact-card .c-qr canvas { width: 76px !important; height: 76px !important; }
+.contact-card .c-qr    { width: 64px; height: 64px; }
+.contact-card .c-qr img, .contact-card .c-qr canvas { width: 64px !important; height: 64px !important; }
+
+/* ── Appendix 1장 수납용 압축 (인쇄 넘침 방지) ── */
+.mr-page.apx { padding-bottom: 10mm; }
+.mr-page.apx .center-title   { margin: 3.5mm 0; }
+.mr-page.apx .check-divider  { margin: 4mm 0; }
+.mr-page.apx .apx-card       { padding: 4mm 5mm; margin-bottom: 4mm; }
+.mr-page.apx .apx-card p     { line-height: 1.7; font-size: 11.5px; }
+.mr-page.apx .apx-h          { margin: 3mm 0 1.5mm; font-size: 12.5px; }
+.mr-page.apx .apx-list       { line-height: 1.7; font-size: 11.5px; }
+.mr-page.apx .region-tags    { gap: 1.8mm; font-size: 11.5px; }
+.mr-page.apx .grade-table th, .mr-page.apx .grade-table td { padding: 1.6mm 2.2mm; }
+.mr-page.apx .contact-grid   { margin-top: 4mm; }
+.mr-page.apx .contact-card   { padding: 2.8mm 3.5mm; }
+.mr-page.apx .contact-card .c-desc { min-height: 6mm; margin: 1mm 0 2mm; }
+.mr-page.apx .contact-card .c-hint { margin-top: 1.5mm; }
+.mr-page.apx .disclaimer     { margin-top: 3mm; padding: 3mm 4mm; line-height: 1.6; }
+@media print {
+  .mr-page.apx .contact-grid, .mr-page.apx .disclaimer { break-inside: avoid; page-break-inside: avoid; }
+}
 .contact-card .c-hint  { font-size: 8.5px; color: #999; margin-top: 2mm; }
 
 /* ── 백커버 ── */
@@ -363,6 +382,6 @@ table.mr-table .row-del {
 <div id="mrLoading"><div class="box" id="mrLoadingBox"></div></div>
 
 <!-- 캐시 규칙: 모듈 수정 시 아래 ?v 와 mreport-main.js/mreport-render.js 내부 import 의 ?v 를 함께 올릴 것 (임대안내문 guide-main.js 규칙과 동일) -->
-<script type="module" src="./js/mreport-main.js?v=1.1.4"></script>
+<script type="module" src="./js/mreport-main.js?v=1.1.5"></script>
 </body>
 </html>
