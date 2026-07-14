@@ -105,7 +105,9 @@ export const CRECONS = 'https://crecons.onrender.com';
 export const CRECONS_KEY = 'mrpt_7Kx2vQ9nWc4Tz8Lb5Hj3Rd6Fm1Pg';   // crecons Render 환경변수 REPORT_API_KEY 와 동일하게
 
 const _py2m2 = py => Math.round((parseFloat(py) || 0) * 3.3058).toLocaleString();
-const _fmtPy = py => (parseFloat(py) || 0).toLocaleString();
+const _fmtPy = py => Math.round(parseFloat(py) || 0).toLocaleString();
+// 표기 정규화: 공백 제거 + 법인 접두어 제거 → "무신사 S1"="무신사S1", "(주)딥다이브"="딥다이브"
+const _norm = s => String(s || '').replace(/\s+/g, '').replace(/^(㈜|\(주\)|주식회사)/, '').toLowerCase();
 
 export async function fetchLeaseContracts(quarter) {
   const year = quarter.slice(0, 4);
@@ -118,7 +120,6 @@ export async function fetchLeaseContracts(quarter) {
     const data = await res.json();
     const src = data.regions || {};
 
-    const out = {};
     const toRow = c => ({
       subRegion: '',                                          // crecons 에 세부권역 없음 → 수동 보완
       building:  c.building || '',
@@ -126,10 +127,21 @@ export async function fetchLeaseContracts(quarter) {
       areaM2:    '',
       tenant:    c.tenant || '',
     });
+
+    const out = {};
     MR_REGIONS.forEach(r => {
-      const cases = [...(src[r]?.cases || [])];
+      let cases = [...(src[r]?.cases || [])];
       if (r === 'Others') cases.push(...(src.ETC?.cases || []));   // ETC → Others 병합
-      if (cases.length) out[r] = cases.map(toRow);
+      // ① 대표사례(★) 우선 정렬 → ② 빌딩+임차인 정규화 키로 중복 제거 → ③ 최대 6건
+      cases.sort((a, b) => (b.isFeatured === true) - (a.isFeatured === true));
+      const seen = new Set();
+      const uniq = cases.filter(c => {
+        const k = `${_norm(c.building)}|${_norm(c.tenant)}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      }).slice(0, 6);
+      if (uniq.length) out[r] = uniq.map(toRow);
     });
     console.log('[mreport] 임대차 계약 자동채움:', Object.keys(out).map(r => `${r} ${out[r].length}건`).join(', ') || '0건');
     return out;
