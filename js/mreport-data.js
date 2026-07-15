@@ -381,7 +381,7 @@ export function normalizeModel(quarter, raw) {
  * 공실률 수치 + 임대차/매입매각 입력값을 근거로 리포트 문구 초안 생성.
  * 반환: 부분 모델 { keypoints?, leasePoints?, regionPoints?: {CBD:{points,leaseInsight,dealInsight}} }
  */
-export async function generateAiDraft(model, refText = '') {
+export async function generateAiDraft(model, refText = '', dealText = '') {
   const v = model.vacancy;
   const lines = [];
   lines.push(`분기: ${quarterLabel(model.quarter,'kr')} (전분기 ${quarterLabel(model.prevQuarter,'kr')})`);
@@ -400,9 +400,22 @@ export async function generateAiDraft(model, refText = '') {
   const refBlock = refText
     ? ['## 지난 분기 리포트 (참고자료)',
        '아래는 지난 분기 리포트 원문이다. 문체·문단 구성·표현 톤만 참고하고,',
-       '여기에 나오는 수치·계약·거래 사실을 이번 리포트에 절대 옮겨 쓰지 마라. 근거는 위 "데이터" 섹션만 사용하라.',
+       '여기에 나오는 수치·계약·거래 사실을 이번 리포트에 절대 옮겨 쓰지 마라. 근거는 "데이터" 섹션과 "매입매각 자료" 섹션만 사용하라.',
        '---', String(refText).slice(0, 9000), '---', '']
     : [];
+
+  // 이번 분기 매입매각 거래 리스트 (🏢 첨부 시) — 사실 데이터로 사용
+  const dealBlock = dealText
+    ? ['## 이번 분기 매입매각 자료 (사실 데이터 — 이 자료의 거래만 사용)',
+       '아래는 당 분기 매입매각 거래 리스트 원문이다. 이 자료를 근거로:',
+       '① dealStats 3개: 총 거래규모(조/억원)·거래 건수·평균 평당가 등 자료에서 집계 가능한 핵심 지표. value=수치, label=지표명, sub=부연(자료에 없으면 빈 문자열).',
+       '② dealPoints 2개: 매입매각 시장 요약 키포인트.',
+       '③ 각 권역(regionPoints)의 deals 배열: 자료의 거래를 권역별로 분류해 표 행으로 정리.',
+       '   asset=자산명, price=매매가(억원, 숫자만), pricePy=평당가(만원, 숫자만), sellerBuyer="매도자→매수자".',
+       '   권역 구분이 불명확한 거래는 Others 에 넣어라. 자료에 없는 값은 빈 문자열.',
+       '④ 각 권역의 dealInsight: 해당 권역 거래 특징 요약.',
+       '---', String(dealText).slice(0, 9000), '---', '']
+    : ['(매입매각 자료 미첨부 — dealStats/dealPoints/deals/dealInsight 는 모두 빈 값으로 두어라)', ''];
 
   const prompt = [
     '너는 상업용 부동산(서울 오피스) 시장 리포트 작성 전문가다.',
@@ -411,15 +424,19 @@ export async function generateAiDraft(model, refText = '') {
     '',
     '## 데이터', ...lines, '',
     ...refBlock,
+    ...dealBlock,
     '## 출력 (JSON만, 코드블록 금지)',
     '{',
     ' "keypoints":[{"title":"줄바꿈은 \\n","body":""} ×4],',
     ' "leasePoints":[{"title":"","body":""} ×3],',
+    ' "dealStats":[{"value":"","label":"","sub":""} ×3],',
+    ' "dealPoints":[{"title":"","body":""} ×2],',
     ' "regionPoints":{ "CBD":{"points":[{"title":"","body":""} ×3],',
-    '   "leaseInsight":{"title":"","body":""}, "dealInsight":{"title":"","body":""}},',
+    '   "leaseInsight":{"title":"","body":""}, "dealInsight":{"title":"","body":""},',
+    '   "deals":[{"asset":"","price":"","pricePy":"","sellerBuyer":""}]},',
     '   "GBD":{...}, "YBD":{...}, "BBD":{...}, "Others":{...} }',
     '}',
-    '데이터가 없는 항목(임대차/매입매각 미입력 권역의 insight 등)은 빈 문자열로 두어라.',
+    '데이터가 없는 항목(임대차/매입매각 미입력 권역의 insight 등)은 빈 문자열, deals 는 빈 배열로 두어라.',
   ].join('\n');
 
   const res = await fetch(`${BACKEND}/api/claude-proxy`, {
@@ -427,7 +444,7 @@ export async function generateAiDraft(model, refText = '') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 8000,           // v1.2.1: 3000 → 8000 (권역 5개 × 문구 32블록, 한국어 토큰 소모로 절단 발생했었음)
+      max_tokens: 12000,          // v1.3.0: 매입매각 deals 표 행 출력 추가로 8000 → 12000
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -493,7 +510,7 @@ function _closeJson(s) {
   return out;
 }
 
-/** AI 결과를 모델에 병합 (빈 문자열은 기존 값 유지) */
+/** AI 결과를 모델에 병합 (빈 문자열은 기존 값 유지, deals 는 유효 행이 있을 때만 교체) */
 export function mergeAiDraft(model, ai) {
   const put = (dst, src) => {
     if (!Array.isArray(src)) return;
@@ -505,6 +522,16 @@ export function mergeAiDraft(model, ai) {
   };
   put(model.keypoints,  ai.keypoints);
   put(model.leasePoints, ai.leasePoints);
+  put(model.dealPoints,  ai.dealPoints);
+
+  // 매입매각 스탯 카드 (value/label/sub 구조)
+  if (Array.isArray(ai.dealStats)) {
+    ai.dealStats.slice(0, 3).forEach((s, i) => {
+      if (!model.dealStats[i]) model.dealStats[i] = { value:'', label:'', sub:'' };
+      ['value', 'label', 'sub'].forEach(k => { if (s?.[k]) model.dealStats[i][k] = String(s[k]); });
+    });
+  }
+
   MR_REGIONS.forEach(r => {
     const src = ai.regionPoints?.[r];
     if (!src) return;
@@ -513,5 +540,17 @@ export function mergeAiDraft(model, ai) {
       if (src[k]?.title) model.regions[r][k].title = src[k].title;
       if (src[k]?.body)  model.regions[r][k].body  = src[k].body;
     });
+    // 매입매각 거래 표: 자산명이 있는 유효 행이 1건 이상일 때만 교체 (환각 빈 행 방지)
+    if (Array.isArray(src.deals)) {
+      const rows = src.deals
+        .map(d => ({
+          asset:       String(d?.asset ?? '').trim(),
+          price:       String(d?.price ?? '').trim(),
+          pricePy:     String(d?.pricePy ?? '').trim(),
+          sellerBuyer: String(d?.sellerBuyer ?? '').trim(),
+        }))
+        .filter(d => d.asset);
+      if (rows.length) model.regions[r].deals = rows;
+    }
   });
 }

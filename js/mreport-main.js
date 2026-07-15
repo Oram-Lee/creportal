@@ -6,8 +6,8 @@
 import {
   buildDraftModel, loadModel, saveModel,
   generateAiDraft, mergeAiDraft, quarterLabel,
-} from './mreport-data.js?v=1.2.1';
-import { renderReport, collectModel } from './mreport-render.js?v=1.2.1';
+} from './mreport-data.js?v=1.3.0';
+import { renderReport, collectModel } from './mreport-render.js?v=1.3.0';
 
 const $ = sel => document.querySelector(sel);
 
@@ -80,26 +80,35 @@ const MR = {
     this.setStatus(`${quarterLabel(model.quarter, 'kr')} · ${statusMsg}`);
   },
 
-  /* ── 📎 지난 분기 리포트 참고자료 (.md/.txt) ── */
-  refDoc: null,
-  pickRefDoc() {
-    // 이미 첨부돼 있으면 제거 여부 먼저 확인 (재클릭 = 교체 or 제거)
-    if (this.refDoc && confirm(`참고자료 "${this.refDoc.name}" 를 제거할까요?\n[취소] 를 누르면 다른 파일로 교체합니다.`)) {
-      this.refDoc = null;
-      $('#mrRefFile').value = '';
-      $('#btnRef').textContent = '📎 지난분기 참고';
-      return this.toast('참고자료를 제거했습니다');
-    }
-    $('#mrRefFile').click();
+  /* ── 첨부자료 2종 (.md/.txt) ──
+   *  ref : 지난 분기 리포트 — AI가 문체·구성만 참고 (수치 이월 금지)
+   *  deal: 이번 분기 매입매각 거래 리스트 — AI가 사실 데이터로 사용해
+   *        매입매각 요약(dealStats/dealPoints)·권역별 거래 표(deals)·인사이트를 자동 작성 */
+  docs: { ref: null, deal: null },
+  _docCfg: {
+    ref:  { input: '#mrRefFile',  btn: '#btnRef',  label: '📎 지난분기 참고',  icon: '📎', desc: '문체·구성 참고자료' },
+    deal: { input: '#mrDealFile', btn: '#btnDeal', label: '🏢 매입매각 자료', icon: '🏢', desc: '매입매각 거래 데이터' },
   },
-  onRefFile(input) {
+  pickDoc(kind) {
+    const cfg = this._docCfg[kind];
+    // 이미 첨부돼 있으면 제거 여부 먼저 확인 (재클릭 = 제거 or 교체)
+    if (this.docs[kind] && confirm(`${cfg.desc} "${this.docs[kind].name}" 를 제거할까요?\n[취소] 를 누르면 다른 파일로 교체합니다.`)) {
+      this.docs[kind] = null;
+      $(cfg.input).value = '';
+      $(cfg.btn).textContent = cfg.label;
+      return this.toast(`${cfg.desc}를 제거했습니다`);
+    }
+    $(cfg.input).click();
+  },
+  onDocFile(input, kind) {
     const f = input.files && input.files[0];
     if (!f) return;
+    const cfg = this._docCfg[kind];
     const reader = new FileReader();
     reader.onload = () => {
-      this.refDoc = { name: f.name, text: String(reader.result || '') };
-      $('#btnRef').textContent = `📎 ${f.name.length > 14 ? f.name.slice(0, 12) + '…' : f.name} ✓`;
-      this.toast(`참고자료 첨부됨: ${f.name} — AI 초안 생성 시 문체·구성을 참고합니다`);
+      this.docs[kind] = { name: f.name, text: String(reader.result || '') };
+      $(cfg.btn).textContent = `${cfg.icon} ${f.name.length > 14 ? f.name.slice(0, 12) + '…' : f.name} ✓`;
+      this.toast(`${cfg.desc} 첨부됨: ${f.name} — 🤖 AI 문구 초안 시 반영됩니다`);
     };
     reader.onerror = () => this.toast('파일을 읽지 못했습니다', 'error');
     reader.readAsText(f);
@@ -111,7 +120,7 @@ const MR = {
     collectModel(this.model);            // 수동 입력값(공실률·계약)을 근거에 포함
     this.loadingSteps(['입력 데이터 정리', 'AI 문구 생성 (10~20초)', '리포트 반영'], 1);
     try {
-      const ai = await generateAiDraft(this.model, this.refDoc?.text || '');
+      const ai = await generateAiDraft(this.model, this.docs.ref?.text || '', this.docs.deal?.text || '');
       this.loadingSteps(null, 2);
       mergeAiDraft(this.model, ai);
       renderReport(this.model);
@@ -186,7 +195,7 @@ const MR = {
     collectModel(this.model);
     this.loadingSteps(['리포트 데이터 수집', 'PPTX 슬라이드 조립', '파일 생성'], 1);
     try {
-      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.2.1');
+      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.3.0');
       this.loadingSteps(null, 2);
       const fileName = await exportReportPPTX(this.model);
       this.toast(`PPTX 저장 완료: ${fileName}`);
