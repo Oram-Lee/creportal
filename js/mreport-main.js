@@ -6,8 +6,8 @@
 import {
   buildDraftModel, loadModel, saveModel,
   generateAiDraft, mergeAiDraft, quarterLabel,
-} from './mreport-data.js?v=1.1.5';
-import { renderReport, collectModel } from './mreport-render.js?v=1.1.5';
+} from './mreport-data.js?v=1.2.0';
+import { renderReport, collectModel } from './mreport-render.js?v=1.2.0';
 
 const $ = sel => document.querySelector(sel);
 
@@ -32,7 +32,7 @@ const MR = {
   selectedQuarter() { return `${$('#mrYear').value}${$('#mrQuarter').value}`; },
 
   setStatus(msg) { $('#mrStatus').textContent = msg; },
-  setButtons(on) { ['btnAi', 'btnSave', 'btnPdf'].forEach(id => { $('#' + id).disabled = !on; }); },
+  setButtons(on) { ['btnAi', 'btnSave', 'btnPdf', 'btnPptx'].forEach(id => { const b = $('#' + id); if (b) b.disabled = !on; }); },
   banner(msg) {
     const el = $('#mrBanner');
     if (msg) { el.textContent = msg; el.classList.add('warn'); }
@@ -52,6 +52,9 @@ const MR = {
       }
       this.loadingSteps(null, 1);
       const model = await buildDraftModel(q);
+      // ★v1.2.0 버그픽스: 저장본이 있는 분기를 재생성하면 새 모델이 version 0 이 되어
+      //   이후 저장이 항상 "버전 충돌"로 거부되던 문제 → 저장본 버전을 승계
+      if (saved) model.version = saved.version;
       this.loadingSteps(null, 2);
       this.applyModel(model, model.vacancy.auto ? '초안 생성 완료 (공실률 자동 반영)' : '초안 생성 완료 (통계 세션 없음 — 수동 입력)');
       const warns = [];
@@ -77,13 +80,38 @@ const MR = {
     this.setStatus(`${quarterLabel(model.quarter, 'kr')} · ${statusMsg}`);
   },
 
+  /* ── 📎 지난 분기 리포트 참고자료 (.md/.txt) ── */
+  refDoc: null,
+  pickRefDoc() {
+    // 이미 첨부돼 있으면 제거 여부 먼저 확인 (재클릭 = 교체 or 제거)
+    if (this.refDoc && confirm(`참고자료 "${this.refDoc.name}" 를 제거할까요?\n[취소] 를 누르면 다른 파일로 교체합니다.`)) {
+      this.refDoc = null;
+      $('#mrRefFile').value = '';
+      $('#btnRef').textContent = '📎 지난분기 참고';
+      return this.toast('참고자료를 제거했습니다');
+    }
+    $('#mrRefFile').click();
+  },
+  onRefFile(input) {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.refDoc = { name: f.name, text: String(reader.result || '') };
+      $('#btnRef').textContent = `📎 ${f.name.length > 14 ? f.name.slice(0, 12) + '…' : f.name} ✓`;
+      this.toast(`참고자료 첨부됨: ${f.name} — AI 초안 생성 시 문체·구성을 참고합니다`);
+    };
+    reader.onerror = () => this.toast('파일을 읽지 못했습니다', 'error');
+    reader.readAsText(f);
+  },
+
   /* ── 🤖 AI 문구 초안 ── */
   async generateAiTexts() {
     if (!this.model) return;
     collectModel(this.model);            // 수동 입력값(공실률·계약)을 근거에 포함
     this.loadingSteps(['입력 데이터 정리', 'AI 문구 생성 (10~20초)', '리포트 반영'], 1);
     try {
-      const ai = await generateAiDraft(this.model);
+      const ai = await generateAiDraft(this.model, this.refDoc?.text || '');
       this.loadingSteps(null, 2);
       mergeAiDraft(this.model, ai);
       renderReport(this.model);
@@ -100,7 +128,14 @@ const MR = {
     collectModel(this.model);
     try {
       const user = localStorage.getItem('crePortalUser') || 'unknown';
-      const res = await saveModel(this.model, user);
+      let res = await saveModel(this.model, user);
+      if (!res.ok && res.conflict) {
+        // 진짜 다른 사용자/탭 충돌: 현재 편집본을 잃지 않도록 덮어쓰기 선택지 제공
+        if (!confirm(`${res.reason}\n\n[확인] 지금 화면의 내용으로 덮어쓰기 (v${res.latest + 1})\n[취소] 저장 중단 (📂 불러오기로 최신본 확인 가능)`)) {
+          return this.toast('저장을 중단했습니다', 'error');
+        }
+        res = await saveModel(this.model, user, true);
+      }
       if (!res.ok) return this.toast(res.reason, 'error');
       this.toast(`저장 완료 (v${res.version})`);
       this.setStatus(`${quarterLabel(this.model.quarter, 'kr')} · 저장됨 v${res.version}`);
@@ -142,6 +177,23 @@ const MR = {
     window.addEventListener('afterprint', done);
     this.toast('인쇄 대화상자에서 "PDF로 저장"을 선택하세요');
     setTimeout(() => window.print(), 150);
+  },
+
+  /* ── 🖼 PPTX 내보내기 ── */
+  async exportPptx() {
+    if (!this.model) return;
+    if (typeof PptxGenJS === 'undefined') return this.toast('PPTX 라이브러리가 로드되지 않았습니다 — 새로고침 후 재시도', 'error');
+    collectModel(this.model);
+    this.loadingSteps(['리포트 데이터 수집', 'PPTX 슬라이드 조립', '파일 생성'], 1);
+    try {
+      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.2.0');
+      this.loadingSteps(null, 2);
+      const fileName = await exportReportPPTX(this.model);
+      this.toast(`PPTX 저장 완료: ${fileName}`);
+    } catch (err) {
+      console.error('[mreport] PPTX 실패:', err);
+      this.toast(`PPTX 생성 실패: ${err.message || err}`, 'error');
+    } finally { this.hideLoading(); }
   },
 
   /* ── 로딩/토스트 ── */

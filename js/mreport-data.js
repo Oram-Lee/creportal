@@ -312,15 +312,16 @@ function seedRuleBasedTexts(model) {
 
 /* ═══════════════ 5. Firebase 저장/로드 (marketReports/{quarter}) ═══════════════ */
 
-export async function saveModel(model, userEmail) {
+export async function saveModel(model, userEmail, force = false) {
   const { db, ref, get, set } = await import('./portal-firebase.js');
   const path = `marketReports/${model.quarter}`;
 
-  // 낙관적 락 (statsFilter 와 동일 패턴)
+  // 낙관적 락 (statsFilter 와 동일 패턴). force=true 면 버전 검사 없이 latest+1 로 덮어씀.
   const vSnap = await get(ref(db, `${path}/version`));
   const latest = vSnap.exists() ? (vSnap.val() || 0) : 0;
-  if (latest !== (model.version || 0)) {
-    return { ok: false, reason: `다른 사용자가 먼저 저장했습니다 (v${latest}). 저장본을 다시 불러와주세요.` };
+  if (!force && latest !== (model.version || 0)) {
+    return { ok: false, conflict: true, latest,
+             reason: `저장된 버전(v${latest})과 내 버전(v${model.version || 0})이 다릅니다.` };
   }
   const payload = {
     ...model,
@@ -380,7 +381,7 @@ export function normalizeModel(quarter, raw) {
  * 공실률 수치 + 임대차/매입매각 입력값을 근거로 리포트 문구 초안 생성.
  * 반환: 부분 모델 { keypoints?, leasePoints?, regionPoints?: {CBD:{points,leaseInsight,dealInsight}} }
  */
-export async function generateAiDraft(model) {
+export async function generateAiDraft(model, refText = '') {
   const v = model.vacancy;
   const lines = [];
   lines.push(`분기: ${quarterLabel(model.quarter,'kr')} (전분기 ${quarterLabel(model.prevQuarter,'kr')})`);
@@ -395,12 +396,21 @@ export async function generateAiDraft(model) {
     if (b.deals.length)  lines.push(`${MR_REGION_SHORT[r]} 매입매각: ` + b.deals.map(d => `${d.asset}(${d.price}억, ${d.sellerBuyer})`).join(', '));
   });
 
+  // 지난 분기 리포트 참고자료 (📎 첨부 시) — 문체·구성 참고용, 수치·사실 이월 금지
+  const refBlock = refText
+    ? ['## 지난 분기 리포트 (참고자료)',
+       '아래는 지난 분기 리포트 원문이다. 문체·문단 구성·표현 톤만 참고하고,',
+       '여기에 나오는 수치·계약·거래 사실을 이번 리포트에 절대 옮겨 쓰지 마라. 근거는 위 "데이터" 섹션만 사용하라.',
+       '---', String(refText).slice(0, 9000), '---', '']
+    : [];
+
   const prompt = [
     '너는 상업용 부동산(서울 오피스) 시장 리포트 작성 전문가다.',
     '아래 데이터만 근거로 오피스 마켓 리포트 초안 문구를 작성하라. 데이터에 없는 사실을 지어내지 마라.',
     '문체: 개조식 종결("~함", "~됨", "~임"), 각 body 는 1~3문장.',
     '',
     '## 데이터', ...lines, '',
+    ...refBlock,
     '## 출력 (JSON만, 코드블록 금지)',
     '{',
     ' "keypoints":[{"title":"줄바꿈은 \\n","body":""} ×4],',

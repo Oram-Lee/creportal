@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>오피스 마켓 리포트 | CRE Portal</title>
 
-<!-- Chart.js (임대차 시장 요약 막대차트) -->
+<!-- Chart.js (임대차 시장 요약 막대차트) + datalabels (막대 위 수치 상시 표시) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<!-- pptxgenjs (PPTX 내보내기) -->
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.min.js"></script>
 <!-- QR 코드 (Appendix 문의 영역) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
@@ -366,10 +369,13 @@ table.mr-table .row-del {
     <option value="Q3">3분기</option><option value="Q4">4분기</option>
   </select>
   <button class="mr-btn primary" id="btnDraft"  onclick="MR.generateDraft()">⚡ 초안 생성</button>
+  <button class="mr-btn" id="btnRef"   onclick="MR.pickRefDoc()" title="지난 분기 리포트(.md/.txt)를 첨부하면 AI 초안이 문체·구성을 참고합니다">📎 지난분기 참고</button>
+  <input type="file" id="mrRefFile" accept=".md,.txt,text/markdown,text/plain" style="display:none" onchange="MR.onRefFile(this)">
   <button class="mr-btn" id="btnAi"    onclick="MR.generateAiTexts()" disabled>🤖 AI 문구 초안</button>
   <button class="mr-btn" id="btnSave"  onclick="MR.saveReport()"      disabled>💾 저장</button>
   <button class="mr-btn" id="btnLoad"  onclick="MR.loadSaved()">📂 저장본 불러오기</button>
   <button class="mr-btn" id="btnPdf"   onclick="MR.printPDF()"        disabled>📄 PDF 저장</button>
+  <button class="mr-btn" id="btnPptx"  onclick="MR.exportPptx()"      disabled>🖼 PPTX 저장</button>
   <span class="mr-status" id="mrStatus">시기를 선택하고 초안을 생성하세요</span>
 </div>
 
@@ -381,7 +387,8 @@ table.mr-table .row-del {
 <div id="mrToast"></div>
 <div id="mrLoading"><div class="box" id="mrLoadingBox"></div></div>
 
-<!-- 캐시 규칙: 모듈 수정 시 아래 ?v 와 mreport-main.js/mreport-render.js 내부 import 의 ?v 를 함께 올릴 것 (임대안내문 guide-main.js 규칙과 동일) -->
-<script type="module" src="./js/mreport-main.js?v=1.1.5"></script>
+<!-- 캐시 규칙: 모듈 수정 시 ?v 5곳을 함께 올릴 것 —
+     ① 아래 main.js  ② main.js 내부 import 2곳(data/render)  ③ main.js 의 pptx 동적 import  ④ render.js 내부 data import  ⑤ mreport-pptx.js 내부 data import -->
+<script type="module" src="./js/mreport-main.js?v=1.2.0"></script>
 </body>
 </html>
