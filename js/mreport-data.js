@@ -407,7 +407,7 @@ export async function generateAiDraft(model, refText = '') {
   const prompt = [
     '너는 상업용 부동산(서울 오피스) 시장 리포트 작성 전문가다.',
     '아래 데이터만 근거로 오피스 마켓 리포트 초안 문구를 작성하라. 데이터에 없는 사실을 지어내지 마라.',
-    '문체: 개조식 종결("~함", "~됨", "~임"), 각 body 는 1~3문장.',
+    '문체: 개조식 종결("~함", "~됨", "~임"), 각 body 는 1~2문장으로 간결하게.',
     '',
     '## 데이터', ...lines, '',
     ...refBlock,
@@ -427,16 +427,70 @@ export async function generateAiDraft(model, refText = '') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 3000,
+      max_tokens: 8000,           // v1.2.1: 3000 → 8000 (권역 5개 × 문구 32블록, 한국어 토큰 소모로 절단 발생했었음)
       messages: [{ role: 'user', content: prompt }],
     }),
   });
   if (!res.ok) throw new Error(`claude-proxy ${res.status}`);
   const data = await res.json();
-  const raw  = (data.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
-  const m    = raw.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error('AI 응답 파싱 실패');
-  return JSON.parse(m[0]);
+  return parseAiJson(data.content?.[0]?.text || '');
+}
+
+/* ── AI 응답 JSON 파서 (v1.2.1) ──
+ * 실전 실패 사례: max_tokens 절단으로 배열이 닫히지 않은 JSON → SyntaxError.
+ * ① 코드펜스 제거 → ② 문자열 내부 제어문자(개행 등) 이스케이프 → ③ 직접 파싱
+ * → ④ 실패 시: 뒤에서부터 마지막 완결 지점(, { [)으로 역추적하며 괄호 밸런싱 후 재시도.
+ * 부분 복구라도 성공하면 반환 — mergeAiDraft 가 빈 값은 기존 문구를 유지하므로 안전. */
+function parseAiJson(text) {
+  const raw = String(text).replace(/```json|```/g, '').trim();
+  const start = raw.indexOf('{');
+  if (start < 0) throw new Error('AI 응답에 JSON이 없습니다');
+  const s = _escCtrlInStrings(raw.slice(start));
+
+  try { return JSON.parse(s); } catch { /* 복구 시도로 진행 */ }
+
+  window._mrAiRaw = raw;                              // 진단용: 콘솔에서 원문 확인 가능
+  for (let cut = s.length; cut > 50; ) {
+    try { return JSON.parse(_closeJson(s.slice(0, cut))); } catch { /* 더 뒤로 역추적 */ }
+    const prev = Math.max(
+      s.lastIndexOf(',', cut - 2), s.lastIndexOf('{', cut - 2), s.lastIndexOf('[', cut - 2));
+    if (prev <= 0) break;
+    cut = prev;
+  }
+  throw new Error('AI 응답 파싱 실패 (콘솔 window._mrAiRaw 로 원문 확인)');
+}
+/* 문자열 내부의 원시 개행/탭/제어문자를 JSON 이스케이프로 치환 (문자열 밖 공백은 유지) */
+function _escCtrlInStrings(s) {
+  let out = '', inStr = false, esc = false;
+  for (const ch of s) {
+    if (esc) { out += ch; esc = false; continue; }
+    if (ch === '\\') { out += ch; if (inStr) esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; out += ch; continue; }
+    if (inStr && ch.charCodeAt(0) < 0x20) {
+      out += ch === '\n' ? '\\n' : ch === '\t' ? '\\t' : ch === '\r' ? '' : ' ';
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+/* 잘린 JSON 마무리: 미종결 문자열 닫기 → 꼬리 쉼표/매달린 키 제거 → 열린 괄호 역순 닫기 */
+function _closeJson(s) {
+  let inStr = false, esc = false;
+  const stack = [];
+  for (const ch of s) {
+    if (esc) { esc = false; continue; }
+    if (ch === '\\') { if (inStr) esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{' || ch === '[') stack.push(ch);
+    else if (ch === '}' || ch === ']') stack.pop();
+  }
+  let out = s;
+  if (inStr) out += '"';
+  out = out.replace(/,\s*$/, '').replace(/,?\s*"(?:[^"\\]|\\.)*"\s*:\s*$/, '');
+  while (stack.length) out += stack.pop() === '{' ? '}' : ']';
+  return out;
 }
 
 /** AI 결과를 모델에 병합 (빈 문자열은 기존 값 유지) */
