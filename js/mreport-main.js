@@ -6,8 +6,8 @@
 import {
   buildDraftModel, loadModel, saveModel,
   generateAiDraft, mergeAiDraft, quarterLabel,
-} from './mreport-data.js?v=1.3.0';
-import { renderReport, collectModel } from './mreport-render.js?v=1.3.0';
+} from './mreport-data.js?v=1.3.1';
+import { renderReport, collectModel } from './mreport-render.js?v=1.3.1';
 
 const $ = sel => document.querySelector(sel);
 
@@ -195,7 +195,7 @@ const MR = {
     collectModel(this.model);
     this.loadingSteps(['리포트 데이터 수집', 'PPTX 슬라이드 조립', '파일 생성'], 1);
     try {
-      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.3.0');
+      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.3.1');
       this.loadingSteps(null, 2);
       const fileName = await exportReportPPTX(this.model);
       this.toast(`PPTX 저장 완료: ${fileName}`);
