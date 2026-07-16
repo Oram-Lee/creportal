@@ -375,13 +375,93 @@ export function normalizeModel(quarter, raw) {
   return m;
 }
 
-/* ═══════════════ 6. AI 문구 초안 ═══════════════ */
+/* ═══════════════ 6. 타사 리서치 참고 (researchDocs — portal-rmap 아카이브 공유) ═══════════════ */
+
+// '2026Q2' → '2026-Q2' (researchDocs.period 형식 = getPeriodString() 규격)
+const periodKeyOf = q => `${q.slice(0, 4)}-${q.slice(4)}`;
+
+/**
+ * 작성 분기와 동일 또는 직전 분기의 타사 리서치 문서 후보 목록.
+ * @returns [{id, title, source, period, reportType, hasIntel, uploadedAt}]
+ */
+export async function loadResearchDocsForQuarter(quarter) {
+  const { db, ref, get } = await import('./portal-firebase.js');
+  const snap = await get(ref(db, 'researchDocs'));
+  const val = snap.val() || {};
+  const wanted = new Set([periodKeyOf(quarter), periodKeyOf(prevQuarterOf(quarter))]);
+  return Object.entries(val)
+    .filter(([, d]) => d && d.active !== false && wanted.has(d.period))
+    .map(([id, d]) => ({
+      id,
+      title: d.title || '(제목 없음)',
+      source: d.source || '출처미상',
+      period: d.period,
+      reportType: d.reportType || '',
+      hasIntel: d.intelStatus === 'ready' && !!d.prebuiltIntel,
+      uploadedAt: d.uploadedAt || 0,
+    }))
+    // 당분기 우선 → 같은 분기 내 최신 업로드 우선
+    .sort((a, b) => b.period !== a.period ? b.period.localeCompare(a.period) : b.uploadedAt - a.uploadedAt);
+}
+
+/**
+ * 선택 문서들로 AI 참고 컨텍스트 조립.
+ * 우선순위: prebuiltIntel.ALL → 권역별 prebuiltIntel 연결 → summary 폴백.
+ * 조립 후 회사명 마스킹(portal-rmap _FIRM_REPLACE_FRONT 와 동일 규칙) 적용.
+ */
+export async function buildResearchContext(docIds) {
+  if (!Array.isArray(docIds) || !docIds.length) return '';
+  const { db, ref, get } = await import('./portal-firebase.js');
+  const PER_DOC = 2200, TOTAL = 9000;
+  const parts = [];
+  for (const id of docIds) {
+    const snap = await get(ref(db, `researchDocs/${id}`)).catch(() => null);
+    const d = snap && snap.exists() ? snap.val() : null;
+    if (!d) continue;
+    const intel = d.prebuiltIntel || {};
+    let body = intel.ALL
+      || MR_REGIONS.map(r => intel[r] ? `[${r}] ${intel[r]}` : '').filter(Boolean).join('\n')
+      || d.summary || '';
+    if (!body) continue;
+    if (body.length > PER_DOC) body = body.slice(0, PER_DOC) + '…';
+    parts.push(`■ ${d.title || id} (${d.period || ''}${d.reportType ? ' · ' + d.reportType : ''})\n${body}`);
+  }
+  let ctx = parts.join('\n\n');
+  if (ctx.length > TOTAL) ctx = ctx.slice(0, TOTAL) + '…';
+  return maskFirmNames(ctx);
+}
+
+/* 리서치 기관·중개법인명 원천 차단 — AI 가 본문에 옮겨 쓰지 못하도록 컨텍스트 단계에서 치환 */
+function maskFirmNames(s) {
+  const RULES = [
+    [/젠스타메이트/g, '전문 리서치 자료'],
+    [/알스퀘어/g, '전문 리서치 자료'],
+    [/교보리얼코/g, '전문 리서치 자료'],
+    [/메이트플러스/g, '전문 리서치 자료'],
+    [/세빌스/g, '글로벌 리서치 자료'],
+    [/쿠시먼[\s]*(앤드웨이크필드|&\s*웨이크필드|웨이크필드)?/g, '글로벌 리서치 자료'],
+    [/나이트프랭크/g, '글로벌 리서치 자료'],
+    [/컬리어스/g, '글로벌 리서치 자료'],
+    [/에비슨영/g, '글로벌 리서치 자료'],
+    [/\bCBRE\b/g, '글로벌 리서치 자료'],
+    [/\bJLL\b/g, '글로벌 리서치 자료'],
+    [/젠스타(?!메이트)/g, '전문 리서치 자료'],
+  ];
+  let out = String(s);
+  for (const [pat, rep] of RULES) out = out.replace(pat, rep);
+  return out;
+}
+
+/* ═══════════════ 7. AI 문구 초안 ═══════════════ */
 
 /**
  * 공실률 수치 + 임대차/매입매각 입력값을 근거로 리포트 문구 초안 생성.
+ * @param refText      지난 분기 리포트 원문 — 문체·구성 참고 (수치 이월 금지)
+ * @param dealText     당분기 매입매각 거래 리스트 — 사실 데이터
+ * @param researchText 타사 리서치 컨텍스트(buildResearchContext 결과) — 워딩·해석 참고 전용
  * 반환: 부분 모델 { keypoints?, leasePoints?, regionPoints?: {CBD:{points,leaseInsight,dealInsight}} }
  */
-export async function generateAiDraft(model, refText = '', dealText = '') {
+export async function generateAiDraft(model, refText = '', dealText = '', researchText = '') {
   const v = model.vacancy;
   const lines = [];
   lines.push(`분기: ${quarterLabel(model.quarter,'kr')} (전분기 ${quarterLabel(model.prevQuarter,'kr')})`);
@@ -414,8 +494,23 @@ export async function generateAiDraft(model, refText = '', dealText = '') {
        '   asset=자산명, price=매매가(억원, 숫자만), pricePy=평당가(만원, 숫자만), sellerBuyer="매도자→매수자".',
        '   권역 구분이 불명확한 거래는 Others 에 넣어라. 자료에 없는 값은 빈 문자열.',
        '④ 각 권역의 dealInsight: 해당 권역 거래 특징 요약.',
+       '⑤ 자료에 "거래예정" 섹션이 있으면: 당분기 실적 거래가 1건 이상 있는 권역에서는 예정 사례를 쓰지 마라.',
+       '   실적 거래가 아예 없는(0건) 권역만 예정 사례로 채우되, asset 은 "자산명 [예정]" 형식으로 빌딩명 옆에 [예정] 을 붙이고,',
+       '   그 세부 내용(우협 선정·실사 진행·클로징 예정 시점 등)은 해당 권역 dealInsight body 에 기술하라. dealStats 집계에는 예정 사례를 포함하지 마라.',
+       '⑥ 각 거래의 비고("Deal 관련 세부 내용")는 deals 표에 넣지 말고, 특기할 만한 내용(우선매수권 행사·사옥 매입·Share deal 등)을 해당 권역 dealInsight 에 자연스럽게 녹여라.',
        '---', String(dealText).slice(0, 9000), '---', '']
     : ['(매입매각 자료 미첨부 — dealStats/dealPoints/deals/dealInsight 는 모두 빈 값으로 두어라)', ''];
+
+  // 타사 리서치 컨텍스트 (📚 선택 시) — 워딩·해석 참고 전용, 수치 인용 금지
+  const researchBlock = researchText
+    ? ['## 타사 리서치 자료 (워딩·해석 참고 전용)',
+       '아래는 전문 리서치 기관의 동일·직전 분기 오피스 시장 자료 요약이다. 활용 규칙:',
+       '① 시장 해석·용어·전망 표현(예: 임차 우위 전환, 공급 부담, Flight to Quality, 우량 자산 선호 등)의 워딩과 관점만 참고하라.',
+       '② 공실률·임대료·거래 수치는 "데이터" 및 "매입매각 자료" 섹션의 값만 사용하라. 아래 자료의 수치를 본문에 옮기거나 자사 수치와 병기하지 마라.',
+       '③ 리서치 기관명·중개법인명을 본문에 절대 표기하지 마라. 필요 시 "전문 리서치 자료 기준" 등 포괄 표현만 사용하라.',
+       '④ 아래 자료의 논조가 자사 데이터의 방향과 다르면 자사 데이터를 우선하라.',
+       '---', String(researchText).slice(0, 9000), '---', '']
+    : [];
 
   const prompt = [
     '너는 상업용 부동산(서울 오피스) 시장 리포트 작성 전문가다.',
@@ -425,6 +520,7 @@ export async function generateAiDraft(model, refText = '', dealText = '') {
     '## 데이터', ...lines, '',
     ...refBlock,
     ...dealBlock,
+    ...researchBlock,
     '## 출력 (JSON만, 코드블록 금지)',
     '{',
     ' "keypoints":[{"title":"줄바꿈은 \\n","body":""} ×4],',

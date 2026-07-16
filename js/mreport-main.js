@@ -6,8 +6,9 @@
 import {
   buildDraftModel, loadModel, saveModel,
   generateAiDraft, mergeAiDraft, quarterLabel,
-} from './mreport-data.js?v=1.3.1';
-import { renderReport, collectModel } from './mreport-render.js?v=1.3.1';
+  loadResearchDocsForQuarter, buildResearchContext,
+} from './mreport-data.js?v=1.4.0';
+import { renderReport, collectModel } from './mreport-render.js?v=1.4.0';
 
 const $ = sel => document.querySelector(sel);
 
@@ -114,14 +115,78 @@ const MR = {
     reader.readAsText(f);
   },
 
+  /* ── 📚 타사 리서치 선택 ──
+   *  researchDocs(portal-rmap 아카이브)에서 작성 분기와 동일·직전 분기 문서를
+   *  복수 선택 → AI 문구 초안 시 워딩·해석 참고 컨텍스트로 주입 (수치는 자사 데이터만 사용) */
+  research: { quarter: null, list: [], selected: [] },
+
+  async openResearch() {
+    const q = this.selectedQuarter();
+    const listEl = $('#mrResearchList');
+    $('#mrResearch').classList.add('show');
+    listEl.innerHTML = '<div class="rs-empty">⏳ 리서치 자료 로딩 중...</div>';
+    try {
+      this.research.list = await loadResearchDocsForQuarter(q);
+      // 분기가 바뀌었으면 이전 선택 초기화, 같으면 후보에 남은 선택만 유지
+      if (this.research.quarter !== q) this.research.selected = [];
+      else {
+        const ids = new Set(this.research.list.map(d => d.id));
+        this.research.selected = this.research.selected.filter(id => ids.has(id));
+      }
+      this.research.quarter = q;
+      this.renderResearchList();
+    } catch (err) {
+      console.error('[mreport] 리서치 목록 로드 실패:', err);
+      listEl.innerHTML = `<div class="rs-empty">리서치 자료를 불러오지 못했습니다 (${err.message || err})<br>
+        <button class="mr-btn" style="margin-top:8px;background:#555" onclick="MR.openResearch()">다시 시도</button></div>`;
+    }
+  },
+
+  renderResearchList() {
+    const listEl = $('#mrResearchList');
+    const { list, selected, quarter } = this.research;
+    $('#mrResearchTitle').textContent = `📚 타사 리서치 선택 — ${quarterLabel(quarter, 'kr')} 리포트`;
+    if (!list.length) {
+      listEl.innerHTML = `<div class="rs-empty">동일·직전 분기에 등록된 리서치 자료가 없습니다.<br>
+        <span style="font-size:11px;color:#888">리포트맵(portal-rmap) → 📚 리서치 자료 탭에서 등록하세요</span></div>`;
+      return;
+    }
+    const curP = `${quarter.slice(0, 4)}-${quarter.slice(4)}`;
+    listEl.innerHTML = list.map(d => `
+      <label class="rs-item">
+        <input type="checkbox" value="${d.id}" ${selected.includes(d.id) ? 'checked' : ''}>
+        <span class="rs-badge ${d.period === curP ? 'cur' : ''}">${d.period}${d.period === curP ? ' 당분기' : ' 직전'}</span>
+        <span class="rs-src">${d.source}</span>
+        <span class="rs-title">${d.title}</span>
+        ${d.hasIntel ? '<span class="rs-intel" title="권역별 인텔리전스 사전생성됨 — 상세 컨텍스트 사용">🧠</span>' : '<span class="rs-intel dim" title="요약본만 사용">📄</span>'}
+      </label>`).join('');
+  },
+
+  applyResearch() {
+    this.research.selected = [...document.querySelectorAll('#mrResearchList input:checked')].map(i => i.value);
+    $('#mrResearch').classList.remove('show');
+    const n = this.research.selected.length;
+    $('#btnResearch').textContent = n ? `📚 리서치 ${n}건 ✓` : '📚 타사 리서치';
+    this.toast(n ? `리서치 ${n}건 선택 — 🤖 AI 문구 초안 시 워딩 참고로 반영됩니다` : '리서치 선택이 해제되었습니다');
+  },
+
+  closeResearch() { $('#mrResearch').classList.remove('show'); },
+
   /* ── 🤖 AI 문구 초안 ── */
   async generateAiTexts() {
     if (!this.model) return;
     collectModel(this.model);            // 수동 입력값(공실률·계약)을 근거에 포함
-    this.loadingSteps(['입력 데이터 정리', 'AI 문구 생성 (10~20초)', '리포트 반영'], 1);
+    this.loadingSteps(['입력 데이터 정리', '리서치 컨텍스트 조립', 'AI 문구 생성 (10~20초)', '리포트 반영'], 1);
     try {
-      const ai = await generateAiDraft(this.model, this.docs.ref?.text || '', this.docs.deal?.text || '');
+      // 리서치 컨텍스트 — 선택 분기와 모델 분기가 일치할 때만 사용 (분기 전환 후 잔존 선택 방지)
+      let researchText = '';
+      if (this.research.selected.length && this.research.quarter === this.model.quarter) {
+        researchText = await buildResearchContext(this.research.selected);
+        console.log(`[mreport] 리서치 컨텍스트 주입: ${this.research.selected.length}건, ${researchText.length}자`);
+      }
       this.loadingSteps(null, 2);
+      const ai = await generateAiDraft(this.model, this.docs.ref?.text || '', this.docs.deal?.text || '', researchText);
+      this.loadingSteps(null, 3);
       mergeAiDraft(this.model, ai);
       renderReport(this.model);
       this.toast('AI 초안이 반영되었습니다. 문구를 검토·수정하세요.');
@@ -195,7 +260,7 @@ const MR = {
     collectModel(this.model);
     this.loadingSteps(['리포트 데이터 수집', 'PPTX 슬라이드 조립', '파일 생성'], 1);
     try {
-      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.3.1');
+      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.4.0');
       this.loadingSteps(null, 2);
       const fileName = await exportReportPPTX(this.model);
       this.toast(`PPTX 저장 완료: ${fileName}`);

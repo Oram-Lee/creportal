@@ -344,6 +344,28 @@ table.mr-table .row-del {
   display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
 }
 #mrLoading.show { display: flex; }
+
+/* ── 📚 타사 리서치 선택 모달 ── */
+.mr-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 9000; align-items: center; justify-content: center; }
+.mr-modal.show { display: flex; }
+.mr-modal-box  { background: #fff; border-radius: 12px; width: min(560px, 92vw); max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 8px 40px rgba(0,0,0,.25); overflow: hidden; }
+.mr-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: var(--si-navy, #2b323d); color: #fff; font-size: 14px; }
+.mr-modal-x    { background: none; border: none; color: #fff; font-size: 15px; cursor: pointer; padding: 2px 6px; }
+.mr-modal-desc { padding: 12px 18px; font-size: 12px; color: #555; background: #f7f8fa; border-bottom: 1px solid #eee; line-height: 1.6; }
+.mr-modal-list { flex: 1; overflow-y: auto; padding: 10px 14px; }
+.mr-modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid #eee; }
+.mr-modal-foot .mr-btn { background: #888; color: #fff; border: none; border-radius: 6px; padding: 7px 16px; font-size: 13px; cursor: pointer; }
+.mr-modal-foot .mr-btn.primary { background: var(--si-red, #ec4899); font-weight: 700; }
+.rs-item  { display: flex; align-items: center; gap: 8px; padding: 9px 8px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.rs-item:hover { background: #f3f5f8; }
+.rs-item input { accent-color: var(--si-red, #ec4899); width: 15px; height: 15px; flex: none; }
+.rs-badge { flex: none; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 10px; background: #e8eaef; color: #666; }
+.rs-badge.cur { background: #fce7f3; color: #be1862; }
+.rs-src   { flex: none; font-size: 11.5px; font-weight: 700; color: #2b323d; }
+.rs-title { flex: 1; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-intel { flex: none; font-size: 13px; }
+.rs-intel.dim { opacity: .45; }
+.rs-empty { text-align: center; padding: 28px 10px; color: #888; font-size: 12.5px; line-height: 1.7; }
 #mrLoading .box { background:#fff; border-radius: 12px; padding: 22px 30px; font-size: 14px; min-width: 300px; }
 #mrLoading .step { margin: 4px 0; color:#888; }
 #mrLoading .step.on { color:#1a3c5e; font-weight:700; }
@@ -351,7 +373,7 @@ table.mr-table .row-del {
 
 @page { size: A4 portrait; margin: 0; }
 @media print {
-  .mr-toolbar, .mr-banner, .edit-only, .tbl-add-btn, .row-del, .auto-badge, .warn-badge, #mrToast, #mrLoading { display: none !important; }
+  .mr-toolbar, .mr-banner, .edit-only, .tbl-add-btn, .row-del, .auto-badge, .warn-badge, #mrToast, #mrLoading, .mr-modal { display: none !important; }
   body { background: #fff; }
   .mr-pages { padding: 0; }
   .mr-page { margin: 0; box-shadow: none; page-break-after: always; }
@@ -373,6 +395,7 @@ table.mr-table .row-del {
   <input type="file" id="mrRefFile" accept=".md,.txt,text/markdown,text/plain" style="display:none" onchange="MR.onDocFile(this,'ref')">
   <button class="mr-btn" id="btnDeal"  onclick="MR.pickDoc('deal')" title="이번 분기 매입매각 거래 리스트(.md/.txt)를 첨부하면 AI 초안이 매입매각 요약·권역별 거래 표를 자동 작성합니다">🏢 매입매각 자료</button>
   <input type="file" id="mrDealFile" accept=".md,.txt,text/markdown,text/plain" style="display:none" onchange="MR.onDocFile(this,'deal')">
+  <button class="mr-btn" id="btnResearch" onclick="MR.openResearch()" title="타사 리서치 자료(동일·직전 분기)를 선택하면 AI 초안이 워딩·시장 해석을 참고합니다 — 수치는 자사 데이터만 사용">📚 타사 리서치</button>
   <button class="mr-btn" id="btnAi"    onclick="MR.generateAiTexts()" disabled>🤖 AI 문구 초안</button>
   <button class="mr-btn" id="btnSave"  onclick="MR.saveReport()"      disabled>💾 저장</button>
   <button class="mr-btn" id="btnLoad"  onclick="MR.loadSaved()">📂 저장본 불러오기</button>
@@ -389,8 +412,27 @@ table.mr-table .row-del {
 <div id="mrToast"></div>
 <div id="mrLoading"><div class="box" id="mrLoadingBox"></div></div>
 
+<!-- 📚 타사 리서치 선택 모달 -->
+<div id="mrResearch" class="mr-modal">
+  <div class="mr-modal-box">
+    <div class="mr-modal-head">
+      <b id="mrResearchTitle">📚 타사 리서치 선택</b>
+      <button class="mr-modal-x" onclick="MR.closeResearch()">✕</button>
+    </div>
+    <div class="mr-modal-desc">
+      작성 분기와 <b>동일·직전 분기</b>의 등록 자료입니다. 선택한 자료의 <b>워딩·시장 해석·전망 표현</b>을
+      AI 초안이 참고합니다. 공실률·계약 수치는 자사 데이터만 사용하며, 기관명은 본문에 표기되지 않습니다.
+    </div>
+    <div id="mrResearchList" class="mr-modal-list"></div>
+    <div class="mr-modal-foot">
+      <button class="mr-btn" style="background:#666" onclick="MR.closeResearch()">취소</button>
+      <button class="mr-btn primary" onclick="MR.applyResearch()">선택 적용</button>
+    </div>
+  </div>
+</div>
+
 <!-- 캐시 규칙: 모듈 수정 시 ?v 5곳을 함께 올릴 것 —
      ① 아래 main.js  ② main.js 내부 import 2곳(data/render)  ③ main.js 의 pptx 동적 import  ④ render.js 내부 data import  ⑤ mreport-pptx.js 내부 data import -->
-<script type="module" src="./js/mreport-main.js?v=1.3.1"></script>
+<script type="module" src="./js/mreport-main.js?v=1.4.0"></script>
 </body>
 </html>
