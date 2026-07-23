@@ -188,7 +188,7 @@ async function renderPage(p){
   const page=await pdfDoc.getPage(p), vp=page.getViewport({scale:2.0});
   const cv=document.createElement("canvas"); cv.width=vp.width; cv.height=vp.height;
   await page.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
-  return pageImages[p]=cv.toDataURL("image/jpeg",0.8).split(",")[1];
+  return pageImages[p]=cv.toDataURL("image/jpeg",0.95).split(",")[1];
 }
 
 $("#run").onclick=async()=>{
@@ -258,7 +258,11 @@ function renderTab(kind){
     tbl.innerHTML="<tr><th>p</th><th>건물명</th><th>주소</th><th>규모</th><th>준공</th><th>전용률</th><th>기준가(보/임/관)</th><th>호가기준</th><th>주차</th></tr>"
       +merged.map(b=>{
         const bp=b.basePricing||{}, sg=bp.single||{}, ex=bp.priceBasis==="exclusive";
-        return `<tr class="${ex?"warn":""}"><td>${fmt(b.pageNum)}</td><td><b>${fmt(b.buildingName)}</b></td><td>${fmt(b.addressNormalized||b.address)}</td><td>B${fmt(b.basementFloors)||"?"}/${fmt(b.totalFloors)||"?"}F</td><td>${fmt(b.completionYear)}</td><td>${fmt(b.exclusiveRate)}</td><td class="num">${fmt(sg.depositPy)} / ${fmt(sg.rentPy)} / ${fmt(sg.maintenancePy)}</td><td>${ex?'<span class="pill">전용면적기준</span>':"임대면적기준"}</td><td>${fmt(b.parkingTotal)}</td></tr>`;
+        const mult=(bp.multiple||[]).filter(g=>g.rentPy||g.depositPy);
+        const priceCell = mult.length
+          ? mult.map(g=>`${fmt(g.floorRange)||"구간?"}: ${fmt(g.depositPy)}/${fmt(g.rentPy)}/${fmt(g.maintenancePy)}`).join("<br>")
+          : `${fmt(sg.depositPy)} / ${fmt(sg.rentPy)} / ${fmt(sg.maintenancePy)}`;
+        return `<tr class="${ex?"warn":""}"><td>${fmt(b.pageNum)}</td><td><b>${fmt(b.buildingName)}</b></td><td>${fmt(b.addressNormalized||b.address)}</td><td>B${fmt(b.basementFloors)||"?"}/${fmt(b.totalFloors)||"?"}F</td><td>${fmt(b.completionYear)}</td><td>${fmt(b.exclusiveRate)}</td><td class="num" style="white-space:normal">${priceCell}${mult.length?' <span class="pill">층대별</span>':""}</td><td>${ex?'<span class="pill">전용면적기준</span>':"임대면적기준"}</td><td>${fmt(b.parkingTotal)}</td></tr>`;
       }).join("");
     return;
   }
