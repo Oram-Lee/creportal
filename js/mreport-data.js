@@ -558,7 +558,7 @@ export async function generateAiDraft(model, refText = '', dealText = '', resear
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 16000,          // v1.5.1: 권역 keywords ×15 출력 추가로 12000 → 16000 (YBD 이후 절단 방지)
+      max_tokens: 24000,          // v1.5.2: 실측 — 2개 권역 출력에 12000 소진(GBD 절단) → 5권역 여유분 24000
       messages: [{ role: 'user', content: prompt }],
     }),
   });
