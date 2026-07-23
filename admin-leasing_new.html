@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCR 관리 v2 — CRE Portal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{
+  --navy:#2b323d; --navy-2:#3a4350; --pink:#ec4899; --pink-soft:#fdf2f8;
+  --bg:#f5f6f8; --line:#e2e5ea; --ink:#2b323d; --sub:#8a8f98;
+  --ok:#0e9f6e; --warn:#9d174d;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Pretendard Variable",Pretendard,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--navy);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:12px}
+header h1{font-size:16px;font-weight:700;letter-spacing:-.2px}
+header .badge{background:var(--pink);font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+main{max-width:1320px;margin:24px auto;padding:0 20px;display:flex;flex-direction:column;gap:16px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px}
+.card h2{font-size:13px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.6px;margin-bottom:14px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:12px;color:var(--sub);font-weight:600}
+select,input[type=text]{border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit;background:#fff;min-width:150px}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:32px;text-align:center;color:var(--sub);cursor:pointer;transition:.15s;margin-top:14px}
+#drop.on{border-color:var(--pink);background:var(--pink-soft);color:var(--pink)}
+#drop strong{color:var(--ink)}
+#thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;max-height:340px;overflow:auto;padding:2px}
+.thumb{border:2px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;position:relative;background:#fff}
+.thumb.sel{border-color:var(--pink);box-shadow:0 0 0 3px rgba(236,72,153,.15)}
+.thumb canvas{width:100%;display:block}
+.thumb .no{position:absolute;top:4px;left:4px;background:var(--navy);color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px}
+.thumb.sel .no{background:var(--pink)}
+.selbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+#rail{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chip{width:34px;height:24px;border-radius:6px;background:var(--line);color:var(--sub);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:.2s}
+.chip.run{background:var(--navy);color:#fff;animation:pulse 1.2s infinite}
+.chip.success{background:var(--ok);color:#fff}
+.chip.error{background:var(--warn);color:#fff}
+@keyframes pulse{50%{opacity:.55}}
+.meter{height:6px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:10px}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--navy),var(--pink));transition:width .4s}
+.stat{display:flex;gap:18px;margin-top:10px;font-size:12px;color:var(--sub)}
+.stat b{color:var(--ink)}
+.btn{border:0;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:.15s}
+.btn-pink{background:var(--pink);color:#fff}.btn-pink:hover{filter:brightness(1.07)}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-ghost{background:#fff;border:1px solid var(--line);color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.tabs{display:flex;gap:2px}
+.tab{padding:9px 18px;border-radius:10px 10px 0 0;background:#e9ebef;font-size:13px;font-weight:600;cursor:pointer;color:var(--sub)}
+.tab.on{background:#fff;color:var(--ink);border:1px solid var(--line);border-bottom:0}
+.tblwrap{overflow:auto;max-height:540px;border:1px solid var(--line);border-radius:0 10px 10px 10px;background:#fff}
+table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+th{position:sticky;top:0;background:var(--navy);color:#fff;font-weight:600;padding:8px 10px;text-align:left;font-size:11px;z-index:1}
+td{padding:7px 10px;border-bottom:1px solid #f0f1f4}
+tr.warn td{background:var(--pink-soft);color:var(--warn)}
+tr:hover td{background:#f5f6f8}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;background:#fff;border:1px solid var(--warn);color:var(--warn);border-radius:99px;padding:0 8px;font-size:10px;font-weight:700}
+.hide{display:none}
+footer{text-align:center;color:var(--sub);font-size:11px;padding:20px}
+</style>
+</head>
+<body>
+<header>
+  <h1>CRE Portal · OCR 관리</h1><span class="badge">v2 NEW</span>
+  <span style="margin-left:auto;font-size:12px;color:#aeb4bd">비전 단일패스 · 병렬 8 · Clova 미사용</span>
+</header>
+<main>
+
+  <section class="card">
+    <h2>1 · 문서 정보 및 PDF</h2>
+    <div class="row">
+      <div class="fg"><label>발간회사 *</label>
+        <select id="sourceCompany">
+          <option value="">선택하세요</option>
+          <option>CBRE</option><option>JLL</option>
+          <option value="Cushman">Cushman & Wakefield</option>
+          <option>Savills</option><option>Colliers</option>
+          <option>신영</option><option>교보리얼코</option>
+          <option>메이트플러스</option><option>젠스타</option>
+          <option value="other">+ 직접 입력</option>
+        </select>
+      </div>
+      <div class="fg hide" id="customWrap"><label>회사명 직접 입력</label>
+        <input type="text" id="sourceCompanyCustom" placeholder="회사명">
+      </div>
+      <div class="fg"><label>발간연도 *</label><select id="publishYear"></select></div>
+      <div class="fg"><label>발간월 *</label><select id="publishMonth"></select></div>
+    </div>
+    <div id="drop"><strong>임대안내문 PDF를 끌어다 놓거나 클릭해 선택</strong><br>업로드 후 처리할 페이지를 고를 수 있습니다</div>
+    <input type="file" id="file" accept="application/pdf" class="hide">
+  </section>
+
+  <section class="card hide" id="stepPages">
+    <h2>2 · 페이지 선택</h2>
+    <div class="selbar">
+      <button class="btn btn-ghost" id="selAll">전체 선택</button>
+      <button class="btn btn-ghost" id="selNone">선택 해제</button>
+      <span id="selCount" style="color:var(--sub);font-size:12px"></span>
+      <button class="btn btn-pink" id="run" style="margin-left:auto">선택 페이지 추출 시작</button>
+    </div>
+    <div id="thumbs"></div>
+  </section>
+
+  <section class="card hide" id="stepRun">
+    <h2>3 · 추출 진행</h2>
+    <div class="meter"><i id="bar"></i></div>
+    <div class="stat">
+      <span>진행 <b id="pDone">0</b>/<b id="pTotal">0</b> 페이지</span>
+      <span>경과 <b id="pTime">0s</b></span>
+      <span id="pMsg"></span>
+    </div>
+    <div id="rail"></div>
+  </section>
+
+  <section class="card hide" id="stepResult">
+    <h2>4 · 결과 검토</h2>
+    <div style="display:flex;align-items:center;margin-bottom:12px;gap:10px">
+      <span id="summary" style="font-size:13px"></span>
+      <button class="btn btn-navy" id="dl" style="margin-left:auto">엑셀 다운로드</button>
+    </div>
+    <div class="tabs">
+      <div class="tab on" data-t="vac">공실 <span id="cntV"></span></div>
+      <div class="tab" data-t="bld">건물 <span id="cntB"></span></div>
+      <div class="tab" data-t="err">오류 <span id="cntE"></span></div>
+    </div>
+    <div class="tblwrap"><table id="tbl"></table></div>
+  </section>
+
+</main>
+<footer>결과 스키마는 기존 파이프라인과 동일(buildingName / basePricing / vacancies) — 층범위 확장·기준가 전파·전용→임대 변환은 기존 후처리를 그대로 통과한 값입니다. 총액은 평당가 × 임대면적 계산값.</footer>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const API_BASE_URL='https://portal-dsyl.onrender.com';
+const $=s=>document.querySelector(s);
+
+/* 발간연월 옵션 (기존 페이지와 동일 로직) */
+(()=>{const y=$("#publishYear"),m=$("#publishMonth"),now=new Date();
+for(let yy=now.getFullYear()+1;yy>=now.getFullYear()-3;yy--){const o=new Option(yy+"년",yy);y.add(o);}
+y.value=now.getFullYear();
+for(let mm=1;mm<=12;mm++){const v=String(mm).padStart(2,"0");m.add(new Option(mm+"월",v));}
+m.value=String(now.getMonth()+1).padStart(2,"0");})();
+$("#sourceCompany").addEventListener("change",e=>$("#customWrap").classList.toggle("hide",e.target.value!=="other"));
+const sourceCompany=()=>{const v=$("#sourceCompany").value;return v==="other"?$("#sourceCompanyCustom").value.trim():v;};
+const publishDate=()=>`${$("#publishYear").value.slice(2)}.${$("#publishMonth").value}`;
+
+let pdfDoc=null, selected=new Set(), jobId=null, result=null, fileBaseName="임대안내문";
+const pageImages={};  // pageNum → base64(jpeg)
+
+/* ── 업로드 & 썸네일 ── */
+const drop=$("#drop");
+drop.onclick=()=>$("#file").click();
+["dragover","dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{
+  e.preventDefault(); drop.classList.toggle("on",ev==="dragover");
+  if(ev==="drop"&&e.dataTransfer.files[0]) loadPdf(e.dataTransfer.files[0]);
+}));
+$("#file").onchange=e=>e.target.files[0]&&loadPdf(e.target.files[0]);
+
+async function loadPdf(f){
+  fileBaseName=f.name.replace(/\.pdf$/i,"");
+  drop.innerHTML=`<strong>${f.name}</strong><br>썸네일 생성 중…`;
+  pdfDoc=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
+  const wrap=$("#thumbs"); wrap.innerHTML=""; selected.clear();
+  for(let p=1;p<=pdfDoc.numPages;p++){
+    const page=await pdfDoc.getPage(p), vp=page.getViewport({scale:.28});
+    const cv=document.createElement("canvas"); cv.width=vp.width; cv.height=vp.height;
+    await page.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
+    const d=document.createElement("div"); d.className="thumb sel"; d.dataset.p=p;
+    d.innerHTML=`<span class="no">${p}</span>`; d.appendChild(cv);
+    d.onclick=()=>{d.classList.toggle("sel"); d.classList.contains("sel")?selected.add(p):selected.delete(p); updSel();};
+    wrap.appendChild(d); selected.add(p);
+  }
+  updSel(); $("#stepPages").classList.remove("hide");
+  drop.innerHTML=`<strong>${f.name}</strong> — ${pdfDoc.numPages}페이지 로드 완료`;
+}
+const updSel=()=>{$("#selCount").textContent=`${selected.size}페이지 선택됨`; $("#run").disabled=!selected.size;};
+$("#selAll").onclick=()=>{document.querySelectorAll(".thumb").forEach(t=>{t.classList.add("sel");selected.add(+t.dataset.p)});updSel();};
+$("#selNone").onclick=()=>{document.querySelectorAll(".thumb").forEach(t=>t.classList.remove("sel"));selected.clear();updSel();};
+
+/* ── 페이지 렌더링(기존과 동일 scale 2.0) → 일괄 전송 → 폴링 ── */
+async function renderPage(p){
+  if(pageImages[p]) return pageImages[p];
+  const page=await pdfDoc.getPage(p), vp=page.getViewport({scale:2.0});
+  const cv=document.createElement("canvas"); cv.width=vp.width; cv.height=vp.height;
+  await page.render({canvasContext:cv.getContext("2d"),viewport:vp}).promise;
+  return pageImages[p]=cv.toDataURL("image/jpeg",0.8).split(",")[1];
+}
+
+$("#run").onclick=async()=>{
+  if(!sourceCompany()){alert("발간회사를 선택하세요");return;}
+  $("#run").disabled=true;
+  const pages=[...selected].sort((a,b)=>a-b);
+  const rail=$("#rail"); rail.innerHTML="";
+  pages.forEach(p=>{const c=document.createElement("div");c.className="chip";c.id="chip"+p;c.textContent=p;rail.appendChild(c);});
+  $("#pTotal").textContent=pages.length; $("#pDone").textContent=0; $("#bar").style.width=0;
+  $("#stepRun").classList.remove("hide"); $("#stepResult").classList.add("hide");
+  $("#pMsg").textContent="페이지 이미지 준비 중…";
+  const t0=Date.now(), tick=setInterval(()=>$("#pTime").textContent=Math.round((Date.now()-t0)/1000)+"s",1000);
+  try{
+    const payload=[];
+    for(const p of pages){ payload.push({pageNum:p, imageData:await renderPage(p)}); $("#chip"+p).classList.add("run"); }
+    $("#pMsg").textContent="병렬 추출 중…";
+    const r=await fetch(`${API_BASE_URL}/ocr2/parse-images`,{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({pages:payload, sourceCompany:sourceCompany(), publishDate:publishDate()})
+    });
+    if(!r.ok) throw new Error("백엔드 응답 "+r.status+" — /ocr2/health로 배포 상태를 확인하세요");
+    jobId=(await r.json()).job_id;
+    await poll(tick);
+  }catch(e){clearInterval(tick);$("#pMsg").innerHTML=`<span style="color:var(--warn)">${e.message}</span>`;$("#run").disabled=false;}
+};
+
+async function poll(tick){
+  const r=await fetch(`${API_BASE_URL}/ocr2/status/${jobId}`), s=await r.json();
+  $("#pDone").textContent=s.done;
+  $("#bar").style.width=(s.total? s.done/s.total*100:0)+"%";
+  Object.entries(s.pages||{}).forEach(([p,st])=>{const c=$("#chip"+p); if(c) c.className="chip "+st;});
+  if(!s.finished) return setTimeout(()=>poll(tick),1500);
+  clearInterval(tick);
+  if(s.error){$("#pMsg").innerHTML=`<span style="color:var(--warn)">오류: ${s.error}</span>`;$("#run").disabled=false;return;}
+  result=s.result;
+  $("#pMsg").innerHTML=`<b style="color:var(--ok)">완료 · ${s.elapsed??""}초</b>`;
+  showResult(); $("#run").disabled=false;
+}
+
+/* ── 결과 (기존 스키마: mergedData[].vacancies) ── */
+const fmt=v=>(v===null||v===undefined||v==="")?"":(typeof v==="number"?v.toLocaleString():v);
+const num=v=>{if(v==null||v==="")return null;if(typeof v==="number")return v;const m=String(v).match(/[\d,]+(\.\d+)?/);return m?parseFloat(m[0].replace(/,/g,"")):null;};
+
+function showResult(){
+  $("#stepResult").classList.remove("hide");
+  const st=result.statistics||{};
+  const errs=(result.pageResults||[]).filter(p=>p.status==="error");
+  $("#cntV").textContent=st.vacanciesFound??0; $("#cntB").textContent=st.buildingsFound??0; $("#cntE").textContent=errs.length;
+  $("#summary").innerHTML=`건물 <b>${st.buildingsFound??0}</b> · 공실 <b>${st.vacanciesFound??0}</b> · 페이지 성공 <b>${st.successPages??0}/${st.totalPages??0}</b>`
+    +(errs.length?` · <span style="color:var(--warn)">실패 ${errs.map(e=>e.pageNum).join(", ")}p</span>`:"");
+  renderTab("vac");
+}
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); t.classList.add("on"); renderTab(t.dataset.t);
+});
+
+function renderTab(kind){
+  const tbl=$("#tbl"), merged=result.mergedData||[];
+  if(kind==="err"){
+    const errs=(result.pageResults||[]).filter(p=>p.status==="error");
+    tbl.innerHTML="<tr><th>페이지</th><th>오류</th></tr>"
+      +(errs.length?errs.map(e=>`<tr class="warn"><td>${e.pageNum}</td><td style="white-space:normal">${fmt(e.error)}</td></tr>`).join("")
+                   :`<tr><td colspan="2">오류 없음</td></tr>`);
+    return;
+  }
+  if(kind==="bld"){
+    tbl.innerHTML="<tr><th>p</th><th>건물명</th><th>주소</th><th>규모</th><th>준공</th><th>전용률</th><th>기준가(보/임/관)</th><th>호가기준</th><th>주차</th></tr>"
+      +merged.map(b=>{
+        const bp=b.basePricing||{}, sg=bp.single||{}, ex=bp.priceBasis==="exclusive";
+        return `<tr class="${ex?"warn":""}"><td>${fmt(b.pageNum)}</td><td><b>${fmt(b.buildingName)}</b></td><td>${fmt(b.addressNormalized||b.address)}</td><td>B${fmt(b.basementFloors)||"?"}/${fmt(b.totalFloors)||"?"}F</td><td>${fmt(b.completionYear)}</td><td>${fmt(b.exclusiveRate)}</td><td class="num">${fmt(sg.depositPy)} / ${fmt(sg.rentPy)} / ${fmt(sg.maintenancePy)}</td><td>${ex?'<span class="pill">전용면적기준</span>':"임대면적기준"}</td><td>${fmt(b.parkingTotal)}</td></tr>`;
+      }).join("");
+    return;
+  }
+  let rows="";
+  for(const b of merged){
+    for(const v of (b.vacancies||[])){
+      const ra=num(v.rentArea), rent=num(v.rentPy);
+      const total=(ra&&rent)?Math.round(ra*rent):null;
+      const warn=rent==null||String(v.floor||"").includes("~");
+      rows+=`<tr class="${warn?"warn":""}"><td>${fmt(b.pageNum)}</td><td><b>${fmt(b.buildingName)}</b></td><td>${fmt(v.tower)}</td><td>${fmt(v.floor)}</td><td class="num">${fmt(v.rentArea)}</td><td class="num">${fmt(v.exclusiveArea)}</td><td class="num">${fmt(v.depositPy)}</td><td class="num">${fmt(v.rentPy)}</td><td class="num">${fmt(v.maintenancePy)}</td><td class="num">${fmt(total)}</td><td>${fmt(v.moveInDate)}</td><td style="white-space:normal;max-width:220px">${fmt(v.note)}</td></tr>`;
+    }
+  }
+  tbl.innerHTML="<tr><th>p</th><th>건물명</th><th>동/타워</th><th>층</th><th>임대(평)</th><th>전용(평)</th><th>평당 보증금</th><th>평당 임대료</th><th>평당 관리비</th><th>월 임대료 총액*</th><th>입주</th><th>비고</th></tr>"+rows;
+}
+$("#dl").onclick=()=>{ if(jobId) location.href=`${API_BASE_URL}/ocr2/export/${jobId}?name=${encodeURIComponent(fileBaseName)}`; };
+</script>
+</body>
+</html>
