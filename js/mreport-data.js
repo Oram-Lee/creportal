@@ -558,7 +558,7 @@ export async function generateAiDraft(model, refText = '', dealText = '', resear
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 12000,          // v1.3.0: 매입매각 deals 표 행 출력 추가로 8000 → 12000
+      max_tokens: 16000,          // v1.5.1: 권역 keywords ×15 출력 추가로 12000 → 16000 (YBD 이후 절단 방지)
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -573,6 +573,7 @@ export async function generateAiDraft(model, refText = '', dealText = '', resear
  * → ④ 실패 시: 뒤에서부터 마지막 완결 지점(, { [)으로 역추적하며 괄호 밸런싱 후 재시도.
  * 부분 복구라도 성공하면 반환 — mergeAiDraft 가 빈 값은 기존 문구를 유지하므로 안전. */
 function parseAiJson(text) {
+  window._mrAiTruncated = false;                      // 부분 복구 여부 (main 배너 안내용)
   const raw = String(text).replace(/```json|```/g, '').trim();
   const start = raw.indexOf('{');
   if (start < 0) throw new Error('AI 응답에 JSON이 없습니다');
@@ -582,7 +583,12 @@ function parseAiJson(text) {
 
   window._mrAiRaw = raw;                              // 진단용: 콘솔에서 원문 확인 가능
   for (let cut = s.length; cut > 50; ) {
-    try { return JSON.parse(_closeJson(s.slice(0, cut))); } catch { /* 더 뒤로 역추적 */ }
+    try {
+      const parsed = JSON.parse(_closeJson(s.slice(0, cut)));
+      window._mrAiTruncated = true;
+      console.warn('[mreport] AI 응답 절단 — 부분 복구됨 (뒤 권역 항목이 비었을 수 있음)');
+      return parsed;
+    } catch { /* 더 뒤로 역추적 */ }
     const prev = Math.max(
       s.lastIndexOf(',', cut - 2), s.lastIndexOf('{', cut - 2), s.lastIndexOf('[', cut - 2));
     if (prev <= 0) break;
