@@ -468,19 +468,29 @@ function maskFirmNames(s) {
  * @param researchText 타사 리서치 컨텍스트(buildResearchContext 결과) — 워딩·해석 참고 전용
  * 반환: 부분 모델 { keypoints?, leasePoints?, regionPoints?: {CBD:{points,leaseInsight,dealInsight}} }
  */
+/**
+ * 공실률 수치 + 임대차/매입매각 입력값을 근거로 리포트 문구 초안 생성.
+ * v1.6.0: 단일 거대 호출 → 6분할 병렬 호출 (요약 1 + 권역 5)
+ *  - 콜당 출력 3~6천 토큰으로 max_tokens 절단·프록시 상한·타임아웃에서 구조적으로 해방
+ *  - 일부 콜 실패/절단 시에도 성공분은 반영 (window._mrAiFailed / _mrAiTruncated 로 안내)
+ * @param refText      지난 분기 리포트 원문 — 문체·구성 참고 (수치 이월 금지)
+ * @param dealText     당분기 매입매각 거래 리스트 — 사실 데이터
+ * @param researchText 타사 리서치 컨텍스트(buildResearchContext 결과)
+ * 반환: 부분 모델 { keypoints?, leasePoints?, dealStats?, dealPoints?, regionPoints? }
+ */
 export async function generateAiDraft(model, refText = '', dealText = '', researchText = '') {
   const v = model.vacancy;
-  const lines = [];
-  lines.push(`분기: ${quarterLabel(model.quarter,'kr')} (전분기 ${quarterLabel(model.prevQuarter,'kr')})`);
-  lines.push(`서울 전체 공실률: ${fmtRate(v.total.prev)} → ${fmtRate(v.total.cur)} (${v.buildingCount}동 기준)`);
+  const dataLines = [];
+  dataLines.push(`분기: ${quarterLabel(model.quarter,'kr')} (전분기 ${quarterLabel(model.prevQuarter,'kr')})`);
+  dataLines.push(`서울 전체 공실률: ${fmtRate(v.total.prev)} → ${fmtRate(v.total.cur)} (${v.buildingCount}동 기준)`);
   MR_REGIONS.forEach(r => {
     const rv = v.regions[r];
-    lines.push(`${MR_REGION_SHORT[r]}: ${fmtRate(rv.prev) || '?'} → ${fmtRate(rv.cur) || '?'}`);
+    dataLines.push(`${MR_REGION_SHORT[r]}: ${fmtRate(rv.prev) || '?'} → ${fmtRate(rv.cur) || '?'}`);
   });
   MR_REGIONS.forEach(r => {
     const b = model.regions[r];
-    if (b.leases.length) lines.push(`${MR_REGION_SHORT[r]} 임대차 계약: ` + b.leases.map(l => `${l.building}(${l.areaPy}평, ${l.tenant})`).join(', '));
-    if (b.deals.length)  lines.push(`${MR_REGION_SHORT[r]} 매입매각: ` + b.deals.map(d => `${d.asset}(${d.price}억, ${d.sellerBuyer})`).join(', '));
+    if (b.leases.length) dataLines.push(`${MR_REGION_SHORT[r]} 임대차 계약: ` + b.leases.map(l => `${l.building}(${l.areaPy}평, ${l.tenant})`).join(', '));
+    if (b.deals.length)  dataLines.push(`${MR_REGION_SHORT[r]} 매입매각: ` + b.deals.map(d => `${d.asset}(${d.price}억, ${d.sellerBuyer})`).join(', '));
   });
 
   // 지난 분기 리포트 참고자료 (📎 첨부 시) — 문체·구성 참고용, 수치·사실 이월 금지
@@ -494,24 +504,22 @@ export async function generateAiDraft(model, refText = '', dealText = '', resear
   // 이번 분기 매입매각 거래 리스트 (🏢 첨부 시) — 사실 데이터로 사용
   const dealBlock = dealText
     ? ['## 이번 분기 매입매각 자료 (사실 데이터 — 이 자료의 거래만 사용)',
-       '아래는 당 분기 매입매각 거래 리스트 원문이다. 이 자료를 근거로:',
-       '① dealStats 3개: 총 거래규모(조/억원)·거래 건수·평균 평당가 등 자료에서 집계 가능한 핵심 지표. value=수치, label=지표명, sub=부연(자료에 없으면 빈 문자열).',
-       '② dealPoints 2개: 매입매각 시장 요약 키포인트.',
-       '③ 각 권역(regionPoints)의 deals 배열: 자료의 거래를 권역별로 분류해 표 행으로 정리.',
+       '아래는 당 분기 매입매각 거래 리스트 원문이다. 활용 규칙:',
+       '① 거래 규모·건수·평당가 등 집계 지표와 시장 요약의 근거로 사용하라.',
+       '② 권역별 거래 표(deals)는 이 자료의 거래를 해당 권역으로 분류해 작성하라.',
        '   asset=자산명, price=매매가(억원, 숫자만), pricePy=평당가(만원, 숫자만), sellerBuyer="매도자→매수자".',
-       '   권역 구분이 불명확한 거래는 Others 에 넣어라. 자료에 없는 값은 빈 문자열.',
-       '④ 각 권역의 dealInsight: 해당 권역 거래 특징 요약.',
-       '⑤ 자료에 "거래예정" 섹션이 있으면: 당분기 실적 거래가 1건 이상 있는 권역에서는 예정 사례를 쓰지 마라.',
-       '   실적 거래가 아예 없는(0건) 권역만 예정 사례로 채우되, asset 은 "자산명 [예정]" 형식으로 빌딩명 옆에 [예정] 을 붙이고,',
-       '   그 세부 내용(우협 선정·실사 진행·클로징 예정 시점 등)은 해당 권역 dealInsight body 에 기술하라. dealStats 집계에는 예정 사례를 포함하지 마라.',
-       '⑥ 각 거래의 비고("Deal 관련 세부 내용")는 deals 표에 넣지 말고, 특기할 만한 내용(우선매수권 행사·사옥 매입·Share deal 등)을 해당 권역 dealInsight 에 자연스럽게 녹여라.',
+       '   권역 구분이 불명확한 거래는 Others 로 분류하라. 자료에 없는 값은 빈 문자열.',
+       '③ "거래예정" 섹션이 있으면: 당분기 실적 거래가 1건 이상 있는 권역에서는 예정 사례를 쓰지 마라.',
+       '   실적 거래가 아예 없는(0건) 권역만 예정 사례로 채우되 asset 은 "자산명 [예정]" 형식으로 쓰고,',
+       '   세부 내용(우협 선정·실사·클로징 예정 등)은 해당 권역 dealInsight body 에 기술하라. 집계 지표에는 예정 사례를 포함하지 마라.',
+       '④ 각 거래의 비고("Deal 관련 세부 내용")는 deals 표에 넣지 말고, 특기 사항(우선매수권·사옥 매입·Share deal 등)을 dealInsight 에 자연스럽게 녹여라.',
        '---', String(dealText).slice(0, 9000), '---', '']
     : ['(매입매각 자료 미첨부 — deals 표 행과 dealStats 의 value 는 빈 값으로 두어라.',
        ' 단 dealPoints 와 각 권역 dealInsight 는 타사 리서치 자료가 있으면 그 정성적 해석을 근거로 반드시 작성하라(수치·기관명 인용 금지). 리서치도 없으면 공실률 추이 등 가용 근거로 시장 분위기를 1~2문장 서술하라)', ''];
 
-  // 타사 리서치 컨텍스트 (📚 선택 시) — 워딩·해석 참고 전용, 수치 인용 금지
+  // 타사 리서치 컨텍스트 (📚 선택 시)
   const researchBlock = researchText
-    ? ['## 타사 리서치 자료 (워딩·해석 참고 전용)',
+    ? ['## 타사 리서치 자료 (참고)',
        '아래는 전문 리서치 기관의 동일·직전 분기 오피스 시장 자료 요약이다. 활용 규칙:',
        '① 시장 해석·용어·전망 표현(예: 임차 우위 전환, 공급 부담, Flight to Quality, 우량 자산 선호 등)의 워딩·관점을 참고하고,',
        '   수급 동향·업종별 임차 수요·공급 일정·투자 심리 같은 정성적 내용은 문구 작성의 근거로 적극 활용하라.',
@@ -522,49 +530,83 @@ export async function generateAiDraft(model, refText = '', dealText = '', resear
        '---', String(researchText).slice(0, 9000), '---', '']
     : [];
 
-  const prompt = [
+  const style = [
     '너는 상업용 부동산(서울 오피스) 시장 리포트 작성 전문가다.',
-    '아래 데이터만 근거로 오피스 마켓 리포트 초안 문구를 작성하라. 데이터에 없는 사실을 지어내지 마라.',
+    '아래 데이터만 근거로 리포트 문구를 작성하라. 데이터에 없는 사실(구체적 계약·거래·수치)을 지어내지 마라.',
     '문체: 개조식 종결("~함", "~됨", "~임"), 각 body 는 1~2문장으로 간결하게.',
-    '',
-    '## 데이터', ...lines, '',
-    ...refBlock,
-    ...dealBlock,
-    ...researchBlock,
-    '## 출력 (JSON만, 코드블록 금지)',
-    '{',
+  ];
+  const fillRules = [
+    '## 채움 원칙 (중요 — 반드시 준수)',
+    '모든 title/body/big/label 은 빈 문자열 금지 — 전 항목을 채워라.',
+    '근거 우선순위: ①자사 수치 데이터 ②매입매각 첨부자료 ③타사 리서치의 정성적 해석 ④공실률 추이 기반 자체 해석.',
+    '상위 근거가 없으면 하위 근거로 서술하되, 사실은 지어내지 마라 — 해석·전망 톤으로 작성하라.',
+    '빈 값 허용 예외(사실 데이터 필수 항목만): deals 표 행(근거 자료가 없으면 빈 배열), dealStats 의 value(집계 근거가 없으면 빈 문자열).',
+  ];
+  const ctx = ['', '## 데이터', ...dataLines, '', ...refBlock, ...dealBlock, ...researchBlock];
+
+  // 콜 1: 요약부 (keypoints/leasePoints/dealStats/dealPoints)
+  const summaryPrompt = [...style, ...ctx,
+    '## 출력 (JSON만, 코드블록 금지)', '{',
     ' "keypoints":[{"title":"줄바꿈은 \\n","body":""} ×4],',
     ' "leasePoints":[{"title":"","body":""} ×3],',
     ' "dealStats":[{"value":"","label":"","sub":""} ×3],',
-    ' "dealPoints":[{"title":"","body":""} ×2],',
-    ' "regionPoints":{ "CBD":{"points":[{"title":"","body":""} ×3],',
-    '   "keywords":[{"big":"","label":"","sub":""} ×3],',
-    '   "leaseInsight":{"title":"","body":""}, "dealInsight":{"title":"","body":""},',
-    '   "deals":[{"asset":"","price":"","pricePy":"","sellerBuyer":""}]},',
-    '   "GBD":{...}, "YBD":{...}, "BBD":{...}, "Others":{...} }',
-    '}',
-    '',
-    '## 채움 원칙 (중요 — 반드시 준수)',
-    '모든 keypoints·leasePoints·points·keywords·leaseInsight 의 title/body/big/label 은 빈 문자열 금지 — 전 항목을 채워라.',
-    '근거 우선순위: ①자사 수치 데이터 ②매입매각 첨부자료 ③타사 리서치의 정성적 해석 ④공실률 추이 기반 자체 해석.',
-    '상위 근거가 없으면 하위 근거로 서술하되, 사실은 지어내지 마라 — 구체적 계약·거래·수치의 창작은 금지하고 해석·전망 톤으로 작성하라.',
-    'keywords 규칙: 각 권역 3개. 1번은 공실률 수치(제공값 유지·보완 가능), 2·3번은 해당 권역 핵심 트렌드.',
-    '  big=짧은 수치 또는 2~6자 핵심어(예: "임차우위", "공급부담", "▲수요회복"), label=키워드명, sub=한 줄 부연. 수치 근거가 없으면 big 에 핵심어를 써라.',
-    '빈 값 허용 예외(사실 데이터 필수 항목만): deals 표 행(근거 자료가 없으면 빈 배열), dealStats 의 value(집계 근거가 없으면 빈 문자열).',
-  ].join('\n');
+    ' "dealPoints":[{"title":"","body":""} ×2]', '}', '',
+    'dealStats: 매입매각 자료에서 집계 가능한 핵심 지표 3개(총 거래규모·건수·평균 평당가 등). value=수치, label=지표명, sub=부연.',
+    ...fillRules].join('\n');
 
+  // 콜 2~6: 권역별 (병렬) — 한 권역 분량만 출력
+  const regionPrompt = r => [...style, ...ctx,
+    `## 출력 — ${MR_REGION_LABEL[r]} (${r}) 이 한 권역의 내용만 작성하라. (JSON만, 코드블록 금지)`, '{',
+    ' "points":[{"title":"","body":""} ×3],',
+    ' "keywords":[{"big":"","label":"","sub":""} ×3],',
+    ' "leaseInsight":{"title":"","body":""}, "dealInsight":{"title":"","body":""},',
+    ' "deals":[{"asset":"","price":"","pricePy":"","sellerBuyer":""}]', '}', '',
+    `keywords 규칙: 3개. 1번은 ${MR_REGION_SHORT[r]} 공실률 수치(제공값 유지·보완 가능), 2·3번은 이 권역 핵심 트렌드.`,
+    '  big=짧은 수치 또는 2~6자 핵심어(예: "임차우위", "공급부담", "▲수요회복"), label=키워드명, sub=한 줄 부연. 수치 근거가 없으면 big 에 핵심어를 써라.',
+    `deals: 매입매각 자료에서 ${MR_REGION_SHORT[r]} 권역 거래만 표 행으로 작성. 근거 자료가 없으면 빈 배열.`,
+    ...fillRules].join('\n');
+
+  const [sumRes, ...regRes] = await Promise.allSettled([
+    callClaudeJson(summaryPrompt, 6000, '요약'),
+    ...MR_REGIONS.map(r => callClaudeJson(regionPrompt(r), 6000, r)),
+  ]);
+
+  const ai = { regionPoints: {} };
+  let truncated = false;
+  const failed = [];
+  if (sumRes.status === 'fulfilled') { Object.assign(ai, sumRes.value.parsed); truncated ||= sumRes.value.truncated; }
+  else { failed.push('요약'); console.warn('[mreport] 요약 AI 실패:', sumRes.reason); }
+  MR_REGIONS.forEach((r, i) => {
+    const res = regRes[i];
+    if (res.status === 'fulfilled') { ai.regionPoints[r] = res.value.parsed; truncated ||= res.value.truncated; }
+    else { failed.push(MR_REGION_SHORT[r]); console.warn(`[mreport] ${r} 권역 AI 실패:`, res.reason); }
+  });
+  window._mrAiTruncated = truncated;
+  window._mrAiFailed = failed;
+  if (failed.length >= 1 + MR_REGIONS.length) {
+    throw new Error(`AI 호출 전체 실패 (${(sumRes.reason && sumRes.reason.message) || ''})`);
+  }
+  return ai;
+}
+
+/** 프록시 1회 호출 → JSON 파싱. 절단 여부를 호출 단위로 반환 (병렬 안전) */
+async function callClaudeJson(prompt, maxTokens, tag) {
   const res = await fetch(`${BACKEND}/api/claude-proxy`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 24000,          // v1.5.2: 실측 — 2개 권역 출력에 12000 소진(GBD 절단) → 5권역 여유분 24000
+      max_tokens: maxTokens,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
   if (!res.ok) throw new Error(`claude-proxy ${res.status}`);
   const data = await res.json();
-  return parseAiJson(data.content?.[0]?.text || '');
+  if (data.stop_reason || data.usage) {
+    console.log(`[mreport] AI ${tag}: stop=${data.stop_reason || '?'} · 출력 ${(data.usage && data.usage.output_tokens) ?? '?'}tok`);
+  }
+  const parsed = parseAiJson(data.content?.[0]?.text || '');
+  return { parsed, truncated: window._mrAiTruncated === true };   // parseAiJson 직후 동기 판독 — 경쟁 없음
 }
 
 /* ── AI 응답 JSON 파서 (v1.2.1) ──

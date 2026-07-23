@@ -7,8 +7,8 @@ import {
   buildDraftModel, loadModel, saveModel,
   generateAiDraft, mergeAiDraft, quarterLabel,
   loadResearchDocsForQuarter, buildResearchContext,
-} from './mreport-data.js?v=1.5.2';
-import { renderReport, collectModel } from './mreport-render.js?v=1.5.2';
+} from './mreport-data.js?v=1.6.0';
+import { renderReport, collectModel } from './mreport-render.js?v=1.6.0';
 
 const $ = sel => document.querySelector(sel);
 
@@ -189,10 +189,15 @@ const MR = {
       this.loadingSteps(null, 3);
       mergeAiDraft(this.model, ai);
       renderReport(this.model);
-      if (window._mrAiTruncated) {
-        this.banner('⚠ AI 응답이 중간에 잘려 뒤쪽 권역 일부만 반영됐습니다 — 🤖 AI 문구 초안을 한 번 더 실행하면 빈 항목이 채워집니다.');
+      const failed = window._mrAiFailed || [];
+      if (window._mrAiTruncated || failed.length) {
+        const parts = [];
+        if (failed.length) parts.push(`일부 호출 실패: ${failed.join('·')}`);
+        if (window._mrAiTruncated) parts.push('일부 응답 절단');
+        this.banner(`⚠ ${parts.join(' / ')} — 🤖 AI 문구 초안을 다시 실행해 완성하세요. (성공한 권역 문구는 이미 반영됨)`);
         this.toast('AI 초안 부분 반영됨 — 재실행 권장', 'error');
       } else {
+        this.banner('');
         this.toast('AI 초안이 반영되었습니다. 문구를 검토·수정하세요.');
       }
     } catch (err) {
@@ -265,7 +270,7 @@ const MR = {
     collectModel(this.model);
     this.loadingSteps(['리포트 데이터 수집', 'PPTX 슬라이드 조립', '파일 생성'], 1);
     try {
-      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.5.2');
+      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.6.0');
       this.loadingSteps(null, 2);
       const fileName = await exportReportPPTX(this.model);
       this.toast(`PPTX 저장 완료: ${fileName}`);
