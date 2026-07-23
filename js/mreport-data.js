@@ -307,6 +307,13 @@ function seedRuleBasedTexts(model) {
           + `${qL} 기준 집계됨.`,
     };
     model.regions[r].keywords[0] = { big: fmtRate(rv.cur), label: `${MR_REGION_SHORT[r]} 공실률`, sub: rv.prev != null ? `전분기 ${fmtRate(rv.prev)}` : '' };
+    if (rv.prev != null) {
+      model.regions[r].keywords[1] = {
+        big: d.dir === 'flat' ? '보합' : `${d.arrow}${d.abs}%p`,
+        label: '전분기 대비',
+        sub: `${quarterLabel(model.prevQuarter)} → ${quarterLabel(model.quarter)}`,
+      };
+    }
   });
 }
 
@@ -499,13 +506,16 @@ export async function generateAiDraft(model, refText = '', dealText = '', resear
        '   그 세부 내용(우협 선정·실사 진행·클로징 예정 시점 등)은 해당 권역 dealInsight body 에 기술하라. dealStats 집계에는 예정 사례를 포함하지 마라.',
        '⑥ 각 거래의 비고("Deal 관련 세부 내용")는 deals 표에 넣지 말고, 특기할 만한 내용(우선매수권 행사·사옥 매입·Share deal 등)을 해당 권역 dealInsight 에 자연스럽게 녹여라.',
        '---', String(dealText).slice(0, 9000), '---', '']
-    : ['(매입매각 자료 미첨부 — dealStats/dealPoints/deals/dealInsight 는 모두 빈 값으로 두어라)', ''];
+    : ['(매입매각 자료 미첨부 — deals 표 행과 dealStats 의 value 는 빈 값으로 두어라.',
+       ' 단 dealPoints 와 각 권역 dealInsight 는 타사 리서치 자료가 있으면 그 정성적 해석을 근거로 반드시 작성하라(수치·기관명 인용 금지). 리서치도 없으면 공실률 추이 등 가용 근거로 시장 분위기를 1~2문장 서술하라)', ''];
 
   // 타사 리서치 컨텍스트 (📚 선택 시) — 워딩·해석 참고 전용, 수치 인용 금지
   const researchBlock = researchText
     ? ['## 타사 리서치 자료 (워딩·해석 참고 전용)',
        '아래는 전문 리서치 기관의 동일·직전 분기 오피스 시장 자료 요약이다. 활용 규칙:',
-       '① 시장 해석·용어·전망 표현(예: 임차 우위 전환, 공급 부담, Flight to Quality, 우량 자산 선호 등)의 워딩과 관점만 참고하라.',
+       '① 시장 해석·용어·전망 표현(예: 임차 우위 전환, 공급 부담, Flight to Quality, 우량 자산 선호 등)의 워딩·관점을 참고하고,',
+       '   수급 동향·업종별 임차 수요·공급 일정·투자 심리 같은 정성적 내용은 문구 작성의 근거로 적극 활용하라.',
+       '   특히 자사 계약·거래 데이터가 없는 권역의 points·keywords·insight 를 채울 때 이 자료가 핵심 근거다.',
        '② 공실률·임대료·거래 수치는 "데이터" 및 "매입매각 자료" 섹션의 값만 사용하라. 아래 자료의 수치를 본문에 옮기거나 자사 수치와 병기하지 마라.',
        '③ 리서치 기관명·중개법인명을 본문에 절대 표기하지 마라. 필요 시 "전문 리서치 자료 기준" 등 포괄 표현만 사용하라.',
        '④ 아래 자료의 논조가 자사 데이터의 방향과 다르면 자사 데이터를 우선하라.',
@@ -528,11 +538,19 @@ export async function generateAiDraft(model, refText = '', dealText = '', resear
     ' "dealStats":[{"value":"","label":"","sub":""} ×3],',
     ' "dealPoints":[{"title":"","body":""} ×2],',
     ' "regionPoints":{ "CBD":{"points":[{"title":"","body":""} ×3],',
+    '   "keywords":[{"big":"","label":"","sub":""} ×3],',
     '   "leaseInsight":{"title":"","body":""}, "dealInsight":{"title":"","body":""},',
     '   "deals":[{"asset":"","price":"","pricePy":"","sellerBuyer":""}]},',
     '   "GBD":{...}, "YBD":{...}, "BBD":{...}, "Others":{...} }',
     '}',
-    '데이터가 없는 항목(임대차/매입매각 미입력 권역의 insight 등)은 빈 문자열, deals 는 빈 배열로 두어라.',
+    '',
+    '## 채움 원칙 (중요 — 반드시 준수)',
+    '모든 keypoints·leasePoints·points·keywords·leaseInsight 의 title/body/big/label 은 빈 문자열 금지 — 전 항목을 채워라.',
+    '근거 우선순위: ①자사 수치 데이터 ②매입매각 첨부자료 ③타사 리서치의 정성적 해석 ④공실률 추이 기반 자체 해석.',
+    '상위 근거가 없으면 하위 근거로 서술하되, 사실은 지어내지 마라 — 구체적 계약·거래·수치의 창작은 금지하고 해석·전망 톤으로 작성하라.',
+    'keywords 규칙: 각 권역 3개. 1번은 공실률 수치(제공값 유지·보완 가능), 2·3번은 해당 권역 핵심 트렌드.',
+    '  big=짧은 수치 또는 2~6자 핵심어(예: "임차우위", "공급부담", "▲수요회복"), label=키워드명, sub=한 줄 부연. 수치 근거가 없으면 big 에 핵심어를 써라.',
+    '빈 값 허용 예외(사실 데이터 필수 항목만): deals 표 행(근거 자료가 없으면 빈 배열), dealStats 의 value(집계 근거가 없으면 빈 문자열).',
   ].join('\n');
 
   const res = await fetch(`${BACKEND}/api/claude-proxy`, {
@@ -632,6 +650,13 @@ export function mergeAiDraft(model, ai) {
     const src = ai.regionPoints?.[r];
     if (!src) return;
     put(model.regions[r].points, src.points);
+    // 권역 키워드 (big/label/sub) — AI가 값을 준 필드만 교체, 빈 값은 기존(시드) 유지
+    if (Array.isArray(src.keywords)) {
+      src.keywords.slice(0, 3).forEach((k, i) => {
+        if (!model.regions[r].keywords[i]) model.regions[r].keywords[i] = { big:'', label:'', sub:'' };
+        ['big', 'label', 'sub'].forEach(f => { if (k?.[f]) model.regions[r].keywords[i][f] = String(k[f]); });
+      });
+    }
     ['leaseInsight', 'dealInsight'].forEach(k => {
       if (src[k]?.title) model.regions[r][k].title = src[k].title;
       if (src[k]?.body)  model.regions[r][k].body  = src[k].body;
