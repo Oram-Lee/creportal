@@ -566,10 +566,12 @@ export async function generateAiDraft(model, refText = '', dealText = '', resear
     `deals: 매입매각 자료에서 ${MR_REGION_SHORT[r]} 권역 거래만 표 행으로 작성. 근거 자료가 없으면 빈 배열.`,
     ...fillRules].join('\n');
 
-  const [sumRes, ...regRes] = await Promise.allSettled([
-    callClaudeJson(summaryPrompt, 6000, '요약'),
-    ...MR_REGIONS.map(r => callClaudeJson(regionPrompt(r), 6000, r)),
-  ]);
+  // 동시 2개 풀 실행 — 6개 동시 발사는 프록시(Render)·API 동시 한도에 걸려 뒤쪽 콜이 실패함 (v1.6.1)
+  const thunks = [
+    () => callClaudeJson(summaryPrompt, 6000, '요약'),
+    ...MR_REGIONS.map(r => () => callClaudeJson(regionPrompt(r), 6000, MR_REGION_SHORT[r])),
+  ];
+  const [sumRes, ...regRes] = await runPool(thunks, 2);
 
   const ai = { regionPoints: {} };
   let truncated = false;
@@ -589,24 +591,48 @@ export async function generateAiDraft(model, refText = '', dealText = '', resear
   return ai;
 }
 
-/** 프록시 1회 호출 → JSON 파싱. 절단 여부를 호출 단위로 반환 (병렬 안전) */
-async function callClaudeJson(prompt, maxTokens, tag) {
-  const res = await fetch(`${BACKEND}/api/claude-proxy`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!res.ok) throw new Error(`claude-proxy ${res.status}`);
-  const data = await res.json();
-  if (data.stop_reason || data.usage) {
-    console.log(`[mreport] AI ${tag}: stop=${data.stop_reason || '?'} · 출력 ${(data.usage && data.usage.output_tokens) ?? '?'}tok`);
+/** 동시 실행 수를 제한하는 풀 러너 — allSettled 와 동일한 {status,value|reason}[] 을 입력 순서대로 반환 */
+async function runPool(thunks, limit = 2) {
+  const results = new Array(thunks.length);
+  let idx = 0;
+  const worker = async () => {
+    while (idx < thunks.length) {
+      const i = idx++;
+      try { results[i] = { status: 'fulfilled', value: await thunks[i]() }; }
+      catch (e) { results[i] = { status: 'rejected', reason: e }; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, thunks.length) }, worker));
+  return results;
+}
+
+/** 프록시 1회 호출 → JSON 파싱. 절단 여부를 호출 단위로 반환 (병렬 안전). 실패 시 2.5초 후 1회 자동 재시도 */
+async function callClaudeJson(prompt, maxTokens, tag, retryLeft = 1) {
+  try {
+    const res = await fetch(`${BACKEND}/api/claude-proxy`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: maxTokens,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    if (!res.ok) throw new Error(`claude-proxy ${res.status}`);
+    const data = await res.json();
+    if (data.stop_reason || data.usage) {
+      console.log(`[mreport] AI ${tag}: stop=${data.stop_reason || '?'} · 출력 ${(data.usage && data.usage.output_tokens) ?? '?'}tok`);
+    }
+    const parsed = parseAiJson(data.content?.[0]?.text || '');
+    return { parsed, truncated: window._mrAiTruncated === true };   // parseAiJson 직후 동기 판독 — 경쟁 없음
+  } catch (e) {
+    if (retryLeft > 0) {
+      console.warn(`[mreport] AI ${tag} 실패 → 2.5초 후 재시도:`, e.message || e);
+      await new Promise(r => setTimeout(r, 2500));
+      return callClaudeJson(prompt, maxTokens, tag, retryLeft - 1);
+    }
+    throw e;
   }
-  const parsed = parseAiJson(data.content?.[0]?.text || '');
-  return { parsed, truncated: window._mrAiTruncated === true };   // parseAiJson 직후 동기 판독 — 경쟁 없음
 }
 
 /* ── AI 응답 JSON 파서 (v1.2.1) ──

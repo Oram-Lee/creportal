@@ -7,8 +7,8 @@ import {
   buildDraftModel, loadModel, saveModel,
   generateAiDraft, mergeAiDraft, quarterLabel,
   loadResearchDocsForQuarter, buildResearchContext,
-} from './mreport-data.js?v=1.6.0';
-import { renderReport, collectModel } from './mreport-render.js?v=1.6.0';
+} from './mreport-data.js?v=1.6.1';
+import { renderReport, collectModel } from './mreport-render.js?v=1.6.1';
 
 const $ = sel => document.querySelector(sel);
 
@@ -176,7 +176,7 @@ const MR = {
   async generateAiTexts() {
     if (!this.model) return;
     collectModel(this.model);            // 수동 입력값(공실률·계약)을 근거에 포함
-    this.loadingSteps(['입력 데이터 정리', '리서치 컨텍스트 조립', 'AI 문구 생성 (10~20초)', '리포트 반영'], 1);
+    this.loadingSteps(['입력 데이터 정리', '리서치 컨텍스트 조립', 'AI 문구 생성 (30~90초, 6분할 호출)', '리포트 반영'], 1);
     try {
       // 리서치 컨텍스트 — 선택 분기와 모델 분기가 일치할 때만 사용 (분기 전환 후 잔존 선택 방지)
       let researchText = '';
@@ -270,7 +270,7 @@ const MR = {
     collectModel(this.model);
     this.loadingSteps(['리포트 데이터 수집', 'PPTX 슬라이드 조립', '파일 생성'], 1);
     try {
-      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.6.0');
+      const { exportReportPPTX } = await import('./mreport-pptx.js?v=1.6.1');
       this.loadingSteps(null, 2);
       const fileName = await exportReportPPTX(this.model);
       this.toast(`PPTX 저장 완료: ${fileName}`);

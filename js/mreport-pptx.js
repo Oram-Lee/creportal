@@ -21,7 +21,7 @@
 import {
   MR_REGIONS, MR_REGION_LABEL, MR_REGION_SHORT,
   quarterLabel, deltaText, fmtRate,
-} from './mreport-data.js?v=1.6.0';
+} from './mreport-data.js?v=1.6.1';
 
 /* ── 팔레트 (market-report.html :root 동일) ── */
 const C = {
