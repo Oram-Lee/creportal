@@ -84,58 +84,13 @@ async function request(r, method, body, silent) {
     return text ? JSON.parse(text) : null;
 }
 
-/**
- * SDK DataSnapshot 호환 스냅샷 생성 (재귀).
- * portal-auth.js의 usersSnap.forEach 등 SDK API를 그대로 지원한다.
- * - forEach: 자식 스냅샷을 키 순서대로 순회, 콜백이 true 반환 시 중단 (SDK 동일)
- * - child(path): 하위 경로 스냅샷 반환 ('a/b/c' 형태 지원)
- * - hasChild / hasChildren / numChildren / size / toJSON 지원
- * - RTDB가 정수 키를 배열로 반환하는 경우도 처리
- */
-function makeSnapshot(key, value) {
-    const childEntries = () => {
-        if (value === null || value === undefined || typeof value !== 'object') return [];
-        return Array.isArray(value)
-            ? value.map((v, i) => [String(i), v]).filter(([, v]) => v !== null && v !== undefined)
-            : Object.entries(value).filter(([, v]) => v !== null && v !== undefined);
-    };
-    return {
-        key,
-        val: () => (value === undefined ? null : value),
-        exists: () => value !== null && value !== undefined,
-        toJSON: () => (value === undefined ? null : value),
-        forEach: (action) => {
-            for (const [k, v] of childEntries()) {
-                if (action(makeSnapshot(k, v)) === true) return true;
-            }
-            return false;
-        },
-        child: (path) => {
-            const segs = String(path).split('/').filter(s => s !== '');
-            let cur = value;
-            for (const s of segs) {
-                cur = (cur !== null && cur !== undefined && typeof cur === 'object') ? cur[s] : undefined;
-            }
-            return makeSnapshot(segs.length ? segs[segs.length - 1] : key, cur === undefined ? null : cur);
-        },
-        hasChild: (path) => {
-            const segs = String(path).split('/').filter(s => s !== '');
-            let cur = value;
-            for (const s of segs) {
-                if (cur === null || cur === undefined || typeof cur !== 'object') return false;
-                cur = cur[s];
-            }
-            return cur !== null && cur !== undefined;
-        },
-        hasChildren: () => childEntries().length > 0,
-        numChildren: () => childEntries().length,
-        get size() { return childEntries().length; }
-    };
-}
-
 export async function get(r) {
     const value = await request(r, 'GET');
-    return makeSnapshot(r.key, value);
+    return {
+        key: r.key,
+        val: () => value,
+        exists: () => value !== null && value !== undefined
+    };
 }
 
 export async function set(r, value) {
