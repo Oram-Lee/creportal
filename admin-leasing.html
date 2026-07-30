@@ -12,7 +12,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <!-- database-compat 제거: 사내망이 RTDB 샤드 호스트(s-gke-*)의 WebSocket을 차단.
+         firebase.database() 대신 아래 REST 어댑터 사용. storage-compat은 별도 도메인이라 유지. -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
     <style>
         :root {
@@ -1639,7 +1640,71 @@
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
-        const db = firebase.database();
+        // ===== RTDB REST 어댑터 (database-compat 대체) =====
+        // 네임스페이스 원본 호스트로만 통신 → wss:// 연결이 발생하지 않음.
+        // 이 페이지 사용 API(once/set/update/remove/push().key/루트 update)만 구현.
+        const DATABASE_URL = firebaseConfig.databaseURL;
+
+        const _PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+        let _lastPushTime = 0;
+        const _lastRandChars = [];
+        function _pushId() {
+            let now = Date.now();
+            const dup = (now === _lastPushTime);
+            _lastPushTime = now;
+            const timeChars = new Array(8);
+            for (let i = 7; i >= 0; i--) { timeChars[i] = _PUSH_CHARS.charAt(now % 64); now = Math.floor(now / 64); }
+            let id = timeChars.join('');
+            if (!dup) {
+                for (let i = 0; i < 12; i++) _lastRandChars[i] = Math.floor(Math.random() * 64);
+            } else {
+                let i = 11;
+                for (; i >= 0 && _lastRandChars[i] === 63; i--) _lastRandChars[i] = 0;
+                _lastRandChars[i]++;
+            }
+            for (let i = 0; i < 12; i++) id += _PUSH_CHARS.charAt(_lastRandChars[i]);
+            return id;
+        }
+
+        async function _rtdbRequest(segs, method, body) {
+            const url = DATABASE_URL + '/' + segs.map(encodeURIComponent).join('/') + '.json';
+            const init = { method: method, cache: 'no-store' };
+            if (body !== undefined) {
+                init.headers = { 'Content-Type': 'application/json' };
+                init.body = JSON.stringify(body);
+            }
+            const res = await fetch(url, init);
+            if (!res.ok) {
+                const detail = await res.text().catch(() => '');
+                throw new Error('[RTDB ' + method + ' /' + segs.join('/') + '] ' + res.status + ' ' + detail.slice(0, 200));
+            }
+            const text = await res.text();
+            return text ? JSON.parse(text) : null;
+        }
+
+        const db = {
+            ref: function (path) {
+                const segs = String(path === undefined ? '' : path).split('/').filter(function (s) { return s !== ''; });
+                return {
+                    key: segs.length ? segs[segs.length - 1] : null,
+                    once: async function (eventType) {
+                        if (eventType !== 'value') throw new Error("[RTDB REST] once('value')만 지원합니다: " + eventType);
+                        const value = await _rtdbRequest(segs, 'GET');
+                        return {
+                            key: segs.length ? segs[segs.length - 1] : null,
+                            val: function () { return value; },
+                            exists: function () { return value !== null && value !== undefined; }
+                        };
+                    },
+                    set: function (v) { return _rtdbRequest(segs, 'PUT', v === undefined ? null : v); },
+                    update: function (v) { return _rtdbRequest(segs, 'PATCH', v); },
+                    remove: function () { return _rtdbRequest(segs, 'DELETE'); },
+                    push: function () { return db.ref(segs.concat(_pushId()).join('/')); }
+                };
+            }
+        };
+        window.__creDbMode = 'rest';
+        console.log('[admin-leasing] REST 어댑터 모드 —', DATABASE_URL);
         const storage = firebase.storage();
         
         // 빌딩 캐시 (메모리)
