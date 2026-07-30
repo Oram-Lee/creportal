@@ -555,9 +555,8 @@
     <!-- Firebase -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script type="module">
-        // 공용 REST 어댑터 — 사내망이 RTDB 샤드 호스트(s-gke-*)의 WebSocket을 차단하므로
-        // SDK getDatabase() 대신 REST 어댑터를 사용한다. 초기화는 어댑터 내부에서 수행됨.
-        import { db, ref, get, set, push, update, remove } from "./js/portal-firebase.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+        import { getDatabase, ref, get, set, push } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
         // ========== 로그인 체크 ==========
         const savedUser = localStorage.getItem('crePortalUser');
@@ -586,7 +585,18 @@
             if (btn) btn.textContent = next === 'dark' ? '☀️' : '🌙';
         };
 
-        // (제거) firebaseConfig/initializeApp/getDatabase — 어댑터 내부에서 초기화됨
+        const firebaseConfig = {
+            apiKey: "AIzaSyDTEJnDQzgY6FQABVBcvNsKvwDLJkmj26s",
+            authDomain: "cre-unified.firebaseapp.com",
+            databaseURL: "https://cre-unified-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "cre-unified",
+            storageBucket: "cre-unified.firebasestorage.app",
+            messagingSenderId: "161207314802",
+            appId: "1:161207314802:web:777e72ae0e190e73ebd5eb"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
         
         // 백엔드 API URL
         const API_BASE_URL = 'https://portal-dsyl.onrender.com';

@@ -399,12 +399,21 @@ input{font-family:inherit;font-size:16px}
 <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=1ac6eee9b1e4c2e0cc6f1d1ca1a6a559&libraries=clusterer,services&autoload=false"></script>
 
 <script type="module">
-// ===== Firebase — REST 어댑터 (데스크톱과 동일 경로) =====
-// 사내망 URL 필터가 RTDB 샤드 호스트(s-gke-*.firebasedatabase.app)의
-// WebSocket 연결을 차단하므로, SDK(getDatabase) 대신 네임스페이스 원본
-// 호스트로만 통신하는 REST 어댑터(portal-firebase.js)를 공용으로 사용한다.
-// 초기화(initializeApp)는 portal-firebase.js 내부에서 수행됨.
-import { db, ref, get, set, push, update, remove } from "./js/portal-firebase.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+import { getDatabase, ref, get, set, push, update, remove } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+// ===== Firebase (실제 CRE Portal 설정) =====
+const firebaseConfig = {
+  apiKey: "AIzaSyDTEJnDQzgY6FQABVBcvNsKvwDLJkmj26s",
+  authDomain: "cre-unified.firebaseapp.com",
+  databaseURL: "https://cre-unified-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "cre-unified",
+  storageBucket: "cre-unified.firebasestorage.app",
+  messagingSenderId: "161207314802",
+  appId: "1:161207314802:web:777e72ae0e190e73ebd5eb"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 // ===== 전역 상태 =====
 const S = {

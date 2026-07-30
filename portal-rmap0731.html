@@ -8,7 +8,7 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
-<!-- database-compat 제거: 사내망 wss 차단 대응, 아래 REST 어댑터 사용 (auth/storage-compat은 별도 도메인이라 유지) -->
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-storage-compat.js"></script>
 
 <!-- 카카오 지도 -->
@@ -3730,65 +3730,7 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const auth    = firebase.auth();
-// ===== RTDB REST 어댑터 (database-compat 대체) — wss 연결 미발생 =====
-const RTDB_URL = firebaseConfig.databaseURL;
-const _PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
-let _lastPushTime = 0; const _lastRandChars = [];
-function _pushId() {
-  let now = Date.now(); const dup = (now === _lastPushTime); _lastPushTime = now;
-  const t = new Array(8);
-  for (let i = 7; i >= 0; i--) { t[i] = _PUSH_CHARS.charAt(now % 64); now = Math.floor(now / 64); }
-  let id = t.join('');
-  if (!dup) { for (let i = 0; i < 12; i++) _lastRandChars[i] = Math.floor(Math.random() * 64); }
-  else { let i = 11; for (; i >= 0 && _lastRandChars[i] === 63; i--) _lastRandChars[i] = 0; _lastRandChars[i]++; }
-  for (let i = 0; i < 12; i++) id += _PUSH_CHARS.charAt(_lastRandChars[i]);
-  return id;
-}
-async function _rtdbRequest(segs, method, body) {
-  const url = RTDB_URL + '/' + segs.map(encodeURIComponent).join('/') + '.json';
-  const init = { method, cache: 'no-store' };
-  if (body !== undefined) { init.headers = { 'Content-Type': 'application/json' }; init.body = JSON.stringify(body); }
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error('[RTDB ' + method + ' /' + segs.join('/') + '] ' + res.status + ' ' + detail.slice(0, 200));
-  }
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-}
-const db = {
-  ref(path) {
-    const segs = String(path === undefined ? '' : path).split('/').filter(s => s !== '');
-    return {
-      key: segs.length ? segs[segs.length - 1] : null,
-      async once(eventType) {
-        if (eventType !== 'value') throw new Error("[RTDB REST] once('value')만 지원: " + eventType);
-        const value = await _rtdbRequest(segs, 'GET');
-        return {
-          key: segs.length ? segs[segs.length - 1] : null,
-          val: () => value,
-          exists: () => value !== null && value !== undefined,
-          forEach(action) {
-            if (value === null || typeof value !== 'object') return false;
-            const entries = Array.isArray(value)
-              ? value.map((v, i) => [String(i), v]).filter(([, v]) => v != null)
-              : Object.entries(value);
-            for (const [k, v] of entries) {
-              if (action({ key: k, val: () => v, exists: () => v != null }) === true) return true;
-            }
-            return false;
-          }
-        };
-      },
-      set(v) { return _rtdbRequest(segs, 'PUT', v === undefined ? null : v); },
-      update(v) { return _rtdbRequest(segs, 'PATCH', v); },
-      remove() { return _rtdbRequest(segs, 'DELETE'); },
-      push() { return db.ref(segs.concat(_pushId()).join('/')); }
-    };
-  }
-};
-window.__creDbMode = 'rest';
-console.log('[portal-rmap] REST 어댑터 모드 —', RTDB_URL);
+const db      = firebase.database();
 const storage = firebase.storage();
 
 const BACKEND = 'https://portal-dsyl.onrender.com';
