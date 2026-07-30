@@ -936,40 +936,23 @@
     </div>
     
     <!-- Firebase SDK -->
-    <!-- compat SDK 제거: 사내망이 RTDB 샤드 호스트(s-gke-*)의 WebSocket을 차단하므로
-         firebase.database() 대신 아래 REST 어댑터로 조회한다. -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     
     <script>
-        // ===== RTDB REST 어댑터 (compat SDK 대체) =====
-        // 네임스페이스 원본 호스트로만 통신 → wss:// 연결이 발생하지 않음.
-        // 이 페이지의 DB 사용은 db.ref(경로).once('value') 읽기 2회뿐이므로 그것만 구현.
-        const DATABASE_URL = "https://cre-unified-default-rtdb.asia-southeast1.firebasedatabase.app";
-
-        const db = {
-            ref: (path) => ({
-                once: async (eventType) => {
-                    if (eventType !== 'value') {
-                        throw new Error("[RTDB REST] once('value')만 지원합니다: " + eventType);
-                    }
-                    const segs = String(path).split('/').filter(s => s !== '');
-                    const url = DATABASE_URL + '/' + segs.map(encodeURIComponent).join('/') + '.json';
-                    const res = await fetch(url, { cache: 'no-store' });
-                    if (!res.ok) {
-                        const detail = await res.text().catch(() => '');
-                        throw new Error(`[RTDB GET /${segs.join('/')}] ${res.status} ${detail.slice(0, 200)}`);
-                    }
-                    const text = await res.text();
-                    const value = text ? JSON.parse(text) : null;
-                    return {
-                        key: segs.length ? segs[segs.length - 1] : null,
-                        val: () => value,
-                        exists: () => value !== null && value !== undefined
-                    };
-                }
-            })
+        // Firebase 설정
+        const firebaseConfig = {
+            apiKey: "AIzaSyD2GoecF7Ow-eSbXqNOoIctrcMFNkbvEYM",
+            authDomain: "cre-unified.firebaseapp.com",
+            databaseURL: "https://cre-unified-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "cre-unified",
+            storageBucket: "cre-unified.firebasestorage.app",
+            messagingSenderId: "212422657218",
+            appId: "1:212422657218:web:ac51847deea6d817c96dd6"
         };
-        window.__creDbMode = 'rest';
-        console.log('[leasing-guide-print] REST 어댑터 모드 —', DATABASE_URL);
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
         
         // URL 파라미터에서 guideId 가져오기
         const urlParams = new URLSearchParams(window.location.search);

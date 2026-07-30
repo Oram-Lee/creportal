@@ -12,7 +12,7 @@
  */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
-import { getStorage, ref as storageRef, getDownloadURL, uploadString } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
+import { getStorage, ref as storageRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-storage.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyDTEJnDQzgY6FQABVBcvNsKvwDLJkmj26s",
@@ -28,7 +28,7 @@ const app = initializeApp(firebaseConfig);
 
 // Storage는 기존 그대로 (RTDB와 무관한 도메인)
 export const storage = getStorage(app);
-export { storageRef, getDownloadURL, uploadString };
+export { storageRef, getDownloadURL };
 
 // ─────────────────────────────────────────────────────────────
 // RTDB REST 어댑터

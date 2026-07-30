@@ -2331,7 +2331,7 @@ export async function saveDirectRow(itemIdx, ri, buildingId) {
 
     try {
         // floorPricing 배열 읽기 후 직접입력 항목 업데이트
-        // (제거) 미사용 SDK 동적 import — dbRef/dbGet은 사용되지 않았음. 아래는 state 주입분 사용.
+        const { ref: dbRef, get: dbGet } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
         const snapshot = await get(ref(db, `buildings/${buildingId}/floorPricing`));
         let fps = [];
         if (snapshot.exists()) {

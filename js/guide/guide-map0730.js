@@ -455,8 +455,8 @@ async function cropAndSaveMap(idx, buildingName, coords, selX, selY, selW, selH,
 
                 // ★ Firebase RTDB에도 URL 영속화 (새로고침 후에도 유지)
                 try {
-                    // SDK getDatabase()는 사내망 차단 wss 연결을 열므로 REST 어댑터 사용
-                    const { db, ref: dbRef, update } = await import('../portal-firebase.js');
+                    const { getDatabase, ref: dbRef, update } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+                    const db = getDatabase();
                     if (bId) {
                         await update(dbRef(db, `buildings/${bId}`), { 'images/location': dlUrl });
                     }

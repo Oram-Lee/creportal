@@ -3,11 +3,10 @@
  * 초기화 및 모든 모듈 통합
  */
 
-// Firebase — 공용 REST 어댑터 (../portal-firebase.js)
-// 사내망 URL 필터가 RTDB 샤드 호스트(s-gke-*.firebasedatabase.app)의 WebSocket을
-// 차단하므로 getDatabase() 대신 REST 어댑터를 사용한다. (onValue는 실사용 0건이라 제거)
-// Storage는 별도 도메인이라 어댑터가 SDK를 그대로 재export한다. 앱 초기화도 어댑터 내부에서 수행.
-import { db, ref, get, set, push, update, remove, storage, storageRef, uploadString, getDownloadURL } from '../portal-firebase.js';
+// Firebase
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getDatabase, ref, get, set, push, update, remove, onValue } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js';
 
 // State
 import { state, initFirebase, setCurrentUser, setAllBuildings, setLeasingGuides, setCoverSettings, resetCoverSettings } from './guide-state.js?v=5.1';
@@ -19,16 +18,32 @@ import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-ut
 import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.7';
 import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.2';
 import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.8';
-import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.17';
+import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.16';
 import { registerVacancyFunctions } from './guide-vacancy.js?v=5.14';
-import { registerMapFunctions } from './guide-map.js?v=6.2';
+import { registerMapFunctions } from './guide-map.js?v=6.1';
 import { registerNoteFunctions } from './guide-note.js?v=5.1';
 import { registerDividerFunctions } from './guide-divider.js?v=5.1';
 import { registerModalFunctions } from './guide-modal.js?v=5.3';
 import { registerContactFunctions } from './guide-contact.js?v=5.1';
 import { registerPreviewFunctions } from './guide-preview.js?v=5.6';
 
-// Firebase 참조를 state 모듈에 전달 (db/storage는 어댑터에서 import됨)
+// Firebase 설정
+const firebaseConfig = {
+    apiKey: "AIzaSyDHH-u0Hqs8oZEZe6cGNnwimXGpIaG0P0g",
+    authDomain: "cre-unified.firebaseapp.com",
+    databaseURL: "https://cre-unified-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "cre-unified",
+    storageBucket: "cre-unified.firebasestorage.app",
+    messagingSenderId: "665289244827",
+    appId: "1:665289244827:web:fd2c0b6f04d0e6c9cacd46"
+};
+
+// Firebase 초기화
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const storage = getStorage(app);
+
+// Firebase 참조를 state 모듈에 전달
 initFirebase({ db, ref, get, set, push, update, remove, storage, storageRef, uploadString, getDownloadURL });
 
 // 전역 변수 (호환성)
