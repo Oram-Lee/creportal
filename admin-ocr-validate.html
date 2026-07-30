@@ -176,6 +176,20 @@ body { font-family: -apple-system, 'Pretendard', sans-serif; background: var(--b
 </div>
 
 <script>
+/* ========== 로그인 체크 (admin-leasing.html과 동일 패턴) ========== */
+const savedUser = localStorage.getItem('crePortalUser');
+if (!savedUser) {
+  window.location.replace('index.html');
+  throw new Error('login required');   // 미로그인 시 이하 스크립트 전체 중단
+}
+try {
+  JSON.parse(savedUser);
+} catch (e) {
+  localStorage.removeItem('crePortalUser');
+  window.location.replace('index.html');
+  throw new Error('login required');
+}
+
 const BACKEND = 'https://portal-dsyl.onrender.com';
 const PORTAL  = 'https://oram-lee.github.io/cre1/portal-rmap.html';
 let allIssues = [], activeFilter = 'ALL', bldNameMap = {};
