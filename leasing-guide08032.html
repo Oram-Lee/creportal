@@ -6917,21 +6917,15 @@
             const container = document.getElementById('contactSniList');
             const selectedEmails = window.contactChangeState.selectedContacts.map(c => c.email);
             
-            // ★ v6.23: 사용자 목록 소스 정규화
-            //   기존 코드는 정의된 적 없는 window.guideDataCache를 참조해 항상 '로딩 중'에 멈춰 있었음.
-            //   실제 데이터는 guideState.allUsers(배열)에 있으므로 배열/객체 양쪽을 모두 허용한다.
-            const rawUsers = window.guideDataCache?.users
-                          ?? window.guideState?.allUsers
-                          ?? window.allUsers;
-            const users = (Array.isArray(rawUsers) ? rawUsers : Object.values(rawUsers || {}))
-                .filter(u => u && u.email && u.role !== 'viewer');
-
-            if (users.length === 0) {
-                container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:20px;">등록된 S&amp;I 담당자가 없습니다</div>';
-                return;
-            }
-
-            {
+            // users 컬렉션에서 S&I 직원 목록 가져오기
+            if (typeof window.guideDataCache !== 'undefined' && window.guideDataCache.users) {
+                const users = Object.values(window.guideDataCache.users).filter(u => u.role !== 'viewer');
+                
+                if (users.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:20px;">등록된 S&I 담당자가 없습니다</div>';
+                    return;
+                }
+                
                 container.innerHTML = users.map(user => {
                     const isSelected = selectedEmails.includes(user.email);
                     const isDefault = window.DEFAULT_CONTACT_POINTS.some(d => d.email === user.email);
@@ -6946,6 +6940,8 @@
                         </div>
                     `;
                 }).join('');
+            } else {
+                container.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:20px;">데이터 로딩 중...</div>';
             }
             
             // 검색 기능
