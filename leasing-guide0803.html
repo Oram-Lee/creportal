@@ -6674,11 +6674,6 @@
                     </div>
                 </div>
             </div>
-            <!-- ★ v6.23: 모든 페이지 일괄 적용 옵션 (탭 무관 공통) -->
-            <label id="contactApplyAllWrap" style="display:flex; align-items:flex-start; gap:8px; margin:0 16px 12px; padding:10px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; font-size:12px; color:#334155; cursor:pointer; line-height:1.6; word-break:keep-all;">
-                <input type="checkbox" id="contactApplyAllPages" style="width:15px; height:15px; margin-top:1px; accent-color:#2563eb; cursor:pointer;">
-                <span>📄 <strong>모든 페이지에 적용</strong> — 이 안내문의 모든 빌딩 장표 담당자를 위 선택으로 덮어쓰고, 이후 추가하는 빌딩에도 기본값으로 적용합니다.<br><span style="color:#94a3b8;">이미 저장된 다른 임대안내문에는 영향이 없습니다.</span></span>
-            </label>
             <div class="modal-footer" style="display:flex; justify-content:space-between;">
                 <button class="btn" style="color:#dc2626; border:1px solid #fecaca;" onclick="resetToDefaultContacts()">🔄 기본값으로 초기화</button>
                 <div style="display:flex; gap:8px;">
@@ -6734,11 +6729,6 @@
             if (buildingContacts && buildingContacts.length > 0) {
                 return buildingContacts;
             }
-            // ★ v6.23: 이 안내문에 지정된 문서 기본 담당자가 있으면 우선 상속 (신규 추가 장표용)
-            const pageDefault = window.guideState?.currentGuide?.pageDefaultContacts;
-            if (Array.isArray(pageDefault) && pageDefault.length > 0) {
-                return pageDefault;
-            }
             return window.DEFAULT_CONTACT_POINTS;
         };
         
@@ -6790,10 +6780,6 @@
             
             // S&I 담당자 목록 렌더링 (users 컬렉션에서)
             renderSniContactList();
-            
-            // ★ v6.23: 일괄 적용 체크박스는 열 때마다 해제
-            const applyAllBox = document.getElementById('contactApplyAllPages');
-            if (applyAllBox) applyAllBox.checked = false;
             
             document.getElementById('contactChangeModal').style.display = 'flex';
         };
@@ -7135,34 +7121,6 @@
             // guideState의 tocItems에서 해당 빌딩 찾아서 contactPoints 업데이트
             const guideState = window.guideState;
             if (guideState && guideState.tocItems && changeState.tocIndex !== null) {
-                // ★ v6.23: 모든 페이지 일괄 적용
-                const applyAll = document.getElementById('contactApplyAllPages')?.checked;
-                
-                if (applyAll) {
-                    let applied = 0;
-                    guideState.tocItems.forEach(it => {
-                        if (!it || !it.buildingId) return;   // 빌딩 장표만 대상 (표지/목차 등 제외)
-                        it.contactPoints = changeState.selectedContacts.map(c => ({ ...c }));
-                        it.useDefaultContacts = changeState.isDefault;
-                        applied++;
-                    });
-                    
-                    // 문서 기본값 — 이후 추가되는 빌딩 장표가 상속 (getContactPointsWithDefault에서 사용)
-                    if (guideState.currentGuide) {
-                        guideState.currentGuide.pageDefaultContacts = changeState.selectedContacts.map(c => ({ ...c }));
-                    }
-                    
-                    const curItem = guideState.tocItems[changeState.tocIndex];
-                    const curBuilding = guideState.allBuildings?.find(b => b.id === curItem?.buildingId);
-                    if (typeof window.renderBuildingEditor === 'function' && curItem && curBuilding) {
-                        window.renderBuildingEditor(curItem, curBuilding);
-                    }
-                    
-                    showToast(`${applied}개 페이지에 담당자가 적용되었습니다. 저장 버튼을 눌러 최종 반영하세요.`, 'success');
-                    closeContactChangeModal();
-                    return;
-                }
-                
                 const item = guideState.tocItems[changeState.tocIndex];
                 if (item) {
                     item.contactPoints = changeState.selectedContacts;
