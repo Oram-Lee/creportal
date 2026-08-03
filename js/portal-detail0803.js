@@ -511,10 +511,7 @@ export function renderInfoSection() {
             <div class="image-column" id="exteriorColumn">
                 <div class="column-header">
                     <span class="column-title">🏢 외관</span>
-                    <div class="column-header-right">
-                        <button class="btn-paste-image" onclick="pasteImageFromClipboard('exterior')" title="클립보드 이미지 붙여넣기">📋 붙여넣기</button>
-                        <span class="column-count">${exteriorImages.length}장</span>
-                    </div>
+                    <span class="column-count">${exteriorImages.length}장</span>
                 </div>
                 ${exteriorImages.length > 0 ? `
                     <div class="image-main-area" onclick="openImageViewer('exterior', window._exteriorIdx || 0)">
@@ -561,10 +558,7 @@ export function renderInfoSection() {
             <div class="image-column" id="floorplanColumn">
                 <div class="column-header">
                     <span class="column-title">📐 평면도</span>
-                    <div class="column-header-right">
-                        <button class="btn-paste-image" onclick="pasteImageFromClipboard('floorplan')" title="클립보드 이미지 붙여넣기">📋 붙여넣기</button>
-                        <span class="column-count">${floorPlanImages.length}장</span>
-                    </div>
+                    <span class="column-count">${floorPlanImages.length}장</span>
                 </div>
                 ${floorPlanImages.length > 0 ? `
                     <div class="image-main-area" onclick="openImageViewer('floorplan', window._floorplanIdx || 0)">
@@ -4716,29 +4710,6 @@ window.fetchBuildingFloorDetail = fetchBuildingFloorDetail;
             font-size: 11px;
             color: #9ca3af;
         }
-        /* ★ v4.3: 섹션 헤더 붙여넣기 버튼 */
-        .column-header-right {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .btn-paste-image {
-            padding: 2px 8px;
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            border-radius: 5px;
-            color: #2563eb;
-            font-size: 11px;
-            font-weight: 600;
-            line-height: 1.6;
-            cursor: pointer;
-            transition: all 0.15s;
-        }
-        .btn-paste-image:hover {
-            background: #2563eb;
-            border-color: #2563eb;
-            color: #fff;
-        }
         
         /* 메인 이미지 영역 */
         .image-main-area {
@@ -4951,13 +4922,6 @@ window.fetchBuildingFloorDetail = fetchBuildingFloorDetail;
             color: white;
         }
         .img-confirm-delete:hover { background: #dc2626; }
-        /* ★ v4.3: 붙여넣기 미리보기 저장 버튼 */
-        .img-confirm-save {
-            background: #2563eb;
-            color: white;
-        }
-        .img-confirm-save:hover { background: #1d4ed8; }
-        .img-confirm-save:disabled { background: #93c5fd; cursor: default; }
         
         /* 추가 버튼 */
         .btn-add-image {
@@ -5488,126 +5452,48 @@ window.deleteExteriorImage = function() {
     confirmDeleteImage('exterior', index);
 };
 
-// ===== ★ v4.3: 클립보드 이미지 붙여넣기 (섹션 버튼 + 미리보기 확인 후 저장) =====
-//   경로 2개 → 동일한 미리보기 모달로 수렴
-//   (A) 섹션 헤더 "📋 붙여넣기" 버튼 → pasteImageFromClipboard(type)
-//   (B) 기존 Ctrl+V 전역 리스너(portal.html v4.1) → 대상 선택 팝업 → savePastedImage(file, type)
+// ===== ★ v4.1: 클립보드 이미지 붙여넣기 - 저장 함수 =====
 
-const PASTE_TYPE_LABEL = { exterior: '외관 사진', floorplan: '평면도' };
-
-// (A) 섹션 헤더 버튼 — 클립보드를 직접 읽어 해당 섹션으로 바로 진입
-window.pasteImageFromClipboard = async function(type) {
-    if (!state.selectedBuilding) {
-        showToast('빌딩을 먼저 선택하세요', 'warning');
-        return;
-    }
-    if (!navigator.clipboard?.read) {
-        showToast('이 브라우저는 버튼 붙여넣기를 지원하지 않습니다. Ctrl+V를 사용하세요', 'warning');
-        return;
-    }
-    try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-            const mime = item.types.find(t => t.startsWith('image/'));
-            if (mime) {
-                const blob = await item.getType(mime);
-                window.savePastedImage(blob, type);
-                return;
-            }
-        }
-        showToast('클립보드에 이미지가 없습니다', 'warning');
-    } catch (err) {
-        console.error('클립보드 읽기 실패:', err);
-        showToast('클립보드 접근이 거부되었습니다. Ctrl+V를 사용하세요', 'warning');
-    }
-};
-
-// 공통 진입점 — 즉시 저장하지 않고 미리보기 모달을 띄운다
 window.savePastedImage = async function(file, type) {
     if (file.size > 5 * 1024 * 1024) {
         showToast('파일 크기는 5MB 이하여야 합니다', 'warning');
         return;
     }
-    if (!state.selectedBuilding) return;
-
-    let imageData;
+    
+    const b = state.selectedBuilding;
+    if (!b) return;
+    
     try {
-        imageData = await new Promise((resolve, reject) => {
+        const imageData = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
             reader.onerror = reject;
             reader.readAsDataURL(file);
         });
-    } catch (err) {
-        console.error('붙여넣기 이미지 읽기 실패:', err);
-        showToast('이미지 읽기 실패', 'error');
-        return;
-    }
-
-    window._pastePendingImage = { imageData, type };
-    document.getElementById('pasteConfirmOverlay')?.remove();
-
-    const label = PASTE_TYPE_LABEL[type] || '이미지';
-    const sizeKb = Math.round(imageData.length * 0.75 / 1024);
-
-    document.body.insertAdjacentHTML('beforeend', `
-        <div id="pasteConfirmOverlay" class="img-confirm-overlay" onclick="if(event.target===this) cancelPastedImage()">
-            <div class="img-confirm-dialog">
-                <div class="img-confirm-preview">
-                    <img src="${imageData}" alt="붙여넣기 미리보기">
-                </div>
-                <div class="img-confirm-body">
-                    <h4>📋 ${label} 추가</h4>
-                    <p>클립보드 이미지를 ${label}(으)로 저장할까요?<br>약 ${sizeKb.toLocaleString()}KB</p>
-                    <div class="img-confirm-actions">
-                        <button class="img-confirm-cancel" onclick="cancelPastedImage()">취소</button>
-                        <button class="img-confirm-save" onclick="commitPastedImage()">저장</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `);
-};
-
-// 미리보기 취소 — DB 쓰기 없음
-window.cancelPastedImage = function() {
-    window._pastePendingImage = null;
-    document.getElementById('pasteConfirmOverlay')?.remove();
-};
-
-// 미리보기 확정 — 실제 저장 (기존 v4.1 저장 로직과 동일한 스키마)
-window.commitPastedImage = async function() {
-    const pending = window._pastePendingImage;
-    if (!pending) return;
-
-    const b = state.selectedBuilding;
-    if (!b) { cancelPastedImage(); return; }
-
-    const btn = document.querySelector('#pasteConfirmOverlay .img-confirm-save');
-    if (btn) { btn.disabled = true; btn.textContent = '저장 중…'; }
-
-    const isExterior = (pending.type === 'exterior');
-    const fieldName = isExterior ? 'exterior' : 'floorPlan';
-    const label = PASTE_TYPE_LABEL[pending.type] || '이미지';
-
-    try {
-        const imgs = [...(b.images?.[fieldName] || []), pending.imageData];
-        await update(ref(db, `buildings/${b.id}/images`), { [fieldName]: imgs });
-
-        if (!b.images) b.images = {};
-        b.images[fieldName] = imgs;
-        const mapped = imgs.map(img => typeof img === 'string' ? { url: img } : img);
-        if (isExterior) b.exteriorImages = mapped;
-        else b.floorPlanImages = mapped;
-
-        cancelPastedImage();
-        showToast(`${label}이(가) 추가되었습니다`, 'success');
+        
+        if (type === 'exterior') {
+            let imgs = b.images?.exterior || [];
+            imgs = [...imgs, imageData];
+            await update(ref(db, `buildings/${b.id}/images`), { exterior: imgs });
+            if (!b.images) b.images = {};
+            b.images.exterior = imgs;
+            b.exteriorImages = imgs.map(img => typeof img === 'string' ? { url: img } : img);
+            showToast('외관 사진이 추가되었습니다', 'success');
+        } else {
+            let imgs = b.images?.floorPlan || [];
+            imgs = [...imgs, imageData];
+            await update(ref(db, `buildings/${b.id}/images`), { floorPlan: imgs });
+            if (!b.images) b.images = {};
+            b.images.floorPlan = imgs;
+            b.floorPlanImages = imgs.map(img => typeof img === 'string' ? { url: img } : img);
+            showToast('평면도가 추가되었습니다', 'success');
+        }
+        
         window.closeImageViewer?.();
         renderInfoSection();
     } catch (err) {
         console.error('붙여넣기 이미지 저장 실패:', err);
         showToast('이미지 저장 실패', 'error');
-        if (btn) { btn.disabled = false; btn.textContent = '저장'; }
     }
 };
 
