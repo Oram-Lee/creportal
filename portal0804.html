@@ -312,12 +312,6 @@
                         title="OCR로 잘못 매핑된 주소를 수정합니다">
                     ✏️ 주소변경
                 </button>
-                <!-- ★ v4.3: 카카오맵 로드뷰 새 탭 열기 -->
-                <button onclick="openBuildingRoadview()" 
-                        style="padding: 2px 8px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 4px; cursor: pointer; font-size: 11px; color: #047857;"
-                        title="이 빌딩 위치의 카카오맵 로드뷰를 새 탭에서 엽니다">
-                    🛣️ 로드뷰
-                </button>
             </div>
             <!-- 빌딩 상태 표시 (히든/삭제 시) -->
             <div id="buildingStatusBanner" style="display:none; margin-top: 8px; padding: 8px 12px; border-radius: 6px; font-size: 12px;"></div>
@@ -6706,39 +6700,6 @@
             popup.children[0].onclick = (ev) => { if (ev.target === ev.currentTarget) popup.remove(); };
         });
         console.log('[v4.1] 이미지 붙여넣기 리스너 등록');
-    </script>
-
-    <!-- ★ v4.3: 카카오맵 로드뷰 바로가기 -->
-    <script>
-        // 상세 패널 주소 옆 [🛣️ 로드뷰] / 지도 마커의 🛣️ 아이콘 → 카카오맵 로드뷰를 새 탭에서 연다.
-        // /link/roadview/위도,경도 는 앱키 없이 동작하며 PC/모바일 카카오맵으로 자동 분기된다.
-        // buildingId 생략 시 현재 상세 패널에 열려 있는 빌딩을 사용한다.
-        window.openBuildingRoadview = function(buildingId) {
-            const b = buildingId
-                ? (window.state?.allBuildings || []).find(x => x.id === buildingId)
-                : window.state?.selectedBuilding;
-            if (!b) {
-                window.showToast?.('빌딩을 먼저 선택하세요', 'warning');
-                return;
-            }
-
-            const lat = b.lat ?? b.coordinates?.lat;
-            const lng = b.lng ?? b.coordinates?.lng;
-
-            if (lat && lng) {
-                window.open(`https://map.kakao.com/link/roadview/${lat},${lng}`, '_blank', 'noopener');
-                return;
-            }
-
-            // 좌표 미보유 빌딩 → 주소 검색으로 대체 (로드뷰 링크는 좌표가 필수)
-            const addr = b.address || b.roadAddress || b.name;
-            if (addr) {
-                window.showToast?.('좌표가 없어 주소 검색 결과로 엽니다', 'warning');
-                window.open(`https://map.kakao.com/link/search/${encodeURIComponent(addr)}`, '_blank', 'noopener');
-            } else {
-                window.showToast?.('이 빌딩에는 위치 정보가 없습니다', 'error');
-            }
-        };
     </script>
 
     <!-- ★ v4.2: 빌딩 리스트 소팅 + 관심영역 그룹 시스템 -->

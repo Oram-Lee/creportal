@@ -24,6 +24,7 @@ export function initKakaoMap() {
             map: state.kakaoMap,
             averageCenter: true,
             minLevel: 4,
+            minClusterSize: 1,   // ★ 기본값 2 → 1개짜리도 기본 마커 대신 숫자 '1' 클러스터로 표시
             disableClickZoom: true,
             styles: [{
                 width: '50px',
@@ -101,6 +102,7 @@ export function updateMapMarkers() {
                 content: `<div class="map-marker-label" style="background:${bgColor};color:${textColor};border:2px solid ${borderColor};padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,0.25);cursor:pointer;white-space:nowrap;position:relative;" onclick="window.openDetail('${b.id}')">
                     ${newBadge}
                     ${b.name || '이름없음'}
+                    <span onclick="event.stopPropagation(); window.openBuildingRoadview('${b.id}')" title="로드뷰 열기" style="margin-left:6px;padding-left:6px;border-left:1px solid ${borderColor};cursor:pointer;">🛣️</span>
                     <div style="position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${borderColor};"></div>
                     <div style="position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid ${bgColor};"></div>
                 </div>`,
