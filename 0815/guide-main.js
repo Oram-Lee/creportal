@@ -10,23 +10,23 @@
 import { db, ref, get, set, push, update, remove, storage, storageRef, uploadString, getDownloadURL } from '../portal-firebase.js';
 
 // State
-import { state, initFirebase, setCurrentUser, setAllBuildings, setLeasingGuides, setCoverSettings, resetCoverSettings } from './guide-state.js?v=5.2';
+import { state, initFirebase, setCurrentUser, setAllBuildings, setLeasingGuides, setCoverSettings, resetCoverSettings } from './guide-state.js?v=5.1';
 
 // Utils
-import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-utils.js?v=5.7';
+import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-utils.js?v=5.1';
 
 // Modules
-import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.8';
-import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.3';
-import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.9';
-import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.18';
-import { registerVacancyFunctions } from './guide-vacancy.js?v=5.15';
+import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.7';
+import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.2';
+import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.8';
+import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.17';
+import { registerVacancyFunctions } from './guide-vacancy.js?v=5.14';
 import { registerMapFunctions } from './guide-map.js?v=6.2';
 import { registerNoteFunctions } from './guide-note.js?v=5.1';
-import { registerDividerFunctions } from './guide-divider.js?v=5.2';
+import { registerDividerFunctions } from './guide-divider.js?v=5.1';
 import { registerModalFunctions } from './guide-modal.js?v=5.3';
 import { registerContactFunctions } from './guide-contact.js?v=5.1';
-import { registerPreviewFunctions } from './guide-preview.js?v=5.7';
+import { registerPreviewFunctions } from './guide-preview.js?v=5.6';
 
 // Firebase 참조를 state 모듈에 전달 (db/storage는 어댑터에서 import됨)
 initFirebase({ db, ref, get, set, push, update, remove, storage, storageRef, uploadString, getDownloadURL });

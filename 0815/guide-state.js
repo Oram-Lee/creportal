@@ -18,13 +18,13 @@ export let storageRef = null;
 export let uploadString = null;
 export let getDownloadURL = null;
 
-// 기본 권역 정의 (2026-08: PAN 폐지 → BBD(분당·판교)로 통합)
+// 기본 권역 정의
 export const DEFAULT_REGIONS = [
     { code: 'GBD', name: '강남권역', nameEn: 'Gangnam Business District' },
     { code: 'YBD', name: '여의도권역', nameEn: 'Yeouido Business District' },
     { code: 'CBD', name: '도심권역', nameEn: 'Central Business District' },
     { code: 'BBD', name: '분당권역', nameEn: 'Bundang Business District' },
-    { code: 'MBD', name: '마곡업무지구', nameEn: 'Magok Business District' },
+    { code: 'PAN', name: '판교권역', nameEn: 'Pangyo Business District' },
     { code: 'ETC', name: '기타권역', nameEn: 'Others' }
 ];
 
@@ -68,7 +68,7 @@ export const state = {
         closingText: '고객이 신뢰할 수 있는 관리를 수행하겠습니다',
         slogan: '공간에 가치를 더하는 공/간/관/리/전/문/가',
         accentColor: '#ec4899',
-        images: [] // 엔딩 페이지 이미지 배열 (최대 8개 — 출력 장표 2x4 그리드)
+        images: [] // 엔딩 페이지 이미지 배열 (최대 10개)
     },
     // 빌딩 추가 모달
     buildingCart: [],

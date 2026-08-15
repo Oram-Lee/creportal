@@ -16,8 +16,8 @@
  * - ★ guide-preview.js와 순서 동기화: 미리보기/출력에도 변경 순서 반영
  */
 
-import { state, getRegionOrder, setRegionOrder, resetRegionOrder } from './guide-state.js?v=5.2';
-import { showToast, getRegionName } from './guide-utils.js?v=5.7';
+import { state, getRegionOrder, setRegionOrder, resetRegionOrder } from './guide-state.js?v=5.1';
+import { showToast, getRegionName } from './guide-utils.js?v=5.1';
 // 순환 의존성 방지 - window 객체를 통해 호출
 // renderCoverEditor, renderBuildingEditor, renderDividerEditor, renderGuideList, renderEndingEditor
 
@@ -158,10 +158,6 @@ export function closeEditor() {
 // Guide에서 tocItems 설정
 export function setTocItemsFromGuide(guide) {
     state.tocItems = guide.items ? JSON.parse(JSON.stringify(guide.items)) : [];
-    // ★ 2026-08: 폐지된 PAN 권역 → BBD 통합 (기존 가이드 자동 마이그레이션)
-    state.tocItems.forEach(it => {
-        if ((it.region || '').toUpperCase() === 'PAN') it.region = 'BBD';
-    });
 }
 
 // ★ v4.9: 개편된 목차 렌더링
@@ -697,7 +693,7 @@ function reorderTocItemsByRegion(newRegionOrder) {
 
 // ★ 권역 순서 초기화
 export function resetRegionOrderAction() {
-    if (confirm('권역 순서를 기본값(GBD → YBD → CBD → BBD → MBD → ETC)으로 초기화하시겠습니까?')) {
+    if (confirm('권역 순서를 기본값(GBD → YBD → CBD → BBD → PAN → ETC)으로 초기화하시겠습니까?')) {
         resetRegionOrder();
         
         // tocItems도 기본 순서로 재정렬

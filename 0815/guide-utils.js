@@ -118,8 +118,7 @@ export function detectRegion(address) {
     if (address.includes('강남') || address.includes('서초') || address.includes('삼성')) return 'GBD';
     if (address.includes('여의도') || address.includes('영등포') || address.includes('마포')) return 'YBD';
     if (address.includes('종로') || address.includes('중구') || address.includes('을지로') || address.includes('광화문')) return 'CBD';
-    if (address.includes('마곡') || address.includes('강서구')) return 'MBD';
-    if (address.includes('판교') || address.includes('분당') || address.includes('성남')) return 'BBD';
+    if (address.includes('판교') || address.includes('분당') || address.includes('성남')) return 'PAN';
     return 'ETC';
 }
 
@@ -129,23 +128,15 @@ export function getRegionName(region) {
         'GBD': '강남',
         'YBD': '여의도',
         'CBD': '도심',
-        'BBD': '분당·판교',
-        'MBD': '마곡',
+        'PAN': '판교',
         'ETC': '기타'
     };
     return names[region] || region;
 }
 
 // 빌딩 데이터 정규화 (Firebase 원본 구조 → 플랫)
-// ★ 폐지된 권역 코드 정규화 (PAN → BBD)
-export function normalizeRegionCode(code) {
-    const c = (code || '').toUpperCase();
-    return c === 'PAN' ? 'BBD' : c;
-}
-
 export function normalizeBuilding(building) {
     if (!building) return building;
-    if (building.region) building.region = normalizeRegionCode(building.region);
     
     // ★ v3.2: 층수 파싱 개선 - 건축물대장 API 결과 지원
     // 1. floors.above/below가 숫자로 있는 경우 (건축물대장 API 결과)

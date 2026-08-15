@@ -53,15 +53,15 @@
  * - 플레이스홀더 텍스트 변경: "드래그앤드롭, Ctrl+V 또는 클릭"
  */
 
-import { state, db, ref, get, update, getAllRegions } from './guide-state.js?v=5.2';
-import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, cleanUnitValue, formatNumberInput, unformatNumber, bindCommaInputs } from './guide-utils.js?v=5.7';
+import { state, db, ref, get, update, getAllRegions } from './guide-state.js?v=5.1';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, cleanUnitValue, formatNumberInput, unformatNumber, bindCommaInputs } from './guide-utils.js?v=5.6';
 import { 
     getUniqueSourcesHtml, 
     getUniqueDatesHtml, 
     renderExternalVacancyGroups, 
     renderExternalCartItems,
     renderExternalCartTags 
-} from './guide-vacancy.js?v=5.15';
+} from './guide-vacancy.js?v=5.12';
 
 // ★ 메인 "선택된 공실" 표(tbody)만 즉시 재렌더 — 전체 에디터 재렌더 없이 라이브 반영
 //   (타사 공실 체크 시 패널/아코디언을 닫지 않고 공실 현황 표를 갱신하기 위함)
@@ -127,11 +127,9 @@ export function refreshVacancyListTable(idx) {
         cntEl.textContent = all.length;
         cntEl.classList.toggle('over-limit', all.length >= MAX_VACANCIES_PER_BUILDING);
     }
-    // ★ 프리뷰(편집화면 A4) 공실표 즉시 동기화
-    refreshPreviewVacancyTable(idx);
 }
 
-import { initBuildingKakaoMap } from './guide-map.js?v=6.2';
+import { initBuildingKakaoMap } from './guide-map.js?v=6.1';
 
 // ★ v5.0: 공실 최대 개수 (A4 가로 기준, 헤더/합계 포함)
 const MAX_VACANCIES_PER_BUILDING = 12;
@@ -223,85 +221,6 @@ async function loadFloorPricing(buildingId, item) {
 }
 
 // 빌딩 에디터 렌더링
-// ★ 프리뷰 공실표 행 HTML — renderBuildingEditor / refreshPreviewVacancyTable 공용
-function buildPreviewVacancyRowsHTML(item, allVacancies) {
-    return `
-                                ${allVacancies.length > 0 ? allVacancies.map(v => `
-                                    <tr>
-                                        <td class="floor">${formatFloorDisplay(v.floor)}</td>
-                                        <td>${v.exclusiveArea || v.area || '-'}</td>
-                                        <td>${v.rentArea || v.area || '-'}</td>
-                                        <td>${v.deposit || v.depositPy || '문의'}</td>
-                                        <td>${v.rent || v.rentPy || '문의'}</td>
-                                        <td>${v.maintenance || v.maintenancePy || '문의'}</td>
-                                        <td>${v.moveIn || v.moveInDate || '-'}</td>
-                                    </tr>
-                                `).join('') : `
-                                    <tr><td colspan="7" class="no-vacancy-cell">
-                                        <div class="no-vacancy-message">
-                                            <span class="no-vacancy-icon">🏢</span>
-                                            <span class="no-vacancy-text">${
-                                                (item.customVacancies === null && item.selectedExternalVacancies === null && item.leasingGuideVacancies === null)
-                                                ? '공실 데이터 없음 - 아래에서 추가해주세요'
-                                                : '현재 공실 없음 (만실)'
-                                            }</span>
-                                        </div>
-                                    </td></tr>
-                                `}
-                                ${allVacancies.length > 0 ? `
-                                    <tr class="total-row">
-                                        <td>합계</td>
-                                        <td>${formatNumber(allVacancies.reduce((s,v) => s + (parseFloat(v.exclusiveArea || v.area || 0)), 0))}</td>
-                                        <td>${formatNumber(allVacancies.reduce((s,v) => s + (parseFloat(v.rentArea || v.area || 0)), 0))}</td>
-                                        <td colspan="4">-</td>
-                                    </tr>
-                                ` : ''}
-    `;
-}
-
-// ★ 프리뷰 공실표만 부분 갱신 (전체 재렌더 없이 [반영] 즉시 반영)
-export function refreshPreviewVacancyTable(idx) {
-    const item = state.tocItems?.[idx];
-    if (!item) return;
-    const tbody = document.getElementById('previewVacancyBody_' + idx);
-    if (!tbody) return;
-    if (!item.customVacancies) item.customVacancies = [];
-    if (!item.selectedExternalVacancies) item.selectedExternalVacancies = [];
-    if (!item.leasingGuideVacancies) item.leasingGuideVacancies = [];
-    const raw = [
-        ...item.customVacancies.map((v, i) => ({ ...v, type: 'custom', id: `custom_${i}` })),
-        ...item.selectedExternalVacancies,
-        ...item.leasingGuideVacancies.map((v, i) => ({ ...v, type: 'guide', id: `guide_${i}` }))
-    ];
-    const all = [...raw].sort((a, b) => {
-        const fa = _parseFloorNumForSort(a.floor), fb = _parseFloorNumForSort(b.floor);
-        return item.vacancySortOrder === 'asc' ? fa - fb : fb - fa;
-    });
-    tbody.innerHTML = buildPreviewVacancyRowsHTML(item, all);
-}
-
-// ★ 기준층 임대/전용 병기 (typicalFloorPy = 임대면적, 전용 = 임대 × 전용률)
-function formatTypicalFloor(building) {
-    const rentPy = parseFloat(building.typicalFloorPy || building.area?.typicalFloorPy || 0);
-    if (!rentPy || rentPy <= 0) return '-';
-    const raw = parseFloat(building.exclusiveRate || building.area?.exclusiveRate || 0);
-    const rentTxt = formatArea(rentPy) + ' 평';
-    // 전용률 표기 혼재 대응: 47.97(%) / 0.4797(비율) 모두 허용
-    const ratio = raw > 1 ? raw / 100 : raw;
-    // ★ 불변식: 전용면적 < 임대면적. 비율이 0~1 범위를 벗어나면 이상치로 보고 임대면적만 표기
-    if (!ratio || ratio <= 0 || ratio > 1) return rentTxt + ' / -';
-    return rentTxt + ' / ' + formatArea(rentPy * ratio) + ' 평 (전용률 ' + (ratio * 100).toFixed(1) + '%)';
-}
-
-// ★ 외관사진 표시 방식 토글 (기본 'contain' = 잘림 없음)
-export function toggleExteriorFit(idx) {
-    const item = state.tocItems?.[idx];
-    if (!item) return;
-    item.exteriorFit = (item.exteriorFit === 'cover') ? 'contain' : 'cover';
-    const building = state.allBuildings.find(b => b.id === item.buildingId);
-    if (building) renderBuildingEditor(item, building);
-}
-
 export function renderBuildingEditor(item, building) {
     const editorMain = document.getElementById('editorMain');
     if (!editorMain) return;
@@ -516,13 +435,10 @@ export function renderBuildingEditor(item, building) {
                     <div>
                         <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                             <span>BUILDING PHOTO</span>
-                            <span style="display:flex; gap:4px;">
-                                <button class="info-action-btn" onclick="event.stopPropagation(); toggleExteriorFit(${idx})" title="맞춤=사진 전체 노출(여백), 채우기=영역 꽉 채움(잘림)" style="font-size:11px; padding:3px 7px; font-weight:600;">${item.exteriorFit === 'cover' ? '🔲 채우기' : '🖼️ 맞춤'}</button>
-                                <button class="info-action-btn" onclick="event.stopPropagation(); pasteExteriorFromClipboard(${idx})" title="복사한 외관 이미지를 바로 붙여넣기" style="font-size:11px; padding:3px 7px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
-                            </span>
+                            <button class="info-action-btn" onclick="event.stopPropagation(); pasteExteriorFromClipboard(${idx})" title="복사한 외관 이미지를 바로 붙여넣기" style="font-size:11px; padding:3px 7px; color:#2563eb; border-color:#2563eb; font-weight:600;">📋 붙여넣기</button>
                         </div>
                         <!-- ★ 수정: 권장 크기 표시 -->
-                        <div class="preview-building-photo preview-editable${item.exteriorFit === 'cover' ? '' : ' fit-contain'}" onclick="uploadImage(${idx}, 'exterior')">
+                        <div class="preview-building-photo preview-editable" onclick="uploadImage(${idx}, 'exterior')">
                             ${mainImg ? `<img src="${typeof mainImg === 'string' ? mainImg : (mainImg.url || mainImg)}" alt="빌딩 외관">` : `
                                 <div class="upload-placeholder">
                                     <span class="placeholder-icon">🏢</span>
@@ -586,7 +502,7 @@ export function renderBuildingEditor(item, building) {
                             <tr><th>연면적</th><td>${formatArea(building.grossFloorPy)} 평 (${formatNumber((building.grossFloorPy || 0) * 3.3058)}㎡)</td></tr>
                             <tr><th>규모</th><td>B${building.floorsBelow || 0} / ${building.floorsAbove || 0}F</td></tr>
                             <tr><th>준공년도</th><td>${building.completionYear || '-'}</td></tr>
-                            <tr><th>기준층(임대/전용)</th><td>${formatTypicalFloor(building)}</td></tr>
+                            <tr><th>기준층(전용)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy) + ' 평' : '-'}</td></tr>
                             <tr><th>전용률</th><td>${(()=>{ const v = building.exclusiveRate || building.area?.exclusiveRate; const n = parseFloat(v); return (!v || isNaN(n) || n === 0) ? '-' : n.toFixed(2) + '%'; })()}</td></tr>
                             <tr><th>E/V</th><td>총 ${(()=>{ const n=cleanUnitValue(building.elevatorTotal??building.specs?.passengerElevator); return n!==null?n+'대':'-'; })()}</td></tr>
                             <tr><th>주차</th><td>총 ${(()=>{ const n=cleanUnitValue(building.parkingTotal??building.parking?.total); return n!==null?n+'대':'-'; })()}${building.parkingNote ? '<br><span style="font-size:10px; color:#555;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
@@ -631,8 +547,37 @@ export function renderBuildingEditor(item, building) {
                                     <th>입주 시기</th>
                                 </tr>
                             </thead>
-                            <tbody id="previewVacancyBody_${idx}">
-                                ${buildPreviewVacancyRowsHTML(item, allVacancies)}
+                            <tbody>
+                                ${allVacancies.length > 0 ? allVacancies.map(v => `
+                                    <tr>
+                                        <td class="floor">${formatFloorDisplay(v.floor)}</td>
+                                        <td>${v.exclusiveArea || v.area || '-'}</td>
+                                        <td>${v.rentArea || v.area || '-'}</td>
+                                        <td>${v.deposit || v.depositPy || '문의'}</td>
+                                        <td>${v.rent || v.rentPy || '문의'}</td>
+                                        <td>${v.maintenance || v.maintenancePy || '문의'}</td>
+                                        <td>${v.moveIn || v.moveInDate || '-'}</td>
+                                    </tr>
+                                `).join('') : `
+                                    <tr><td colspan="7" class="no-vacancy-cell">
+                                        <div class="no-vacancy-message">
+                                            <span class="no-vacancy-icon">🏢</span>
+                                            <span class="no-vacancy-text">${
+                                                (item.customVacancies === null && item.selectedExternalVacancies === null && item.leasingGuideVacancies === null)
+                                                ? '공실 데이터 없음 - 아래에서 추가해주세요'
+                                                : '현재 공실 없음 (만실)'
+                                            }</span>
+                                        </div>
+                                    </td></tr>
+                                `}
+                                ${allVacancies.length > 0 ? `
+                                    <tr class="total-row">
+                                        <td>합계</td>
+                                        <td>${formatNumber(allVacancies.reduce((s,v) => s + (parseFloat(v.exclusiveArea || v.area || 0)), 0))}</td>
+                                        <td>${formatNumber(allVacancies.reduce((s,v) => s + (parseFloat(v.rentArea || v.area || 0)), 0))}</td>
+                                        <td colspan="4">-</td>
+                                    </tr>
+                                ` : ''}
                             </tbody>
                         </table>
                     </div>
@@ -2838,8 +2783,6 @@ export function registerBuildingFunctions() {
     // guide-vacancy.js 충돌 방지: 버튼에서 직접 switchVacancyAddTab 호출하므로 override 불필요
     // 타사 공실 토글/필터/초기화 함수는 guide-vacancy.js에서 단일 등록 (중복 제거)
     window.refreshVacancyListTable = refreshVacancyListTable;
-    window.refreshPreviewVacancyTable = refreshPreviewVacancyTable;
-    window.toggleExteriorFit = toggleExteriorFit;
     window.updateDirectRow = updateDirectRow;
     window.saveDirectRow = saveDirectRow;
     window.addDirectRow = addDirectRow;

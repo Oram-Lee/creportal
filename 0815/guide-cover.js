@@ -3,8 +3,8 @@
  * 표지 템플릿, 엔딩 페이지, 커스텀 권역 관리
  */
 
-import { state, DEFAULT_REGIONS, getAllRegions, addCustomRegion, removeCustomRegion, setEndingSettings, saveSettingsToLocal, loadSettingsFromLocal, setRegionAlias, removeRegionAlias, getRegionAlias } from './guide-state.js?v=5.2';
-import { showToast } from './guide-utils.js?v=5.7';
+import { state, DEFAULT_REGIONS, getAllRegions, addCustomRegion, removeCustomRegion, setEndingSettings, saveSettingsToLocal, loadSettingsFromLocal, setRegionAlias, removeRegionAlias, getRegionAlias } from './guide-state.js?v=5.1';
+import { showToast } from './guide-utils.js?v=5.1';
 
 // coverSettings 로드
 export function loadCoverSettings(guide) {
@@ -202,15 +202,16 @@ function renderEndingMiniPreview() {
                     <div style="font-size:16px; font-weight:700; color:white; margin-top:8px;">${es.companyName || '에스앤아이 코퍼레이션'}</div>
                 </div>
                 <div style="font-size:8px; color:rgba(255,255,255,0.6); line-height:1.5;">
-                    ${[1,2,3,4,5].map(n => es['description' + n] || '').filter(Boolean).join('<br>')}
+                    ${es.description1 || ''}<br>
+                    ${es.description2 || ''}
                 </div>
                 <div>
                     <div style="font-size:22px; font-weight:700; color:${accentColor};">${es.thankYouText || 'THANK YOU'}</div>
                     <div style="font-size:8px; color:rgba(255,255,255,0.5); margin-top:4px;">${es.slogan || ''}</div>
                 </div>
             </div>
-            <div style="display:grid; grid-template-columns:repeat(2, 1fr); grid-template-rows:repeat(4, 1fr); gap:2px; padding:4px;">
-                ${[0,1,2,3,4,5,6,7].map(i => {
+            <div style="display:grid; grid-template-columns:repeat(2, 1fr); grid-template-rows:repeat(5, 1fr); gap:2px; padding:4px;">
+                ${[0,1,2,3,4,5,6,7,8,9].map(i => {
                     const img = images[i];
                     return `<div style="background:#2d3748; border-radius:2px; overflow:hidden;">
                         ${img ? `<img src="${img}" style="width:100%; height:100%; object-fit:cover;">` : ''}
@@ -358,16 +359,6 @@ export function openEndingEditor() {
                                 <input type="text" value="${es.companyName || ''}" placeholder="에스앤아이 코퍼레이션" onchange="updateEndingSetting('companyName', this.value)" style="width:100%; padding:8px; border:1px solid var(--border-color); border-radius:4px;">
                             </div>
                             
-                            <!-- 설명문 (5줄) -->
-                            <div class="setting-group" style="margin-bottom:16px;">
-                                <label style="font-weight:600; margin-bottom:8px; display:block;">설명문 (5줄)</label>
-                                ${[1,2,3,4,5].map(n => `
-                                    <input type="text" value="${es['description' + n] || ''}" placeholder="설명문 ${n}행"
-                                           onchange="updateEndingSetting('description${n}', this.value)"
-                                           style="width:100%; padding:8px; margin-bottom:6px; border:1px solid var(--border-color); border-radius:4px;">
-                                `).join('')}
-                            </div>
-                            
                             <!-- 감사 인사 & 슬로건 -->
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
                                 <div class="setting-group">
@@ -388,9 +379,9 @@ export function openEndingEditor() {
                             
                             <!-- 이미지 업로드 -->
                             <div class="setting-group">
-                                <label style="font-weight:600; margin-bottom:8px; display:block;">이미지 (최대 8개)</label>
+                                <label style="font-weight:600; margin-bottom:8px; display:block;">이미지 (최대 10개)</label>
                                 <div class="ending-images-grid" id="endingImagesGrid">
-                                    ${[0,1,2,3,4,5,6,7].map(i => {
+                                    ${[0,1,2,3,4,5,6,7,8,9].map(i => {
                                         const img = images[i];
                                         return `
                                             <div class="ending-image-slot ${img ? 'has-image' : ''}" onclick="uploadEndingImage(${i})">
@@ -451,17 +442,13 @@ function renderEndingPreview(es) {
                     </div>
                     <div style="font-size:16px; font-weight:700; color:white; margin-top:8px;">${es.companyName || ''}</div>
                 </div>
-                <div style="font-size:8px; color:rgba(255,255,255,0.6); line-height:1.5;">
-                    ${[1,2,3,4,5].map(n => es['description' + n] || '').filter(Boolean).join('<br>')}
-                </div>
                 <div>
-                    <div style="font-size:24px; font-weight:700; color:${accentColor}; margin-bottom:4px;">${es.thankYouText || 'THANK YOU'}</div>
-                    <div style="font-size:8px; color:rgba(255,255,255,0.5); margin-bottom:4px;">${es.closingText || ''}</div>
+                    <div style="font-size:24px; font-weight:700; color:${accentColor}; margin-bottom:8px;">${es.thankYouText || 'THANK YOU'}</div>
                     <div style="font-size:9px; color:rgba(255,255,255,0.6);">${es.slogan || ''}</div>
                 </div>
             </div>
-            <div class="ending-preview-right" style="display:grid; grid-template-columns:repeat(2, 1fr); grid-template-rows:repeat(4, 1fr); gap:2px; padding:4px;">
-                ${[0,1,2,3,4,5,6,7].map(i => {
+            <div class="ending-preview-right" style="display:grid; grid-template-columns:repeat(2, 1fr); grid-template-rows:repeat(5, 1fr); gap:2px; padding:4px;">
+                ${[0,1,2,3,4,5,6,7,8,9].map(i => {
                     const img = images[i];
                     return `
                         <div style="background:#2d3748; border-radius:2px; overflow:hidden;">

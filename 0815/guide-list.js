@@ -8,8 +8,8 @@
  * - Firebase 저장 전 데이터 크기 경고
  */
 
-import { state, db, ref, get, set, push, update, remove } from './guide-state.js?v=5.2';
-import { showToast, formatDate, getRegionName } from './guide-utils.js?v=5.7';
+import { state, db, ref, get, set, push, update, remove } from './guide-state.js?v=5.1';
+import { showToast, formatDate, getRegionName } from './guide-utils.js?v=5.1';
 // 순환 의존성 방지 - window 객체를 통해 호출
 // openEditor, setTocItemsFromGuide, loadCoverSettings
 
@@ -113,7 +113,7 @@ export function updateFilterOptions(guideList) {
         const current = regionFilter.value;
         regionFilter.innerHTML = `
             <option value="all">전체 권역</option>
-            ${['GBD', 'YBD', 'CBD', 'BBD', 'MBD', 'ETC']
+            ${['GBD', 'YBD', 'CBD', 'PAN', 'ETC']
                 .filter(r => regionSet.has(r))
                 .map(r => `<option value="${r}" ${current === r ? 'selected' : ''}>${getRegionName(r)}</option>`)
                 .join('')}

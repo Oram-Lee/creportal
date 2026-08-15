@@ -30,8 +30,8 @@
  * - window.print() 기반 PDF 저장 기능
  */
 
-import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo, getRegionOrder } from './guide-state.js?v=5.2';
-import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.7';
+import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo, getRegionOrder } from './guide-state.js?v=5.1';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.1';
 
 // ★ v3.6: 층 표기 정규화 함수 (FF 중복 방지)
 function formatFloorDisplay(floor) {
@@ -442,7 +442,7 @@ function renderTocFullPage(data) {
     
     // 권역별 아이콘
     const regionIcons = {
-        'GBD': '🟡', 'YBD': '🟢', 'CBD': '🔵', 'BBD': '🟣', 'MBD': '🟤', 'ETC': '⚪'
+        'GBD': '🟡', 'YBD': '🟢', 'CBD': '🔵', 'BBD': '🟣', 'PAN': '🟠', 'ETC': '⚪'
     };
     
     return `
@@ -624,7 +624,7 @@ function renderBuildingPreviewPage(data) {
                 <div class="fullpreview-col fullpreview-col-left">
                     <div class="preview-section building-photo-section">
                         <div class="section-title">BUILDING PHOTO</div>
-                        <div class="section-content photo-content${item.exteriorFit === 'cover' ? '' : ' fit-contain'}">
+                        <div class="section-content photo-content">
                             ${mainImg ? `<img src="${mainImg.url || mainImg}" alt="빌딩 외관" class="building-photo">` : '<div class="photo-placeholder"><span>🏢</span></div>'}
                         </div>
                     </div>
@@ -647,7 +647,7 @@ function renderBuildingPreviewPage(data) {
                                 <tr><th>연면적</th><td>${formatArea(building.grossFloorPy)}평 (${formatNumber(Math.round((building.grossFloorPy || 0) * 3.3058))}㎡)</td></tr>
                                 <tr><th>규모</th><td>B${building.floorsBelow || 0} / ${building.floorsAbove || 0}F</td></tr>
                                 <tr><th>준공</th><td>${building.completionYear || '-'}년</td></tr>
-                                <tr><th>기준층(임대/전용)</th><td>${formatTypicalFloor(building)}</td></tr>
+                                <tr><th>기준층</th><td>${formatArea(building.typicalFloorPy)}평 (전용률 ${formatPercent(building.exclusiveRate || building.area?.exclusiveRate)}%)</td></tr>
                                 <tr><th>E/V</th><td>총 ${building.elevatorTotal || '-'}대</td></tr>
                                 <tr><th>주차</th><td>총 ${String(building.parkingTotal || '-').replace(/대+$/, '')}대${building.parkingNote ? '<br><span style="font-size:10px; color:#555;">' + String(building.parkingNote).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
                             </table>
@@ -792,19 +792,6 @@ function renderBuildingPreviewPage(data) {
 }
 
 // ========== 엔딩 페이지 (THANK YOU) ==========
-// ★ 기준층 임대/전용 병기 (typicalFloorPy = 임대면적, 전용 = 임대 × 전용률)
-function formatTypicalFloor(building) {
-    const rentPy = parseFloat(building.typicalFloorPy || building.area?.typicalFloorPy || 0);
-    if (!rentPy || rentPy <= 0) return '-';
-    const raw = parseFloat(building.exclusiveRate || building.area?.exclusiveRate || 0);
-    const rentTxt = formatArea(rentPy) + ' 평';
-    // 전용률 표기 혼재 대응: 47.97(%) / 0.4797(비율) 모두 허용
-    const ratio = raw > 1 ? raw / 100 : raw;
-    // ★ 불변식: 전용면적 < 임대면적. 비율이 0~1 범위를 벗어나면 이상치로 보고 임대면적만 표기
-    if (!ratio || ratio <= 0 || ratio > 1) return rentTxt + ' / -';
-    return rentTxt + ' / ' + formatArea(rentPy * ratio) + ' 평 (전용률 ' + (ratio * 100).toFixed(1) + '%)';
-}
-
 function renderEndingPage(data) {
     const es = data.endingSettings || {};
     const cs = data.coverSettings || {};
@@ -836,7 +823,7 @@ function renderEndingPage(data) {
             </div>
             <div class="ending-right">
                 <div class="ending-image-grid">
-                    ${[0,1,2,3,4,5,6,7].map(i => {
+                    ${[0,1,2,3,4,5,6,7,8,9].map(i => {
                         const img = images[i];
                         return `
                             <div class="ending-img-cell">

@@ -240,11 +240,6 @@
         .image-box.contain img {
             object-fit: contain;
         }
-        /* ★ 외관사진 맞춤(기본): 세로 사진 잘림 방지 */
-        .section-photo.fit-contain .image-box img {
-            object-fit: contain;
-            background: #ffffff;
-        }
         
         /* ★ Building Photo / General Information 영역 - 동일 높이 (페이지 절반) */
         .section-photo,
@@ -608,7 +603,7 @@
         .ending-page .ending-image-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: repeat(4, 1fr);
+            grid-template-rows: repeat(5, 1fr);
             gap: 8px;
             height: 100%;
         }
@@ -1176,28 +1171,14 @@
             return null;
         }
         
-        // ★ 기준층 임대/전용 병기 (typicalFloorPy = 임대면적, 전용 = 임대 × 전용률)
-        function formatTypicalFloor(building) {
-            const rentPy = parseFloat(building.typicalFloorPy || building.area?.typicalFloorPy || 0);
-            if (!rentPy || rentPy <= 0) return '-';
-            const raw = parseFloat(building.exclusiveRate || building.area?.exclusiveRate || 0);
-            const rentTxt = formatArea(rentPy) + ' 평';
-            // 전용률 표기 혼재 대응: 47.97(%) / 0.4797(비율) 모두 허용
-            const ratio = raw > 1 ? raw / 100 : raw;
-            // ★ 불변식: 전용면적 < 임대면적. 비율이 0~1 범위를 벗어나면 이상치로 보고 임대면적만 표기
-            if (!ratio || ratio <= 0 || ratio > 1) return rentTxt + ' / -';
-            return rentTxt + ' / ' + formatArea(rentPy * ratio) + ' 평 (전용률 ' + (ratio * 100).toFixed(1) + '%)';
-        }
-
         // ★ 권역 표시명 가져오기 (별칭 우선 적용)
         const DEFAULT_REGION_NAMES = {
             'GBD': '강남', 'YBD': '여의도', 'CBD': '도심', 
-            'BBD': '분당·판교', 'MBD': '마곡', 'ETC': '기타'
+            'BBD': '분당', 'PAN': '판교', 'ETC': '기타'
         };
         
         function getRegionDisplayName(regionCode, guideData) {
-            let code = (regionCode || 'ETC').toUpperCase();
-            if (code === 'PAN') code = 'BBD';  // ★ 폐지 권역 통합
+            const code = (regionCode || 'ETC').toUpperCase();
             // 1. 별칭 확인
             const alias = guideData?.regionAliases?.[code];
             if (alias && alias.displayName) {
@@ -1285,7 +1266,7 @@
                     </div>
                     <div class="ending-right">
                         <div class="ending-image-grid">
-                            ${[0,1,2,3,4,5,6,7].map(i => {
+                            ${[0,1,2,3,4,5,6,7,8,9].map(i => {
                                 const img = images[i];
                                 return `
                                     <div class="ending-img-cell">
@@ -1502,7 +1483,7 @@
                     <div class="page-body">
                         <!-- 좌측: 외관 + 위치 -->
                         <div class="col">
-                            <div class="section section-photo${(item.exteriorFit === 'cover') ? '' : ' fit-contain'}">
+                            <div class="section section-photo">
                                 <div class="section-title">BUILDING PHOTO</div>
                                 <div class="image-box">
                                     ${exteriorImg ? `<img src="${typeof exteriorImg === 'string' ? exteriorImg : exteriorImg.url}" alt="외관">` : '<div class="no-image">이미지 없음</div>'}
@@ -1526,7 +1507,7 @@
                                     <tr><th>연면적</th><td>${formatArea(building.grossFloorPy || building.area?.grossFloorPy)} 평</td></tr>
                                     <tr><th>규모</th><td>B${building.floorsBelow || building.floors?.below || 0} / ${building.floorsAbove || building.floors?.above || 0}F</td></tr>
                                     <tr><th>준공년도</th><td>${building.completionYear || building.specs?.completionYear || '-'}</td></tr>
-                                    <tr><th>기준층(임대/전용)</th><td>${formatTypicalFloor(building)}</td></tr>
+                                    <tr><th>기준층(전용)</th><td>${(building.typicalFloorPy && parseFloat(building.typicalFloorPy) > 0) ? formatArea(building.typicalFloorPy || building.area?.typicalFloorPy) + ' 평' : '-'}</td></tr>
                                     <tr><th>전용률</th><td>${(()=>{ const v = building.exclusiveRate || building.area?.exclusiveRate; const n = parseFloat(v); return (!v || isNaN(n) || n === 0) ? '-' : n.toFixed(2) + '%'; })()}</td></tr>
                                     <tr><th>E/V</th><td>총 ${getElevatorTotal(building)}대</td></tr>
                                     <tr><th>주차</th><td>총 ${String(getParkingTotal(building) || '-').replace(/대+$/, '')}대${getParkingNote(building) ? '<br><span style="font-size:inherit; color:inherit;">' + String(getParkingNote(building)).replace(/^대\s*/, '').replace(/\n/g, '<br>') + '</span>' : ''}</td></tr>
@@ -1797,7 +1778,7 @@
                 
                 // ★ 권역별 빌딩 그룹핑 (순서 유지를 위해 tocItems 인덱스도 저장)
                 const regionGroups = {};
-                const REGION_ORDER = ['GBD', 'YBD', 'CBD', 'BBD', 'MBD', 'ETC'];
+                const REGION_ORDER = ['GBD', 'YBD', 'CBD', 'BBD', 'PAN', 'ETC'];
                 
                 tocItems.forEach((item, tocIdx) => {
                     if (item.buildingId) {

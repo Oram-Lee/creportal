@@ -3,8 +3,8 @@
  * 간지 페이지 관리 (Quill 리치텍스트)
  */
 
-import { state, storage, storageRef, uploadString, getDownloadURL } from './guide-state.js?v=5.2';
-import { showToast } from './guide-utils.js?v=5.7';
+import { state, storage, storageRef, uploadString, getDownloadURL } from './guide-state.js?v=5.1';
+import { showToast } from './guide-utils.js?v=5.1';
 // renderToc은 window 객체를 통해 호출 (순환 의존성 방지)
 
 // Quill 에디터 인스턴스
@@ -123,7 +123,7 @@ export function renderDividerEditor(item, idx) {
     const region = (prevItem?.region || prevBuilding?.region || 'ETC').toUpperCase();
     const REGION_NAMES = {
         'GBD': '강남', 'YBD': '여의도', 'CBD': '도심', 
-        'BBD': '분당·판교', 'MBD': '마곡', 'ETC': '기타'
+        'BBD': '분당', 'PAN': '판교', 'ETC': '기타'
     };
     const regionName = REGION_NAMES[region] || region;
     

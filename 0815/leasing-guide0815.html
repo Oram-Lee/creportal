@@ -890,7 +890,6 @@
         .toc-region-header-banner.region-CBD,
         .toc-region-header-banner.region-BBD,
         .toc-region-header-banner.region-PAN,
-        .toc-region-header-banner.region-MBD,
         .toc-region-header-banner.region-ETC {
             background: #2b323d;
         }
@@ -5329,13 +5328,6 @@
         .region-badge.region-YBD, .region-tag.region-YBD { background: #ede9fe; color: #5b21b6; }
         .region-badge.region-BBD, .region-tag.region-BBD { background: #fee2e2; color: #991b1b; }
         .region-badge.region-PAN, .region-tag.region-PAN { background: #fef3c7; color: #92400e; }
-        .region-badge.region-MBD, .region-tag.region-MBD { background: #ccfbf1; color: #115e59; }
-        /* ★ 외관사진 맞춤 모드: 세로 사진 잘림 방지 (기본값) */
-        .preview-building-photo.fit-contain img,
-        .photo-content.fit-contain .building-photo {
-            object-fit: contain !important;
-            background: #ffffff;
-        }
         .region-badge.region-ETC, .region-tag.region-ETC { background: #f1f5f9; color: #475569; }
         /* 커스텀 권역 (리테일, 지방 등) - 기본 스타일 */
         .region-badge[class*="region-"], .region-tag[class*="region-"] {
@@ -6013,7 +6005,7 @@
         .ending-image-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
             gap: 10px;
             width: 100%;
             max-width: 380px;
@@ -6493,7 +6485,6 @@
                         <button class="picker-filter-btn" data-region="CBD" onclick="filterByRegion('CBD')">CBD</button>
                         <button class="picker-filter-btn" data-region="YBD" onclick="filterByRegion('YBD')">YBD</button>
                         <button class="picker-filter-btn" data-region="BBD" onclick="filterByRegion('BBD')">BBD</button>
-                        <button class="picker-filter-btn" data-region="MBD" onclick="filterByRegion('MBD')">MBD</button>
                         <button class="picker-filter-btn" data-region="ETC" onclick="filterByRegion('ETC')">기타</button>
                         <button class="picker-filter-btn" data-region="starred" onclick="filterByRegion('starred')">⭐ 즐겨찾기</button>
                     </div>
@@ -7268,7 +7259,7 @@
     <!-- ★ v4.6: guideState 전역 노출 (담당자 변경 기능에서 사용) -->
     <!-- ★ v5.6: ?v=5.1 버전 쿼리 통일 → guide-building.js 등 모듈과 동일 인스턴스 공유 -->
     <script type="module">
-        import { state } from './js/guide/guide-state.js?v=5.2';
+        import { state } from './js/guide/guide-state.js?v=5.1';
         window.guideState = state;
         console.log('[Guide] guideState 전역 노출 완료');
     </script>
@@ -7289,6 +7280,6 @@
     </script>
 
     <!-- 모듈 로드 -->
-    <script type="module" src="./js/guide/guide-main.js?v=6.23"></script>
+    <script type="module" src="./js/guide/guide-main.js?v=6.22"></script>
 </body>
 </html>
