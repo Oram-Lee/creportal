@@ -6436,6 +6436,20 @@
                     </div>
                 </div>
 
+                <!-- ★ 문서 타입 (오피스 / 리테일) -->
+                <div class="form-group">
+                    <label>문서 타입</label>
+                    <div class="position-btn-group" style="display:flex; gap:4px; max-width:320px;">
+                        <button type="button" class="position-btn active" data-gtype="office"
+                                onclick="selectCreateGuideType('office')">🏢 오피스</button>
+                        <button type="button" class="position-btn" data-gtype="retail"
+                                onclick="selectCreateGuideType('retail')">🛍️ 리테일</button>
+                    </div>
+                    <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">
+                        공실표·임대조건 표 구성이 타입에 따라 달라집니다.
+                    </div>
+                </div>
+
                 <div class="form-group" id="prevGuideGroup" style="display:none;">
                     <label>재활용할 안내문</label>
                     <select id="prevGuideSelect" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px;">
