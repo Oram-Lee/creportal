@@ -19,14 +19,14 @@ import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-ut
 import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.10';
 import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.4';
 import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.10';
-import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.19';
+import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.20';
 import { registerVacancyFunctions } from './guide-vacancy.js?v=5.16';
 import { registerMapFunctions } from './guide-map.js?v=6.3';
 import { registerNoteFunctions } from './guide-note.js?v=5.2';
 import { registerDividerFunctions } from './guide-divider.js?v=5.3';
 import { registerModalFunctions } from './guide-modal.js?v=5.4';
 import { registerContactFunctions } from './guide-contact.js?v=5.2';
-import { registerPreviewFunctions } from './guide-preview.js?v=5.8';
+import { registerPreviewFunctions } from './guide-preview.js?v=5.9';
 
 // Firebase 참조를 state 모듈에 전달 (db/storage는 어댑터에서 import됨)
 initFirebase({ db, ref, get, set, push, update, remove, storage, storageRef, uploadString, getDownloadURL });

@@ -592,8 +592,8 @@ function renderBuildingPreviewPage(data) {
     const vacCols = VACANCY_COLUMNS[guideType];
     const vacancies = filterVacanciesByType([
         ...(item.customVacancies || []).map((v, i) => ({...v, usage: v.usage || guideType, type: 'custom', id: `custom_${i}`})),
-        ...(item.selectedExternalVacancies || []),
-        ...(item.leasingGuideVacancies || [])  // portal.html에서 저장된 공실
+        ...(item.selectedExternalVacancies || []).map(v => ({...v, usage: v.usage || guideType})),
+        ...(item.leasingGuideVacancies || []).map(v => ({...v, usage: v.usage || guideType}))  // portal.html에서 저장된 공실
     ], guideType);
     
     // ★ v4.6: 담당자 - item에 지정된 담당자 우선, 없으면 빌딩 담당자, 그것도 없으면 기본값
@@ -604,7 +604,11 @@ function renderBuildingPreviewPage(data) {
         : (buildingContacts.length > 0 
             ? buildingContacts 
             : (window.DEFAULT_CONTACT_POINTS || []));
+    // ★ NOTE 소스 — item.noteMode 가 'custom'이면 이 문서 전용 노트를 쓴다 (원본 정의: guide-building.js)
     const guideMemos = (building.memos || []).filter(m => m.showInLeasingGuide);
+    const noteText = (item.noteMode === 'custom')
+        ? (item.customNote || '')
+        : guideMemos.map(m => (m.content || '')).join('\n');
     
     // 빌딩 정보 정규화
     normalizeBuilding(building);
@@ -780,8 +784,8 @@ function renderBuildingPreviewPage(data) {
                     <div class="preview-section note-section">
                         <div class="section-title">NOTE</div>
                         <div class="section-content note-content">
-                            ${guideMemos.length > 0 
-                                ? guideMemos.map(m => `<div class="note-item">• ${(m.content||"").replace(/\n/g,"<br>")}</div>`).join('') 
+                            ${noteText.trim()
+                                ? noteText.split('\n').filter(l => l.trim()).map(l => `<div class="note-item">• ${l.trim()}</div>`).join('')
                                 : '<div class="note-empty">-</div>'}
                         </div>
                     </div>

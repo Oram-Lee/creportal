@@ -88,8 +88,8 @@ function mergeVacanciesForGuide(item) {
     const type = getGuideType();
     const merged = [
         ...(item.customVacancies || []).map((v, i) => ({ ...v, usage: v.usage || type, type: 'custom', id: `custom_${i}` })),
-        ...(item.selectedExternalVacancies || []),
-        ...(item.leasingGuideVacancies || []).map((v, i) => ({ ...v, type: 'guide', id: `guide_${i}` }))
+        ...(item.selectedExternalVacancies || []).map(v => ({ ...v, usage: v.usage || type })),
+        ...(item.leasingGuideVacancies || []).map((v, i) => ({ ...v, usage: v.usage || type, type: 'guide', id: `guide_${i}` }))
     ];
     return filterVacanciesByType(merged, type);
 }
@@ -476,28 +476,46 @@ export function renderBuildingEditor(item, building) {
     const allVacancies = sortVacancies(allVacanciesRaw, item.vacancySortOrder);
     
     // NOTE (임대안내문 표시용 메모) — 인라인 편집
+    // ★ noteMode: 'shared'(빌딩 공용, 기본) | 'custom'(이 문서 전용)
+    //   shared 는 buildings/{id}/memos 를 읽고 쓴다 — 같은 빌딩이 담긴 다른 안내문에도 함께 반영된다.
+    //   custom 은 item.customNote 에만 저장한다 — 빌딩 레코드를 건드리지 않아 다른 안내문에 영향이 없다.
+    //   기본값을 shared 로 두어 기존 안내문의 동작은 그대로 유지된다.
+    const noteMode = (item.noteMode === 'custom') ? 'custom' : 'shared';
     const guideMemos = (building.memos || []).filter(m => m.showInLeasingGuide);
+    const sharedNoteText = guideMemos.map(m => (m.content || '')).join('\n');
+    const noteCurrentText = (noteMode === 'custom') ? (item.customNote || '') : sharedNoteText;
     // 미들닷: 각 줄마다 • 처리
     const renderNoteLines = (content) =>
         (content || '').split('\n')
             .filter(l => l.trim())
             .map(l => `<div class="note-item">• ${l.trim()}</div>`)
             .join('');
-    const noteDisplayHtml = guideMemos.length === 0
+    const noteDisplayHtml = !noteCurrentText.trim()
         ? `<div class="preview-note-placeholder" onclick="startNoteInlineEdit(${idx}, '${building.id}')">📝 클릭하여 노트 추가</div>`
-        : guideMemos.map(m => renderNoteLines(m.content)).join('');
-    const noteCurrentText = guideMemos.map(m => (m.content||'')).join('\n');
+        : renderNoteLines(noteCurrentText);
+    const noteModeBtn = (mode, label, title) => {
+        const on = noteMode === mode;
+        return `<button class="info-action-btn" title="${title}" onclick="setNoteMode(${idx}, '${mode}')"
+            style="font-size:10px; padding:1px 7px; ${on ? 'background:#2563eb; color:#fff; border-color:#2563eb;' : 'color:#94a3b8;'}">${label}</button>`;
+    };
     const noteHtml = `
         <div class="preview-note-section${guideMemos.length === 0 ? ' preview-note-empty' : ''}">
             <div class="preview-section-title" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>NOTE</span>
-                <button class="info-action-btn" onclick="startNoteInlineEdit(${idx}, '${building.id}')" title="노트 편집">✏️</button>
+                <span style="display:flex; gap:6px; align-items:center;">
+                    <span style="display:inline-flex; gap:2px;">
+                        ${noteModeBtn('shared', '공용', '빌딩 공용 노트 — 같은 빌딩이 담긴 다른 안내문에도 함께 반영됩니다')}
+                        ${noteModeBtn('custom', '이 문서', '이 문서 전용 노트 — 이 안내문에서만 보입니다')}
+                    </span>
+                    <button class="info-action-btn" onclick="startNoteInlineEdit(${idx}, '${building.id}')" title="노트 편집">✏️</button>
+                </span>
             </div>
             <div id="noteDisplay_${idx}" class="preview-note-content">${noteDisplayHtml}</div>
             <div id="noteEditor_${idx}" style="display:none; margin-top:6px;">
                 <textarea id="noteTextarea_${idx}"
                     style="width:100%; box-sizing:border-box; min-height:90px; font-size:12px; border:1px solid #bae6fd; border-radius:6px; padding:8px; resize:vertical; font-family:inherit; color:#1e293b;"
                     placeholder="줄바꿈(Enter)으로 항목을 구분합니다&#10;예) 6월 19일 사용승인예정&#10;2,3층 업무시설 가능"
+                    data-note-mode="${noteMode}"
                 >${noteCurrentText}</textarea>
                 <div style="display:flex; gap:6px; margin-top:6px; justify-content:flex-end;">
                     <button class="info-action-btn" onclick="cancelNoteInlineEdit(${idx})" style="color:#64748b;">취소</button>
@@ -2773,10 +2791,45 @@ export function cancelNoteInlineEdit(idx) {
     editor.style.display = 'none';
 }
 
+// ★ NOTE 소스 전환 — 'shared'(빌딩 공용) | 'custom'(이 문서 전용)
+//   전용으로 처음 바꿀 때 공용 노트를 시작점으로 복사해 둔다. 빈 화면에서 다시 쓰게 만들지 않기 위해서다.
+//   한 번 복사한 뒤에는 두 노트가 완전히 분리되어 서로 영향을 주지 않는다.
+export function setNoteMode(idx, mode) {
+    const item = state.tocItems?.[idx];
+    if (!item) return;
+    const next = (mode === 'custom') ? 'custom' : 'shared';
+    if ((item.noteMode === 'custom' ? 'custom' : 'shared') === next) return;
+
+    const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
+    if (next === 'custom' && item.customNote === undefined) {
+        item.customNote = (building.memos || [])
+            .filter(m => m.showInLeasingGuide)
+            .map(m => m.content || '')
+            .join('\n');
+    }
+    item.noteMode = next;
+    renderBuildingEditor(item, building);
+    showToast(next === 'custom'
+        ? '이 문서 전용 노트로 바꿨습니다 — 다른 안내문에는 반영되지 않습니다'
+        : '빌딩 공용 노트로 바꿨습니다', 'info');
+}
+
 export async function saveNoteInline(idx, buildingId) {
     const ta = document.getElementById(`noteTextarea_${idx}`);
     if (!ta) return;
     const newText = ta.value.trim();
+
+    // ★ 전용 노트는 item 에만 저장한다 — 빌딩 레코드를 건드리지 않으므로 다른 안내문에 영향이 없다.
+    //   Firebase 반영은 안내문 저장([임시저장]/[발행]) 시점에 items 와 함께 이뤄진다.
+    const itemForNote = state.tocItems?.[idx];
+    if (itemForNote && itemForNote.noteMode === 'custom') {
+        itemForNote.customNote = newText;
+        const b = state.allBuildings.find(x => x.id === buildingId) || {};
+        renderBuildingEditor(itemForNote, b);
+        showToast('노트를 저장했습니다 — 안내문 저장 시 반영됩니다', 'success');
+        return;
+    }
+
     try {
         const building = state.allBuildings.find(b => b.id === buildingId);
         if (!building) return;
@@ -2895,6 +2948,7 @@ export function registerBuildingFunctions() {
     window.startNoteInlineEdit = startNoteInlineEdit;
     window.cancelNoteInlineEdit = cancelNoteInlineEdit;
     window.saveNoteInline = saveNoteInline;
+    window.setNoteMode = setNoteMode;   // ★ NOTE 공용/전용 전환
     window.setMainImage = setMainImage;
     window.removeImage = removeImage;
     window.removeMapImage = removeMapImage;

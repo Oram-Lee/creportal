@@ -1504,8 +1504,8 @@
             const vacCols = VACANCY_COLUMNS[guideType];
             const vacanciesRaw = filterVacanciesByType([
                 ...(item.customVacancies || []).map(v => ({ ...v, usage: v.usage || guideType })),
-                ...(item.selectedExternalVacancies || []),
-                ...(item.leasingGuideVacancies || [])
+                ...(item.selectedExternalVacancies || []).map(v => ({ ...v, usage: v.usage || guideType })),
+                ...(item.leasingGuideVacancies || []).map(v => ({ ...v, usage: v.usage || guideType }))
             ], guideType);
             
             // ★ 정렬 적용 (item.vacancySortOrder, 기본값: asc)
@@ -1517,7 +1517,12 @@
             });
             
             // NOTE (메모)
-            const notes = (building.memos || []).filter(m => m.showInLeasingGuide);
+            // ★ NOTE 소스 — item.noteMode 가 'custom'이면 이 문서 전용 노트를 쓴다.
+            //   ES 모듈이 아니라 import가 불가능하므로 guide-building.js 의 판정을 인라인 복제한다. (원본은 그쪽)
+            const noteText = (item.noteMode === 'custom')
+                ? (item.customNote || '')
+                : (building.memos || []).filter(m => m.showInLeasingGuide).map(m => (m.content || '')).join('\n');
+            const noteLines = noteText.split('\n').filter(l => l.trim());
             
             // 담당자 - 기본값 설정 (leasing-guide.html과 동일)
             const DEFAULT_CONTACTS = [
@@ -1699,12 +1704,12 @@
                                     ${guideType === 'retail' && item.retailRentNote ? `<div class="rent-footnote" style="font-size:7pt; color:#64748b; margin-top:2pt;">${item.retailRentNote}</div>` : ''}
                                 </div>
                                 
-                                ${notes.length > 0 ? `
+                                ${noteLines.length > 0 ? `
                                 <!-- NOTE (있는 경우만) -->
                                 <div class="section section-note">
                                     <div class="section-title">NOTE</div>
                                     <div class="note-box">
-                                        ${notes.map(n => (n.content || '').split('\n').filter(l => l.trim()).map(l => `<div class="note-item">• ${l.trim()}</div>`).join('')).join('')}
+                                        ${noteLines.map(l => `<div class="note-item">• ${l.trim()}</div>`).join('')}
                                     </div>
                                 </div>
                                 ` : ''}
