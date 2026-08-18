@@ -1311,6 +1311,99 @@
         #transferBtn[disabled] { opacity: 0.45 !important; cursor: not-allowed !important; }
     </style>
     
+    <!-- ★ 리테일: 안내문 공실(직접입력) 편집 모달 — #vacancyEditModal 복제본, 타사 공실과 분리 -->
+    <div id="guideVacancyOverlay" onclick="closeGuideVacancyModal()" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1010;"></div>
+    <div id="guideVacancyEditModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:24px; width:90%; max-width:560px; max-height:88vh; overflow-y:auto; z-index:1011; box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="font-size:18px; font-weight:600;">📄 안내문 공실 <span id="gvModalMode" style="font-size:13px; color:var(--text-muted);">추가</span></h3>
+            <button onclick="closeGuideVacancyModal()" style="background:none; border:none; font-size:24px; cursor:pointer; color:var(--text-muted);">×</button>
+        </div>
+
+        <div id="gvVacancyFields">
+        <div style="display:flex; gap:16px; align-items:center; margin-bottom:14px; padding:10px 12px; background:var(--bg-primary); border-radius:8px;">
+            <span style="font-size:12px; color:var(--text-muted);">구분</span>
+            <label style="display:flex; align-items:center; gap:5px; font-size:14px; cursor:pointer;"><input type="radio" name="gvUsage" value="office" checked onchange="_gvSyncUsage()"> 오피스</label>
+            <label style="display:flex; align-items:center; gap:5px; font-size:14px; cursor:pointer;"><input type="radio" name="gvUsage" value="retail" onchange="_gvSyncUsage()"> 리테일</label>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;"><span id="gvFloorLabel">공실층</span></label>
+                <input type="text" id="gvFloor" placeholder="3F, B1 등" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">입주시기</label>
+                <input type="text" id="gvMoveIn" placeholder="즉시, 25.04 등" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">전용면적(평)</label>
+                <input type="text" id="gvExclusiveArea" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">임대면적(평)</label>
+                <input type="text" id="gvRentArea" oninput="_gvSyncTotals()" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">보증금(원/평)</label>
+                <input type="text" id="gvDeposit" placeholder="문의 가능" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">임대료(원/평)</label>
+                <input type="text" id="gvRent" oninput="_gvSyncTotals()" placeholder="문의 가능" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                <div id="gvRentTotal" style="font-size:11px; color:#2563eb; margin-top:3px;"></div>
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">관리비(원/평)</label>
+                <input type="text" id="gvMaintenance" oninput="_gvSyncTotals()" placeholder="문의 가능" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                <div id="gvMntTotal" style="font-size:11px; color:#2563eb; margin-top:3px;"></div>
+            </div>
+            <div>
+                <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">업종·비고</label>
+                <input type="text" id="gvNote" placeholder="1층 코너, 카페 등" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+            </div>
+        </div>
+        </div>
+
+        <details id="gvRetailSection" style="margin-top:16px; border:1px solid var(--border-color); border-radius:8px; padding:10px 12px;">
+            <summary style="font-size:13px; font-weight:600; cursor:pointer; color:var(--text-muted);">🏬 리테일 부가정보 (빌딩 공통)</summary>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+                <div>
+                    <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">전면 길이(m)</label>
+                    <input type="text" id="gvFrontage" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">층고(m)</label>
+                    <input type="text" id="gvCeilingHeight" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">권리금</label>
+                    <input type="text" id="gvPremium" placeholder="무권리 등" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">업종 제한</label>
+                    <input type="text" id="gvRestrictions" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                </div>
+                <div style="grid-column: span 2;">
+                    <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">주요 입점 브랜드</label>
+                    <input type="text" id="gvAnchorTenants" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                </div>
+                <div style="grid-column: span 2;">
+                    <label style="display:block; font-size:12px; color:var(--text-muted); margin-bottom:4px;">유동인구·상권 메모</label>
+                    <input type="text" id="gvTrafficNote" style="width:100%; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; font-size:14px;">
+                </div>
+            </div>
+        </details>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px; padding-top:16px; border-top:1px solid var(--border-color);">
+            <button onclick="closeGuideVacancyModal()" style="padding:10px 20px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); cursor:pointer;">취소</button>
+            <button id="gvSaveBtn" onclick="saveGuideVacancyEdit()" style="padding:10px 20px; border:none; border-radius:6px; background:var(--accent-color); color:white; cursor:pointer; font-weight:600;">저장</button>
+        </div>
+    </div>
+    <style>
+        #guideVacancyEditModal.show { display: block !important; }
+        #guideVacancyOverlay.show { display: block !important; }
+    </style>
+
     <!-- ★ 이슈3: 공실 이관 모달 -->
     <div id="vacancyTransferModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border-radius:12px; padding:24px; width:90%; max-width:560px; z-index:1002; box-shadow:0 10px 40px rgba(0,0,0,0.25);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -7204,17 +7297,19 @@
             }
 
             // ★ v6.11: 안내문 직접입력 공실/기준가 노출 데이터 반영
-            if (data && (data.guideVacancy !== undefined || data.guideFloorPricing !== undefined)) {
+            if (data && (data.guideVacancy !== undefined || data.guideFloorPricing !== undefined || data.retailInfo !== undefined)) {
                 if (window.state?.allBuildings) {
                     const gi = window.state.allBuildings.findIndex(b => b.id === buildingId);
                     if (gi >= 0) {
                         if (data.guideVacancy !== undefined) window.state.allBuildings[gi].guideVacancy = data.guideVacancy;
                         if (data.guideFloorPricing !== undefined) window.state.allBuildings[gi].guideFloorPricing = data.guideFloorPricing;
+                        if (data.retailInfo !== undefined) window.state.allBuildings[gi].retailInfo = data.retailInfo;
                     }
                 }
                 if (window.state?.selectedBuilding?.id === buildingId) {
                     if (data.guideVacancy !== undefined) window.state.selectedBuilding.guideVacancy = data.guideVacancy;
                     if (data.guideFloorPricing !== undefined) window.state.selectedBuilding.guideFloorPricing = data.guideFloorPricing;
+                    if (data.retailInfo !== undefined) window.state.selectedBuilding.retailInfo = data.retailInfo;
                     if (typeof window.refreshGuideManualBlocks === 'function') window.refreshGuideManualBlocks();
                 }
             }
@@ -7229,29 +7324,90 @@
         };
         const _guideEsc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+        // ★ 리테일: usage 배지 + 월 총액(평당가 × 임대면적) 계산
+        const _guideNum = (v) => {
+            const n = Number(String(v ?? '').replace(/,/g, '').trim());
+            return isNaN(n) ? null : n;
+        };
+        const _guideMonthly = (unitPrice, rentArea) => {
+            const p = _guideNum(unitPrice), a = _guideNum(rentArea);
+            if (p === null || a === null || p <= 0 || a <= 0) return '';
+            return Math.round(p * a).toLocaleString('ko-KR');
+        };
+        const _guideUsageBadge = (u) => (u || 'office') === 'retail'
+            ? '<span style="font-size:10px; font-weight:700; color:#b45309; background:#fef3c7; padding:2px 6px; border-radius:8px;">리테일</span>'
+            : '<span style="font-size:10px; font-weight:700; color:#3730a3; background:#e0e7ff; padding:2px 6px; border-radius:8px;">오피스</span>';
+
+        let _gvFilter = 'all';   // ★ 리테일: 안내문 공실 블록 하위 탭 (all|office|retail)
+
+        function _renderRetailInfoPanel() {
+            const ri = window.state?.selectedBuilding?.retailInfo || {};
+            const F = [['전면 길이', ri.frontage, 'm'], ['층고', ri.ceilingHeight, 'm'], ['권리금', ri.premium, ''],
+                       ['업종 제한', ri.restrictions, ''], ['주요 입점', ri.anchorTenants, ''], ['상권 메모', ri.trafficNote, '']];
+            const cells = F.map(([label, val, unit]) => `
+                <div style="min-width:0;">
+                    <div style="font-size:10px; color:#a16207;">${label}</div>
+                    <div style="font-size:12px; color:#78350f; font-weight:600; word-break:break-all;">${val ? _guideEsc(val) + (unit && !isNaN(Number(val)) ? unit : '') : '-'}</div>
+                </div>`).join('');
+            return `
+            <div style="padding:10px 14px; background:#fffbeb; border-bottom:1px solid #fde68a;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                    <span style="font-size:11px; font-weight:700; color:#b45309;">🏬 리테일 부가정보</span>
+                    <button onclick="openRetailInfoModal()" style="font-size:11px; font-weight:600; padding:3px 9px; border:1px solid #fcd34d; border-radius:6px; background:#fff; color:#b45309; cursor:pointer;">편집</button>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px 12px;">${cells}</div>
+            </div>`;
+        }
+
         function _renderGuideVacancyBlock(gv) {
-            const rows = (gv.vacancies || []).map(v => `
+            const all = gv?.vacancies || [];
+            const cnt = { all: all.length, office: 0, retail: 0 };
+            all.forEach(v => { cnt[(v.usage || 'office') === 'retail' ? 'retail' : 'office']++; });
+            // 원본 인덱스를 유지해야 수정·삭제가 올바른 행을 가리킨다
+            const list = _gvFilter === 'all' ? all.map((v, i) => [v, i])
+                       : all.map((v, i) => [v, i]).filter(([v]) => (v.usage || 'office') === _gvFilter);
+            const tabs = [['all', '전체'], ['office', '오피스'], ['retail', '리테일']].map(([k, label]) => {
+                const on = _gvFilter === k;
+                return `<button onclick="setGuideVacancyFilter('${k}')" style="font-size:11px; font-weight:600; padding:3px 10px; border:1px solid ${on ? '#2563eb' : '#dbeafe'}; border-radius:12px; background:${on ? '#2563eb' : '#fff'}; color:${on ? '#fff' : '#64748b'}; cursor:pointer;">${label} ${cnt[k]}</button>`;
+            }).join('');
+            const rows = list.map(([v, i]) => {
+                const isRetail = (v.usage || 'office') === 'retail';
+                const monthlyRent = isRetail ? _guideMonthly(v.rent, v.rentArea) : '';
+                const monthlyMnt = isRetail ? _guideMonthly(v.maintenance, v.rentArea) : '';
+                return `
                 <tr>
-                    <td style="padding:7px 8px; text-align:center; border-bottom:1px solid #eef2f7;">${_guideEsc(v.floor)}</td>
+                    <td style="padding:7px 8px; text-align:center; border-bottom:1px solid #eef2f7;">${_guideUsageBadge(v.usage)}</td>
+                    <td style="padding:7px 8px; text-align:center; border-bottom:1px solid #eef2f7;">${_guideEsc(v.floor)}${v.note ? `<div style="font-size:10px; color:#94a3b8; margin-top:2px;">${_guideEsc(v.note)}</div>` : ''}</td>
                     <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.exclusiveArea)}</td>
                     <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.rentArea)}</td>
                     <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.deposit)}</td>
-                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.rent)}</td>
-                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.maintenance)}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.rent)}${monthlyRent ? `<div style="font-size:10px; color:#94a3b8;">월 ${monthlyRent}</div>` : ''}</td>
+                    <td style="padding:7px 8px; text-align:right; border-bottom:1px solid #eef2f7;">${_guideFmt(v.maintenance)}${monthlyMnt ? `<div style="font-size:10px; color:#94a3b8;">월 ${monthlyMnt}</div>` : ''}</td>
                     <td style="padding:7px 8px; text-align:center; border-bottom:1px solid #eef2f7;">${_guideEsc(v.moveIn)}</td>
-                </tr>`).join('');
-            const upd = gv.updatedAt ? new Date(gv.updatedAt).toLocaleDateString('ko-KR') : '';
+                    <td style="padding:7px 8px; text-align:center; border-bottom:1px solid #eef2f7; white-space:nowrap;">
+                        <button onclick="openGuideVacancyModal(${i})" title="수정" style="font-size:12px; padding:2px 6px; border:1px solid #e2e8f0; border-radius:4px; background:#fff; color:#64748b; cursor:pointer;">✏️</button>
+                        <button onclick="deleteGuideVacancyRow(${i})" title="삭제" style="font-size:12px; padding:2px 7px; border:1px solid #fecaca; border-radius:4px; background:#fff; color:#dc2626; cursor:pointer; margin-left:3px;">×</button>
+                    </td>
+                </tr>`;
+            }).join('');
+            const upd = gv?.updatedAt ? new Date(gv.updatedAt).toLocaleDateString('ko-KR') : '';
+            const addLabel = _gvFilter === 'retail' ? '＋ 리테일 추가' : '＋ 공실 추가';
             return `
             <div class="guide-manual-vacancy" style="margin-bottom:16px; border:1px solid #bfdbfe; border-radius:10px; overflow:hidden;">
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#eff6ff;">
                     <div style="font-size:13px; font-weight:700; color:#1d4ed8;">📄 안내문 공실 <span style="font-size:11px; font-weight:600; color:#2563eb; background:#dbeafe; padding:2px 8px; border-radius:10px; margin-left:4px;">직접입력</span></div>
-                    <div style="font-size:11px; color:#94a3b8;">${gv.vacancies?.length || 0}건${upd ? ' · ' + upd : ''}</div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:11px; color:#94a3b8;">${upd}</span>
+                        <button onclick="openGuideVacancyModal(-1)" style="font-size:11px; font-weight:600; padding:4px 10px; border:1px solid #93c5fd; border-radius:6px; background:#fff; color:#1d4ed8; cursor:pointer;">${addLabel}</button>
+                    </div>
                 </div>
+                <div style="display:flex; gap:6px; padding:8px 14px; background:#f8fafc; border-bottom:1px solid #eef2f7;">${tabs}</div>
+                ${_gvFilter === 'retail' ? _renderRetailInfoPanel() : ''}
                 <table style="width:100%; border-collapse:collapse; font-size:12px;">
                     <thead><tr style="background:#f8fafc; color:#64748b; font-weight:600;">
-                        <th style="padding:8px; text-align:center;">층</th><th style="padding:8px; text-align:right;">전용(평)</th><th style="padding:8px; text-align:right;">임대(평)</th><th style="padding:8px; text-align:right;">보증금</th><th style="padding:8px; text-align:right;">임대료</th><th style="padding:8px; text-align:right;">관리비</th><th style="padding:8px; text-align:center;">입주시기</th>
+                        <th style="padding:8px; text-align:center;">구분</th><th style="padding:8px; text-align:center;">층</th><th style="padding:8px; text-align:right;">전용(평)</th><th style="padding:8px; text-align:right;">임대(평)</th><th style="padding:8px; text-align:right;">보증금</th><th style="padding:8px; text-align:right;">임대료</th><th style="padding:8px; text-align:right;">관리비</th><th style="padding:8px; text-align:center;">입주시기</th><th style="padding:8px; text-align:center;">관리</th>
                     </tr></thead>
-                    <tbody>${rows || '<tr><td colspan="7" style="padding:12px; text-align:center; color:#94a3b8;">공실 없음</td></tr>'}</tbody>
+                    <tbody>${rows || `<tr><td colspan="9" style="padding:12px; text-align:center; color:#94a3b8;">${_gvFilter === 'retail' ? '리테일' : _gvFilter === 'office' ? '오피스' : ''} 공실 없음 — [${addLabel}]로 입력하세요</td></tr>`}</tbody>
                 </table>
             </div>`;
         }
@@ -7285,7 +7441,8 @@
             const dSec = document.getElementById('sectionDocument');
             if (dSec) {
                 const ex = dSec.querySelector('.guide-manual-vacancy');
-                if (b?.guideVacancy?.show) { if (!ex) dSec.insertAdjacentHTML('afterbegin', _renderGuideVacancyBlock(b.guideVacancy)); }
+                // ★ 리테일: guideVacancy가 없어도 빈 블록을 노출해 입력 진입점을 제공
+                if (b) { if (!ex) dSec.insertAdjacentHTML('afterbegin', _renderGuideVacancyBlock(b.guideVacancy || { vacancies: [] })); }
                 else if (ex) ex.remove();
             }
             const pSec = document.getElementById('sectionPricing');
@@ -7301,6 +7458,181 @@
         }
         window.injectGuideManualBlocks = injectGuideManualBlocks;
         window.refreshGuideManualBlocks = refreshGuideManualBlocks;
+
+        // ═══ ★ 리테일: 안내문 공실 직접입력(포털) ═══════════════════
+        let _gvEditIndex = -1;
+        let _gvMode = 'vacancy';   // 'vacancy' | 'retail'(부가정보 전용)
+        const _gvVal = (id) => (document.getElementById(id)?.value || '').trim();
+        const _gvSet = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+
+        function _gvSyncUsage() {
+            const isRetail = document.querySelector('input[name="gvUsage"]:checked')?.value === 'retail';
+            const fl = document.getElementById('gvFloorLabel');
+            if (fl) fl.textContent = isRetail ? '매장층' : '공실층';
+            const sec = document.getElementById('gvRetailSection');
+            if (sec) sec.open = isRetail;
+            _gvSyncTotals();
+        }
+        function _gvSyncTotals() {
+            const isRetail = document.querySelector('input[name="gvUsage"]:checked')?.value === 'retail';
+            const area = _gvVal('gvRentArea');
+            const rt = document.getElementById('gvRentTotal'), mt = document.getElementById('gvMntTotal');
+            const r = isRetail ? _guideMonthly(_gvVal('gvRent'), area) : '';
+            const m = isRetail ? _guideMonthly(_gvVal('gvMaintenance'), area) : '';
+            if (rt) rt.textContent = r ? `월 총액 ${r}원` : '';
+            if (mt) mt.textContent = m ? `월 총액 ${m}원` : '';
+        }
+
+        async function openGuideVacancyModal(index, mode) {
+            const b = window.state?.selectedBuilding;
+            if (!b?.id) { if (typeof showToast === 'function') showToast('빌딩을 먼저 선택하세요', 'error'); return; }
+            _gvMode = (mode === 'retail') ? 'retail' : 'vacancy';
+            _gvEditIndex = Number(index);
+            const v = _gvEditIndex >= 0 ? (b.guideVacancy?.vacancies?.[_gvEditIndex] || {}) : {};
+            document.getElementById('gvModalMode').textContent =
+                _gvMode === 'retail' ? '부가정보' : (_gvEditIndex >= 0 ? '수정' : '추가');
+            const fields = document.getElementById('gvVacancyFields');
+            if (fields) fields.style.display = (_gvMode === 'retail') ? 'none' : '';
+            _gvSet('gvFloor', v.floor); _gvSet('gvMoveIn', v.moveIn);
+            _gvSet('gvExclusiveArea', v.exclusiveArea); _gvSet('gvRentArea', v.rentArea);
+            _gvSet('gvDeposit', v.deposit); _gvSet('gvRent', v.rent);
+            _gvSet('gvMaintenance', v.maintenance); _gvSet('gvNote', v.note);
+            // 신규 추가 시에는 현재 선택된 하위 탭을 기본 구분으로
+            const usage = _gvEditIndex >= 0 ? (v.usage || 'office') : (_gvFilter === 'retail' ? 'retail' : 'office');
+            document.querySelectorAll('input[name="gvUsage"]').forEach(r => { r.checked = (r.value === usage); });
+
+            // retailInfo: state 우선, 없으면 1회 조회
+            let ri = b.retailInfo;
+            if (ri === undefined) {
+                try {
+                    const { db, ref, get } = await import('./js/portal-firebase.js');
+                    const snap = await get(ref(db, `buildings/${b.id}/retailInfo`));
+                    ri = snap?.val?.() ?? null;
+                    b.retailInfo = ri || null;
+                } catch (_) { ri = null; }
+            }
+            ri = ri || {};
+            _gvSet('gvFrontage', ri.frontage); _gvSet('gvCeilingHeight', ri.ceilingHeight);
+            _gvSet('gvPremium', ri.premium); _gvSet('gvRestrictions', ri.restrictions);
+            _gvSet('gvAnchorTenants', ri.anchorTenants); _gvSet('gvTrafficNote', ri.trafficNote);
+
+            _gvSyncUsage();
+            if (_gvMode === 'retail') { const sec = document.getElementById('gvRetailSection'); if (sec) sec.open = true; }
+            document.getElementById('guideVacancyOverlay').classList.add('show');
+            document.getElementById('guideVacancyEditModal').classList.add('show');
+        }
+        function closeGuideVacancyModal() {
+            document.getElementById('guideVacancyOverlay')?.classList.remove('show');
+            document.getElementById('guideVacancyEditModal')?.classList.remove('show');
+            _gvEditIndex = -1;
+            _gvMode = 'vacancy';
+            const fields = document.getElementById('gvVacancyFields');
+            if (fields) fields.style.display = '';
+        }
+        function setGuideVacancyFilter(f) {
+            _gvFilter = (f === 'office' || f === 'retail') ? f : 'all';
+            refreshGuideManualBlocks();
+        }
+        const openRetailInfoModal = () => openGuideVacancyModal(-1, 'retail');
+
+        // 공통 저장: rows 배열과 retailInfo(선택)를 buildings/{id}에 반영 + 브로드캐스트
+        async function _gvPersist(rows, retailInfo) {
+            const b = window.state?.selectedBuilding;
+            if (!b?.id) return false;
+            const payload = {
+                show: true,
+                vacancies: rows,
+                guideId: b.guideVacancy?.guideId || '',
+                updatedAt: new Date().toISOString()
+            };
+            const patch = { guideVacancy: payload };
+            if (retailInfo) patch.retailInfo = retailInfo;
+            const { db, ref, update } = await import('./js/portal-firebase.js');
+            await update(ref(db, `buildings/${b.id}`), patch);
+
+            b.guideVacancy = payload;
+            if (retailInfo) b.retailInfo = retailInfo;
+            const gi = window.state?.allBuildings?.findIndex(x => x.id === b.id);
+            if (gi >= 0) {
+                window.state.allBuildings[gi].guideVacancy = payload;
+                if (retailInfo) window.state.allBuildings[gi].retailInfo = retailInfo;
+            }
+            try {
+                const bc = new BroadcastChannel('cre_portal_sync');
+                bc.postMessage({ type: 'buildingUpdated', buildingId: b.id, data: { guideVacancy: payload } });
+                if (retailInfo) bc.postMessage({ type: 'buildingUpdated', buildingId: b.id, data: { retailInfo } });
+                bc.close();
+            } catch (_) { /* 미지원 환경 무시 */ }
+            // 저장은 이미 완료 — 렌더 실패가 '저장 실패'로 보고되지 않도록 격리
+            try { refreshGuideManualBlocks(); } catch (e) { console.error('공실 블록 갱신 오류:', e); }
+            return true;
+        }
+
+        async function saveGuideVacancyEdit() {
+            const b = window.state?.selectedBuilding;
+            if (!b?.id) return;
+            if (_gvMode === 'vacancy' && !_gvVal('gvFloor')) { if (typeof showToast === 'function') showToast('층을 입력하세요', 'error'); return; }
+            const btn = document.getElementById('gvSaveBtn');
+            if (btn) btn.disabled = true;
+            try {
+                const rows = JSON.parse(JSON.stringify(b.guideVacancy?.vacancies || []));
+                const base = _gvEditIndex >= 0 ? (rows[_gvEditIndex] || {}) : { source: '포털입력' };
+                const row = _gvMode === 'retail' ? null : {
+                    ...base,
+                    floor: _gvVal('gvFloor'),
+                    exclusiveArea: _gvVal('gvExclusiveArea'),
+                    rentArea: _gvVal('gvRentArea'),
+                    deposit: _gvVal('gvDeposit') || '문의',
+                    rent: _gvVal('gvRent') || '문의',
+                    maintenance: _gvVal('gvMaintenance') || '문의',
+                    moveIn: _gvVal('gvMoveIn') || '즉시',
+                    usage: document.querySelector('input[name="gvUsage"]:checked')?.value || 'office',
+                    note: _gvVal('gvNote')
+                };
+                if (row) { if (_gvEditIndex >= 0) rows[_gvEditIndex] = row; else rows.push(row); }
+
+                const ri = {
+                    frontage: _gvVal('gvFrontage'), ceilingHeight: _gvVal('gvCeilingHeight'),
+                    trafficNote: _gvVal('gvTrafficNote'), anchorTenants: _gvVal('gvAnchorTenants'),
+                    restrictions: _gvVal('gvRestrictions'), premium: _gvVal('gvPremium')
+                };
+                const hasRetail = _gvMode === 'retail' || Object.values(ri).some(x => x !== '') || !!b.retailInfo;
+
+                await _gvPersist(rows, hasRetail ? ri : null);
+                closeGuideVacancyModal();
+                if (typeof showToast === 'function')
+                    showToast(_gvMode === 'retail' ? '✅ 리테일 부가정보를 저장했습니다' : '✅ 안내문 공실을 저장했습니다', 'success');
+            } catch (e) {
+                console.error('saveGuideVacancyEdit 오류:', e);
+                if (typeof showToast === 'function') showToast('저장에 실패했습니다', 'error');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        async function deleteGuideVacancyRow(index) {
+            const b = window.state?.selectedBuilding;
+            if (!b?.guideVacancy?.vacancies) return;
+            if (!confirm('이 공실을 삭제할까요?')) return;
+            try {
+                const rows = JSON.parse(JSON.stringify(b.guideVacancy.vacancies));
+                rows.splice(Number(index), 1);
+                await _gvPersist(rows, null);
+                if (typeof showToast === 'function') showToast('삭제했습니다', 'success');
+            } catch (e) {
+                console.error('deleteGuideVacancyRow 오류:', e);
+                if (typeof showToast === 'function') showToast('삭제에 실패했습니다', 'error');
+            }
+        }
+
+        window.openGuideVacancyModal = openGuideVacancyModal;
+        window.closeGuideVacancyModal = closeGuideVacancyModal;
+        window.saveGuideVacancyEdit = saveGuideVacancyEdit;
+        window.deleteGuideVacancyRow = deleteGuideVacancyRow;
+        window._gvSyncUsage = _gvSyncUsage;
+        window._gvSyncTotals = _gvSyncTotals;
+        window.setGuideVacancyFilter = setGuideVacancyFilter;
+        window.openRetailInfoModal = openRetailInfoModal;
 
         try {
             ['sectionDocument', 'sectionPricing'].forEach(id => {

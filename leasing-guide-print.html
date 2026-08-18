@@ -992,6 +992,50 @@
         }
         
         // ★ 면적 소수점 2자리 강제 표기
+        // ★ 공실표 컬럼 세트 — guide-state.js VACANCY_COLUMNS 의 복제본
+        //   (이 페이지는 ES 모듈이 아니라 import 불가. 수정 시 양쪽을 함께 고칠 것)
+        const VACANCY_COLUMNS = {
+            office: {
+                unitNotePrint: '(면적:평 | 금액:원/평)',
+                print: ['층', '임대', '전용', '보증금', '임대료', '관리비', '입주']
+            },
+            retail: {
+                unitNotePrint: '(단위:평)',
+                print: ['매장층', '전용면적', '임대면적', '입주시기']
+            }
+        };
+
+        // ★ 문서 타입에 맞는 공실만 추리기 (usage 없는 기존 데이터는 'office')
+        function filterVacanciesByType(list, type) {
+            const t = (type === 'retail') ? 'retail' : 'office';
+            return (list || []).filter(v => (((v && v.usage) || 'office') === t));
+        }
+
+        // ★ 리테일 월 총액(원) = 단가(원/평) × 임대면적(평)
+        function retailMonthlyTotal(unitPrice, v) {
+            const num = x => {
+                if (x === undefined || x === null || x === '') return null;
+                const p = parseFloat(String(x).replace(/,/g, ''));
+                return isNaN(p) ? null : p;
+            };
+            const price = num(unitPrice);
+            if (price === null) return null;
+            const area = num(v && v.rentArea) ?? num(v && v.area) ?? num(v && v.exclusiveArea);
+            if (area === null || area <= 0) return null;
+            return Math.round(price * area);
+        }
+
+        // ★ 리테일 RENT 표 행 데이터 (보증금 값이 전무하면 컬럼 숨김)
+        function buildRetailRentRows(vacancies) {
+            const rows = (vacancies || []).map(v => ({
+                floor: v.floor,
+                deposit: retailMonthlyTotal(v.deposit ?? v.depositPy, v),
+                rent: retailMonthlyTotal(v.rent ?? v.rentPy, v),
+                maintenance: retailMonthlyTotal(v.maintenance ?? v.maintenancePy, v)
+            }));
+            return { rows, showDeposit: rows.some(r => r.deposit !== null) };
+        }
+
         function formatArea(n) {
             if (!n && n !== 0) return '-';
             const num = Number(n);
@@ -1455,11 +1499,14 @@
             };
             
             // 공실 데이터 통합
-            const vacanciesRaw = [
-                ...(item.customVacancies || []),
+            // ★ 문서 타입(guideType)에 해당하는 공실만 남긴다 (없으면 'office')
+            const guideType = (guideData.guideType === 'retail') ? 'retail' : 'office';
+            const vacCols = VACANCY_COLUMNS[guideType];
+            const vacanciesRaw = filterVacanciesByType([
+                ...(item.customVacancies || []).map(v => ({ ...v, usage: v.usage || guideType })),
                 ...(item.selectedExternalVacancies || []),
                 ...(item.leasingGuideVacancies || [])
-            ];
+            ], guideType);
             
             // ★ 정렬 적용 (item.vacancySortOrder, 기본값: asc)
             const sortOrder = item.vacancySortOrder || 'asc';
@@ -1494,7 +1541,7 @@
                         </div>
                         <div class="region-info" style="text-align:right; line-height:1.5;">
                             ${guideData.coverSettings?.logoImage ? `<img src="${guideData.coverSettings.logoImage}" alt="로고" style="height:20pt; display:block; margin-left:auto; margin-bottom:2pt;">` : ''}
-                            <div>Leasing Information (${region})</div>
+                            <div>Leasing Information (${guideType === 'retail' ? `Retail · ${region}` : region})</div>
                         </div>
                     </div>
                     
@@ -1544,20 +1591,32 @@
                         <div class="col col-right">
                             <!-- Space Availability (상단, 확장) -->
                             <div class="section section-vacancy">
-                                <div class="section-title">SPACE AVAILABILITY <span style="font-weight:normal; font-size:7pt; color:#94a3b8;">(면적:평 | 금액:원/평)</span></div>
+                                <div class="section-title">SPACE AVAILABILITY <span style="font-weight:normal; font-size:7pt; color:#94a3b8;">${vacCols.unitNotePrint}</span></div>
                                 <table class="vacancy-table">
                                     <thead>
                                         <tr>
-                                            <th>층</th>
-                                            <th>임대</th>
-                                            <th>전용</th>
-                                            <th>보증금</th>
-                                            <th>임대료</th>
-                                            <th>관리비</th>
-                                            <th>입주</th>
+                                            ${vacCols.print.map(h => `<th>${h}</th>`).join('')}
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        ${guideType === 'retail' ? `
+                                        ${vacancies.length > 0 ? vacancies.map(v => `
+                                            <tr>
+                                                <td class="floor">${formatFloor(v.floor)}</td>
+                                                <td>${formatArea(v.exclusiveArea || v.area)}</td>
+                                                <td>${formatArea(v.rentArea || v.area)}</td>
+                                                <td>${v.moveIn || v.moveInDate || '-'}</td>
+                                            </tr>
+                                        `).join('') : `<tr><td colspan="4" class="no-vacancy-cell">등록된 리테일 공실 없음</td></tr>`}
+                                        ${vacancies.length > 0 ? `
+                                            <tr class="total-row">
+                                                <td>합계</td>
+                                                <td>${formatArea(vacancies.reduce((s,v) => s + parseFloat(v.exclusiveArea || v.area || 0), 0))}</td>
+                                                <td>${formatArea(vacancies.reduce((s,v) => s + parseFloat(v.rentArea || v.area || 0), 0))}</td>
+                                                <td>-</td>
+                                            </tr>
+                                        ` : ''}
+                                        ` : `
                                         ${vacancies.length > 0 ? vacancies.map(v => `
                                             <tr>
                                                 <td class="floor">${formatFloor(v.floor)}</td>
@@ -1581,6 +1640,7 @@
                                                 <td colspan="4">-</td>
                                             </tr>
                                         ` : ''}
+                                        `}
                                     </tbody>
                                 </table>
                             </div>
@@ -1589,8 +1649,26 @@
                             <div class="col-bottom">
                                 <!-- RENT -->
                                 <div class="section section-rent">
-                                    <div class="section-title">RENT <span style="font-weight:normal; font-size:7pt; color:#94a3b8;">(단위:원/임대평)</span></div>
+                                    <div class="section-title">RENT <span style="font-weight:normal; font-size:7pt; color:#94a3b8;">${guideType === 'retail' ? '(단위:원/월 총액)' : '(단위:원/임대평)'}</span></div>
                                     <table class="rent-table">
+                                        ${guideType === 'retail' ? (() => {
+                                            const { rows, showDeposit } = buildRetailRentRows(vacancies);
+                                            const won = n => (n === null ? '문의' : n.toLocaleString());
+                                            const span = showDeposit ? 4 : 3;
+                                            return `
+                                        <tr>
+                                            <th>구분</th>
+                                            ${showDeposit ? '<th>보증금</th>' : ''}
+                                            <th>월 임대료</th>
+                                            <th>월 관리비</th>
+                                        </tr>
+                                        ${rows.length > 0 ? rows.map(r => `<tr>
+                                            <td>${formatFloor(r.floor)}</td>
+                                            ${showDeposit ? `<td>${won(r.deposit)}</td>` : ''}
+                                            <td>${won(r.rent)}</td>
+                                            <td>${won(r.maintenance)}</td>
+                                        </tr>`).join('') : `<tr><td colspan="${span}">-</td></tr>`}`;
+                                        })() : `
                                         <tr>
                                             <th>구분</th>
                                             <th>보증금</th>
@@ -1616,7 +1694,9 @@
                                                 <td>${formatPrice(building.maintenancePy || building.pricing?.maintenancePy)}</td>
                                             </tr>`;
                                         })()}
+                                        `}
                                     </table>
+                                    ${guideType === 'retail' && item.retailRentNote ? `<div class="rent-footnote" style="font-size:7pt; color:#64748b; margin-top:2pt;">${item.retailRentNote}</div>` : ''}
                                 </div>
                                 
                                 ${notes.length > 0 ? `
