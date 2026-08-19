@@ -869,13 +869,26 @@ export function renderBuildingEditor(item, building) {
                 <div class="image-manager-title">💰 기준가 관리</div>
                 <button onclick="refreshGuidePreview(${idx})" title="편집·추가한 값을 위 미리보기에 반영" style="padding:6px 14px; background:white; color:#0369a1; border:1px solid #7dd3fc; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;">🔄 미리보기 새로고침</button>
             </div>
+            ${guideType === 'retail' ? `
+            <!-- ★ v6.22: 리테일 문서에서는 기준가가 RENT 표에 반영되지 않는다.
+                 아무 효과 없는 UI로 보여 오해를 사므로 무엇이 표를 만드는지 명시한다.
+                 섹션 자체를 숨기지는 않는다 — 포털 노출(직접입력) 용도로 계속 쓰이기 때문. -->
+            <div style="margin:8px 0 0; padding:10px 12px; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; font-size:11.5px; color:#92400e; line-height:1.65;">
+                <strong>🛍️ 리테일 문서입니다.</strong>
+                위 RENT 표는 <strong>공실표의 임대료·관리비 × 임대면적</strong>으로 만들어집니다.
+                여기서 기준가를 선택·반영해도 <strong>RENT 표는 바뀌지 않습니다</strong> —
+                금액을 고치려면 <strong>공실 현황</strong>의 해당 행을 수정하세요.
+                이 영역은 <strong>Portal 빌딩 상세에 기준가를 노출</strong>하는 용도로만 동작합니다.
+            </div>` : ''}
             
             <!-- 기준층 정보 -->
             <div class="standard-floor-section">
                 <div style="margin-bottom:8px;">
                     <div class="standard-floor-title">📐 기준층 정보 직접 입력</div>
                     <div style="font-size:11px; color:#64748b; margin-top:3px; line-height:1.6;">
-                        기준가 정보가 미입력된 경우 직접 입력하거나 하단 기준가를 선택·반영하세요.
+                        ${guideType === 'retail'
+                            ? '입력한 값은 <strong>Portal 빌딩 기준가</strong>에만 저장됩니다. 안내문 RENT 표에는 반영되지 않습니다.'
+                            : '기준가 정보가 미입력된 경우 직접 입력하거나 하단 기준가를 선택·반영하세요.'}
                         저장 시 CRE Portal 해당 빌딩 기준가에 <strong style="color:#0369a1;">직접입력</strong> 구분으로 저장됩니다.
                     </div>
                     <label style="display:flex; align-items:center; gap:7px; margin-top:8px; padding:8px 10px; background:#fff; border:1px solid #bae6fd; border-radius:6px; font-size:12px; color:#334155; cursor:pointer;">
@@ -903,7 +916,9 @@ export function renderBuildingEditor(item, building) {
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
                             <div style="font-size:13px; font-weight:700; color:#0369a1; display:flex; align-items:center; gap:8px;">
                                 💰 기준가 선택
-                                <span style="font-weight:400; color:#64748b; font-size:11px;">체크 후 반영 · 선택 항목은 ↕로 노출 순서 변경</span>
+                                <span style="font-weight:400; color:#64748b; font-size:11px;">${guideType === 'retail'
+                                    ? '체크 후 반영 · <strong style="color:#b45309;">Portal 노출용</strong> (RENT 표 미반영)'
+                                    : '체크 후 반영 · 선택 항목은 ↕로 노출 순서 변경'}</span>
                             </div>
                             <button onclick="applyAllSelectedFloorPricing(${idx})"
                                 style="padding:7px 18px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap;">
