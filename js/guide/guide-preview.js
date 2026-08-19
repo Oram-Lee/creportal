@@ -30,8 +30,8 @@
  * - window.print() 기반 PDF 저장 기능
  */
 
-import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo, getRegionOrder, getGuideType, VACANCY_COLUMNS, filterVacanciesByType, buildRetailRentRows } from './guide-state.js?v=5.4';
-import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.9';
+import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo, getRegionOrder, getGuideType, VACANCY_COLUMNS, filterVacanciesByType, buildRetailRentRows, getRetailRoundUnit } from './guide-state.js?v=5.5';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.10';
 
 // ★ v3.6: 층 표기 정규화 함수 (FF 중복 방지)
 function formatFloorDisplay(floor) {
@@ -726,7 +726,7 @@ function renderBuildingPreviewPage(data) {
                         <div class="section-content">
                             <table class="rent-table">
                                 ${guideType === 'retail' ? (() => {
-                                    const { rows, showDeposit } = buildRetailRentRows(vacancies);
+                                    const { rows, showDeposit } = buildRetailRentRows(vacancies, getRetailRoundUnit(item));
                                     const won = n => (n === null ? '문의' : n.toLocaleString());
                                     const span = showDeposit ? 4 : 3;
                                     return `

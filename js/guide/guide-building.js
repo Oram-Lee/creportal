@@ -53,15 +53,15 @@
  * - 플레이스홀더 텍스트 변경: "드래그앤드롭, Ctrl+V 또는 클릭"
  */
 
-import { state, db, ref, get, update, getAllRegions, getGuideType, VACANCY_COLUMNS, filterVacanciesByType, buildRetailRentRows } from './guide-state.js?v=5.4';
-import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, imageMatchesUsage, normalizeImageList, cleanUnitValue, formatNumberInput, unformatNumber, bindCommaInputs } from './guide-utils.js?v=5.9';
+import { state, db, ref, get, update, getAllRegions, getGuideType, VACANCY_COLUMNS, filterVacanciesByType, buildRetailRentRows, getRetailRoundUnit, RETAIL_ROUND_UNITS } from './guide-state.js?v=5.5';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, imageMatchesUsage, normalizeImageList, cleanUnitValue, formatNumberInput, unformatNumber, bindCommaInputs } from './guide-utils.js?v=5.10';
 import { 
     getUniqueSourcesHtml, 
     getUniqueDatesHtml, 
     renderExternalVacancyGroups, 
     renderExternalCartItems,
     renderExternalCartTags 
-} from './guide-vacancy.js?v=5.17';
+} from './guide-vacancy.js?v=5.18';
 
 // ★ 메인 "선택된 공실" 표(tbody)만 즉시 재렌더 — 전체 에디터 재렌더 없이 라이브 반영
 //   (타사 공실 체크 시 패널/아코디언을 닫지 않고 공실 현황 표를 갱신하기 위함)
@@ -140,7 +140,7 @@ export function refreshVacancyListTable(idx) {
     refreshPreviewVacancyTable(idx);
 }
 
-import { initBuildingKakaoMap } from './guide-map.js?v=6.4';
+import { initBuildingKakaoMap } from './guide-map.js?v=6.5';
 
 // ★ v5.0: 공실 최대 개수 (A4 가로 기준, 헤더/합계 포함)
 const MAX_VACANCIES_PER_BUILDING = 12;
@@ -327,7 +327,7 @@ export function refreshPreviewVacancyTable(idx) {
 
 // ★ 리테일 RENT 표 (편집 프리뷰) — 층별 다행 + 월 총액(원) + 각주 인라인 편집
 function renderRetailRentHTML(idx, item, vacancies) {
-    const { rows, showDeposit } = buildRetailRentRows(vacancies);
+    const { rows, showDeposit } = buildRetailRentRows(vacancies, getRetailRoundUnit(item));
     const won = n => (n === null ? '문의' : n.toLocaleString());
     const span = showDeposit ? 4 : 3;
     return `
@@ -349,6 +349,20 @@ function renderRetailRentHTML(idx, item, vacancies) {
 }
 
 // ★ 리테일 RENT 각주 문구 저장 (빌딩 장표별)
+// ★ v6.23: 장표별 금액 표기 단위 — 빈 값이면 문서 기본값을 따른다
+export function setItemRoundUnit(idx, value) {
+    const item = state.tocItems?.[idx];
+    if (!item) return;
+    if (value === '' || value === null || value === undefined) delete item.retailRoundUnit;
+    else {
+        const u = Number(value);
+        if (u === 0 || u === 1000 || u === 10000) item.retailRoundUnit = u;
+        else delete item.retailRoundUnit;
+    }
+    const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
+    renderBuildingEditor(item, building);
+}
+
 export function updateRetailRentNote(idx, value) {
     const item = state.tocItems?.[idx];
     if (!item) return;
@@ -772,11 +786,18 @@ export function renderBuildingEditor(item, building) {
                             `}
                         </table>
                         ${guideType === 'retail' ? `
-                        <input type="text" class="retail-rent-note-input"
-                            value="${(item.retailRentNote || '').replace(/"/g, '&quot;')}"
-                            onchange="updateRetailRentNote(${idx}, this.value)"
-                            placeholder="각주 (예: *보증금 별도  *4구비 별도)"
-                            style="width:100%; box-sizing:border-box; margin-top:4px; padding:3px 6px; border:1px dashed #cbd5e1; border-radius:4px; font-size:8px; color:#64748b;">
+                        <div style="display:flex; gap:4px; align-items:center; margin-top:4px;">
+                            <select onchange="setItemRoundUnit(${idx}, this.value)" title="이 장표의 금액 표기 단위 (문서 기본값을 덮어씁니다)"
+                                style="flex:none; padding:3px 4px; border:1px dashed #cbd5e1; border-radius:4px; font-size:8px; color:#64748b; background:#fff; cursor:pointer;">
+                                <option value="" ${item.retailRoundUnit === undefined ? 'selected' : ''}>문서기본(${RETAIL_ROUND_UNITS.find(u => u.value === (state.retailRoundUnit ?? 0))?.label || '원'})</option>
+                                ${RETAIL_ROUND_UNITS.map(u => `<option value="${u.value}" ${item.retailRoundUnit === u.value ? 'selected' : ''}>${u.label}</option>`).join('')}
+                            </select>
+                            <input type="text" class="retail-rent-note-input"
+                                value="${(item.retailRentNote || '').replace(/"/g, '&quot;')}"
+                                onchange="updateRetailRentNote(${idx}, this.value)"
+                                placeholder="각주 (예: *보증금 별도  *4구비 별도)"
+                                style="flex:1; min-width:0; box-sizing:border-box; padding:3px 6px; border:1px dashed #cbd5e1; border-radius:4px; font-size:8px; color:#64748b;">
+                        </div>
                         ` : ''}
                     </div>
                     
@@ -870,16 +891,27 @@ export function renderBuildingEditor(item, building) {
                 <button onclick="refreshGuidePreview(${idx})" title="편집·추가한 값을 위 미리보기에 반영" style="padding:6px 14px; background:white; color:#0369a1; border:1px solid #7dd3fc; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;">🔄 미리보기 새로고침</button>
             </div>
             ${guideType === 'retail' ? `
-            <!-- ★ v6.22: 리테일 문서에서는 기준가가 RENT 표에 반영되지 않는다.
-                 아무 효과 없는 UI로 보여 오해를 사므로 무엇이 표를 만드는지 명시한다.
-                 섹션 자체를 숨기지는 않는다 — 포털 노출(직접입력) 용도로 계속 쓰이기 때문. -->
-            <div style="margin:8px 0 0; padding:10px 12px; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; font-size:11.5px; color:#92400e; line-height:1.65;">
-                <strong>🛍️ 리테일 문서입니다.</strong>
-                위 RENT 표는 <strong>공실표의 임대료·관리비 × 임대면적</strong>으로 만들어집니다.
-                여기서 기준가를 선택·반영해도 <strong>RENT 표는 바뀌지 않습니다</strong> —
-                금액을 고치려면 <strong>공실 현황</strong>의 해당 행을 수정하세요.
-                이 영역은 <strong>Portal 빌딩 상세에 기준가를 노출</strong>하는 용도로만 동작합니다.
-            </div>` : ''}
+            <!-- ★ v6.23: 리테일에서는 기준가가 RENT 표에 반영되지 않는다.
+                 안내는 접힘 바깥에 크게 두고, 조작 UI만 접는다.
+                 섹션을 숨기지 않는 이유 — Portal 노출(직접입력) 대상 선택이 여기서만 가능하다. -->
+            <div style="margin:10px 0 0; padding:14px 16px; background:#fffbeb; border:1px solid #fcd34d; border-left:4px solid #f59e0b; border-radius:8px; color:#92400e; line-height:1.7;">
+                <div style="font-size:14px; font-weight:800; margin-bottom:6px;">🛍️ 리테일 문서 — 여기는 RENT 표와 무관합니다</div>
+                <div style="font-size:12.5px;">
+                    위 RENT 표는 <strong>공실 현황의 임대료·관리비 × 임대면적</strong>으로 만들어집니다.
+                    금액을 고치려면 <strong>공실 현황</strong>의 해당 행을 수정하세요.
+                </div>
+                <div style="font-size:12.5px; margin-top:6px; padding-top:6px; border-top:1px dashed #fcd34d;">
+                    이 영역은 <strong>Portal 빌딩 상세에 어떤 기준가를 노출할지 고르는</strong> 용도로만 동작합니다.
+                </div>
+            </div>
+            <details id="fpFold_${idx}" style="margin-top:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff;">
+                <summary style="cursor:pointer; padding:9px 12px; font-size:12px; font-weight:700; color:#475569; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <span>📤 Portal 노출 기준가 설정</span>
+                    <span style="font-weight:600; color:#94a3b8; font-size:11px;">
+                        기준가 ${(item.floorPricing?.length || 0)}건 · Portal 노출 ${building.guideFloorPricing?.show ? 'ON' : 'OFF'} · 클릭하여 펼치기
+                    </span>
+                </summary>
+                <div style="padding:0 4px 6px;">` : ''}
             
             <!-- 기준층 정보 -->
             <div class="standard-floor-section">
@@ -915,15 +947,16 @@ export function renderBuildingEditor(item, building) {
                     <div style="margin-top:12px; padding:12px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px;">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
                             <div style="font-size:13px; font-weight:700; color:#0369a1; display:flex; align-items:center; gap:8px;">
-                                💰 기준가 선택
+                                ${guideType === 'retail' ? '📤 Portal 노출 기준가 선택' : '💰 기준가 선택'}
                                 <span style="font-weight:400; color:#64748b; font-size:11px;">${guideType === 'retail'
-                                    ? '체크 후 반영 · <strong style="color:#b45309;">Portal 노출용</strong> (RENT 표 미반영)'
+                                    ? '체크한 항목만 Portal 빌딩 상세에 노출 · ↕로 노출 순서 변경'
                                     : '체크 후 반영 · 선택 항목은 ↕로 노출 순서 변경'}</span>
                             </div>
+                            ${guideType === 'retail' ? '' : `
                             <button onclick="applyAllSelectedFloorPricing(${idx})"
                                 style="padding:7px 18px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap;">
                                 ✓ 반영
-                            </button>
+                            </button>`}
                         </div>
                         <table style="width:100%; border-collapse:collapse; font-size:13px;">
                             <thead>
@@ -978,6 +1011,7 @@ export function renderBuildingEditor(item, building) {
                     </div>
                 ` : ''}
             </div>
+            ${guideType === 'retail' ? `</div></details>` : ''}
         </div>
 
         <!-- 공실 관리 섹션 -->
@@ -2445,7 +2479,11 @@ export function jumpToEditSection(target, idx, buildingId) {
             byId('imageManagerSection');
             setTimeout(() => document.querySelector(`.image-tab[data-type="${target}"]`)?.click(), 350);
             break;
-        case 'floorPricing': byId('floorPricingSection'); break;
+        case 'floorPricing':
+            // 리테일에서는 접혀 있으므로 먼저 펼친다
+            document.getElementById(`fpFold_${idx}`)?.setAttribute('open', '');
+            byId('floorPricingSection');
+            break;
         case 'vacancy': byId('vacancySection'); break;
         case 'note':
             scrollTo('.preview-note-section');
@@ -3063,6 +3101,7 @@ export function registerBuildingFunctions() {
     // 타사 공실 토글/필터/초기화 함수는 guide-vacancy.js에서 단일 등록 (중복 제거)
     window.refreshVacancyListTable = refreshVacancyListTable;
     window.updateRetailRentNote = updateRetailRentNote;   // ★ 리테일 RENT 각주
+    window.setItemRoundUnit = setItemRoundUnit;           // ★ 리테일 장표별 금액 표기 단위
     window.refreshPreviewVacancyTable = refreshPreviewVacancyTable;
     window.toggleExteriorFit = toggleExteriorFit;
     window.updateDirectRow = updateDirectRow;

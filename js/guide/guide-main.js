@@ -10,23 +10,23 @@
 import { db, ref, get, set, push, update, remove, storage, storageRef, uploadString, getDownloadURL } from '../portal-firebase.js';
 
 // State
-import { state, initFirebase, setCurrentUser, setAllBuildings, setLeasingGuides, setCoverSettings, resetCoverSettings } from './guide-state.js?v=5.4';
+import { state, initFirebase, setCurrentUser, setAllBuildings, setLeasingGuides, setCoverSettings, resetCoverSettings } from './guide-state.js?v=5.5';
 
 // Utils
-import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-utils.js?v=5.9';
+import { showToast, initTheme, toggleTheme, normalizeBuilding } from './guide-utils.js?v=5.10';
 
 // Modules
-import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.11';
-import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.5';
-import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.11';
-import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.22';
-import { registerVacancyFunctions } from './guide-vacancy.js?v=5.17';
-import { registerMapFunctions } from './guide-map.js?v=6.4';
-import { registerNoteFunctions } from './guide-note.js?v=5.3';
-import { registerDividerFunctions } from './guide-divider.js?v=5.4';
-import { registerModalFunctions } from './guide-modal.js?v=5.5';
-import { registerContactFunctions } from './guide-contact.js?v=5.3';
-import { registerPreviewFunctions } from './guide-preview.js?v=5.10';
+import { renderGuideList, registerListFunctions } from './guide-list.js?v=5.12';
+import { renderToc, registerTocFunctions } from './guide-toc.js?v=5.6';
+import { renderCoverEditor, registerCoverFunctions } from './guide-cover.js?v=5.12';
+import { renderBuildingEditor, registerBuildingFunctions } from './guide-building.js?v=6.23';
+import { registerVacancyFunctions } from './guide-vacancy.js?v=5.18';
+import { registerMapFunctions } from './guide-map.js?v=6.5';
+import { registerNoteFunctions } from './guide-note.js?v=5.4';
+import { registerDividerFunctions } from './guide-divider.js?v=5.5';
+import { registerModalFunctions } from './guide-modal.js?v=5.6';
+import { registerContactFunctions } from './guide-contact.js?v=5.4';
+import { registerPreviewFunctions } from './guide-preview.js?v=5.11';
 
 // Firebase 참조를 state 모듈에 전달 (db/storage는 어댑터에서 import됨)
 initFirebase({ db, ref, get, set, push, update, remove, storage, storageRef, uploadString, getDownloadURL });

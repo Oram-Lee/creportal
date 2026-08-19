@@ -1025,13 +1025,28 @@
             return Math.round(price * area);
         }
 
+        // ★ 리테일 월 총액 표기 단위 — 원본은 guide-state.js. 수정 시 양쪽 함께.
+        function validRoundUnit(u) { return (u === 0 || u === 1000 || u === 10000) ? u : null; }
+        function getRetailRoundUnit(item, guideData) {
+            const byItem = validRoundUnit(item && item.retailRoundUnit);
+            if (byItem !== null) return byItem;
+            const byDoc = validRoundUnit(guideData && guideData.retailRoundUnit);
+            return byDoc !== null ? byDoc : 0;
+        }
+        function roundToUnit(n, unit) {
+            if (n === null || n === undefined) return n;
+            const u = validRoundUnit(unit);
+            if (!u) return n;
+            return Math.round(n / u) * u;
+        }
+
         // ★ 리테일 RENT 표 행 데이터 (보증금 값이 전무하면 컬럼 숨김)
-        function buildRetailRentRows(vacancies) {
+        function buildRetailRentRows(vacancies, roundUnit) {
             const rows = (vacancies || []).map(v => ({
                 floor: v.floor,
-                deposit: retailMonthlyTotal(v.deposit ?? v.depositPy, v),
-                rent: retailMonthlyTotal(v.rent ?? v.rentPy, v),
-                maintenance: retailMonthlyTotal(v.maintenance ?? v.maintenancePy, v)
+                deposit: roundToUnit(retailMonthlyTotal(v.deposit ?? v.depositPy, v), roundUnit),
+                rent: roundToUnit(retailMonthlyTotal(v.rent ?? v.rentPy, v), roundUnit),
+                maintenance: roundToUnit(retailMonthlyTotal(v.maintenance ?? v.maintenancePy, v), roundUnit)
             }));
             return { rows, showDeposit: rows.some(r => r.deposit !== null) };
         }
@@ -1657,7 +1672,7 @@
                                     <div class="section-title">RENT <span style="font-weight:normal; font-size:7pt; color:#94a3b8;">${guideType === 'retail' ? '(단위:원/월 총액)' : '(단위:원/임대평)'}</span></div>
                                     <table class="rent-table">
                                         ${guideType === 'retail' ? (() => {
-                                            const { rows, showDeposit } = buildRetailRentRows(vacancies);
+                                            const { rows, showDeposit } = buildRetailRentRows(vacancies, getRetailRoundUnit(item, guideData));
                                             const won = n => (n === null ? '문의' : n.toLocaleString());
                                             const span = showDeposit ? 4 : 3;
                                             return `

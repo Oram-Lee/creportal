@@ -3,8 +3,8 @@
  * 장바구니 형태의 빌딩 선택 UI
  */
 
-import { state, getGuideType } from './guide-state.js?v=5.4';
-import { showToast, detectRegion, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.9';
+import { state, getGuideType } from './guide-state.js?v=5.5';
+import { showToast, detectRegion, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.10';
 // renderToc은 window 객체를 통해 호출 (순환 의존성 방지)
 
 // 빌딩 장바구니

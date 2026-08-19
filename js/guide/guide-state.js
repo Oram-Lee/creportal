@@ -44,6 +44,10 @@ export const state = {
     currentGuide: null,
     // ★ 문서 타입 (기본 'office')
     guideType: 'office',
+    // ★ 리테일 월 총액 절삭 단위 (문서 기본값) — 0=원 | 1000=천원 | 10000=만원
+    //   장표(item.retailRoundUnit)에 값이 있으면 그쪽이 우선한다.
+    //   guideType과 같은 문서 고유 속성이므로 localStorage에는 저장하지 않는다.
+    retailRoundUnit: 0,
     tocItems: [],
     selectedTocIndex: -1,
     coverSettings: {
@@ -136,16 +140,47 @@ export function retailMonthlyTotal(unitPrice, v) {
     return Math.round(price * area);
 }
 
+// ★ 리테일 월 총액 절삭 단위 — 표시 전용. 저장값(원/평)은 건드리지 않는다.
+export const RETAIL_ROUND_UNITS = [
+    { value: 0,     label: '원',   short: '원 단위' },
+    { value: 1000,  label: '천원', short: '천원 단위' },
+    { value: 10000, label: '만원', short: '만원 단위' }
+];
+
+const _validRoundUnit = (u) => (u === 0 || u === 1000 || u === 10000) ? u : null;
+
+// 장표(item) 값이 있으면 우선, 없으면 문서 기본값, 그래도 없으면 원 단위
+export function getRetailRoundUnit(item) {
+    const byItem = _validRoundUnit(item?.retailRoundUnit);
+    if (byItem !== null) return byItem;
+    const byDoc = _validRoundUnit(state.retailRoundUnit);
+    return byDoc !== null ? byDoc : 0;
+}
+
+export function setRetailRoundUnit(unit) {
+    state.retailRoundUnit = _validRoundUnit(unit) ?? 0;
+}
+
+// 반올림 (내림이 아니다 — 14,832,700 → 만원 단위 → 14,830,000)
+export function roundToUnit(n, unit) {
+    if (n === null || n === undefined) return n;
+    const u = _validRoundUnit(unit);
+    if (!u) return n;
+    return Math.round(n / u) * u;
+}
+
 // ★ 리테일 RENT 표 행 데이터 — 층별 다행, 금액은 월 총액(원)
 //   보증금은 값이 하나도 없으면 컬럼 자체를 숨긴다 (showDeposit=false)
-export function buildRetailRentRows(vacancies) {
+//   roundUnit: 표시용 절삭 단위. 생략하면 절삭 없음 (기존 호출부 회귀 방지)
+export function buildRetailRentRows(vacancies, roundUnit) {
+    const r = n => roundToUnit(retailMonthlyTotal(n.price, n.v), roundUnit);
     const rows = (vacancies || []).map(v => ({
         floor: v.floor,
-        deposit: retailMonthlyTotal(v.deposit ?? v.depositPy, v),
-        rent: retailMonthlyTotal(v.rent ?? v.rentPy, v),
-        maintenance: retailMonthlyTotal(v.maintenance ?? v.maintenancePy, v)
+        deposit: r({ price: v.deposit ?? v.depositPy, v }),
+        rent: r({ price: v.rent ?? v.rentPy, v }),
+        maintenance: r({ price: v.maintenance ?? v.maintenancePy, v })
     }));
-    return { rows, showDeposit: rows.some(r => r.deposit !== null) };
+    return { rows, showDeposit: rows.some(r2 => r2.deposit !== null) };
 }
 
 // Firebase 초기화 함수

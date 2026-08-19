@@ -3,8 +3,8 @@
  * 간지 페이지 관리 (Quill 리치텍스트)
  */
 
-import { state, storage, storageRef, uploadString, getDownloadURL } from './guide-state.js?v=5.4';
-import { showToast } from './guide-utils.js?v=5.9';
+import { state, storage, storageRef, uploadString, getDownloadURL } from './guide-state.js?v=5.5';
+import { showToast } from './guide-utils.js?v=5.10';
 // renderToc은 window 객체를 통해 호출 (순환 의존성 방지)
 
 // Quill 에디터 인스턴스

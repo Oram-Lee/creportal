@@ -8,8 +8,8 @@
  * - Firebase 저장 전 데이터 크기 경고
  */
 
-import { state, db, ref, get, set, push, update, remove, getGuideType, setGuideType } from './guide-state.js?v=5.4';
-import { showToast, formatDate, getRegionName } from './guide-utils.js?v=5.9';
+import { state, db, ref, get, set, push, update, remove, getGuideType, setGuideType, setRetailRoundUnit } from './guide-state.js?v=5.5';
+import { showToast, formatDate, getRegionName } from './guide-utils.js?v=5.10';
 // 순환 의존성 방지 - window 객체를 통해 호출
 // openEditor, setTocItemsFromGuide, loadCoverSettings
 
@@ -424,6 +424,7 @@ export function editGuide(guideId) {
     
     // ★ 문서 타입 로드 (값이 없는 기존 안내문은 'office')
     setGuideType(guide.guideType || 'office');
+    setRetailRoundUnit(guide.retailRoundUnit);   // ★ 절삭 단위 (없으면 원 단위)
     
     // coverSettings 로드
     window.loadCoverSettings(guide);
@@ -532,6 +533,7 @@ export async function saveDraft() {
             regionSummary,
             status: 'draft',
             guideType: getGuideType(),   // ★ 문서 타입
+            retailRoundUnit: state.retailRoundUnit ?? 0,   // ★ 리테일 월 총액 절삭 단위(문서 기본)
             coverSettings: state.coverSettings ? JSON.parse(JSON.stringify(state.coverSettings)) : {},
             endingSettings: state.endingSettings ? JSON.parse(JSON.stringify(state.endingSettings)) : {},
             customRegions: state.customRegions ? JSON.parse(JSON.stringify(state.customRegions)) : [],
@@ -601,6 +603,7 @@ export async function saveFinal() {
             regionSummary,
             status: 'published',
             guideType: getGuideType(),   // ★ 문서 타입
+            retailRoundUnit: state.retailRoundUnit ?? 0,   // ★ 리테일 월 총액 절삭 단위(문서 기본)
             coverSettings: state.coverSettings ? JSON.parse(JSON.stringify(state.coverSettings)) : {},
             endingSettings: state.endingSettings ? JSON.parse(JSON.stringify(state.endingSettings)) : {},
             customRegions: state.customRegions ? JSON.parse(JSON.stringify(state.customRegions)) : [],

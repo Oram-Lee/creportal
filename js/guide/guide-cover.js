@@ -3,8 +3,8 @@
  * 표지 템플릿, 엔딩 페이지, 커스텀 권역 관리
  */
 
-import { state, DEFAULT_REGIONS, getAllRegions, addCustomRegion, removeCustomRegion, setEndingSettings, saveSettingsToLocal, loadSettingsFromLocal, setRegionAlias, removeRegionAlias, getRegionAlias, getGuideType, setGuideType } from './guide-state.js?v=5.4';
-import { showToast } from './guide-utils.js?v=5.9';
+import { state, DEFAULT_REGIONS, getAllRegions, addCustomRegion, removeCustomRegion, setEndingSettings, saveSettingsToLocal, loadSettingsFromLocal, setRegionAlias, removeRegionAlias, getRegionAlias, getGuideType, setGuideType, setRetailRoundUnit, getRetailRoundUnit, RETAIL_ROUND_UNITS } from './guide-state.js?v=5.5';
+import { showToast } from './guide-utils.js?v=5.10';
 
 // coverSettings 로드
 export function loadCoverSettings(guide) {
@@ -97,6 +97,22 @@ export function renderCoverEditor() {
                     공실표·임대조건 표 구성이 타입에 따라 달라집니다.
                 </div>
             </div>
+            
+            ${getGuideType() === 'retail' ? `
+            <!-- ★ v5.12: 리테일 월 총액 표기 단위 (문서 기본값) -->
+            <div class="cover-setting-group" style="margin-top: 20px;">
+                <label class="cover-setting-label">RENT 금액 표기 단위</label>
+                <div class="position-btn-group" style="max-width:320px;">
+                    ${RETAIL_ROUND_UNITS.map(u => `
+                        <button type="button" class="position-btn ${(state.retailRoundUnit ?? 0) === u.value ? 'active' : ''}"
+                            onclick="event.stopPropagation(); selectRetailRoundUnit(${u.value})">${u.short}</button>
+                    `).join('')}
+                </div>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">
+                    월 총액의 끝자리를 반올림해 표기합니다. 예) 14,832,700 → 만원 단위 → 14,830,000<br>
+                    저장된 원/평 단가는 그대로이며 <strong>표기만</strong> 바뀝니다. 장표별로 따로 지정할 수도 있습니다.
+                </div>
+            </div>` : ''}
             
             <!-- 로고 업로드 -->
             <div class="cover-setting-group" style="margin-top: 20px;">
@@ -279,6 +295,13 @@ export function selectCoverTemplate(tpl) {
 
 // ★ 문서 타입 전환 (오피스 / 리테일)
 //   부제(subtitle)는 "비어 있을 때만" 자동으로 채운다 — 사용자가 직접 입력한 값은 보존
+// ★ 리테일 월 총액 표기 단위 (문서 기본값)
+export function selectRetailRoundUnit(unit) {
+    setRetailRoundUnit(unit);
+    renderCoverEditor();
+    showToast(`RENT 금액을 ${RETAIL_ROUND_UNITS.find(u => u.value === (state.retailRoundUnit ?? 0))?.short || '원 단위'}로 표기합니다`, 'success');
+}
+
 export function selectGuideType(type) {
     setGuideType(type);
     
@@ -1046,6 +1069,7 @@ export function registerCoverFunctions() {
     window.closeCoverPreviewModal = closeCoverPreviewModal;
     window.selectCoverTemplate = selectCoverTemplate;
     window.selectGuideType = selectGuideType;   // ★ 문서 타입 전환
+    window.selectRetailRoundUnit = selectRetailRoundUnit;   // ★ 리테일 금액 표기 단위
     window.updateCoverSetting = updateCoverSetting;
     window.setLogoPosition = setLogoPosition;
     window.uploadCoverImage = uploadCoverImage;
