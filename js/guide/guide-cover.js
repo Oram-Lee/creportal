@@ -3,8 +3,8 @@
  * 표지 템플릿, 엔딩 페이지, 커스텀 권역 관리
  */
 
-import { state, DEFAULT_REGIONS, getAllRegions, addCustomRegion, removeCustomRegion, setEndingSettings, saveSettingsToLocal, loadSettingsFromLocal, setRegionAlias, removeRegionAlias, getRegionAlias, getGuideType, setGuideType } from './guide-state.js?v=5.3';
-import { showToast } from './guide-utils.js?v=5.8';
+import { state, DEFAULT_REGIONS, getAllRegions, addCustomRegion, removeCustomRegion, setEndingSettings, saveSettingsToLocal, loadSettingsFromLocal, setRegionAlias, removeRegionAlias, getRegionAlias, getGuideType, setGuideType } from './guide-state.js?v=5.4';
+import { showToast } from './guide-utils.js?v=5.9';
 
 // coverSettings 로드
 export function loadCoverSettings(guide) {

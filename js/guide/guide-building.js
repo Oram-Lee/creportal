@@ -53,15 +53,15 @@
  * - 플레이스홀더 텍스트 변경: "드래그앤드롭, Ctrl+V 또는 클릭"
  */
 
-import { state, db, ref, get, update, getAllRegions, getGuideType, VACANCY_COLUMNS, filterVacanciesByType, buildRetailRentRows } from './guide-state.js?v=5.3';
-import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, cleanUnitValue, formatNumberInput, unformatNumber, bindCommaInputs } from './guide-utils.js?v=5.8';
+import { state, db, ref, get, update, getAllRegions, getGuideType, VACANCY_COLUMNS, filterVacanciesByType, buildRetailRentRows } from './guide-state.js?v=5.4';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, toWon, formatPriceWon, getExteriorImages, getFloorPlanImages, imageMatchesUsage, normalizeImageList, cleanUnitValue, formatNumberInput, unformatNumber, bindCommaInputs } from './guide-utils.js?v=5.9';
 import { 
     getUniqueSourcesHtml, 
     getUniqueDatesHtml, 
     renderExternalVacancyGroups, 
     renderExternalCartItems,
     renderExternalCartTags 
-} from './guide-vacancy.js?v=5.16';
+} from './guide-vacancy.js?v=5.17';
 
 // ★ 메인 "선택된 공실" 표(tbody)만 즉시 재렌더 — 전체 에디터 재렌더 없이 라이브 반영
 //   (타사 공실 체크 시 패널/아코디언을 닫지 않고 공실 현황 표를 갱신하기 위함)
@@ -140,7 +140,7 @@ export function refreshVacancyListTable(idx) {
     refreshPreviewVacancyTable(idx);
 }
 
-import { initBuildingKakaoMap } from './guide-map.js?v=6.3';
+import { initBuildingKakaoMap } from './guide-map.js?v=6.4';
 
 // ★ v5.0: 공실 최대 개수 (A4 가로 기준, 헤더/합계 포함)
 const MAX_VACANCIES_PER_BUILDING = 12;
@@ -391,10 +391,10 @@ export function renderBuildingEditor(item, building) {
     
     // 이미지 데이터 초기화 (Firebase에서 기존 이미지 가져오기)
     if (!item.exteriorImages || item.exteriorImages.length === 0) {
-        item.exteriorImages = getExteriorImages(building);
+        item.exteriorImages = getExteriorImages(building, guideType);
     }
     if (!item.floorPlanImages || item.floorPlanImages.length === 0) {
-        item.floorPlanImages = getFloorPlanImages(building);
+        item.floorPlanImages = getFloorPlanImages(building, guideType);
     }
     if (!item.mainImageIndex) item.mainImageIndex = 0;
     if (!item.customVacancies) item.customVacancies = [];
@@ -856,12 +856,9 @@ export function renderBuildingEditor(item, building) {
                 💡 권장 크기: 외관/평면도 <strong>800×600px</strong> | 지도 <strong>600×400px</strong> (가로 비율 4:3)
             </div>
             <div class="image-grid" id="imageGrid">
-                ${item.exteriorImages.length > 0 ? item.exteriorImages.map((img, i) => `
-                    <div class="image-thumb ${item.mainImageIndex === i ? 'main' : ''}" onclick="setMainImage(${idx}, ${i})" title="${item.mainImageIndex === i ? '메인 이미지' : '클릭하여 메인으로 설정'}">
-                        <img src="${typeof img === 'string' ? img : (img.url || img)}" alt="외관 ${i+1}">
-                        <button class="remove-btn" onclick="event.stopPropagation(); removeImage(${idx}, 'exterior', ${i})">×</button>
-                    </div>
-                `).join('') : '<div class="image-empty">등록된 외관 이미지가 없습니다</div>'}
+                ${item.exteriorImages.length > 0
+                    ? item.exteriorImages.map((img, i) => renderImageThumb(idx, 'exterior', img, i, item.mainImageIndex === i)).join('')
+                    : '<div class="image-empty">등록된 외관 이미지가 없습니다</div>'}
                 <button class="image-add-btn" onclick="uploadImage(${idx}, 'exterior')" title="이미지 추가">+</button>
             </div>
         </div>
@@ -1352,27 +1349,35 @@ function compressImage(dataUrl, maxWidth = 800, quality = 0.7) {
 }
 
 // ★ v2.3 신규: 이미지를 buildings 컬렉션에 동기화하는 함수
+// ★ v6.21: 머지 저장 — 화면(item) 배열은 문서 타입으로 걸러진 부분집합이므로 그대로 덮어쓰면
+//   반대 타입 전용 사진이 빌딩 레코드에서 영구 소실된다. 저장 직전 원본을 읽어 보존한다.
+//   로컬 캐시(building.exteriorImages)는 저장 직후 화면 배열로 덮어써지므로 머지 기준이 될 수 없다.
+//   반환값은 병합된 전체 배열 — 호출부는 이 값을 로컬 building 객체에 넣어야 한다.
 async function syncImageToBuilding(buildingId, type, images) {
-    if (!buildingId) return;
+    const list = images || [];
+    const field = type === 'exterior' ? 'exteriorImages'
+                : type === 'floorplan' ? 'floorPlanImages' : null;
+    if (!buildingId || !field) return list;
     
     try {
-        const updateData = {};
+        const docType = getGuideType();
+        const snapshot = await get(ref(db, `buildings/${buildingId}/${field}`));
+        const current = normalizeImageList(snapshot.exists() ? snapshot.val() : []);
         
-        if (type === 'exterior') {
-            updateData['exteriorImages'] = images;
-        } else if (type === 'floorplan') {
-            updateData['floorPlanImages'] = images;
-        }
+        // 화면에 있는 URL은 화면 쪽(최신 태그)을 채택하고, 나머지 반대 타입 전용만 보존
+        const shown = new Set(list.map(i => (typeof i === 'string' ? i : i?.url)).filter(Boolean));
+        const keep = current.filter(img => !imageMatchesUsage(img, docType) && !shown.has(img.url));
+        const merged = [...keep, ...list];
         
-        if (Object.keys(updateData).length > 0) {
-            await update(ref(db, `buildings/${buildingId}`), updateData);
-            console.log(`[이미지 동기화] buildings/${buildingId}에 ${type} 이미지 저장 완료`);
-        }
+        await update(ref(db, `buildings/${buildingId}`), { [field]: merged });
+        console.log(`[이미지 동기화] buildings/${buildingId} ${field} 저장 — 화면 ${list.length}건 + 보존 ${keep.length}건`);
+        return merged;
     } catch (error) {
         console.error('[이미지 동기화 오류]', error);
         if (error.message && error.message.includes('too large')) {
             showToast('이미지 용량이 너무 큽니다. 더 작은 이미지를 사용해주세요.', 'error');
         }
+        return list;
     }
 }
 
@@ -1400,7 +1405,8 @@ export function uploadImage(idx, type) {
                     // ★ 이미지 압축 (800px, 70% 품질)
                     const compressedDataUrl = await compressImage(originalDataUrl, 800, 0.7);
                     
-                    resolve({ url: compressedDataUrl, fileName: file.name });
+                    // ★ 업로드 기본 구분 = 현재 문서 타입 (썸네일 배지로 즉시 공용 전환 가능)
+                    resolve({ url: compressedDataUrl, fileName: file.name, usage: getGuideType() });
                 };
                 reader.readAsDataURL(file);
             });
@@ -1410,12 +1416,13 @@ export function uploadImage(idx, type) {
         const newImages = await Promise.all(processPromises);
         
         // 타입별로 이미지 추가
+        let mergedImages = null;
         if (type === 'exterior') {
             if (!item.exteriorImages) item.exteriorImages = [];
             item.exteriorImages.push(...newImages);
             
-            // ★ buildings 컬렉션에도 동기화
-            await syncImageToBuilding(item.buildingId, 'exterior', item.exteriorImages);
+            // ★ buildings 컬렉션에도 동기화 (머지 저장 결과를 로컬 캐시에 쓴다)
+            mergedImages = await syncImageToBuilding(item.buildingId, 'exterior', item.exteriorImages);
             
         } else if (type === 'floorplan') {
             if (!item.floorPlanImages) item.floorPlanImages = [];
@@ -1423,7 +1430,7 @@ export function uploadImage(idx, type) {
             item.floorPlanImages.unshift(...newImages);
             
             // ★ buildings 컬렉션에도 동기화
-            await syncImageToBuilding(item.buildingId, 'floorplan', item.floorPlanImages);
+            mergedImages = await syncImageToBuilding(item.buildingId, 'floorplan', item.floorPlanImages);
             
         } else if (type === 'map') {
             // 지도 이미지도 압축
@@ -1433,11 +1440,11 @@ export function uploadImage(idx, type) {
         const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
         
         // 로컬 building 객체도 업데이트
-        if (building && building.id) {
+        if (building && building.id && mergedImages) {
             if (type === 'exterior') {
-                building.exteriorImages = item.exteriorImages;
+                building.exteriorImages = mergedImages;
             } else if (type === 'floorplan') {
-                building.floorPlanImages = item.floorPlanImages;
+                building.floorPlanImages = mergedImages;
             }
         }
         
@@ -1471,39 +1478,47 @@ export function setMainImage(idx, imageIdx) {
 }
 
 // ★ v2.3 수정: 이미지 삭제 (buildings 컬렉션 동기화 포함)
-export function removeImage(idx, type, imageIdx) {
+export async function removeImage(idx, type, imageIdx) {
     const item = state.tocItems[idx];
     if (!item) return;
     
+    let shown = [];
+    let merged = null;
     if (type === 'exterior') {
         item.exteriorImages.splice(imageIdx, 1);
         if (item.mainImageIndex >= item.exteriorImages.length) {
             item.mainImageIndex = Math.max(0, item.exteriorImages.length - 1);
         }
+        shown = item.exteriorImages;
         
         // buildings 컬렉션에도 동기화
-        syncImageToBuilding(item.buildingId, 'exterior', item.exteriorImages);
+        merged = await syncImageToBuilding(item.buildingId, 'exterior', item.exteriorImages);
         
     } else if (type === 'floorplan') {
         item.floorPlanImages.splice(imageIdx, 1);
+        shown = item.floorPlanImages;
         
         // buildings 컬렉션에도 동기화
-        syncImageToBuilding(item.buildingId, 'floorplan', item.floorPlanImages);
+        merged = await syncImageToBuilding(item.buildingId, 'floorplan', item.floorPlanImages);
     }
     
     const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
     
-    // 로컬 building 객체도 업데이트
-    if (building && building.id) {
+    // 로컬 building 객체도 업데이트 (머지 결과 기준)
+    if (building && building.id && merged) {
         if (type === 'exterior') {
-            building.exteriorImages = item.exteriorImages;
+            building.exteriorImages = merged;
         } else if (type === 'floorplan') {
-            building.floorPlanImages = item.floorPlanImages;
+            building.floorPlanImages = merged;
         }
     }
     
     renderBuildingEditor(item, building);
-    showToast('이미지가 삭제되었습니다', 'success');
+    // ★ 머지 저장이 보존한 반대 타입 전용 사진 건수를 알린다 (포털에 남아 보이는 이유)
+    const kept = Math.max(0, (merged?.length || 0) - shown.length);
+    showToast(kept > 0
+        ? `이미지가 삭제되었습니다 (다른 문서 타입 전용 사진 ${kept}건은 유지됩니다)`
+        : '이미지가 삭제되었습니다', 'success');
 }
 
 // 지도 이미지 삭제
@@ -1809,7 +1824,7 @@ async function processGuideImage(file, idx, type) {
             reader.readAsDataURL(file);
         });
         const compressed = await compressImage(dataUrl, 800, 0.7);
-        const newImg = { url: compressed, fileName: file.name || 'pasted.png' };
+        const newImg = { url: compressed, fileName: file.name || 'pasted.png', usage: getGuideType() };
         const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
         if (type === 'exterior') {
             if (!item.exteriorImages) item.exteriorImages = [];
@@ -1817,13 +1832,13 @@ async function processGuideImage(file, idx, type) {
             // ★ v6.15 fix: 붙여넣은 이미지를 메인으로 지정 (기존엔 push 후 mainImageIndex=0 유지 →
             //   BUILDING PHOTO 미리보기가 안 바뀌어 "붙여넣기 안 됨"으로 보이던 문제)
             item.mainImageIndex = item.exteriorImages.length - 1;
-            await syncImageToBuilding(item.buildingId, 'exterior', item.exteriorImages);
-            if (building.id) building.exteriorImages = item.exteriorImages;
+            const merged = await syncImageToBuilding(item.buildingId, 'exterior', item.exteriorImages);
+            if (building.id) building.exteriorImages = merged;
         } else if (type === 'floorplan') {
             if (!item.floorPlanImages) item.floorPlanImages = [];
             item.floorPlanImages.unshift(newImg);  // uploadImage와 동일하게 맨 앞에
-            await syncImageToBuilding(item.buildingId, 'floorplan', item.floorPlanImages);
-            if (building.id) building.floorPlanImages = item.floorPlanImages;
+            const merged = await syncImageToBuilding(item.buildingId, 'floorplan', item.floorPlanImages);
+            if (building.id) building.floorPlanImages = merged;
         } else {
             // map 등은 기존 지도 처리로 위임
             return processLocationImage(file, idx);
@@ -1962,6 +1977,73 @@ export async function generateLocationMap(idx, buildingId) {
 }
 
 // 이미지 탭 전환
+// ★ v6.21: 이미지 구분(usage) — 배지 + 3단 순환
+//   '' = 공용(양쪽 문서에 노출) | 'office' | 'retail'
+const IMAGE_USAGE_LABEL = { '': '공용', office: '오피스', retail: '리테일' };
+const IMAGE_USAGE_STYLE = {
+    '':       'background:#e2e8f0; color:#475569;',
+    office:   'background:#dbeafe; color:#1d4ed8;',
+    retail:   'background:#fde68a; color:#92400e;'
+};
+
+// 썸네일 1개 렌더 (초기 렌더와 switchImageTab이 공유 — 한쪽만 고쳐 어긋나지 않도록)
+function renderImageThumb(idx, type, img, i, isMain) {
+    const src = typeof img === 'string' ? img : (img.url || img);
+    const usage = (img && typeof img === 'object' && img.usage) || '';
+    const label = IMAGE_USAGE_LABEL[usage] || '공용';
+    const style = IMAGE_USAGE_STYLE[usage] || IMAGE_USAGE_STYLE[''];
+    const isExterior = type === 'exterior';
+    const alt = isExterior ? '외관' : '평면도';
+    const mainAttrs = isExterior
+        ? ` onclick="setMainImage(${idx}, ${i})" title="${isMain ? '메인 이미지' : '클릭하여 메인으로 설정'}"`
+        : '';
+    return `
+        <div class="image-thumb ${isExterior && isMain ? 'main' : ''}"${mainAttrs}>
+            <img src="${src}" alt="${alt} ${i + 1}">
+            <button class="image-usage-badge" title="클릭: 공용 → 오피스 → 리테일 순으로 변경"
+                onclick="event.stopPropagation(); cycleImageUsage(${idx}, '${type}', ${i})"
+                style="position:absolute; left:2px; bottom:2px; padding:1px 5px; border:none; border-radius:8px; font-size:9px; font-weight:700; line-height:1.5; cursor:pointer; ${style}">${label}</button>
+            <button class="remove-btn" onclick="event.stopPropagation(); removeImage(${idx}, '${type}', ${i})">×</button>
+        </div>`;
+}
+
+// ★ 이미지 구분 지정 — usage가 falsy면 공용(필드 제거)
+export async function setImageUsage(idx, type, imageIdx, usage) {
+    const item = state.tocItems[idx];
+    if (!item) return;
+    const list = type === 'exterior' ? item.exteriorImages : item.floorPlanImages;
+    if (!Array.isArray(list) || !list[imageIdx]) return;
+    
+    // 문자열로 저장된 옛 이미지는 { url } 객체로 승격한다 (URL은 그대로 유지)
+    const cur = list[imageIdx];
+    const next = (typeof cur === 'string') ? { url: cur } : { ...cur };
+    if (usage === 'office' || usage === 'retail') next.usage = usage;
+    else delete next.usage;
+    list[imageIdx] = next;
+    
+    const merged = await syncImageToBuilding(item.buildingId, type, list);
+    const building = state.allBuildings.find(b => b.id === item.buildingId) || {};
+    if (building.id && merged) {
+        if (type === 'exterior') building.exteriorImages = merged;
+        else building.floorPlanImages = merged;
+    }
+    
+    const tabBtn = document.querySelector(`.image-tab[data-type="${type}"]`);
+    if (tabBtn) switchImageTab(idx, type, tabBtn);
+    showToast(`구분을 '${IMAGE_USAGE_LABEL[next.usage || '']}'으로 변경했습니다`, 'success');
+}
+
+// 배지 클릭 = 공용 → 오피스 → 리테일 → 공용
+export function cycleImageUsage(idx, type, imageIdx) {
+    const item = state.tocItems[idx];
+    if (!item) return;
+    const list = type === 'exterior' ? item.exteriorImages : item.floorPlanImages;
+    const cur = list?.[imageIdx];
+    const usage = (cur && typeof cur === 'object' && cur.usage) || '';
+    const next = usage === '' ? 'office' : usage === 'office' ? 'retail' : '';
+    setImageUsage(idx, type, imageIdx, next);
+}
+
 export function switchImageTab(idx, type, btn) {
     const item = state.tocItems[idx];
     if (!item) return;
@@ -1979,22 +2061,16 @@ export function switchImageTab(idx, type, btn) {
     
     if (type === 'exterior') {
         grid.innerHTML = `
-            ${item.exteriorImages.length > 0 ? item.exteriorImages.map((img, i) => `
-                <div class="image-thumb ${item.mainImageIndex === i ? 'main' : ''}" onclick="setMainImage(${idx}, ${i})" title="${item.mainImageIndex === i ? '메인 이미지' : '클릭하여 메인으로 설정'}">
-                    <img src="${typeof img === 'string' ? img : (img.url || img)}" alt="외관 ${i+1}">
-                    <button class="remove-btn" onclick="event.stopPropagation(); removeImage(${idx}, 'exterior', ${i})">×</button>
-                </div>
-            `).join('') : '<div class="image-empty">등록된 외관 이미지가 없습니다</div>'}
+            ${item.exteriorImages.length > 0
+                ? item.exteriorImages.map((img, i) => renderImageThumb(idx, 'exterior', img, i, item.mainImageIndex === i)).join('')
+                : '<div class="image-empty">등록된 외관 이미지가 없습니다</div>'}
             <button class="image-add-btn" onclick="uploadImage(${idx}, 'exterior')" title="이미지 추가">+</button>
         `;
     } else if (type === 'floorplan') {
         grid.innerHTML = `
-            ${item.floorPlanImages.length > 0 ? item.floorPlanImages.map((img, i) => `
-                <div class="image-thumb">
-                    <img src="${typeof img === 'string' ? img : (img.url || img)}" alt="평면도 ${i+1}">
-                    <button class="remove-btn" onclick="event.stopPropagation(); removeImage(${idx}, 'floorplan', ${i})">×</button>
-                </div>
-            `).join('') : '<div class="image-empty">등록된 평면도 이미지가 없습니다</div>'}
+            ${item.floorPlanImages.length > 0
+                ? item.floorPlanImages.map((img, i) => renderImageThumb(idx, 'floorplan', img, i, false)).join('')
+                : '<div class="image-empty">등록된 평면도 이미지가 없습니다</div>'}
             <button class="image-add-btn" onclick="uploadImage(${idx}, 'floorplan')" title="이미지 추가">+</button>
         `;
     } else if (type === 'map') {
@@ -2954,6 +3030,8 @@ export function registerBuildingFunctions() {
     window.removeMapImage = removeMapImage;
     window.resetToStorageMapImage = resetToStorageMapImage;
     window.switchImageTab = switchImageTab;
+    window.setImageUsage = setImageUsage;
+    window.cycleImageUsage = cycleImageUsage;
     window.saveStandardFloor = saveStandardFloor;
     window.toggleFloorPricing = toggleFloorPricing;
     window.toggleAllFloorPricing = toggleAllFloorPricing;

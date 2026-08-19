@@ -8,8 +8,8 @@
  * - Firebase 저장 전 데이터 크기 경고
  */
 
-import { state, db, ref, get, set, push, update, remove, getGuideType, setGuideType } from './guide-state.js?v=5.3';
-import { showToast, formatDate, getRegionName } from './guide-utils.js?v=5.8';
+import { state, db, ref, get, set, push, update, remove, getGuideType, setGuideType } from './guide-state.js?v=5.4';
+import { showToast, formatDate, getRegionName } from './guide-utils.js?v=5.9';
 // 순환 의존성 방지 - window 객체를 통해 호출
 // openEditor, setTocItemsFromGuide, loadCoverSettings
 

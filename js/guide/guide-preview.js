@@ -30,8 +30,8 @@
  * - window.print() 기반 PDF 저장 기능
  */
 
-import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo, getRegionOrder, getGuideType, VACANCY_COLUMNS, filterVacanciesByType, buildRetailRentRows } from './guide-state.js?v=5.3';
-import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.8';
+import { state, db, ref, get, DEFAULT_REGIONS, getAllRegions, getRegionInfo, getRegionOrder, getGuideType, VACANCY_COLUMNS, filterVacanciesByType, buildRetailRentRows } from './guide-state.js?v=5.4';
+import { showToast, formatNumber, formatArea, formatPercent, normalizeBuilding, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.9';
 
 // ★ v3.6: 층 표기 정규화 함수 (FF 중복 방지)
 function formatFloorDisplay(floor) {
@@ -539,13 +539,14 @@ function renderBuildingPreviewPage(data) {
     const region = (item.region || building.region || 'ETC').toUpperCase();
     
     // 이미지 fallback 처리 (tocItem → Firebase 빌딩 데이터)
+    // ★ 폴백도 문서 타입으로 거른다 — 무필터면 담을 때 제외한 반대 타입 사진이 되살아난다
     let exteriorImages = item.exteriorImages || [];
     if (exteriorImages.length === 0) {
-        exteriorImages = getExteriorImages(building);
+        exteriorImages = getExteriorImages(building, getGuideType());
     }
     let floorPlanImages = item.floorPlanImages || [];
     if (floorPlanImages.length === 0) {
-        floorPlanImages = getFloorPlanImages(building);
+        floorPlanImages = getFloorPlanImages(building, getGuideType());
     }
     
     const mainImg = exteriorImages[item.mainImageIndex || 0];

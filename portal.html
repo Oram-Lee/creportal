@@ -6781,7 +6781,15 @@
                 <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:99999;display:flex;align-items:center;justify-content:center;">
                     <div style="background:#fff;border-radius:12px;padding:20px 24px;box-shadow:0 8px 30px rgba(0,0,0,0.3);min-width:280px;text-align:center;">
                         <div style="font-size:14px;font-weight:600;margin-bottom:4px;">📋 클립보드 이미지 감지</div>
-                        <div style="font-size:12px;color:#64748b;margin-bottom:16px;">어디에 추가할까요?</div>
+                        <div style="font-size:12px;color:#64748b;margin-bottom:12px;">어디에 추가할까요?</div>
+                        <div style="display:flex;gap:12px;justify-content:center;align-items:center;margin-bottom:14px;padding:8px;background:#f8fafc;border-radius:8px;">
+                            <span style="font-size:11px;color:#94a3b8;font-weight:600;">구분</span>
+                            ${['', 'office', 'retail'].map(u => `
+                                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#334155;cursor:pointer;">
+                                    <input type="radio" name="pasteUsage" value="${u}" ${(window.getGalleryUsageDefault?.() || '') === u ? 'checked' : ''} style="cursor:pointer;">
+                                    ${u === '' ? '공용' : u === 'office' ? '오피스' : '리테일'}
+                                </label>`).join('')}
+                        </div>
                         <div style="display:flex;gap:10px;justify-content:center;">
                             <button id="pasteAsExterior" style="flex:1;padding:12px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">🏢 외관 사진</button>
                             <button id="pasteAsFloorplan" style="flex:1;padding:12px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;">📐 평면도</button>
@@ -6792,7 +6800,12 @@
             `;
             document.body.appendChild(popup);
             
-            const save = (type) => { popup.remove(); window.savePastedImage?.(file, type); };
+            const save = (type) => {
+                // 팝업을 지우기 전에 선택값을 먼저 읽는다
+                const usage = popup.querySelector('input[name="pasteUsage"]:checked')?.value || '';
+                popup.remove();
+                window.savePastedImage?.(file, type, usage);
+            };
             popup.querySelector('#pasteAsExterior').onclick = () => save('exterior');
             popup.querySelector('#pasteAsFloorplan').onclick = () => save('floorplan');
             popup.querySelector('#pasteCancel').onclick = () => popup.remove();
@@ -7436,6 +7449,200 @@
             </div>`;
         }
 
+        // ═══ ★ v6.21: 빌딩 이미지 갤러리 (오피스/리테일 구분) ═══════════
+        // ⚠️ 안내문(guide-building.js)과 저장 규칙이 정반대다.
+        //    안내문 : 화면 = 문서 타입으로 걸러진 부분집합 → 저장 시 머지 필수
+        //    포털   : 화면 = 항상 전량 (탭은 표시 필터일 뿐) → 전량 덮어쓰기가 맞다
+        //    여기에 안내문식 머지를 넣으면 삭제가 먹지 않는다.
+        let _giFilter = 'all';   // all | shared | office | retail
+        const _GI_LABEL = { '': '공용', office: '오피스', retail: '리테일' };
+        const _GI_STYLE = {
+            '':     'background:#e2e8f0; color:#475569;',
+            office: 'background:#dbeafe; color:#1d4ed8;',
+            retail: 'background:#fde68a; color:#92400e;'
+        };
+        const _giToast = (m, t) => { if (typeof showToast === 'function') showToast(m, t); };
+        // 문자열로 저장된 옛 이미지를 { url } 객체로 승격 (URL은 그대로 유지)
+        const _giList = (b, field) => (Array.isArray(b?.[field]) ? b[field] : [])
+            .map(x => (typeof x === 'string' ? { url: x } : x))
+            .filter(x => x && x.url);
+        const _giUsage = (img) => (img?.usage === 'office' || img?.usage === 'retail') ? img.usage : '';
+        const _giPass = (img) => _giFilter === 'all' ? true
+            : _giFilter === 'shared' ? _giUsage(img) === '' : _giUsage(img) === _giFilter;
+
+        function _renderImageGrid(pairs, field, title) {
+            const cells = pairs.map(([img, i]) => {
+                const u = _giUsage(img);
+                return `
+                <div style="position:relative; width:88px;">
+                    <div onclick="openImageViewer('${field}', ${i})" title="클릭하면 원본을 봅니다"
+                        style="width:88px; height:66px; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden; background:#f1f5f9; cursor:zoom-in;">
+                        <img src="${img.url}" alt="${title} ${i + 1}" style="width:100%; height:100%; object-fit:cover;">
+                    </div>
+                    <button onclick="event.stopPropagation(); cyclePortalImageUsage('${field}', ${i})" title="클릭: 공용 → 오피스 → 리테일"
+                        style="position:absolute; left:3px; bottom:3px; padding:1px 6px; border:none; border-radius:8px; font-size:9px; font-weight:700; line-height:1.6; cursor:pointer; ${_GI_STYLE[u]}">${_GI_LABEL[u]}</button>
+                    <button onclick="event.stopPropagation(); deletePortalImage('${field}', ${i})" title="삭제"
+                        style="position:absolute; top:3px; right:3px; width:18px; height:18px; padding:0; border:none; border-radius:50%; background:rgba(239,68,68,0.9); color:#fff; font-size:11px; line-height:18px; cursor:pointer;">×</button>
+                </div>`;
+            }).join('');
+            return `<div style="display:flex; flex-wrap:wrap; gap:8px;">${cells
+                || '<div style="font-size:12px; color:#94a3b8; padding:4px 2px;">표시할 이미지가 없습니다</div>'}</div>`;
+        }
+
+        function _renderBuildingImageBlock(b) {
+            const ext = _giList(b, 'exteriorImages');
+            const fpl = _giList(b, 'floorPlanImages');
+            const all = ext.concat(fpl);
+            const cnt = {
+                all: all.length,
+                shared: all.filter(i => _giUsage(i) === '').length,
+                office: all.filter(i => _giUsage(i) === 'office').length,
+                retail: all.filter(i => _giUsage(i) === 'retail').length
+            };
+            const tabs = [['all', '전체'], ['shared', '공용'], ['office', '오피스'], ['retail', '리테일']].map(([k, label]) => {
+                const on = _giFilter === k;
+                return `<button onclick="setBuildingImageFilter('${k}')" style="font-size:11px; font-weight:600; padding:3px 10px; border:1px solid ${on ? '#475569' : '#e2e8f0'}; border-radius:12px; background:${on ? '#475569' : '#fff'}; color:${on ? '#fff' : '#64748b'}; cursor:pointer;">${label} ${cnt[k]}</button>`;
+            }).join('');
+            // 원본 인덱스를 유지해야 구분 변경·삭제가 올바른 항목을 가리킨다
+            const pick = (list) => list.map((v, i) => [v, i]).filter(([v]) => _giPass(v));
+            return `
+            <div class="building-image-gallery" style="margin-bottom:16px; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f8fafc;">
+                    <div style="font-size:13px; font-weight:700; color:#334155;">📷 빌딩 이미지 <span style="font-size:11px; font-weight:600; color:#64748b; background:#e2e8f0; padding:2px 8px; border-radius:10px; margin-left:4px;">${cnt.all}장</span></div>
+                    <span style="font-size:11px; color:#94a3b8;">Ctrl+V로 붙여넣기</span>
+                </div>
+                <div style="display:flex; gap:6px; padding:8px 14px; background:#fff; border-bottom:1px solid #f1f5f9;">${tabs}</div>
+                <div style="padding:10px 14px;">
+                    <div style="font-size:11px; font-weight:700; color:#64748b; margin-bottom:6px;">🏢 외관 (${ext.length})</div>
+                    ${_renderImageGrid(pick(ext), 'exteriorImages', '외관')}
+                    <div style="font-size:11px; font-weight:700; color:#64748b; margin:12px 0 6px;">📐 평면도 (${fpl.length})</div>
+                    ${_renderImageGrid(pick(fpl), 'floorPlanImages', '평면도')}
+                </div>
+            </div>`;
+        }
+
+        function setBuildingImageFilter(f) {
+            _giFilter = ['shared', 'office', 'retail'].includes(f) ? f : 'all';
+            refreshGuideManualBlocks();
+        }
+
+        // 저장 — 전량 배열 그대로 (머지 금지)
+        async function _giPersist(field, list) {
+            const b = window.state?.selectedBuilding;
+            if (!b?.id) return false;
+            try {
+                const { db, ref, update } = await import('./js/portal-firebase.js');
+                await update(ref(db, `buildings/${b.id}`), { [field]: list });
+                b[field] = list;
+                const gi = window.state?.allBuildings?.findIndex(x => x.id === b.id);
+                if (gi >= 0) window.state.allBuildings[gi][field] = list;
+                try {
+                    const bc = new BroadcastChannel('cre_portal_sync');
+                    bc.postMessage({ type: 'buildingUpdated', buildingId: b.id, data: { [field]: list } });
+                    bc.close();
+                } catch (_) { /* 미지원 환경 무시 */ }
+                // 저장은 이미 완료 — 렌더 실패가 '저장 실패'로 보고되지 않도록 격리
+                try { refreshGuideManualBlocks(); } catch (e) { console.error('이미지 갤러리 갱신 오류:', e); }
+                return true;
+            } catch (e) {
+                console.error('_giPersist 오류:', e);
+                _giToast('이미지 저장에 실패했습니다', 'error');
+                return false;
+            }
+        }
+
+        async function cyclePortalImageUsage(field, index) {
+            const b = window.state?.selectedBuilding;
+            const list = _giList(b, field);
+            if (!list[index]) return;
+            const cur = _giUsage(list[index]);
+            const next = cur === '' ? 'office' : cur === 'office' ? 'retail' : '';
+            const obj = { ...list[index] };
+            if (next) obj.usage = next; else delete obj.usage;
+            list[index] = obj;
+            if (await _giPersist(field, list)) _giToast(`구분을 '${_GI_LABEL[next]}'으로 변경했습니다`, 'success');
+        }
+
+        async function deletePortalImage(field, index) {
+            const b = window.state?.selectedBuilding;
+            const list = _giList(b, field);
+            if (!list[index]) return;
+            if (!confirm('이 이미지를 삭제할까요?')) return;
+            list.splice(index, 1);
+            if (await _giPersist(field, list)) _giToast('이미지를 삭제했습니다', 'success');
+        }
+
+        // ── 원본 확대 (기존 미사용 컨테이너 #imageViewerModal 재활용) ──
+        function _giEscKey(e) { if (e.key === 'Escape') closeImageViewer(); }
+        function openImageViewer(field, index) {
+            const img = _giList(window.state?.selectedBuilding, field)[index];
+            const el = document.getElementById('imageViewerModal');
+            if (!img || !el) return;
+            el.innerHTML = `
+                <div onclick="closeImageViewer()" style="position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.75); z-index:99998; display:flex; align-items:center; justify-content:center; padding:24px; cursor:zoom-out;">
+                    <img src="${img.url}" alt="원본" style="max-width:92vw; max-height:88vh; border-radius:8px; box-shadow:0 10px 40px rgba(0,0,0,0.5);">
+                </div>`;
+            document.addEventListener('keydown', _giEscKey);
+        }
+        function closeImageViewer() {
+            const el = document.getElementById('imageViewerModal');
+            if (el) el.innerHTML = '';
+            document.removeEventListener('keydown', _giEscKey);
+        }
+
+        // ── 붙여넣기 저장 (호출부: 클립보드 팝업) ──
+        // 저장 형식은 안내문과 동일한 base64 dataURL 평면 배열. 규격도 800px / 품질 0.7로 통일한다.
+        function _giCompress(dataUrl, maxWidth, quality) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = function () {
+                    let w = img.width, h = img.height;
+                    if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => resolve(dataUrl);
+                img.src = dataUrl;
+            });
+        }
+        // 팝업 라디오 기본값 = 현재 갤러리 탭 ('전체'/'공용'이면 공용)
+        function getGalleryUsageDefault() {
+            return (_giFilter === 'office' || _giFilter === 'retail') ? _giFilter : '';
+        }
+        async function savePastedImage(file, type, usage) {
+            const b = window.state?.selectedBuilding;
+            if (!b?.id) { _giToast('빌딩을 먼저 선택해주세요', 'error'); return; }
+            const field = type === 'floorplan' ? 'floorPlanImages' : 'exteriorImages';
+            try {
+                _giToast('이미지 처리 중...', 'info');
+                const dataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => resolve(ev.target.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                const compressed = await _giCompress(dataUrl, 800, 0.7);
+                const img = { url: compressed, fileName: file.name || 'pasted.png' };
+                if (usage === 'office' || usage === 'retail') img.usage = usage;
+                const list = _giList(b, field);
+                if (field === 'exteriorImages') list.push(img); else list.unshift(img);
+                if (await _giPersist(field, list)) _giToast('이미지를 저장했습니다', 'success');
+            } catch (e) {
+                console.error('savePastedImage 오류:', e);
+                _giToast('이미지 저장 중 오류가 발생했습니다', 'error');
+            }
+        }
+
+        window.setBuildingImageFilter = setBuildingImageFilter;
+        window.cyclePortalImageUsage = cyclePortalImageUsage;
+        window.deletePortalImage = deletePortalImage;
+        window.openImageViewer = openImageViewer;
+        window.closeImageViewer = closeImageViewer;
+        window.getGalleryUsageDefault = getGalleryUsageDefault;
+        window.savePastedImage = savePastedImage;
+
         function injectGuideManualBlocks() {
             const b = window.state?.selectedBuilding;
             const dSec = document.getElementById('sectionDocument');
@@ -7443,6 +7650,13 @@
                 const ex = dSec.querySelector('.guide-manual-vacancy');
                 // ★ 리테일: guideVacancy가 없어도 빈 블록을 노출해 입력 진입점을 제공
                 if (b) { if (!ex) dSec.insertAdjacentHTML('afterbegin', _renderGuideVacancyBlock(b.guideVacancy || { vacancies: [] })); }
+                else if (ex) ex.remove();
+            }
+            // ★ v6.21: 빌딩 이미지 갤러리 — 리서치 섹션(beforeend)과 겹치지 않게 afterbegin
+            const iSec = document.getElementById('sectionInfo');
+            if (iSec) {
+                const ex = iSec.querySelector('.building-image-gallery');
+                if (b) { if (!ex) iSec.insertAdjacentHTML('afterbegin', _renderBuildingImageBlock(b)); }
                 else if (ex) ex.remove();
             }
             const pSec = document.getElementById('sectionPricing');
@@ -7453,7 +7667,7 @@
             }
         }
         function refreshGuideManualBlocks() {
-            document.querySelectorAll('.guide-manual-vacancy, .guide-manual-pricing').forEach(el => el.remove());
+            document.querySelectorAll('.guide-manual-vacancy, .guide-manual-pricing, .building-image-gallery').forEach(el => el.remove());
             injectGuideManualBlocks();
         }
         window.injectGuideManualBlocks = injectGuideManualBlocks;
@@ -7635,7 +7849,7 @@
         window.openRetailInfoModal = openRetailInfoModal;
 
         try {
-            ['sectionDocument', 'sectionPricing'].forEach(id => {
+            ['sectionDocument', 'sectionPricing', 'sectionInfo'].forEach(id => {
                 const el = document.getElementById(id);
                 if (el) new MutationObserver(() => injectGuideManualBlocks()).observe(el, { childList: true });
             });

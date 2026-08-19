@@ -413,8 +413,27 @@ export function resizeImage(dataUrl, maxWidth = 1200, quality = 0.8) {
     });
 }
 
+// ★ 이미지 구분(usage) — 값이 없으면 '공용'이라 양쪽 문서에 다 나온다.
+//   공실(usage 없으면 'office')과 폴백 방향이 반대다. 공실 코드를 복사해 오지 말 것.
+//   기존 사진에는 usage가 없으므로, 이 방향이라야 오피스 안내문 회귀가 나지 않는다.
+export function imageMatchesUsage(img, type) {
+    if (!type) return true;                       // 타입 미지정 = 필터 없음
+    if (!img || typeof img === 'string') return true;   // 문자열은 usage를 가질 수 없다 = 공용
+    return !img.usage || img.usage === type;
+}
+
+// ★ raw 배열 정규화 — 문자열 항목을 { url } 객체로 승격한다.
+//   빌딩 레코드에서 직접 읽은 배열에는 구버전 문자열이 남아 있을 수 있다.
+export function normalizeImageList(list) {
+    if (!Array.isArray(list)) return [];
+    return list
+        .map(img => (typeof img === 'string' ? { url: img } : img))
+        .filter(img => img && img.url);
+}
+
 // 외관 이미지 가져오기
-export function getExteriorImages(building) {
+//   type: 'office' | 'retail' | undefined(전량)
+export function getExteriorImages(building, type) {
     if (!building) return [];
     
     const images = [];
@@ -449,11 +468,12 @@ export function getExteriorImages(building) {
         images.push({ url: building.mainImage });
     }
     
-    return images;
+    return images.filter(img => imageMatchesUsage(img, type));
 }
 
 // 평면도 이미지 가져오기
-export function getFloorPlanImages(building) {
+//   type: 'office' | 'retail' | undefined(전량)
+export function getFloorPlanImages(building, type) {
     if (!building) return [];
     
     const images = [];
@@ -485,7 +505,7 @@ export function getFloorPlanImages(building) {
         images.push({ url: building.floorPlanImage });
     }
     
-    return images;
+    return images.filter(img => imageMatchesUsage(img, type));
 }
 
 // 디바운스 함수

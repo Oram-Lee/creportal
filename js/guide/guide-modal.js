@@ -3,8 +3,8 @@
  * 장바구니 형태의 빌딩 선택 UI
  */
 
-import { state } from './guide-state.js?v=5.3';
-import { showToast, detectRegion, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.8';
+import { state, getGuideType } from './guide-state.js?v=5.4';
+import { showToast, detectRegion, getRegionName, getExteriorImages, getFloorPlanImages } from './guide-utils.js?v=5.9';
 // renderToc은 window 객체를 통해 호출 (순환 의존성 방지)
 
 // 빌딩 장바구니
@@ -221,8 +221,9 @@ export function confirmAddBuildings() {
         if (!building) return;
         
         // Firebase에서 기존 이미지 가져오기 (portal.html/complist.html 호환)
-        const exteriorImages = getExteriorImages(building);
-        const floorPlanImages = getFloorPlanImages(building);
+        // ★ 문서 타입에 맞는 것만 담는다 — usage 없는 기존 사진은 공용이라 양쪽 다 통과한다
+        const exteriorImages = getExteriorImages(building, getGuideType());
+        const floorPlanImages = getFloorPlanImages(building, getGuideType());
         
         state.tocItems.push({
             type: 'building',

@@ -3,8 +3,8 @@
  * 담당자 배정, 일괄 매핑
  */
 
-import { state, db, ref, get, update } from './guide-state.js?v=5.3';
-import { showToast } from './guide-utils.js?v=5.8';
+import { state, db, ref, get, update } from './guide-state.js?v=5.4';
+import { showToast } from './guide-utils.js?v=5.9';
 // renderBuildingEditor는 window 객체를 통해 호출 (순환 의존성 방지)
 
 // 모달 상태
