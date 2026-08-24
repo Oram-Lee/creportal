@@ -22,17 +22,29 @@
   button:hover,.lnk:hover{background:rgba(255,255,255,.22)}
   button.go{background:var(--pink);border-color:var(--pink)}
   button:disabled{opacity:.45;cursor:not-allowed}
-  #rv{flex:1;min-height:0;width:100%;background:#0f1216}
-  .msg{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;
-       gap:8px;color:#aab2bd;font-size:14px;text-align:center;padding:24px}
+  .wrap{flex:1 1 auto;position:relative;min-height:0}
+  #rv{position:absolute;inset:0;background:#0f1216}
+  /* ★ hidden 속성이 display 규칙에 먹히지 않도록 .on 클래스로 제어한다 */
+  .msg{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+       flex-direction:column;gap:8px;color:#aab2bd;font-size:14px;text-align:center;
+       padding:24px;background:#0f1216;z-index:10}
+  .msg.on{display:flex}
   .msg b{color:#fff;font-size:16px}
+  /* 보기 모드 — 헤더 없이 로드뷰만 꽉 채우고 정보는 떠 있는 라벨로 */
+  body.view header{display:none}
+  .float{position:absolute;left:14px;top:14px;z-index:9;background:rgba(15,18,22,.8);
+         color:#fff;padding:8px 13px;border-radius:8px;display:none;align-items:center;gap:10px}
+  body.view .float{display:flex}
+  .float .nm{font-size:14px;font-weight:700}
+  .float .ad{font-size:11.5px;color:#aab2bd}
+  .float a{font-size:11px;color:#f9a8d4;text-decoration:none;border:1px solid rgba(249,168,212,.4);
+           padding:3px 9px;border-radius:5px}
   .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
          background:var(--navy);color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;
          box-shadow:0 6px 20px rgba(0,0,0,.35);opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
   .toast.on{opacity:1}
   .hint{position:absolute;left:14px;bottom:14px;background:rgba(15,18,22,.78);color:#d7dce3;
         font-size:11.5px;padding:6px 11px;border-radius:6px;line-height:1.5;max-width:300px}
-  .wrap{flex:1;position:relative;min-height:0;display:flex}
 </style>
 </head>
 <body>
@@ -51,9 +63,13 @@
 
 <div class="wrap">
   <div id="rv"></div>
+  <div class="float">
+    <div><div class="nm" id="fName"></div><div class="ad" id="fAddr"></div></div>
+    <a id="fKakao" target="_blank" rel="noopener">카카오맵</a>
+  </div>
   <div class="hint" id="hint" hidden></div>
+  <div class="msg" id="msg"><b>로드뷰를 불러올 수 없습니다</b><span id="msgSub"></span></div>
 </div>
-<div class="msg" id="msg" hidden><b>로드뷰를 불러올 수 없습니다</b><span id="msgSub"></span></div>
 <div class="toast" id="toast"></div>
 
 <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=1ac6eee9b1e4c2e0cc6f1d1ca1a6a559&autoload=false"></script>
@@ -69,6 +85,9 @@ const P = {
   name: qs.get('name') || '',
   addr: qs.get('addr') || ''
 };
+/* edit=1 이면 시점 저장 UI가 있는 편집 모드, 아니면 전체화면 보기 모드 */
+const EDIT = qs.get('edit') === '1';
+document.body.classList.add(EDIT ? 'edit' : 'view');
 
 /* 파노라마 탐색 반경 — 좁은 곳부터 넓혀 가며 시도한다.
    가까운 파노라마일수록 그 건물이 면한 도로일 확률이 높다. */
@@ -81,8 +100,7 @@ const toast = (t, ms = 1800) => {
   const el = $('#toast'); el.textContent = t; el.classList.add('on');
   clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('on'), ms);
 };
-const fail = (sub) => { $('#rv').hidden = true; $('.wrap').hidden = true;
-  $('#msg').hidden = false; $('#msgSub').textContent = sub; };
+const fail = (sub) => { $('#msg').classList.add('on'); $('#msgSub').textContent = sub; };
 
 /* ── 빌딩 정보 로드 ──────────────────────────────────────── */
 async function loadBuilding() {
@@ -101,14 +119,18 @@ async function loadBuilding() {
 
   $('#bName').textContent = name;
   $('#bAddr').textContent = addr || '주소 없음';
+  $('#fName').textContent = name;
+  $('#fAddr').textContent = addr || '주소 없음';
   document.title = `${name} · 로드뷰`;
 
   if (!(lat && lng)) {
-    $('#btnKakao').href = `https://map.kakao.com/link/search/${encodeURIComponent(addr || name)}`;
+    const sUrl = `https://map.kakao.com/link/search/${encodeURIComponent(addr || name)}`;
+    $('#btnKakao').href = sUrl; $('#fKakao').href = sUrl;
     fail('이 빌딩에는 좌표가 없습니다. 상단 [카카오맵]으로 주소 검색을 이용하세요.');
     return null;
   }
-  $('#btnKakao').href = `https://map.kakao.com/link/roadview/${lat},${lng}`;
+  const rUrl = `https://map.kakao.com/link/roadview/${lat},${lng}`;
+  $('#btnKakao').href = rUrl; $('#fKakao').href = rUrl;
   return { lat, lng, name, addr };
 }
 
@@ -137,7 +159,7 @@ function applySaved() {
 function autoAim() {
   if (!target) return;
   findPano(new kakao.maps.LatLng(target.lat, target.lng));
-  showHint('건물 중심을 향해 자동 조준했습니다. 각도를 맞춘 뒤 [이 시점 저장]을 누르면 다음부터 그 화면으로 열립니다.');
+  if (EDIT) showHint('건물 중심을 향해 자동 조준했습니다. 각도를 맞춘 뒤 [이 시점 저장]을 누르면 다음부터 그 화면으로 열립니다.');
 }
 
 function showHint(t) { const h = $('#hint'); h.textContent = t; h.hidden = false;
@@ -181,6 +203,7 @@ async function clearViewpoint() {
     rvClient = new kakao.maps.RoadviewClient();
 
     if (!applySaved()) autoAim();
+    setTimeout(() => rv.relayout(), 60);   // 컨테이너 크기 확정 후 재계산
 
     $('#btnReset').onclick = autoAim;
     $('#btnSave').onclick  = saveViewpoint;
