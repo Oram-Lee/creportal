@@ -6831,8 +6831,16 @@
             const lat = b.lat ?? b.coordinates?.lat;
             const lng = b.lng ?? b.coordinates?.lng;
 
+            // ★ 2026-08-24: 카카오맵 링크는 시작 방향을 지정할 수 없어 건물 측면·후면이 열린다.
+            //   자체 로드뷰 페이지로 넘겨 건물 정면을 향해 자동 조준하고,
+            //   저장된 시점(buildings/{id}/roadview)이 있으면 그 화면으로 연다.
             if (lat && lng) {
-                window.open(`https://map.kakao.com/link/roadview/${lat},${lng}`, '_blank', 'noopener');
+                const p = new URLSearchParams({ lat, lng });
+                if (b.id) p.set('id', b.id);
+                if (b.name) p.set('name', b.name);
+                const ad = b.address || b.addressJibun || b.roadAddress;
+                if (ad) p.set('addr', ad);
+                window.open(`roadview.html?${p.toString()}`, '_blank', 'noopener');
                 return;
             }
 
