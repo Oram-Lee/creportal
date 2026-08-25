@@ -147,13 +147,28 @@ function findPano(pos, i = 0) {
 
 function applySaved() {
   if (!saved || saved.panoId == null) return false;
-  rv.setPanoId(saved.panoId, target);
-  // setPanoId 후 init 이벤트에서 저장된 각도를 덮어쓴다
-  kakao.maps.event.addListener(rv, 'init', function once() {
-    kakao.maps.event.removeListener(rv, 'init', once);
-    rv.setViewpoint({ pan: saved.pan ?? 0, tilt: saved.tilt ?? 0, zoom: saved.zoom ?? 0 });
-  });
-  return true;
+  try {
+    // ★ 반드시 kakao.maps.LatLng 이어야 한다. 평범한 객체를 넘기면
+    //   내부에서 getLat() 을 호출하다 "b.e is not a function" 으로 죽는다.
+    const pos = new kakao.maps.LatLng(target.lat, target.lng);
+
+    // init 은 setPanoId 이후 비동기로 발생하므로 리스너를 먼저 걸어 둔다
+    kakao.maps.event.addListener(rv, 'init', function once() {
+      kakao.maps.event.removeListener(rv, 'init', once);
+      try {
+        rv.setViewpoint({ pan: Number(saved.pan) || 0,
+                          tilt: Number(saved.tilt) || 0,
+                          zoom: Number(saved.zoom) || 0 });
+      } catch (e) { console.warn('저장된 각도 적용 실패', e); }
+    });
+
+    rv.setPanoId(Number(saved.panoId), pos);
+    if (EDIT) showHint('저장된 시점으로 열었습니다. 각도를 바꾼 뒤 다시 저장하면 갱신됩니다.');
+    return true;
+  } catch (e) {
+    console.warn('저장된 시점 적용 실패 → 자동 조준으로 대체', e);
+    return false;   // 자동 조준이 이어받는다
+  }
 }
 
 function autoAim() {
@@ -167,19 +182,39 @@ function showHint(t) { const h = $('#hint'); h.textContent = t; h.hidden = false
 
 /* ── 시점 저장 / 해제 ───────────────────────────────────── */
 async function saveViewpoint() {
-  if (!bid) { toast('빌딩 ID가 없어 저장할 수 없습니다'); return; }
-  if (!rv) return;
-  const vp = rv.getViewpoint();
-  const body = { panoId: rv.getPanoId(), pan: vp.pan, tilt: vp.tilt, zoom: vp.zoom,
-                 savedAt: new Date().toISOString() };
-  $('#btnSave').disabled = true;
+  const btn = $('#btnSave');
+  if (!bid) { toast('빌딩 ID가 없어 저장할 수 없습니다 (URL에 id 없음)', 3000); return; }
+  if (!rv) { toast('로드뷰가 아직 준비되지 않았습니다'); return; }
+
+  let body;
+  try {
+    const vp = rv.getViewpoint();
+    body = { panoId: Number(rv.getPanoId()), pan: Number(vp.pan) || 0,
+             tilt: Number(vp.tilt) || 0, zoom: Number(vp.zoom) || 0,
+             savedAt: new Date().toISOString() };
+    if (!Number.isFinite(body.panoId)) throw new Error('파노라마 ID를 읽지 못했습니다');
+  } catch (e) {
+    console.error('시점 읽기 실패', e); toast('시점을 읽지 못했습니다: ' + e.message, 3000); return;
+  }
+
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = '저장 중…';
   try {
     const r = await fetch(`${DB}/buildings/${encodeURIComponent(bid)}/roadview.json`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) throw new Error(r.status);
-    saved = body; toast('이 시점을 기본값으로 저장했습니다');
-  } catch (e) { toast('저장 실패: ' + e.message, 2600); }
-  $('#btnSave').disabled = false;
+    const txt = await r.text();
+    if (!r.ok) throw new Error(`${r.status} ${txt.slice(0, 120)}`);
+    saved = body;
+    console.log('저장됨', bid, body);
+    btn.textContent = '✓ 저장됨';
+    toast(`저장 완료 — pano ${body.panoId} / pan ${Math.round(body.pan)}°`, 2600);
+    setTimeout(() => { btn.textContent = label; }, 1600);
+  } catch (e) {
+    console.error('저장 실패', e);
+    toast('저장 실패: ' + e.message, 4000);
+    btn.textContent = label;
+  }
+  btn.disabled = false;
 }
 
 async function clearViewpoint() {
@@ -202,13 +237,19 @@ async function clearViewpoint() {
     rv = new kakao.maps.Roadview($('#rv'));
     rvClient = new kakao.maps.RoadviewClient();
 
-    if (!applySaved()) autoAim();
-    setTimeout(() => rv.relayout(), 60);   // 컨테이너 크기 확정 후 재계산
-
+    // 버튼 핸들러를 먼저 연결한다 — 아래 로직이 실패해도 조작은 가능해야 한다
     $('#btnReset').onclick = autoAim;
     $('#btnSave').onclick  = saveViewpoint;
     $('#btnClear').onclick = clearViewpoint;
     window.addEventListener('resize', () => rv && rv.relayout());
+
+    try {
+      if (!applySaved()) autoAim();
+    } catch (e) {
+      console.error('로드뷰 초기화 오류', e);
+      autoAim();
+    }
+    setTimeout(() => rv.relayout(), 60);   // 컨테이너 크기 확정 후 재계산
   });
 })();
 </script>
