@@ -103,6 +103,7 @@
                             <div class="type-selector">
                                 <button class="type-btn active" data-type="general" onclick="setCompListType('general')">일반용</button>
                                 <button class="type-btn" data-type="lg" onclick="setCompListType('lg')">LG그룹용</button>
+                                <button class="type-btn" data-type="sni" onclick="setCompListType('sni')">S&amp;I 시세자료</button>
                             </div>
                             <button class="btn btn-outline" onclick="saveDraft()" title="임시저장 (브라우저에 저장)">📋 임시저장</button>
                             <button class="btn btn-secondary" onclick="saveCompList(false)" title="Comp List만 저장">💾 저장</button>
@@ -147,6 +148,11 @@
                         <div class="spreadsheet-wrapper lg-mode" id="lgSpreadsheet" style="display:none;">
                             <!-- LG 형식용 별도 테이블 -->
                         </div>
+                        
+                        <!-- S&I 시세자료용 스프레드시트 -->
+                        <div class="spreadsheet-wrapper" id="sniSpreadsheet" style="display:none;">
+                            <!-- S&I 형식용 별도 테이블 (complist-templates.js) -->
+                        </div>
                     </div>
                 </div>
             </main>
@@ -176,6 +182,10 @@
                             <button type="button" class="type-btn" data-type="lg" onclick="selectNewType('lg')">
                                 <span class="icon">🏢</span>
                                 <span class="label">LG그룹용</span>
+                            </button>
+                            <button type="button" class="type-btn" data-type="sni" onclick="selectNewType('sni')">
+                                <span class="icon">📑</span>
+                                <span class="label">S&amp;I 시세자료</span>
                             </button>
                         </div>
                     </div>

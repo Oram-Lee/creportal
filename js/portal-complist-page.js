@@ -4,6 +4,10 @@
  */
 
 import { db, ref, get, set, push, update, remove } from './portal-firebase.js';
+import {
+    initTemplates, registerTemplate, getTemplate,
+    allContainerIds, SNI_BUILDING_KEYS
+} from './complist-templates.js';
 
 // ============================================================
 // 단위 변환 헬퍼 함수 (마이그레이션 호환)
@@ -70,8 +74,44 @@ const pageState = {
 // ============================================================
 // 초기화
 // ============================================================
+// ============================================================
+// 템플릿 레지스트리 등록
+// ※ 유형별 하드코딩 분기를 대체. 새 포맷 추가 시 여기에 등록만 하면 됨.
+// ============================================================
+function setupTemplates() {
+    initTemplates({
+        toWon, toManwon, formatManwon, formatNumber,
+        escapeHtml, safeStringify, getExteriorUrl, showToast,
+        getState: () => pageState,
+        rerender: () => renderDetailView()
+    });
+
+    registerTemplate({
+        id: 'general',
+        label: '일반용',
+        icon: '📊',
+        badgeClass: 'general',
+        containerId: 'generalSpreadsheet',
+        render: renderGeneralSpreadsheet,
+        exportExcel: downloadExcelGeneral
+    });
+
+    registerTemplate({
+        id: 'lg',
+        label: 'LG그룹용',
+        icon: '🏢',
+        badgeClass: 'lg',
+        containerId: 'lgSpreadsheet',
+        render: renderLGSpreadsheet,
+        exportExcel: downloadExcelLG
+    });
+    // 'sni'(S&I 시세자료)는 complist-templates.js에서 자체 등록됨
+}
+
 export async function initCompListPage() {
     console.log('Comp List 페이지 초기화 시작...');
+    
+    setupTemplates();
     
     // 세션 체크 (portal-auth.js와 동일한 키 사용)
     const session = localStorage.getItem('crePortalUser');
@@ -353,6 +393,19 @@ function flattenBuildingData(id, b) {
         // ※ 추가: 공실 정보 (portal.html에서 저장된 경우)
         vacancies: b.vacancies || [],
         
+        // ★ S&I 시세자료 양식 - 상세 사양
+        parkingSystem: b.parkingSystem || b.specs?.parkingSystem || '',
+        entranceDirection: b.entranceDirection || b.specs?.entranceDirection || '',
+        restroomPerFloor: b.restroomPerFloor || b.specs?.restroomPerFloor || '',
+        remodelYear: b.remodelYear || b.specs?.remodelYear || '',
+        
+        // ★ S&I 시세자료 양식 - 딜 조건 (수동 입력)
+        contractMonths: b.contractMonths || '',
+        fitoutMonths: b.fitoutMonths || '',
+        fitoutFreeMaintMonths: b.fitoutFreeMaintMonths || '',
+        tiPerPy: b.tiPerPy || '',
+        leaseNote: b.leaseNote || '',
+        
         // ★ 건축물대장 추가 필드
         vlRat: b.vlRat || '',
         bcRat: b.bcRat || '',
@@ -507,8 +560,8 @@ function renderCompListCards() {
                 ` : ''}
                 <div class="card-row card-header">
                     <div class="card-title">${escapeHtml(c.title || '제목 없음')}</div>
-                    <span class="card-type ${c.type === 'lg' ? 'lg' : 'general'}">
-                        ${c.type === 'lg' ? 'LG그룹용' : '일반용'}
+                    <span class="card-type ${getTemplate(c.type).badgeClass || 'general'}" style="${getTemplate(c.type).badgeStyle || ''}">
+                        ${getTemplate(c.type).label}
                     </span>
                 </div>
                 <div class="card-row card-author">
@@ -655,7 +708,8 @@ window.selectCompList = async function(compListId) {
                     'rentPy', 'depositPy', 'maintenancePy',  // 가격
                     'exclusiveRate', 'typicalFloorPy', 'typicalFloorSqm', 'typicalFloorLeasePy',  // 면적
                     'hvac', 'parkingFee', 'freeParkingCondition', 'paidParking',  // 주차/시설
-                    'floorPlan', 'floorPlanImages', 'remarks', 'specialNotes'  // 기타 (평면도 이미지 포함)
+                    'floorPlan', 'floorPlanImages', 'remarks', 'specialNotes',  // 기타 (평면도 이미지 포함)
+                    ...SNI_BUILDING_KEYS  // S&I 시세자료 양식 (상세 사양 + 딜 조건)
                 ];
                 
                 if (b.buildingData) {
@@ -718,16 +772,13 @@ function renderDetailView() {
         btn.classList.toggle('active', btn.dataset.type === data.type);
     });
     
-    // 스프레드시트 렌더링
-    if (data.type === 'lg') {
-        document.getElementById('generalSpreadsheet').style.display = 'none';
-        document.getElementById('lgSpreadsheet').style.display = 'block';
-        renderLGSpreadsheet();
-    } else {
-        document.getElementById('generalSpreadsheet').style.display = 'block';
-        document.getElementById('lgSpreadsheet').style.display = 'none';
-        renderGeneralSpreadsheet();
-    }
+    // 스프레드시트 렌더링 (레지스트리)
+    const template = getTemplate(data.type);
+    allContainerIds().forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (id === template.containerId) ? 'block' : 'none';
+    });
+    template.render();
 }
 
 // ============================================================
@@ -3730,7 +3781,9 @@ async function syncBuildingDataToMaster(buildings) {
             // 시설 정보 (엘리베이터, 구조, 용도 제외 - 건축물대장)
             'hvac', 'heatingCooling',
             // 기타
-            'floorPlan', 'remarks', 'exteriorImage', 'mainImage', 'description', 'pm'
+            'floorPlan', 'remarks', 'exteriorImage', 'mainImage', 'description', 'pm',
+            // S&I 시세자료 양식 (상세 사양 + 딜 조건 + 임차 특이사항)
+            ...SNI_BUILDING_KEYS
         ];
         
         for (const key of editableKeys) {
@@ -3796,6 +3849,7 @@ window.saveCompList = async function(syncToMaster = false) {
                 buildingName: b.buildingName || '',
                 buildingData: b.buildingData || {},
                 vacancies: b.vacancies || [],
+                selectedVacancyIdxs: b.selectedVacancyIdxs || [],  // S&I 양식 열 구성용
                 addedAt: b.addedAt || new Date().toISOString()
             }))
         };
@@ -3897,6 +3951,7 @@ window.saveDraft = function() {
             buildingId: b.buildingId || '',
             buildingName: b.buildingName || '',
             vacancies: b.vacancies || [],
+            selectedVacancyIdxs: b.selectedVacancyIdxs || [],  // S&I 양식 열 구성용
             buildingData: stripImageData(b.buildingData),  // ★ 이미지 제외
             addedAt: b.addedAt || new Date().toISOString()
         }))
@@ -4058,7 +4113,7 @@ function renderDraftList() {
             <div>
                 <div style="font-weight:600; margin-bottom:4px;">${d.title}</div>
                 <div style="font-size:12px; color:#64748b;">
-                    ${d.type === 'lg' ? 'LG그룹용' : '일반용'} · ${d.buildingCount}개 빌딩 · ${formatDate(d.savedAt)}
+                    ${getTemplate(d.type).label} · ${d.buildingCount}개 빌딩 · ${formatDate(d.savedAt)}
                 </div>
             </div>
             <button onclick="deleteDraft('${d.key}', event)" style="
@@ -4172,11 +4227,7 @@ window.downloadCompListExcel = async function() {
         jointCollateral: b.buildingData?.jointCollateral
     })));
     
-    if (data.type === 'lg') {
-        await downloadExcelLG({ ...data, buildings: buildingsWithData });
-    } else {
-        await downloadExcelGeneral({ ...data, buildings: buildingsWithData });
-    }
+    await getTemplate(data.type).exportExcel({ ...data, buildings: buildingsWithData });
 };
 
 // 일반용 엑셀 다운로드
