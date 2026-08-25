@@ -852,6 +852,40 @@
                 </div>
             </div>
             
+            <!-- ★ 2026-08-24: Comp List(S&I 시세자료) 양식용 상세 항목 -->
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">📐 상세 사양 <small style="font-weight:400; color:var(--text-muted);">· Comp List 양식용</small></div>
+            <div class="form-row">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px;">
+                    <div>
+                        <small style="color: var(--text-muted);">주차 방식</small>
+                        <select id="editParkingSystem" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary);">
+                            <option value="">선택</option>
+                            <option value="자주식">자주식</option>
+                            <option value="기계식">기계식</option>
+                            <option value="자주식/기계식 혼합">자주식/기계식 혼합</option>
+                        </select>
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">주 출입구 방향</small>
+                        <select id="editEntranceDirection" style="width:100%; padding:10px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-primary); color:var(--text-primary);">
+                            <option value="">선택</option>
+                            <option value="동">동</option><option value="서">서</option>
+                            <option value="남">남</option><option value="북">북</option>
+                            <option value="남동">남동</option><option value="남서">남서</option>
+                            <option value="북동">북동</option><option value="북서">북서</option>
+                        </select>
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">층당 화장실</small>
+                        <input type="text" id="editRestroomPerFloor" placeholder="남 1 / 여 1">
+                    </div>
+                    <div>
+                        <small style="color: var(--text-muted);">리모델링 연도</small>
+                        <input type="text" id="editRemodelYear" placeholder="2018">
+                    </div>
+                </div>
+            </div>
+
             <!-- 시설 정보 (건축물대장에 없는 것만) -->
             <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 16px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border-color);">🏗️ 시설 정보</div>
             <div class="form-row">
@@ -3497,6 +3531,12 @@
                     rentPy: (document.getElementById('editRentPy')?.value || '').replace(/,/g, ''),
                     maintenancePy: (document.getElementById('editMaintenancePy')?.value || '').replace(/,/g, ''),
                     
+                    // ★ Comp List 양식용 상세 사양
+                    parkingSystem: document.getElementById('editParkingSystem')?.value || '',
+                    entranceDirection: document.getElementById('editEntranceDirection')?.value || '',
+                    restroomPerFloor: document.getElementById('editRestroomPerFloor')?.value || '',
+                    remodelYear: document.getElementById('editRemodelYear')?.value || '',
+                    
                     // 시설 정보
                     hvac: document.getElementById('editHvac')?.value || '',
                     ceilingHeight: document.getElementById('editCeilingHeight')?.value || '',
@@ -3633,6 +3673,12 @@
         setVal('editDepositPy', (window.commaFormat||(x=>x))(rawDeposit));
         setVal('editRentPy', (window.commaFormat||(x=>x))(rawRent));
         setVal('editMaintenancePy', (window.commaFormat||(x=>x))(rawMaint));
+        
+        // ★ Comp List 양식용 상세 사양 (_raw fallback 동일 적용)
+        setVal('editParkingSystem', getVal(building.parkingSystem, building.parking?.system, raw.parkingSystem, raw.parking?.system));
+        setVal('editEntranceDirection', getVal(building.entranceDirection, raw.entranceDirection));
+        setVal('editRestroomPerFloor', getVal(building.restroomPerFloor, raw.restroomPerFloor));
+        setVal('editRemodelYear', getVal(building.remodelYear, raw.remodelYear));
         
         // 시설 정보 (★ _raw fallback)
         setVal('editHvac', getVal(building.hvac, raw.hvac, raw.specs?.hvac));
@@ -3815,6 +3861,12 @@
             updates['pricing/depositPy'] = depositWon;
             updates['pricing/rentPy'] = rentWon;
             updates['pricing/maintenancePy'] = maintenanceWon;
+            
+            // ★ Comp List 양식용 상세 사양
+            updates.parkingSystem = formData.parkingSystem || '';
+            updates.entranceDirection = formData.entranceDirection || '';
+            updates.restroomPerFloor = formData.restroomPerFloor || '';
+            updates.remodelYear = formData.remodelYear || '';
             
             // 시설 정보
             updates.hvac = formData.hvac || '';
