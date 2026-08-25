@@ -1491,3 +1491,111 @@ body {
     background: #dbeafe;
     color: #2563eb;
 }
+
+/* ========================================
+   S&I 시세자료용 스타일 (앰버/브라운 계열)
+   ※ .spreadsheet:not(.lg-table) 규칙과 명시도가 같으므로
+      반드시 그 뒤(파일 하단)에 위치해야 적용됨
+   ======================================== */
+
+.card-type.sni { background: #fffbeb; color: #b45309; }
+
+.spreadsheet.sni-table .col-category { background: #fffbeb !important; }
+
+/* 섹션 색상 - 원본 엑셀 양식 톤 */
+.spreadsheet.sni-table .section-image     { background: #fde68a !important; }
+.spreadsheet.sni-table .section-note      { background: #f1f5f9 !important; }
+.spreadsheet.sni-table .section-building  { background: #e0f2fe !important; }
+.spreadsheet.sni-table .section-detail    { background: #e0e7ff !important; }
+.spreadsheet.sni-table .section-parking   { background: #ede9fe !important; }
+.spreadsheet.sni-table .section-lease     { background: #f9d6ae !important; }
+.spreadsheet.sni-table .section-rent      { background: #d9ecf2 !important; }
+.spreadsheet.sni-table .section-period    { background: #f1f5f9 !important; }
+.spreadsheet.sni-table .section-incentive { background: #fff2cc !important; }
+.spreadsheet.sni-table .section-cost      { background: #ffc000 !important; }
+
+/* 빌딩 헤더 - 앰버 브라운 */
+.spreadsheet.sni-table th.building-header-cell,
+.spreadsheet.sni-table .building-header-cell {
+    background: #b45309 !important;
+    color: white !important;
+    font-weight: 600;
+    vertical-align: middle;
+    padding: 12px;
+}
+
+.building-header-cell .sni-col-no {
+    font-size: 11px;
+    opacity: 0.75;
+    margin-bottom: 2px;
+}
+
+/* 헤더 공실 선택 탭 (공실 2개 이상일 때만 노출) */
+.building-header-cell .sni-vac-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    justify-content: center;
+    margin-top: 4px;
+}
+.building-header-cell .sni-vac-btn {
+    padding: 1px 6px;
+    font-size: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #e2e8f0;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    transition: all 0.15s;
+}
+.building-header-cell .sni-vac-btn.active {
+    background: #2563eb;
+    color: #fff;
+    border-color: #1d4ed8;
+}
+.building-header-cell .sni-vac-btn:hover { filter: brightness(0.95); }
+
+/* 계산 셀 강조 - 원본 양식 배경 재현
+   ※ 편집 가능 셀은 공통 .cell-editable(노랑)을 그대로 유지 */
+.spreadsheet.sni-table .cell-formula.tone-lease { background: #fdf3e7 !important; color: #7c2d12 !important; }
+.spreadsheet.sni-table .cell-formula.tone-rent  { background: #eaf4f8 !important; color: #0c4a6e !important; }
+.spreadsheet.sni-table .cell-formula.tone-inc   { background: #fff8e6 !important; color: #78350f !important; }
+.spreadsheet.sni-table .cell-formula.tone-mute  { background: #f1f5f9 !important; color: #475569 !important; }
+.spreadsheet.sni-table .cell-formula.tone-favor {
+    background: #ffefc2 !important; color: #78350f !important; font-weight: 600;
+}
+.spreadsheet.sni-table .cell-formula.tone-noc {
+    background: #ffc000 !important; color: #7f1d1d !important; font-weight: 700;
+}
+.spreadsheet.sni-table .cell-formula.tone-cost {
+    background: #ffe08a !important; color: #78350f !important; font-weight: 600;
+}
+.spreadsheet.sni-table .cell-formula.tone-total {
+    background: #a6a6a6 !important; color: #1f2937 !important; font-weight: 700;
+}
+
+/* 줄바꿈 허용 셀 (위치 등) */
+.spreadsheet.sni-table .cell-pre { white-space: pre-line; }
+
+/* 임차 특이사항 셀 */
+.spreadsheet.sni-table .sni-note-cell {
+    text-align: left;
+    white-space: pre-line;
+    font-size: 11px;
+    line-height: 1.5;
+}
+.spreadsheet.sni-table .sni-note-cell .auto-tag { font-size: 10px; color: #94a3b8; }
+.spreadsheet.sni-table .sni-note-cell textarea {
+    width: 100%;
+    padding: 6px;
+    border: 2px solid var(--accent-color);
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: inherit;
+    line-height: 1.5;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+/* 건축물대장 잠금 표시 */
+.spreadsheet.sni-table .lock-mark { font-size: 10px; color: #94a3b8; }

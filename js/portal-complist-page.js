@@ -560,7 +560,7 @@ function renderCompListCards() {
                 ` : ''}
                 <div class="card-row card-header">
                     <div class="card-title">${escapeHtml(c.title || '제목 없음')}</div>
-                    <span class="card-type ${getTemplate(c.type).badgeClass || 'general'}" style="${getTemplate(c.type).badgeStyle || ''}">
+                    <span class="card-type ${getTemplate(c.type).badgeClass || 'general'}">
                         ${getTemplate(c.type).label}
                     </span>
                 </div>

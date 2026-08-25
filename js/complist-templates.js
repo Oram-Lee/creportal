@@ -225,7 +225,6 @@ window.editSniLeaseNote = function (cell, buildingIdx) {
     const ta = document.createElement('textarea');
     ta.value = current;
     ta.rows = 4;
-    ta.style.cssText = 'width:100%; padding:6px; border:2px solid #3b82f6; border-radius:4px; font-size:12px; box-sizing:border-box; resize:vertical; font-family:inherit;';
     cell.innerHTML = '';
     cell.appendChild(ta);
     ta.focus();
@@ -243,18 +242,6 @@ window.editSniLeaseNote = function (cell, buildingIdx) {
 // ============================================================
 // S&I 화면 렌더링
 // ============================================================
-const SNI_SECTION_STYLE = {
-    note: 'background:#f1f5f9;',
-    building: 'background:#e0f2fe;',
-    detail: 'background:#e0f2fe;',
-    parking: 'background:#e0f2fe;',
-    lease: 'background:#f9d6ae;',
-    rent: 'background:#d9ecf2;',
-    period: 'background:#f8fafc;',
-    incentive: 'background:#fff2cc;',
-    cost: 'background:#ffc000;'
-};
-
 function fmtMoney(x) {
     if (!x || !isFinite(x)) return '-';
     return H.formatNumber(won(x)) + '원';
@@ -270,25 +257,27 @@ function fmtMonths(x, unit = '개월') {
     return x.toFixed(1) + unit;
 }
 
-/** 편집 가능한 셀 HTML */
-function editCellHtml(display, onclick, extraStyle = '') {
+/** 편집 가능한 셀 (배경은 공통 .cell-editable 사용) */
+function editCellHtml(display, onclick, extraClass = '') {
     const inner = display && display !== '-'
         ? H.escapeHtml(String(display))
         : '<span class="placeholder-input">입력</span>';
-    return `<td class="col-building cell-editable" style="${extraStyle}" onclick="${onclick}">${inner}</td>`;
+    return `<td class="col-building cell-editable ${extraClass}" onclick="${onclick}">${inner}</td>`;
 }
 
-function readCellHtml(display, cls = 'cell-formula', extraStyle = '') {
+/** 계산/읽기 전용 셀 (tone-* 클래스로 원본 양식 배경 재현) */
+function readCellHtml(display, tone = '') {
     const text = (display === undefined || display === null || display === '') ? '-' : String(display);
-    return `<td class="col-building ${cls}" style="${extraStyle}">${H.escapeHtml(text)}</td>`;
+    return `<td class="col-building cell-formula ${tone}">${H.escapeHtml(text)}</td>`;
 }
 
-function ledgerCellHtml(rawValue, buildingIdx, key, extraStyle = '') {
+/** 건축물대장 필드: 값이 있으면 수정 불가, 없으면 입력 가능 */
+function ledgerCellHtml(rawValue, buildingIdx, key, extraClass = '') {
     const has = rawValue !== undefined && rawValue !== null && String(rawValue).trim() !== '';
     if (has) {
-        return `<td class="col-building cell-readonly" style="${extraStyle}" title="건축물대장 정보 (수정 불가)">${H.escapeHtml(String(rawValue))} <span style="font-size:10px;color:#94a3b8;">🔒</span></td>`;
+        return `<td class="col-building cell-readonly ${extraClass}" title="건축물대장 정보 (수정 불가)">${H.escapeHtml(String(rawValue))} <span class="lock-mark">🔒</span></td>`;
     }
-    return editCellHtml('-', `editBuildingCell(this, ${buildingIdx}, '${key}')`, extraStyle);
+    return editCellHtml('-', `editBuildingCell(this, ${buildingIdx}, '${key}')`, extraClass);
 }
 
 function renderSniSpreadsheet() {
@@ -312,26 +301,26 @@ function renderSniSpreadsheet() {
         if (vacs.length > 1) {
             const selected = Array.isArray(e.building.selectedVacancyIdxs) && e.building.selectedVacancyIdxs.length
                 ? e.building.selectedVacancyIdxs : [0];
-            selector = `<div style="display:flex; flex-wrap:wrap; gap:3px; justify-content:center; margin-top:3px;">` +
-                vacs.map((v, vi) => {
-                    const on = selected.includes(vi);
-                    return `<button class="action-btn" style="padding:1px 6px; font-size:10px; background:${on ? '#3b82f6' : '#e2e8f0'}; color:${on ? '#fff' : '#475569'};"
-                        onclick="event.stopPropagation(); toggleSniVacancy(${e.buildingIdx}, ${vi})"
-                        title="열에 표시할 공실 선택">${H.escapeHtml(v.floor || `공실${vi + 1}`)}</button>`;
-                }).join('') + `</div>`;
+            selector = `<div class="sni-vac-tabs">` + vacs.map((v, vi) => {
+                const on = selected.includes(vi);
+                return `<button class="sni-vac-btn${on ? ' active' : ''}"
+                    onclick="event.stopPropagation(); toggleSniVacancy(${e.buildingIdx}, ${vi})"
+                    title="열에 표시할 공실 선택">${H.escapeHtml(v.floor || `공실${vi + 1}`)}</button>`;
+            }).join('') + `</div>`;
         }
 
-        const floorTag = e.vacancy?.floor ? `<div class="vacancy-status has-vacancy"><span>${H.escapeHtml(e.vacancy.floor)}</span></div>` : '';
+        const floorTag = e.vacancy?.floor
+            ? `<div class="vacancy-status has-vacancy"><span>${H.escapeHtml(e.vacancy.floor)}</span></div>` : '';
 
         return `
         <th class="col-building header building-header-cell">
-            <div style="font-size:11px; color:#64748b;">${i + 1}</div>
+            <div class="sni-col-no">${i + 1}</div>
             <div class="building-name">${H.escapeHtml(e.building.buildingName || '-')}</div>
             ${floorTag}
             ${selector}
             <div class="actions">
-                <button class="action-btn" onclick="event.stopPropagation(); refreshBuildingLedgerInComplist('${e.building.buildingId}')" title="건축물대장 불러오기" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white;">🔄</button>
-                <button class="action-btn" onclick="event.stopPropagation(); openVacancyManageModal('${e.building.buildingId}')" title="공실 관리" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">📋</button>
+                <button class="action-btn" onclick="event.stopPropagation(); refreshBuildingLedgerInComplist('${e.building.buildingId}')" title="건축물대장 불러오기">🔄</button>
+                <button class="action-btn" onclick="event.stopPropagation(); openVacancyManageModal('${e.building.buildingId}')" title="공실 관리">📋</button>
                 <button class="action-btn" onclick="event.stopPropagation(); addVacancyToBuilding('${e.building.buildingId}')" title="공실 추가">➕</button>
                 <button class="action-btn" onclick="event.stopPropagation(); removeBuilding('${e.building.buildingId}')" title="삭제">🗑️</button>
             </div>
@@ -365,22 +354,23 @@ function renderSniSpreadsheet() {
 
     // ---------- 임차 특이사항 ----------
     html += `<tr>
-        <td class="col-category" style="${SNI_SECTION_STYLE.note}">임차<br>특이사항</td>
+        <td class="col-category section-note">임차<br>특이사항</td>
         <td class="col-label">RF / FO / TI</td>
         ${entries.map(e => {
             const text = sniLeaseNoteText(e);
             const isAuto = !((e.building.buildingData || {}).leaseNote || '').trim();
-            return `<td class="col-building cell-editable" style="text-align:left; white-space:pre-line; font-size:11px; line-height:1.5;"
-                onclick="editSniLeaseNote(this, ${e.buildingIdx})" title="클릭해 수정 (비우면 자동 초안으로 복귀)">${H.escapeHtml(text)}${isAuto ? ' <span style="font-size:10px;color:#94a3b8;">✎자동</span>' : ''}</td>`;
+            return `<td class="col-building cell-editable sni-note-cell"
+                onclick="editSniLeaseNote(this, ${e.buildingIdx})"
+                title="클릭해 수정 (비우면 자동 초안으로 복귀)">${H.escapeHtml(text)}${isAuto ? ' <span class="auto-tag">✎자동</span>' : ''}</td>`;
         }).join('')}
     </tr>`;
 
     // ---------- 섹션 렌더 헬퍼 ----------
-    const section = (title, styleKey, rows) => {
+    const section = (title, sectionClass, rows) => {
         rows.forEach((row, idx) => {
             html += '<tr>';
             if (idx === 0) {
-                html += `<td class="col-category" rowspan="${rows.length}" style="${SNI_SECTION_STYLE[styleKey] || ''}">${title}</td>`;
+                html += `<td class="col-category ${sectionClass}" rowspan="${rows.length}">${title}</td>`;
             }
             html += `<td class="col-label">${row.label}</td>`;
             entries.forEach((e, i) => { html += row.cell(e, calcs[i], i); });
@@ -389,10 +379,10 @@ function renderSniSpreadsheet() {
     };
 
     // ---------- 빌딩 현황 ----------
-    section('빌딩 현황', 'building', [
+    section('빌딩 현황', 'section-building', [
         { label: '주소', cell: (e, c) => ledgerCellHtml(c.bd.addressJibun || c.bd.address, e.buildingIdx, 'addressJibun') },
         { label: '도로명 주소', cell: (e, c) => ledgerCellHtml(c.bd.address, e.buildingIdx, 'address') },
-        { label: '위치', cell: (e, c) => editCellHtml(c.bd.nearestStation || c.bd.station, `editBuildingCell(this, ${e.buildingIdx}, 'nearestStation')`, 'white-space:pre-line;') },
+        { label: '위치', cell: (e, c) => editCellHtml(c.bd.nearestStation || c.bd.station, `editBuildingCell(this, ${e.buildingIdx}, 'nearestStation')`, 'cell-pre') },
         { label: '빌딩 규모', cell: (e, c) => ledgerCellHtml(c.bd.floors || c.bd.scale, e.buildingIdx, 'floors') },
         {
             label: '사용승인일 / 리모델링 년도',
@@ -412,45 +402,43 @@ function renderSniSpreadsheet() {
     ]);
 
     // ---------- 빌딩 세부현황 ----------
-    section('빌딩<br>세부현황', 'detail', [
+    section('빌딩<br>세부현황', 'section-detail', [
         { label: '건물종류', cell: (e, c) => ledgerCellHtml(c.bd.buildingUse || c.bd.usage, e.buildingIdx, 'buildingUse') },
         { label: '주 출입구 방향', cell: (e, c) => editCellHtml(c.bd.entranceDirection, `editBuildingCell(this, ${e.buildingIdx}, 'entranceDirection')`) }
     ]);
 
     // ---------- 주차 관련 ----------
-    section('주차 관련', 'parking', [
+    section('주차 관련', 'section-parking', [
         { label: '무료 주차 기준', cell: (e, c) => editCellHtml(freeParkingLabel(c), `editBuildingCell(this, ${e.buildingIdx}, 'freeParkingCondition')`) },
-        { label: '무료 주차 제공 (대)', cell: (e, c) => readCellHtml(c.freeParkingCount ? `${c.freeParkingCount}대` : '-', 'cell-formula', 'background:#f1f5f9;') },
+        { label: '무료 주차 제공 (대)', cell: (e, c) => readCellHtml(c.freeParkingCount ? `${c.freeParkingCount}대` : '-', 'tone-mute') },
         { label: '유료 주차 기준', cell: (e, c) => editCellHtml(c.bd.paidParking || c.bd.parkingFee, `editBuildingCell(this, ${e.buildingIdx}, 'paidParking')`) }
     ]);
 
     // ---------- 임차 제안 ----------
-    const leaseStyle = 'background:#fdf3e7;';
-    section('임차 제안', 'lease', [
+    section('임차 제안', 'section-lease', [
         { label: '입주조건 최적 임차 층수', cell: (e) => editCellHtml(e.vacancy.floor, `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'floor')`) },
         { label: '입주 가능 시기', cell: (e) => editCellHtml(e.vacancy.moveInDate, `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'moveInDate')`) },
-        { label: '거래유형', cell: () => readCellHtml('월세', 'cell-readonly') },
-        { label: '임대면적 (m²)', cell: (e, c) => readCellHtml(fmtArea(c.rentArea * PY_TO_M2, ' m²'), 'cell-formula', leaseStyle) },
-        { label: '전용면적 (m²)', cell: (e, c) => readCellHtml(fmtArea(c.exclArea * PY_TO_M2, ' m²'), 'cell-formula', leaseStyle) },
-        { label: '임대면적 (평)', cell: (e, c) => editCellHtml(c.rentArea ? fmtArea(c.rentArea, ' 평') : '-', `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'rentArea')`, leaseStyle) },
-        { label: '전용면적 (평)', cell: (e, c) => editCellHtml(c.exclArea ? fmtArea(c.exclArea, ' 평') : '-', `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'exclusiveArea')`, leaseStyle) }
+        { label: '거래유형', cell: () => `<td class="col-building cell-readonly">월세</td>` },
+        { label: '임대면적 (m²)', cell: (e, c) => readCellHtml(fmtArea(c.rentArea * PY_TO_M2, ' m²'), 'tone-lease') },
+        { label: '전용면적 (m²)', cell: (e, c) => readCellHtml(fmtArea(c.exclArea * PY_TO_M2, ' m²'), 'tone-lease') },
+        { label: '임대면적 (평)', cell: (e, c) => editCellHtml(c.rentArea ? fmtArea(c.rentArea, ' 평') : '-', `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'rentArea')`) },
+        { label: '전용면적 (평)', cell: (e, c) => editCellHtml(c.exclArea ? fmtArea(c.exclArea, ' 평') : '-', `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'exclusiveArea')`) }
     ]);
 
     // ---------- 임대 기준 ----------
-    const rentStyle = 'background:#eaf4f8;';
-    section('임대 기준', 'rent', [
+    section('임대 기준', 'section-rent', [
         { label: '월 평당 보증금', cell: (e, c) => editCellHtml(c.depositPy ? fmtMoney(c.depositPy) : '-', `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'depositPy')`) },
         { label: '월 평당 임대료', cell: (e, c) => editCellHtml(c.rentPy ? fmtMoney(c.rentPy) : '-', `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'rentPy')`) },
         { label: '월 평당 관리비', cell: (e, c) => editCellHtml(c.maintPy ? fmtMoney(c.maintPy) : '-', `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'maintenancePy')`) },
-        { label: '월 평당 지출비용', cell: (e, c) => readCellHtml(fmtMoney(c.rentPy + c.maintPy), 'cell-formula', rentStyle) },
+        { label: '월 평당 지출비용', cell: (e, c) => readCellHtml(fmtMoney(c.rentPy + c.maintPy), 'tone-rent') },
         { label: '총 보증금', cell: (e, c) => readCellHtml(fmtMoney(c.totalDeposit)) },
         { label: '월 임대료 총액', cell: (e, c) => readCellHtml(fmtMoney(c.monthlyRentTotal)) },
         { label: '월 관리비 총액', cell: (e, c) => readCellHtml(fmtMoney(c.monthlyMaintTotal)) },
-        { label: '월 전용면적당 지출비용', cell: (e, c) => readCellHtml(c.exclArea > 0 ? fmtMoney((c.monthlyRentTotal + c.monthlyMaintTotal) / c.exclArea) : '-', 'cell-formula', rentStyle) }
+        { label: '월 전용면적당 지출비용', cell: (e, c) => readCellHtml(c.exclArea > 0 ? fmtMoney((c.monthlyRentTotal + c.monthlyMaintTotal) / c.exclArea) : '-', 'tone-rent') }
     ]);
 
     // ---------- 기간 ----------
-    section('기간', 'period', [
+    section('기간', 'section-period', [
         { label: '계약기간 (개월)', cell: (e, c) => editCellHtml(fmtMonths(c.contractM), `editBuildingCell(this, ${e.buildingIdx}, 'contractMonths')`) },
         { label: '계약기간 (년)', cell: (e, c) => readCellHtml(fmtMonths(c.contractY, '년')) },
         { label: '점유기간 (계약+FO, 개월)', cell: (e, c) => readCellHtml(fmtMonths(c.occupyM)) },
@@ -458,29 +446,27 @@ function renderSniSpreadsheet() {
     ]);
 
     // ---------- 임대 Incentive ----------
-    const incStyle = 'background:#fff8e6;';
-    section('임대<br>Incentive', 'incentive', [
-        { label: '렌트프리 (개월/년)', cell: (e, c) => editCellHtml(fmtMonths(c.rentFree, '개월/년'), `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'rentFree')`, incStyle) },
-        { label: 'Fit-out (총 제공 기간)', cell: (e, c) => editCellHtml(fmtMonths(c.fitoutM), `editBuildingCell(this, ${e.buildingIdx}, 'fitoutMonths')`, incStyle) },
-        { label: 'Fit-out (관리비 면제)', cell: (e, c) => editCellHtml(fmtMonths(c.fitoutFreeM), `editBuildingCell(this, ${e.buildingIdx}, 'fitoutFreeMaintMonths')`, incStyle) },
-        { label: 'TI (총액)', cell: (e, c) => readCellHtml(c.tiTotal ? `총액 ${H.formatNumber(won(c.tiTotal))}원` : '-', 'cell-formula', incStyle) },
-        { label: 'TI (전용 1평당)', cell: (e, c) => editCellHtml(c.tiPerPy ? `전용 1평당 ${H.formatNumber(won(c.tiPerPy))}원` : '-', `editBuildingCell(this, ${e.buildingIdx}, 'tiPerPy')`, incStyle) },
-        { label: 'TI (RF 환산)', cell: (e, c) => readCellHtml(c.tiMonths ? `RF 환산 총 ${c.tiMonths.toFixed(1)}개월` : '-', 'cell-formula', incStyle) },
-        { label: '계약기간 총 Favor', cell: (e, c) => readCellHtml(fmtMonths(c.totalFavor), 'cell-formula', incStyle) },
-        { label: '연평균 Favor', cell: (e, c) => readCellHtml(fmtMonths(c.annualFavor, '개월/년'), 'cell-formula', 'background:#ffefc2; font-weight:600;') },
-        { label: '평균 월 평당 임대료', cell: (e, c) => readCellHtml(fmtMoney(c.avgRentPy), 'cell-formula', incStyle) },
-        { label: '평균 월 평당 관리비', cell: (e, c) => readCellHtml(fmtMoney(c.avgMaintPy), 'cell-formula', incStyle) },
-        { label: '초년차 기준 NOC', cell: (e, c) => readCellHtml(fmtMoney(c.noc), 'cell-formula', 'background:#ffc000; font-weight:700;') }
+    section('임대<br>Incentive', 'section-incentive', [
+        { label: '렌트프리 (개월/년)', cell: (e, c) => editCellHtml(fmtMonths(c.rentFree, '개월/년'), `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'rentFree')`) },
+        { label: 'Fit-out (총 제공 기간)', cell: (e, c) => editCellHtml(fmtMonths(c.fitoutM), `editBuildingCell(this, ${e.buildingIdx}, 'fitoutMonths')`) },
+        { label: 'Fit-out (관리비 면제)', cell: (e, c) => editCellHtml(fmtMonths(c.fitoutFreeM), `editBuildingCell(this, ${e.buildingIdx}, 'fitoutFreeMaintMonths')`) },
+        { label: 'TI (총액)', cell: (e, c) => readCellHtml(c.tiTotal ? `총액 ${H.formatNumber(won(c.tiTotal))}원` : '-', 'tone-inc') },
+        { label: 'TI (전용 1평당)', cell: (e, c) => editCellHtml(c.tiPerPy ? `전용 1평당 ${H.formatNumber(won(c.tiPerPy))}원` : '-', `editBuildingCell(this, ${e.buildingIdx}, 'tiPerPy')`) },
+        { label: 'TI (RF 환산)', cell: (e, c) => readCellHtml(c.tiMonths ? `RF 환산 총 ${c.tiMonths.toFixed(1)}개월` : '-', 'tone-inc') },
+        { label: '계약기간 총 Favor', cell: (e, c) => readCellHtml(fmtMonths(c.totalFavor), 'tone-inc') },
+        { label: '연평균 Favor', cell: (e, c) => readCellHtml(fmtMonths(c.annualFavor, '개월/년'), 'tone-favor') },
+        { label: '평균 월 평당 임대료', cell: (e, c) => readCellHtml(fmtMoney(c.avgRentPy), 'tone-inc') },
+        { label: '평균 월 평당 관리비', cell: (e, c) => readCellHtml(fmtMoney(c.avgMaintPy), 'tone-inc') },
+        { label: '초년차 기준 NOC', cell: (e, c) => readCellHtml(fmtMoney(c.noc), 'tone-noc') }
     ]);
 
     // ---------- 예상 비용 ----------
-    const costStyle = 'background:#ffe08a; font-weight:600;';
-    section('예상 비용', 'cost', [
-        { label: '보증금', cell: (e, c) => readCellHtml(fmtMoney(c.totalDeposit), 'cell-formula', costStyle) },
-        { label: '평균 월 임대료', cell: (e, c) => readCellHtml(fmtMoney(c.avgRentTotal), 'cell-formula', costStyle) },
-        { label: '평균 월 관리비', cell: (e, c) => readCellHtml(fmtMoney(c.avgMaintTotal), 'cell-formula', costStyle) },
-        { label: '월 지출비용 (임대료+관리비)', cell: (e, c) => readCellHtml(fmtMoney(c.avgRentTotal + c.avgMaintTotal), 'cell-formula', 'background:#a6a6a6; font-weight:700;') },
-        { label: '연 지출비용 (월 지출×12)', cell: (e, c) => readCellHtml(fmtMoney((c.avgRentTotal + c.avgMaintTotal) * 12), 'cell-formula', costStyle) }
+    section('예상 비용', 'section-cost', [
+        { label: '보증금', cell: (e, c) => readCellHtml(fmtMoney(c.totalDeposit), 'tone-cost') },
+        { label: '평균 월 임대료', cell: (e, c) => readCellHtml(fmtMoney(c.avgRentTotal), 'tone-cost') },
+        { label: '평균 월 관리비', cell: (e, c) => readCellHtml(fmtMoney(c.avgMaintTotal), 'tone-cost') },
+        { label: '월 지출비용 (임대료+관리비)', cell: (e, c) => readCellHtml(fmtMoney(c.avgRentTotal + c.avgMaintTotal), 'tone-total') },
+        { label: '연 지출비용 (월 지출×12)', cell: (e, c) => readCellHtml(fmtMoney((c.avgRentTotal + c.avgMaintTotal) * 12), 'tone-cost') }
     ]);
 
     html += '</tbody></table>';
@@ -823,8 +809,7 @@ registerTemplate({
     id: 'sni',
     label: 'S&I 시세자료',
     icon: '📑',
-    badgeClass: 'general',
-    badgeStyle: 'background:#fef3c7; color:#92400e;',
+    badgeClass: 'sni',
     containerId: 'sniSpreadsheet',
     render: renderSniSpreadsheet,
     exportExcel: downloadExcelSni
