@@ -1599,3 +1599,132 @@ body {
 
 /* 건축물대장 잠금 표시 */
 .spreadsheet.sni-table .lock-mark { font-size: 10px; color: #94a3b8; }
+
+/* ========================================
+   외관/평면도 이미지 - 엑셀 삽입 영역과 동일한 박스
+   ※ .image-cell img (max-width:50%) 보다 명시도가 높아야 하므로 하단 배치
+   ======================================== */
+.image-cell .img-box {
+    height: 100%;
+    margin: 0 auto;
+    overflow: hidden;
+    background: #e2e8f0;
+    border-radius: 2px;
+    /* aspect-ratio는 템플릿이 엑셀 열너비/행높이에서 계산해 인라인으로 지정 */
+}
+.image-cell .img-box img {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    object-fit: cover;      /* 박스를 꽉 채움 — 엑셀 삽입 결과와 동일 */
+    object-position: center;
+    display: block;
+    cursor: pointer;
+    border-radius: 0;
+    box-shadow: none;
+}
+.image-cell .img-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+/* 이미지 모달 - 붙여넣기 버튼 정렬 */
+.image-upload-area .upload-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.image-upload-area button.upload-btn {
+    font-family: inherit;
+}
+
+/* ========================================
+   좌측 목록 서랍(Drawer) UI
+   ======================================== */
+.list-panel {
+    transition: width 0.22s ease, min-width 0.22s ease, opacity 0.15s ease;
+}
+.list-panel.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    opacity: 0;
+    pointer-events: none;
+    border-right: none;
+}
+
+.panel-header .drawer-toggle {
+    padding: 4px 9px;
+    font-size: 12px;
+    line-height: 1;
+}
+
+/* 접혔을 때 좌측에 붙는 세로 손잡이 */
+.drawer-handle {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 30px;
+    flex: 0 0 30px;
+    border: none;
+    border-right: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.drawer-handle:hover {
+    background: var(--accent-light);
+    color: var(--accent-color);
+}
+.drawer-handle.show { display: flex; }
+.drawer-handle-icon { font-size: 12px; }
+.drawer-handle-label {
+    writing-mode: vertical-rl;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+/* ========================================
+   절삭/반올림 토글
+   ======================================== */
+.rounding-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 11px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.rounding-toggle:hover { border-color: var(--accent-color); }
+.rounding-toggle.on {
+    background: var(--accent-light);
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+.rounding-toggle .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+.rounding-toggle.on .dot { background: var(--accent-color); }
+
+/* 총액 직접 입력 셀 표시 */
+.spreadsheet .cell-total-source {
+    box-shadow: inset 3px 0 0 #0ea5e9;
+}

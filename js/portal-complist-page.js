@@ -22,9 +22,10 @@ import {
 function toWon(value) {
     const num = parseFloat(value) || 0;
     if (num === 0) return 0;
-    // 1000 미만이면 만원 단위로 간주 (×10000)
-    // 1000 이상이면 이미 원 단위
-    return num < 1000 ? num * 10000 : num;
+    // ★ 원천 데이터(임대안내문)의 평당 단가는 천원 단위다.
+    //   예) 79 → 79,000원/평 (123.34평 기준 월 임대료 9,743,860원)
+    //   1000 이상이면 이미 원 단위로 저장된 값이므로 그대로 둔다.
+    return num < 1000 ? num * 1000 : num;
 }
 
 /**
@@ -83,7 +84,8 @@ function setupTemplates() {
         toWon, toManwon, formatManwon, formatNumber,
         escapeHtml, safeStringify, getExteriorUrl, showToast,
         getState: () => pageState,
-        rerender: () => renderDetailView()
+        rerender: () => renderDetailView(),
+        imageCellHtml, cropImageToBox, calcVacancyMoney
     });
 
     registerTemplate({
@@ -112,6 +114,7 @@ export async function initCompListPage() {
     console.log('Comp List 페이지 초기화 시작...');
     
     setupTemplates();
+    restoreDrawerState();
     
     // 세션 체크 (portal-auth.js와 동일한 키 사용)
     const session = localStorage.getItem('crePortalUser');
@@ -772,6 +775,8 @@ function renderDetailView() {
         btn.classList.toggle('active', btn.dataset.type === data.type);
     });
     
+    syncRoundingToggleUI();
+
     // 스프레드시트 렌더링 (레지스트리)
     const template = getTemplate(data.type);
     allContainerIds().forEach(id => {
@@ -874,24 +879,7 @@ function renderGeneralSpreadsheet() {
         <tr>
             <td class="col-category section-image">외관사진</td>
             <td class="col-label">빌딩 이미지</td>
-            ${entries.map((e) => {
-                const bd = e.building.buildingData || {};
-                const imageUrl = getExteriorUrl(bd);
-                return `
-                    <td class="col-building image-cell">
-                        ${imageUrl ? 
-                            `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
-                                <img src="${imageUrl}" onclick="openImageModal('${e.building.buildingId}')" alt="외관">
-                            </div>` :
-                            `<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;">
-                                <button class="upload-btn" onclick="openImageModal('${e.building.buildingId}')">
-                                    📷 이미지 등록
-                                </button>
-                            </div>`
-                        }
-                    </td>
-                `;
-            }).join('')}
+            ${entries.map((e) => imageCellHtml(e.building.buildingData || {}, e.building.buildingId, generalImageBox(entries.length))).join('')}
         </tr>
     `;
     
@@ -1164,13 +1152,15 @@ function renderGeneralSpreadsheet() {
     // ========================================
     // ★ 마이그레이션 호환: 단위 자동 감지 (toWon/toManwon 함수 사용)
     const rentRows = [
-        { label: '월 평당 보증금', key: 'depositPy', source: 'vacancy', editable: true, displayUnit: 'manwon' },
-        { label: '월 평당 임대료', key: 'rentPy', source: 'vacancy', editable: true, displayUnit: 'manwon' },
-        { label: '월 평당 관리비', key: 'maintenancePy', source: 'vacancy', editable: true, displayUnit: 'manwon' },
-        { label: '월 평당 지출비용', formula: 'rentPy + maintenancePy', format: 'manwon' },
-        { label: '총 보증금', formula: 'depositPy * rentArea', format: 'won' },
-        { label: '월 임대료 총액', formula: 'rentPy * rentArea', format: 'won' },
-        { label: '월 관리비 총액', formula: 'maintenancePy * rentArea', format: 'won' },
+        // 평당 단가: 총액이 입력돼 있으면 역산값을 보여준다 (원 단위)
+        { label: '월 평당 보증금', key: 'depositPy', source: 'vacancy', editable: true, computed: 'depositPy', format: 'won' },
+        { label: '월 평당 임대료', key: 'rentPy', source: 'vacancy', editable: true, computed: 'rentPy', format: 'won' },
+        { label: '월 평당 관리비', key: 'maintenancePy', source: 'vacancy', editable: true, computed: 'maintPy', format: 'won' },
+        { label: '월 평당 지출비용', formula: 'rentPy + maintenancePy', format: 'won' },
+        // 총액: 직접 입력 가능(원천). 비어 있으면 평당 × 임대면적
+        { label: '총 보증금', key: 'totalDeposit', source: 'vacancy', editable: true, computed: 'totalDeposit', format: 'won', totalKey: 'deposit' },
+        { label: '월 임대료 총액', key: 'totalRent', source: 'vacancy', editable: true, computed: 'totalRent', format: 'won', totalKey: 'rent' },
+        { label: '월 관리비 총액', key: 'totalMaintenance', source: 'vacancy', editable: true, computed: 'totalMaint', format: 'won', totalKey: 'maint' },
         { label: '월 전용면적당 지출비용', formula: '(rentPy + maintenancePy) * rentArea / exclusiveArea', format: 'won' }
     ];
     
@@ -1186,10 +1176,11 @@ function renderGeneralSpreadsheet() {
             let value = '';
             let cellClass = 'col-building';
             
-            // ★ 마이그레이션 호환: toWon()으로 원 단위 정규화
-            const depositPy = toWon(v.depositPy);
-            const rentPy = toWon(v.rentPy);
-            const maintenancePy = toWon(v.maintenancePy);
+            // ★ 총액 우선 → 없으면 평당 × 면적 (절삭 토글 반영)
+            const _m = calcVacancyMoney(v);
+            const depositPy = _m.depositPy;
+            const rentPy = _m.rentPy;
+            const maintenancePy = _m.maintPy;
             // ※ 수정: 기본값 제거
             const rentArea = parseFloat(v.rentArea) || 0;
             const exclusiveArea = parseFloat(v.exclusiveArea) || 0;
@@ -1200,11 +1191,11 @@ function renderGeneralSpreadsheet() {
                     // 월 평당 지출비용 (만원 단위로 표시)
                     value = rentPy + maintenancePy;
                 } else if (row.formula === 'depositPy * rentArea') {
-                    value = rentArea > 0 ? depositPy * rentArea : '-';
+                    value = rentArea > 0 ? _m.totalDeposit : '-';
                 } else if (row.formula === 'rentPy * rentArea') {
-                    value = rentArea > 0 ? rentPy * rentArea : '-';
+                    value = rentArea > 0 ? _m.totalRent : '-';
                 } else if (row.formula === 'maintenancePy * rentArea') {
-                    value = rentArea > 0 ? maintenancePy * rentArea : '-';
+                    value = rentArea > 0 ? _m.totalMaint : '-';
                 } else if (row.formula.includes('exclusiveArea')) {
                     value = (rentArea > 0 && exclusiveArea > 0) ? ((rentPy + maintenancePy) * rentArea / exclusiveArea) : '-';
                 }
@@ -1216,6 +1207,13 @@ function renderGeneralSpreadsheet() {
                         value = formatValue(value, row.format);
                     }
                 }
+            } else if (row.computed) {
+                // ★ 총액 우선 계산 결과 (절삭 토글 반영)
+                const cv = _m[row.computed];
+                value = cv ? formatValue(cv, row.format) : '-';
+                if (row.editable) cellClass += ' cell-editable';
+                // 총액이 직접 입력된 항목은 좌측에 파란 띠로 표시
+                if (row.totalKey && _m.fromTotal[row.totalKey]) cellClass += ' cell-total-source';
             } else if (row.source === 'vacancy') {
                 // ★ 원본 값을 만원 단위로 변환해서 표시
                 const rawValue = v[row.key];
@@ -1264,10 +1262,11 @@ function renderGeneralSpreadsheet() {
             let value = '';
             let cellClass = 'col-building';
             
-            // ★ 마이그레이션 호환: toWon()으로 원 단위 정규화
-            const depositPy = toWon(v.depositPy);
-            const rentPy = toWon(v.rentPy);
-            const maintenancePy = toWon(v.maintenancePy);
+            // ★ 총액 우선 → 없으면 평당 × 면적 (절삭 토글 반영)
+            const _m = calcVacancyMoney(v);
+            const depositPy = _m.depositPy;
+            const rentPy = _m.rentPy;
+            const maintenancePy = _m.maintPy;
             const rentFree = parseFloat(v.rentFree) || 0;
             // ※ 수정: 기본값 제거
             const rentArea = parseFloat(v.rentArea) || 0;
@@ -1334,10 +1333,11 @@ function renderGeneralSpreadsheet() {
             const v = e.vacancy || {};
             let cellClass = 'col-building cell-formula';
             
-            // ★ 마이그레이션 호환: toWon()으로 원 단위 정규화
-            const depositPy = toWon(v.depositPy);
-            const rentPy = toWon(v.rentPy);
-            const maintenancePy = toWon(v.maintenancePy);
+            // ★ 총액 우선 → 없으면 평당 × 면적 (절삭 토글 반영)
+            const _m = calcVacancyMoney(v);
+            const depositPy = _m.depositPy;
+            const rentPy = _m.rentPy;
+            const maintenancePy = _m.maintPy;
             const rentFree = parseFloat(v.rentFree) || 0;
             // ※ 수정: 기본값 제거
             const rentArea = parseFloat(v.rentArea) || 0;
@@ -1347,7 +1347,7 @@ function renderGeneralSpreadsheet() {
             
             if (rentArea > 0) {
                 if (row.formula.includes('depositPy * rentArea')) {
-                    value = depositPy * rentArea;
+                    value = _m.totalDeposit;
                 } else if (row.formula.includes('rentPy') && !row.formula.includes('maintenancePy')) {
                     value = effectiveRent * rentArea;
                 } else if (row.formula.includes('maintenancePy') && !row.formula.includes('rentPy')) {
@@ -1433,24 +1433,7 @@ function renderLGSpreadsheet() {
         <tr>
             <td class="col-category section-image">건물 외관</td>
             <td class="col-label">이미지</td>
-            ${buildings.map(b => {
-                const bd = b.buildingData || {};
-                const imageUrl = getExteriorUrl(bd);
-                return `
-                    <td colspan="3" class="image-cell">
-                        ${imageUrl ? 
-                            `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
-                                <img src="${imageUrl}" onclick="openImageModal('${b.buildingId}')" alt="외관">
-                            </div>` :
-                            `<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;">
-                                <button class="upload-btn" onclick="openImageModal('${b.buildingId}')">
-                                    📷 이미지 등록
-                                </button>
-                            </div>`
-                        }
-                    </td>
-                `;
-            }).join('')}
+            ${buildings.map(b => imageCellHtml(b.buildingData || {}, b.buildingId, lgImageBox()).replace('<td class="col-building image-cell">', '<td colspan="3" class="image-cell">')).join('')}
         </tr>
     `;
     
@@ -1695,9 +1678,8 @@ function renderLGSpreadsheet() {
             <td class="col-label">보증금</td>
             ${buildings.map(b => {
                 const v = b.vacancies?.[0] || {};
-                const depositPy = toWon(v.depositPy);
                 const totalRent = (b.vacancies || []).reduce((sum, v) => sum + (parseFloat(v.rentArea) || 0), 0);
-                const totalDeposit = depositPy * totalRent;
+                const totalDeposit = calcVacancyMoney(v, totalRent).totalDeposit;
                 return `<td colspan="3" class="cell-formula">${totalDeposit ? formatNumber(Math.round(totalDeposit)) + '원' : '-'}</td>`;
             }).join('')}
         </tr>
@@ -1884,16 +1866,17 @@ function calculateFormula(formula, bd, v, entry) {
         // 변수 치환
         const rentArea = parseFloat(v.rentArea) || 0;
         const exclusiveArea = parseFloat(v.exclusiveArea) || 0;
-        // ★ 마이그레이션 호환: toWon()으로 원 단위 정규화
-        const depositPy = toWon(v.depositPy);
-        const rentPy = toWon(v.rentPy);
-        const maintenancePy = toWon(v.maintenancePy);
+        // ★ 총액 우선 → 없으면 평당 × 면적 (절삭 토글 반영)
+        const _m = calcVacancyMoney(v);
+        const depositPy = _m.depositPy;
+        const rentPy = _m.rentPy;
+        const maintenancePy = _m.maintPy;
         const rentFree = parseFloat(v.rentFree) || 0;
         
         // 중간 계산 (이미 원 단위이므로 * 10000 제거)
-        const totalDeposit = depositPy * rentArea;
-        const totalRent = rentPy * rentArea;
-        const totalMaintenance = maintenancePy * rentArea;
+        const totalDeposit = _m.totalDeposit;
+        const totalRent = _m.totalRent;
+        const totalMaintenance = _m.totalMaint;
         const effectiveRent = rentPy * (12 - rentFree) / 12;
         const monthlyPayment = (effectiveRent + maintenancePy) * rentArea;
         
@@ -3528,49 +3511,300 @@ window.deleteImage = async function() {
     }
 };
 
+// ============================================================
+// 임대 금액 계산 (총액 우선 → 없으면 평당 × 면적)
+//  - 총액(totalDeposit/totalRent/totalMaintenance)이 입력돼 있으면 그것을 원천으로 삼고
+//    평당 단가는 ROUNDDOWN(총액/임대면적, 0)으로 역산한다 (S&I 시세자료 엑셀과 동일)
+//  - 총액이 없으면 기존처럼 평당 × 임대면적으로 총액을 만든다
+//  - 절삭/반올림 토글이 꺼져 있으면 절삭 없이 원본 소수값을 그대로 반환
+// ============================================================
+function isRoundingOn() {
+    return pageState.roundingEnabled !== false;  // 기본값 ON
+}
+
+function roundDown(value, digits = 0) {
+    if (!isFinite(value)) return 0;
+    const f = Math.pow(10, digits);
+    return Math.floor(value * f) / f;
+}
+
+/** 절삭 토글을 반영한 값 (토글 OFF면 원본 그대로) */
+function applyRound(value, digits = 0) {
+    return isRoundingOn() ? roundDown(value, digits) : value;
+}
+
+/**
+ * 공실 하나의 금액 일체를 계산한다.
+ * @returns {{depositPy, rentPy, maintPy, totalDeposit, totalRent, totalMaint,
+ *            fromTotal: {deposit:boolean, rent:boolean, maint:boolean}}}
+ */
+function calcVacancyMoney(v = {}, rentAreaOverride) {
+    const rentArea = parseFloat(rentAreaOverride ?? v.rentArea) || 0;
+
+    const rawTotalDeposit = parseFloat(v.totalDeposit) || 0;
+    const rawTotalRent = parseFloat(v.totalRent) || 0;
+    const rawTotalMaint = parseFloat(v.totalMaintenance) || 0;
+
+    const fromTotal = {
+        deposit: rawTotalDeposit > 0,
+        rent: rawTotalRent > 0,
+        maint: rawTotalMaint > 0
+    };
+
+    // 평당 단가: 총액이 있으면 역산, 없으면 저장값
+    const depositPy = fromTotal.deposit && rentArea > 0
+        ? applyRound(rawTotalDeposit / rentArea, 0) : toWon(v.depositPy);
+    const rentPy = fromTotal.rent && rentArea > 0
+        ? applyRound(rawTotalRent / rentArea, 0) : toWon(v.rentPy);
+    const maintPy = fromTotal.maint && rentArea > 0
+        ? applyRound(rawTotalMaint / rentArea, 0) : toWon(v.maintenancePy);
+
+    // 총액: 입력값 우선, 없으면 평당 × 면적
+    const totalDeposit = fromTotal.deposit ? rawTotalDeposit : depositPy * rentArea;
+    const totalRent = fromTotal.rent ? rawTotalRent : rentPy * rentArea;
+    const totalMaint = fromTotal.maint ? rawTotalMaint : maintPy * rentArea;
+
+    return { rentArea, depositPy, rentPy, maintPy, totalDeposit, totalRent, totalMaint, fromTotal };
+}
+
+window.toggleRounding = function() {
+    pageState.roundingEnabled = !isRoundingOn();
+    syncRoundingToggleUI();
+    showToast(isRoundingOn() ? '절삭 적용 (엑셀 수식 기준)' : '원본값 표시 (절삭 해제)', 'info');
+    renderDetailView();
+};
+
+function syncRoundingToggleUI() {
+    const btn = document.getElementById('roundingToggle');
+    const label = document.getElementById('roundingLabel');
+    if (!btn || !label) return;
+    const on = isRoundingOn();
+    btn.classList.toggle('on', on);
+    label.textContent = on ? '절삭 적용' : '원본값';
+}
+
+// ============================================================
+// 좌측 목록 서랍 UI
+// ============================================================
+window.toggleListPanel = function() {
+    const panel = document.getElementById('listPanel');
+    const handle = document.getElementById('drawerHandle');
+    if (!panel || !handle) return;
+
+    const collapsed = panel.classList.toggle('collapsed');
+    handle.classList.toggle('show', collapsed);
+    try { localStorage.setItem('complist_drawer_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+};
+
+function restoreDrawerState() {
+    try {
+        if (localStorage.getItem('complist_drawer_collapsed') === '1') {
+            document.getElementById('listPanel')?.classList.add('collapsed');
+            document.getElementById('drawerHandle')?.classList.add('show');
+        }
+    } catch (e) {}
+}
+
+// ============================================================
+// 외관 이미지 표시 박스 (웹 미리보기 = 엑셀 삽입 결과)
+//  - 엑셀 열너비(문자수)/행높이(pt)를 px로 환산해 동일 비율 박스를 만든다
+//  - 웹은 object-fit:cover, 엑셀은 같은 비율로 center-crop 후 삽입 → WYSIWYG
+// ============================================================
+function excelBoxPx(widthChars, heightPt) {
+    return {
+        w: Math.round(widthChars * 7 + 5),
+        h: Math.round(heightPt * 4 / 3)
+    };
+}
+
+/** 일반용 이미지 박스 (엑셀: 빌딩 1열 × 행6 높이 100pt) */
+function generalImageBox(entryCount) {
+    const colWidth = entryCount <= 5 ? 26 : (entryCount <= 10 ? 22 : 18);
+    return excelBoxPx(colWidth, 100);
+}
+
+/** LG용 이미지 박스 (엑셀: 3열 병합 12×3 × 행9~17 = 162pt) */
+function lgImageBox() {
+    return excelBoxPx(36, 162);
+}
+
+/** 외관 이미지 셀 HTML — 박스를 꽉 채워 표시 */
+function imageCellHtml(bd, buildingId, box) {
+    const url = getExteriorUrl(bd);
+    if (!url) {
+        return `<td class="col-building image-cell">
+            <div class="img-empty"><button class="upload-btn" onclick="openImageModal('${buildingId}')">📷 이미지 등록</button></div>
+        </td>`;
+    }
+    return `<td class="col-building image-cell">
+        <div class="img-box" style="aspect-ratio:${box.w}/${box.h};">
+            <img src="${url}" onclick="openImageModal('${buildingId}')" alt="외관" title="클릭해서 변경">
+        </div>
+    </td>`;
+}
+
+/** 엑셀 삽입 전 박스 비율로 center-crop (웹 미리보기와 동일한 결과) */
+function cropImageToBox(dataUrl, box) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = function() {
+            const targetRatio = box.w / box.h;
+            const srcRatio = img.width / img.height;
+            let sx = 0, sy = 0, sw = img.width, sh = img.height;
+            if (srcRatio > targetRatio) {
+                sw = img.height * targetRatio;
+                sx = (img.width - sw) / 2;
+            } else {
+                sh = img.width / targetRatio;
+                sy = (img.height - sh) / 2;
+            }
+            const scale = Math.min(2, Math.max(1, 600 / box.w));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(box.w * scale);
+            canvas.height = Math.round(box.h * scale);
+            canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+    });
+}
+
+// ============================================================
+// 외관 이미지 저장 (업로드 / 클립보드 붙여넣기 공용)
+// ※ 압축 규격은 portal.html과 동일: maxWidth 800px, JPEG 품질 0.7
+// ============================================================
+function compressImageDataUrl(dataUrl, maxWidth = 800, quality = 0.7) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = function() {
+            let w = img.width, h = img.height;
+            if (w > maxWidth) { h = (h * maxWidth) / w; w = maxWidth; }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+    });
+}
+
+function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+/** 외관 이미지를 로컬 상태 + Firebase에 저장 */
+async function saveExteriorImage(buildingId, imageData) {
+    const building = pageState.editData.buildings.find(b => b.buildingId === buildingId);
+    if (building) {
+        if (!building.buildingData) building.buildingData = {};
+        building.buildingData.exteriorImage = imageData;
+        // ★ images.exterior 배열에도 반영 (portal.html 호환)
+        if (!building.buildingData.images) building.buildingData.images = {};
+        building.buildingData.images.exterior = [{ url: imageData, name: 'exterior_complist.jpg' }];
+    }
+
+    try {
+        await update(ref(db, `buildings/${buildingId}`), {
+            exteriorImage: imageData,
+            updatedAt: new Date().toISOString()
+        });
+        await update(ref(db, `buildings/${buildingId}/images`), {
+            exterior: [{ url: imageData, name: 'exterior_complist.jpg' }]
+        });
+        return true;
+    } catch (e) {
+        console.error('이미지 저장 실패:', e);
+        return false;
+    }
+}
+
 window.handleImageUpload = async function(input) {
     const file = input.files[0];
     if (!file) return;
-    
+
     const buildingId = document.getElementById('img_buildingId').value;
-    
-    // TODO: Firebase Storage에 업로드 구현
-    // 현재는 Base64로 임시 처리
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        const imageData = e.target.result;
-        
-        // 빌딩 데이터 업데이트
-        const building = pageState.editData.buildings.find(b => b.buildingId === buildingId);
-        if (building) {
-            if (!building.buildingData) building.buildingData = {};
-            building.buildingData.exteriorImage = imageData;
-            // ★ images.exterior 배열에도 반영 (portal.html 호환)
-            if (!building.buildingData.images) building.buildingData.images = {};
-            building.buildingData.images.exterior = [{ url: imageData, name: 'exterior_complist.jpg' }];
-        }
-        
-        // Firebase에도 저장 (빌딩 정보 업데이트)
-        try {
-            await update(ref(db, `buildings/${buildingId}`), {
-                exteriorImage: imageData,
-                updatedAt: new Date().toISOString()
-            });
-            // ★ images/exterior에도 저장 (portal.html 호환)
-            await update(ref(db, `buildings/${buildingId}/images`), {
-                exterior: [{ url: imageData, name: 'exterior_complist.jpg' }]
-            });
-            
-            showToast('이미지 업로드 완료', 'success');
-            closeImageModal();
-            renderDetailView();
-        } catch (e) {
-            console.error('이미지 저장 실패:', e);
-            showToast('이미지 저장 실패', 'error');
-        }
-    };
-    reader.readAsDataURL(file);
+    showToast('이미지 처리 중...', 'info');
+
+    const dataUrl = await fileToDataUrl(file);
+    const compressed = await compressImageDataUrl(dataUrl);
+
+    if (await saveExteriorImage(buildingId, compressed)) {
+        showToast('이미지 업로드 완료', 'success');
+        closeImageModal();
+        renderDetailView();
+    } else {
+        showToast('이미지 저장 실패', 'error');
+    }
+    input.value = '';
 };
+
+/** 클립보드 → 외관 이미지 (버튼 클릭용) */
+window.pasteImageFromClipboard = async function() {
+    const buildingId = document.getElementById('img_buildingId').value;
+    if (!buildingId) return;
+
+    try {
+        if (!navigator.clipboard?.read) {
+            showToast('이 브라우저는 버튼 붙여넣기를 지원하지 않습니다. 창 위에서 Ctrl+V를 눌러주세요', 'warning');
+            return;
+        }
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+            const type = item.types.find(t => t.startsWith('image/'));
+            if (!type) continue;
+            const blob = await item.getType(type);
+            await applyPastedImage(buildingId, blob);
+            return;
+        }
+        showToast('클립보드에 이미지가 없습니다', 'warning');
+    } catch (e) {
+        console.error('클립보드 읽기 실패:', e);
+        showToast('클립보드 접근이 거부되었습니다. 창 위에서 Ctrl+V를 눌러주세요', 'warning');
+    }
+};
+
+/** 붙여넣은 이미지 blob 저장 (버튼 / Ctrl+V 공용) */
+async function applyPastedImage(buildingId, blob) {
+    showToast('이미지 처리 중...', 'info');
+    const dataUrl = await fileToDataUrl(blob);
+    const compressed = await compressImageDataUrl(dataUrl);
+
+    if (await saveExteriorImage(buildingId, compressed)) {
+        showToast('이미지를 저장했습니다', 'success');
+        closeImageModal();
+        renderDetailView();
+    } else {
+        showToast('이미지 저장 실패', 'error');
+    }
+}
+
+// 이미지 모달이 열려 있을 때 Ctrl+V로 바로 붙여넣기 (portal.html과 동일한 동작)
+document.addEventListener('paste', async function(e) {
+    const modal = document.getElementById('imageUploadModal');
+    if (!modal || !modal.classList.contains('show')) return;
+
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    let file = null;
+    for (const item of items) {
+        if (item.type.startsWith('image/')) { file = item.getAsFile(); break; }
+    }
+    if (!file) return;
+
+    e.preventDefault();
+    const buildingId = document.getElementById('img_buildingId').value;
+    if (buildingId) await applyPastedImage(buildingId, file);
+});
 
 // ============================================================
 // 평면도 이미지 관리 (여러 이미지 지원)
@@ -4453,10 +4687,11 @@ async function downloadExcelGeneral(data) {
         }
         
         // 임대 기준
-        // ★ 마이그레이션 호환: toWon()으로 원 단위 정규화, * 10000 제거
-        const depositPy = toWon(v.depositPy);
-        const rentPy = toWon(v.rentPy);
-        const maintenancePy = toWon(v.maintenancePy);
+        // ★ 총액 우선 → 없으면 평당 × 면적
+        const _m = calcVacancyMoney(v);
+        const depositPy = _m.depositPy;
+        const rentPy = _m.rentPy;
+        const maintenancePy = _m.maintPy;
         
         setCell(`${col}32`, depositPy || '', { numFmt: '₩#,##0' });
         setCell(`${col}33`, rentPy || '', { numFmt: '₩#,##0' });

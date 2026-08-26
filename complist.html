@@ -46,6 +46,9 @@
                 <div class="panel-header">
                     <h2>📋 Comp List</h2>
                     <div style="display:flex; gap:8px;">
+                        <button class="btn btn-outline btn-sm drawer-toggle" onclick="toggleListPanel()" title="목록 접기">
+                            ◀
+                        </button>
                         <button class="btn btn-outline btn-sm" onclick="showDraftList()" title="임시저장 불러오기">
                             📂
                         </button>
@@ -76,6 +79,12 @@
                 </div>
             </aside>
 
+            <!-- 목록이 접혔을 때 여는 손잡이 -->
+            <button class="drawer-handle" id="drawerHandle" onclick="toggleListPanel()" title="목록 펼치기">
+                <span class="drawer-handle-icon">▶</span>
+                <span class="drawer-handle-label">Comp List</span>
+            </button>
+
             <!-- 우측: 상세보기/편집 영역 -->
             <main class="detail-panel" id="detailPanel">
                 <div class="empty-state" id="emptyState">
@@ -105,6 +114,10 @@
                                 <button class="type-btn" data-type="lg" onclick="setCompListType('lg')">LG그룹용</button>
                                 <button class="type-btn" data-type="sni" onclick="setCompListType('sni')">S&amp;I 시세자료</button>
                             </div>
+                            <button class="rounding-toggle on" id="roundingToggle" onclick="toggleRounding()"
+                                    title="엑셀 수식과 동일하게 절삭(ROUNDDOWN) 적용 / 해제하면 원본값 표시">
+                                <span class="dot"></span><span id="roundingLabel">절삭 적용</span>
+                            </button>
                             <button class="btn btn-outline" onclick="saveDraft()" title="임시저장 (브라우저에 저장)">📋 임시저장</button>
                             <button class="btn btn-secondary" onclick="saveCompList(false)" title="Comp List만 저장">💾 저장</button>
                             <button class="btn btn-primary" onclick="saveCompList(true)" title="저장 + 편집한 빌딩 정보를 포털에도 반영">💾 저장+동기화</button>
@@ -302,11 +315,14 @@
                             <input type="file" id="buildingImageInput" accept="image/*" onchange="handleImageUpload(this)">
                             <span>📷 새 이미지 업로드</span>
                         </label>
+                        <button class="upload-btn" onclick="pasteImageFromClipboard()">
+                            📋 캡처 붙여넣기
+                        </button>
                         <button class="delete-btn" id="deleteImageBtn" onclick="deleteImage()" style="display:none;">
                             🗑️ 이미지 삭제
                         </button>
                     </div>
-                    <p class="upload-hint">이미지는 상세 패널, 임대안내문에서도 표시됩니다.</p>
+                    <p class="upload-hint">이 창에서 <strong>Ctrl+V</strong>로 바로 붙여넣을 수 있습니다. 이미지는 상세 패널, 임대안내문에서도 표시됩니다.</p>
                 </div>
             </div>
             <div class="modal-footer">

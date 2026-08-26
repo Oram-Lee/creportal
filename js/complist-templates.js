@@ -64,6 +64,20 @@ export const SNI_BUILDING_KEYS = [
 
 const PY_TO_M2 = 3.305785;
 
+// 엑셀 출력 규격 (S&I 시세자료 기준본)
+const SNI_XL = {
+    font: 'Pretendard',
+    size: 10,
+    colA: 2.7,
+    colB: 7.5,
+    colC: 18.0,
+    colData: 13.0,
+    imageRowHeight: 189.75,
+    rowHeight: 16.5
+};
+/** 엑셀 이미지 삽입 영역 (웹 미리보기와 동일 비율) */
+const SNI_IMAGE_BOX = { w: Math.round(SNI_XL.colData * 7 + 5), h: Math.round(SNI_XL.imageRowHeight * 4 / 3) };
+
 // ============================================================
 // 계산 유틸
 // ============================================================
@@ -88,9 +102,11 @@ function sniCalc(entry) {
     const rentArea = num(v.rentArea);
     const exclArea = num(v.exclusiveArea);
 
-    const depositPy = H.toWon(v.depositPy);
-    const rentPy = H.toWon(v.rentPy);
-    const maintPy = H.toWon(v.maintenancePy);
+    // 총액 우선 → 없으면 평당 × 면적 (절삭 토글 반영)
+    const money = H.calcVacancyMoney(v, rentArea);
+    const depositPy = money.depositPy;
+    const rentPy = money.rentPy;
+    const maintPy = money.maintPy;
 
     const rentFree = num(v.rentFree);
     const contractM = num(bd.contractMonths) || 60;
@@ -102,7 +118,7 @@ function sniCalc(entry) {
     const occupyM = contractM + fitoutM;
     const occupyY = occupyM / 12;
 
-    const monthlyRentTotal = rentPy * rentArea;
+    const monthlyRentTotal = money.totalRent;
     const tiTotal = tiPerPy * exclArea;
     const tiMonths = monthlyRentTotal > 0 ? tiTotal / monthlyRentTotal : 0;
 
@@ -127,9 +143,10 @@ function sniCalc(entry) {
         tiTotal, tiMonths, totalFavor, annualFavor,
         avgRentPy, avgMaintPy, noc,
         freeParkingBase, freeParkingCount,
-        totalDeposit: depositPy * rentArea,
+        totalDeposit: money.totalDeposit,
         monthlyRentTotal,
-        monthlyMaintTotal: maintPy * rentArea,
+        monthlyMaintTotal: money.totalMaint,
+        fromTotal: money.fromTotal,
         avgRentTotal: avgRentPy * rentArea,
         avgMaintTotal: avgMaintPy * rentArea
     };
@@ -265,6 +282,14 @@ function editCellHtml(display, onclick, extraClass = '') {
     return `<td class="col-building cell-editable ${extraClass}" onclick="${onclick}">${inner}</td>`;
 }
 
+/** 총액 셀 — 직접 입력 가능(원천). 입력값이면 좌측에 파란 띠 표시 */
+function totalCellHtml(entry, calc, key, value, totalKey) {
+    const isSource = calc.fromTotal && calc.fromTotal[totalKey];
+    const cls = isSource ? 'cell-total-source' : '';
+    return editCellHtml(fmtMoney(value),
+        `editVacancyCell(this, ${entry.buildingIdx}, ${entry.vacancyIdx}, '${key}')`, cls);
+}
+
 /** 계산/읽기 전용 셀 (tone-* 클래스로 원본 양식 배경 재현) */
 function readCellHtml(display, tone = '') {
     const text = (display === undefined || display === null || display === '') ? '-' : String(display);
@@ -343,13 +368,7 @@ function renderSniSpreadsheet() {
     html += `<tr>
         <td class="col-category section-image">외관사진</td>
         <td class="col-label">빌딩 이미지</td>
-        ${entries.map(e => {
-            const url = H.getExteriorUrl(e.building.buildingData || {});
-            return `<td class="col-building image-cell">${url
-                ? `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;"><img src="${url}" onclick="openImageModal('${e.building.buildingId}')" alt="외관"></div>`
-                : `<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%;"><button class="upload-btn" onclick="openImageModal('${e.building.buildingId}')">📷 이미지 등록</button></div>`
-            }</td>`;
-        }).join('')}
+        ${entries.map(e => H.imageCellHtml(e.building.buildingData || {}, e.building.buildingId, SNI_IMAGE_BOX)).join('')}
     </tr>`;
 
     // ---------- 임차 특이사항 ----------
@@ -431,9 +450,9 @@ function renderSniSpreadsheet() {
         { label: '월 평당 임대료', cell: (e, c) => editCellHtml(c.rentPy ? fmtMoney(c.rentPy) : '-', `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'rentPy')`) },
         { label: '월 평당 관리비', cell: (e, c) => editCellHtml(c.maintPy ? fmtMoney(c.maintPy) : '-', `editVacancyCell(this, ${e.buildingIdx}, ${e.vacancyIdx}, 'maintenancePy')`) },
         { label: '월 평당 지출비용', cell: (e, c) => readCellHtml(fmtMoney(c.rentPy + c.maintPy), 'tone-rent') },
-        { label: '총 보증금', cell: (e, c) => readCellHtml(fmtMoney(c.totalDeposit)) },
-        { label: '월 임대료 총액', cell: (e, c) => readCellHtml(fmtMoney(c.monthlyRentTotal)) },
-        { label: '월 관리비 총액', cell: (e, c) => readCellHtml(fmtMoney(c.monthlyMaintTotal)) },
+        { label: '총 보증금', cell: (e, c) => totalCellHtml(e, c, 'totalDeposit', c.totalDeposit, 'deposit') },
+        { label: '월 임대료 총액', cell: (e, c) => totalCellHtml(e, c, 'totalRent', c.monthlyRentTotal, 'rent') },
+        { label: '월 관리비 총액', cell: (e, c) => totalCellHtml(e, c, 'totalMaintenance', c.monthlyMaintTotal, 'maint') },
         { label: '월 전용면적당 지출비용', cell: (e, c) => readCellHtml(c.exclArea > 0 ? fmtMoney((c.monthlyRentTotal + c.monthlyMaintTotal) / c.exclArea) : '-', 'tone-rent') }
     ]);
 
@@ -611,10 +630,10 @@ async function downloadExcelSni(data) {
     }
 
     sheet.columns = [
-        { width: 2.66 },   // A
-        { width: 13.22 },  // B
-        { width: 24.55 },  // C
-        ...entries.map(() => ({ width: 26.33 }))
+        { width: SNI_XL.colA },
+        { width: SNI_XL.colB },
+        { width: SNI_XL.colC },
+        ...entries.map(() => ({ width: SNI_XL.colData }))
     ];
 
     const border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
@@ -624,7 +643,7 @@ async function downloadExcelSni(data) {
         if (opts.formula) cell.value = { formula: opts.formula };
         else cell.value = (value === '' || value === undefined || value === null) ? null : value;
         cell.font = {
-            name: '맑은 고딕', size: 9,
+            name: SNI_XL.font, size: SNI_XL.size,
             bold: !!opts.bold,
             color: { argb: opts.color || 'FF000000' }
         };
@@ -652,8 +671,8 @@ async function downloadExcelSni(data) {
     });
 
     // ---------- 행 높이 ----------
-    for (let r = 1; r <= 61; r++) sheet.getRow(r).height = 16.9;
-    sheet.getRow(5).height = 190.15;
+    for (let r = 1; r <= 61; r++) sheet.getRow(r).height = SNI_XL.rowHeight;
+    sheet.getRow(5).height = SNI_XL.imageRowHeight;
     sheet.getRow(6).height = 79.9;
     sheet.getRow(9).height = 60;
 
@@ -695,9 +714,11 @@ async function downloadExcelSni(data) {
         put(`${col}5`, null, {});
         if (url && url.startsWith('data:image')) {
             try {
+                // 웹 미리보기와 동일하게 박스 비율로 center-crop 후 삽입
+                const cropped = await H.cropImageToBox(url, SNI_IMAGE_BOX);
                 const imageId = workbook.addImage({
-                    base64: url.split(',')[1],
-                    extension: url.includes('png') ? 'png' : 'jpeg'
+                    base64: cropped.split(',')[1],
+                    extension: 'jpeg'
                 });
                 sheet.addImage(imageId, {
                     tl: { col: 3 + i, row: 4 },
@@ -749,18 +770,22 @@ async function downloadExcelSni(data) {
         put(`${col}32`, c.exclArea || null, st(32));
 
         // 임대 기준 (행 33~40)
-        // 보증금: 입력값 우선, 없으면 원본 양식 관례(임대료 × 10) 수식으로 대체
-        if (c.depositPy > 0) {
-            put(`${col}33`, c.depositPy, { fmt: SNI_FMT.comma, align: 'right' });
-        } else {
-            put(`${col}33`, null, { formula: `${col}34*10`, fmt: SNI_FMT.comma, align: 'right' });
-        }
-        put(`${col}34`, c.rentPy || null, { fmt: SNI_FMT.won, align: 'right' });
-        put(`${col}35`, c.maintPy || null, { fmt: SNI_FMT.won, align: 'right' });
+        // 총액이 입력된 항목은 총액을 원천(값)으로 두고 평당을 ROUNDDOWN 역산한다.
+        // (총액이 없으면 기존대로 평당이 원천, 총액은 평당 × 임대면적 수식)
+        const ft = c.fromTotal || {};
+        const putPair = (pyRow, totalRow, isSource, pyValue, totalValue, pyFmt) => {
+            if (isSource) {
+                put(`${col}${pyRow}`, null, { formula: `ROUNDDOWN(${col}${totalRow}/${col}31, 0)`, fmt: pyFmt, align: 'right' });
+                put(`${col}${totalRow}`, totalValue || null, { fmt: SNI_FMT.won, align: 'right' });
+            } else {
+                put(`${col}${pyRow}`, pyValue || null, { fmt: pyFmt, align: 'right' });
+                put(`${col}${totalRow}`, null, { formula: `${col}${pyRow}*${col}31`, fmt: SNI_FMT.won, align: 'right' });
+            }
+        };
+        putPair(33, 37, ft.deposit, c.depositPy, c.totalDeposit, SNI_FMT.comma);
+        putPair(34, 38, ft.rent, c.rentPy, c.monthlyRentTotal, SNI_FMT.won);
+        putPair(35, 39, ft.maint, c.maintPy, c.monthlyMaintTotal, SNI_FMT.won);
         put(`${col}36`, null, { formula: `${col}34+${col}35`, align: 'right', ...st(36) });
-        put(`${col}37`, null, { formula: `${col}33*${col}31`, fmt: SNI_FMT.won, align: 'right' });
-        put(`${col}38`, null, { formula: `${col}34*${col}31`, fmt: SNI_FMT.won, align: 'right' });
-        put(`${col}39`, null, { formula: `${col}35*${col}31`, fmt: SNI_FMT.won, align: 'right' });
         put(`${col}40`, null, { formula: `IFERROR((${col}38+${col}39)/${col}32,0)`, align: 'right', ...st(40) });
 
         // 기간 (행 41~44)
