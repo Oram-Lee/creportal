@@ -56,14 +56,13 @@ export function ref(dbObj, path = '') {
     };
 }
 
-async function request(r, method, body, silent, extraParams) {
+async function request(r, method, body, silent) {
     if (!r || !r._isRef) throw new Error('[RTDB] 유효하지 않은 ref');
 
     const params = [];
     const token = await getToken();
     if (token) params.push('auth=' + encodeURIComponent(token));
     if (silent) params.push('print=silent');
-    if (extraParams && extraParams.length) params.push(...extraParams);
 
     const path = r._segs.map(encodeURIComponent).join('/');
     const url = `${r._db.url}/${path}.json` + (params.length ? '?' + params.join('&') : '');
@@ -139,21 +138,6 @@ export async function get(r) {
     return makeSnapshot(r.key, value);
 }
 
-/**
- * shallow 조회 — 하위 트리를 내려받지 않고 한 단계만 확인한다.
- *
- * RTDB REST의 ?shallow=true 응답 규약
- *   - 자식이 객체/배열인 필드 → 값 대신 true
- *   - 자식이 스칼라(문자열·숫자·불린)인 필드 → 값 그대로
- *
- * 대용량 노드에서 "키 목록"과 "스칼라 메타"만 필요한 경우에 사용한다.
- * 반환은 get()과 동일한 스냅샷 형태.
- */
-export async function getShallow(r) {
-    const value = await request(r, 'GET', undefined, false, ['shallow=true']);
-    return makeSnapshot(r.key, value);
-}
-
 export async function set(r, value) {
     await request(r, 'PUT', value === undefined ? null : value, true);
 }
@@ -213,5 +197,4 @@ export function push(r, value) {
 
 // 검증용 표식 (콘솔에서 어느 버전이 로드됐는지 확인)
 window.__creDbMode = 'rest';
-window.__creDbRev = '260906a';
-console.log('[portal-firebase] REST 어댑터 모드 rev 260906a —', db.url);
+console.log('[portal-firebase] REST 어댑터 모드 —', db.url);

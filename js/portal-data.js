@@ -11,11 +11,110 @@
  *   - 빌딩 300개 + 렌트롤 1000개 기준: 65만회 반복 → ~3000회로 축소
  * - ★ leasingGuides 인덱싱: 빌딩별 가이드 정보 사전 매핑
  * - ★ 성능 타이머 추가 (console에서 병목 확인 가능)
+ *
+ * v4.1 트래픽 최적화 (2026-09-06):
+ * - leasingGuides 전량 로드(약 125MB) 제거 → 필요한 하위 경로만 조회(약 23MB)
+ *   백업 실측 기준 노드 125.0MB 중 endingSettings가 101.3MB를 차지하나
+ *   포털 코드는 이 필드를 한 번도 참조하지 않음. coverSettings도 동일.
+ *   실제 사용 필드는 items(빌딩 매핑) 및 가이드 제목뿐임.
+ * - 화면 동작·표시 결과는 기존과 동일. 내려받는 양만 줄인다.
+ * - 조회 실패 시 기존 전량 로드로 자동 폴백하므로 기능 중단 위험 없음.
  */
 
 import { state } from './portal-state.js';
-import { db, ref, get } from './portal-firebase.js';
+import { db, ref, get, getShallow } from './portal-firebase.js';
 import { showToast, detectRegion } from './portal-utils.js';
+
+// ============================================================
+// ★ v4.1: leasingGuides 경량 로더
+//
+// 포털이 leasingGuides에서 실제로 쓰는 값
+//   processLeasingGuideBuildings() : tocItems[].buildingId / buildings[].buildingId
+//   buildLeasingGuideIndex()       : items[].buildingId / .type
+//                                    items[].selectedExternalVacancies
+//                                    guide.name || guide.title
+//   저장 여부 판정                  : status / savedAt / publishedAt / createdAt
+//
+// 반면 endingSettings·coverSettings는 임대안내문 편집·출력 화면 전용이며
+// 포털 코드에서 참조되지 않는다. 두 필드가 노드 용량의 대부분을 차지한다.
+//
+// 따라서 루트 전량 조회 대신
+//   1) shallow 조회로 가이드 키 목록 확보
+//   2) 가이드별 shallow 조회로 스칼라 메타 확보 + 객체 필드 존재 여부 판별
+//   3) 필요한 객체 필드(items / tocItems / buildings)만 개별 조회
+// 순으로 받는다. 반환 형태는 기존 전량 조회 결과와 동일한 { guideId: guide } 맵이므로
+// 호출부 이후 로직은 수정할 필요가 없다.
+// ============================================================
+
+// 포털이 필요로 하는 객체형 필드. 여기에 없는 객체 필드는 내려받지 않는다.
+const LG_OBJECT_FIELDS = ['items', 'tocItems', 'buildings'];
+
+async function loadOneGuideLite(guideId) {
+    try {
+        const metaSnap = await getShallow(ref(db, `leasingGuides/${guideId}`));
+        const meta = metaSnap.val();
+
+        // shallow 응답이 객체가 아니면 판별 불가 → 해당 건만 전량 조회
+        if (!meta || typeof meta !== 'object') {
+            const full = await get(ref(db, `leasingGuides/${guideId}`));
+            return [guideId, full.val()];
+        }
+
+        const guide = {};
+
+        // shallow는 스칼라 필드를 값 그대로 돌려준다 (객체·배열 필드는 true).
+        // status·title·createdAt 등 메타는 추가 요청 없이 여기서 확보된다.
+        Object.entries(meta).forEach(([k, v]) => {
+            if (v !== true) guide[k] = v;
+        });
+
+        // 객체 필드는 실제 존재하는 것만 골라서 조회
+        const need = LG_OBJECT_FIELDS.filter(f => meta[f] === true);
+        if (need.length) {
+            const got = await Promise.all(
+                need.map(f => get(ref(db, `leasingGuides/${guideId}/${f}`)))
+            );
+            need.forEach((f, i) => { guide[f] = got[i].val(); });
+        }
+
+        return [guideId, guide];
+    } catch (e) {
+        console.warn(`[leasingGuides/${guideId}] 경량 조회 실패 → 단건 전량 조회`, e);
+        try {
+            const full = await get(ref(db, `leasingGuides/${guideId}`));
+            return [guideId, full.val()];
+        } catch (e2) {
+            console.error(`[leasingGuides/${guideId}] 단건 조회도 실패`, e2);
+            return [guideId, null];
+        }
+    }
+}
+
+async function loadLeasingGuidesLite() {
+    const t0 = performance.now();
+    try {
+        const keysSnap = await getShallow(ref(db, 'leasingGuides'));
+        const keysVal = keysSnap.val();
+        if (!keysVal || typeof keysVal !== 'object') return {};
+
+        const keys = Object.keys(keysVal);
+        if (!keys.length) return {};
+
+        const entries = await Promise.all(keys.map(k => loadOneGuideLite(k)));
+        const out = {};
+        entries.forEach(([k, v]) => { if (v) out[k] = v; });
+
+        console.log(
+            `  🪶 leasingGuides 경량 로드: ${Object.keys(out).length}/${keys.length}건 · ` +
+            `${Math.round(performance.now() - t0)}ms`
+        );
+        return out;
+    } catch (e) {
+        console.warn('[leasingGuides] 경량 로드 실패 → 전량 로드로 폴백', e);
+        const snap = await get(ref(db, 'leasingGuides'));
+        return snap.val() || {};
+    }
+}
 
 // 데이터 로드
 export async function loadData() {
@@ -31,7 +130,7 @@ export async function loadData() {
             get(ref(db, 'managements')),
             get(ref(db, 'documents')),
             get(ref(db, 'users')),
-            get(ref(db, 'leasingGuides')),
+            loadLeasingGuidesLite(),   // ★ v4.1: 전량 조회 → 필요한 하위 경로만
             get(ref(db, 'vacancies'))  // ★ 독립 컬렉션
         ]);
         
@@ -46,7 +145,7 @@ export async function loadData() {
             managements: mg.val() || {},
             documents: docs.val() || {},
             users: u.val() || {},
-            leasingGuides: lg.val() || {},
+            leasingGuides: lg || {},   // ★ v4.1: 경량 로더는 스냅샷이 아닌 맵을 반환
             vacancies: vac.val() || {}  // ★ 독립 컬렉션
         };
         
@@ -141,7 +240,7 @@ async function loadRemainingData() {
             get(ref(db, 'incentives')),
             get(ref(db, 'managements')),
             get(ref(db, 'documents')),
-            get(ref(db, 'leasingGuides')),
+            loadLeasingGuidesLite(),   // ★ v4.1: 전량 조회 → 필요한 하위 경로만
             get(ref(db, 'vacancies'))
         ]);
         state.dataCache.rentrolls = r.val() || {};
@@ -149,7 +248,7 @@ async function loadRemainingData() {
         state.dataCache.incentives = i.val() || {};
         state.dataCache.managements = mg.val() || {};
         state.dataCache.documents = docs.val() || {};
-        state.dataCache.leasingGuides = lg.val() || {};
+        state.dataCache.leasingGuides = lg || {};   // ★ v4.1: 경량 로더 반환값
         state.dataCache.vacancies = vac.val() || {};
 
         processBuildings();
