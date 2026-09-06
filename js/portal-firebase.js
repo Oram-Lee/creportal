@@ -36,6 +36,66 @@ export { storageRef, getDownloadURL, uploadString };
 
 export const db = { url: firebaseConfig.databaseURL };
 
+// ─────────────────────────────────────────────────────────────
+// ★ v4.2: 중량 필드 분리 계층
+//
+// buildings 레코드 안에 들어 있던 이미지·층별단가는 목록/지도에서 쓰이지 않으면서
+// 노드 용량의 대부분을 차지한다. 이를 형제 노드로 옮겨 목록 조회에서 제외한다.
+//
+//   buildings/{id}/images…         → buildingImages/{id}/images…
+//   buildings/{id}/exteriorImages… → buildingImages/{id}/exteriorImages…
+//   buildings/{id}/floorPricing…   → buildingPricing/{id}/floorPricing…
+//
+// 호출부는 기존 경로를 그대로 쓰고, 여기서 실제 경로로 바꿔 보낸다.
+// update() 본문에 중량 필드가 섞여 오는 경우도 여기서 분리해 각 노드로 나눠 보낸다.
+// 따라서 26곳의 호출부를 수정할 필요가 없다.
+// ─────────────────────────────────────────────────────────────
+
+const HEAVY_FIELD_TARGET = {
+    images: 'buildingImages',
+    exteriorImages: 'buildingImages',
+    exteriorImage: 'buildingImages',
+    floorPlanImages: 'buildingImages',
+    thumbnails: 'buildingImages',
+    photos: 'buildingImages',
+    floorPricing: 'buildingPricing'
+};
+
+export const HEAVY_NODES = ['buildingImages', 'buildingPricing'];
+
+function heavyTargetOf(field) {
+    return Object.prototype.hasOwnProperty.call(HEAVY_FIELD_TARGET, field)
+        ? HEAVY_FIELD_TARGET[field]
+        : null;
+}
+
+// buildings/{id}/{heavyField}/... → {target}/{id}/{heavyField}/...
+function rewriteSegs(segs) {
+    if (segs.length >= 3 && segs[0] === 'buildings') {
+        const target = heavyTargetOf(segs[2]);
+        if (target) return [target, segs[1], ...segs.slice(2)];
+    }
+    return segs;
+}
+
+// update/set 본문에서 중량 필드를 분리
+function splitHeavyValues(values) {
+    const main = {};
+    const extra = {};
+    let hasHeavy = false;
+    for (const [k, v] of Object.entries(values || {})) {
+        const target = heavyTargetOf(k);
+        if (target) {
+            if (!extra[target]) extra[target] = {};
+            extra[target][k] = v;
+            hasHeavy = true;
+        } else {
+            main[k] = v;
+        }
+    }
+    return { main, extra, hasHeavy };
+}
+
 /**
  * 인증 토큰 훅.
  * 현재 보안 규칙이 공개 상태라 토큰 없이 동작한다.
@@ -46,11 +106,13 @@ async function getToken() {
 }
 
 export function ref(dbObj, path = '') {
-    const segs = String(path).split('/').filter(s => s !== '');
+    const raw = String(path).split('/').filter(s => s !== '');
+    const segs = rewriteSegs(raw);
     return {
         _isRef: true,
         _db: dbObj || db,
         _segs: segs,
+        _rawSegs: raw,   // 재작성 전 경로 (본문 분리 판정용)
         key: segs.length ? segs[segs.length - 1] : null,
         toString() { return `${(dbObj || db).url}/${segs.join('/')}`; }
     };
@@ -155,10 +217,36 @@ export async function getShallow(r) {
 }
 
 export async function set(r, value) {
+    // buildings/{id} 통째 쓰기에 중량 필드가 섞인 경우 분리
+    if (r._rawSegs && r._rawSegs.length === 2 && r._rawSegs[0] === 'buildings'
+        && value && typeof value === 'object' && !Array.isArray(value)) {
+        const { main, extra, hasHeavy } = splitHeavyValues(value);
+        if (hasHeavy) {
+            const id = r._rawSegs[1];
+            await Promise.all([
+                request(r, 'PUT', main, true),
+                ...Object.entries(extra).map(([node, vals]) =>
+                    request(ref(r._db, `${node}/${id}`), 'PATCH', vals, true))
+            ]);
+            return;
+        }
+    }
     await request(r, 'PUT', value === undefined ? null : value, true);
 }
 
 export async function update(r, values) {
+    if (r._rawSegs && r._rawSegs.length === 2 && r._rawSegs[0] === 'buildings'
+        && values && typeof values === 'object') {
+        const { main, extra, hasHeavy } = splitHeavyValues(values);
+        if (hasHeavy) {
+            const id = r._rawSegs[1];
+            const jobs = Object.entries(extra).map(([node, vals]) =>
+                request(ref(r._db, `${node}/${id}`), 'PATCH', vals, true));
+            if (Object.keys(main).length) jobs.push(request(r, 'PATCH', main, true));
+            await Promise.all(jobs);
+            return;
+        }
+    }
     await request(r, 'PATCH', values, true);
 }
 
@@ -213,5 +301,5 @@ export function push(r, value) {
 
 // 검증용 표식 (콘솔에서 어느 버전이 로드됐는지 확인)
 window.__creDbMode = 'rest';
-window.__creDbRev = '260906a';
-console.log('[portal-firebase] REST 어댑터 모드 rev 260906a —', db.url);
+window.__creDbRev = '260906b';
+console.log('[portal-firebase] REST 어댑터 모드 rev 260906b (중량필드 분리) —', db.url);

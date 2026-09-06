@@ -343,7 +343,68 @@ function toWon(value) {
 
 // ===== 상세 패널 열기/닫기 =====
 
+// ============================================================
+// ★ v4.2: 중량 필드 지연 로드
+//
+// 이미지와 층별단가는 buildings 레코드에서 분리되어 형제 노드에 있다.
+// 목록·지도는 이 값을 쓰지 않으므로 초기 로드에서 제외되고,
+// 상세를 여는 시점에 해당 빌딩 것만 가져온다.
+//
+// 상세 패널은 기다리지 않고 즉시 뜬다. 값이 도착하면 다시 그린다.
+// ============================================================
+
+function _normalizeImageList(arr) {
+    return (arr || []).map(img => (typeof img === 'string' ? { url: img } : img));
+}
+
+async function hydrateBuildingHeavy(b) {
+    if (b._heavyLoaded || b._heavyLoading) return false;
+    b._heavyLoading = true;
+    try {
+        const [imgSnap, prcSnap] = await Promise.all([
+            get(ref(db, `buildingImages/${b.id}`)),
+            get(ref(db, `buildingPricing/${b.id}`))
+        ]);
+        const img = imgSnap.val() || {};
+        const prc = prcSnap.val() || {};
+
+        b.images = img.images || b.images ||
+            { exterior: [], floorPlan: [], lobby: [], facilities: [], etc: [] };
+        b.exteriorImages = _normalizeImageList(
+            img.exteriorImages || img.images?.exterior || b.exteriorImages
+        );
+        b.floorPlanImages = _normalizeImageList(
+            img.floorPlanImages || img.images?.floorPlan || b.floorPlanImages
+        );
+        if (img.exteriorImage) b.exteriorImage = img.exteriorImage;
+        if (Array.isArray(prc.floorPricing)) b.floorPricing = prc.floorPricing;
+
+        b._heavyLoaded = true;
+        return true;
+    } catch (e) {
+        console.warn(`[buildingHeavy/${b.id}] 지연 로드 실패 — 기존 값으로 표시`, e);
+        return false;
+    } finally {
+        b._heavyLoading = false;
+    }
+}
+
 export function openDetail(id) {
+    const target = state.allBuildings.find(b => b.id === id);
+
+    // 아직 중량 필드를 안 받았으면 백그라운드로 받아온 뒤 한 번 더 그린다
+    if (target && !target._heavyLoaded && !target._heavyLoading) {
+        hydrateBuildingHeavy(target).then(changed => {
+            if (changed && state.selectedBuilding && state.selectedBuilding.id === id) {
+                _openDetailInternal(id);
+            }
+        });
+    }
+
+    return _openDetailInternal(id);
+}
+
+function _openDetailInternal(id) {
     state.selectedBuilding = state.allBuildings.find(b => b.id === id);
     if (!state.selectedBuilding) return;
     
