@@ -8528,6 +8528,10 @@ window.saveBuildingEdit = async function(formData) {
 
 console.log('✅ [v4.2] openBuildingEditModal + saveBuildingEdit 모듈 로드 완료 (소수점 표시 개선)');
 
+// 배포 확인용 표식 — 콘솔에서 이 줄이 보이면 최신 portal-detail.js 가 로드된 것
+window.__creDetailRev = '260907-v4.5';
+console.log('[portal-detail] rev 260907-v4.5 — 중량필드 지연로드 · 이미지경로 일원화 · 기준층면적 분리');
+
 // ★ 안전망: registerDetailGlobals() 호출 시점에 의존하지 않고
 //   module 로드 즉시 window에 noexcludeLowFloors 토글 함수 노출
 //   (브라우저 캐시·import 순서 이슈 방어)
