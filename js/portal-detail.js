@@ -484,20 +484,34 @@ function getImageUrls(b, kind) {
               .filter(Boolean);
 }
 
-/** 이미지 목록을 두 경로에 함께 기록하고 로컬 상태도 맞춘다. */
+/**
+ * 이미지 목록을 두 경로에 함께 기록하고 로컬 상태도 맞춘다.
+ *
+ * 두 경로를 모두 유지하는 이유:
+ *   최상위 exteriorImages — 상단 '빌딩 이미지' 패널(구분 태그 보관)
+ *   중첩 images.exterior  — 임대안내문 출력(leasing-guide-print), 컴프리스트
+ * 두 소비처가 서로 다른 필드만 읽으므로 한쪽만 남길 수 없다.
+ * 같은 이미지가 두 번 저장되지만, 이 노드는 상세를 열 때만 조회되므로
+ * 목록·지도 트래픽에는 영향이 없다.
+ */
 async function persistImageUrls(b, kind, urls) {
     const f = IMG_FIELD[kind];
-    const hadTop = Array.isArray(b[f.top]) && b[f.top].length > 0;
 
-    await update(ref(db, `buildings/${b.id}/images`), { [f.nested]: urls });
-    // 최상위 필드를 쓰던 빌딩은 그쪽도 맞춰야 표시가 어긋나지 않는다
-    if (hadTop || urls.length === 0) {
-        await update(ref(db, `buildings/${b.id}`), { [f.top]: urls });
+    // 상단 패널이 붙여 둔 부가 정보(usage 구분 등)를 URL 기준으로 보존한다
+    const metaByUrl = new Map();
+    for (const img of (b[f.top] || [])) {
+        if (img && typeof img === 'object' && img.url) metaByUrl.set(img.url, img);
     }
+    const topList = urls.map(u => metaByUrl.get(u) || { url: u });
+
+    // 두 경로를 항상 함께 기록한다. 한쪽만 갱신하면 다른 쪽에 남은 옛 값이
+    // 되살아나거나(삭제 후 재등장) 목록이 어긋난다.
+    await update(ref(db, `buildings/${b.id}/images`), { [f.nested]: urls });
+    await update(ref(db, `buildings/${b.id}`), { [f.top]: topList });
 
     if (!b.images) b.images = {};
     b.images[f.nested] = urls;
-    b[f.top] = urls.map(u => ({ url: u }));
+    b[f.top] = topList;
 }
 
 function _openDetailInternal(id) {

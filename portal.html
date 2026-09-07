@@ -7600,6 +7600,19 @@
             try {
                 const { db, ref, update } = await import('./js/portal-firebase.js');
                 await update(ref(db, `buildings/${b.id}`), { [field]: list });
+
+                // ★ v4.4: 이미지는 최상위(exteriorImages)와 중첩(images.exterior) 두 경로에 존재한다.
+                // 이 패널이 최상위만 갱신하면, 하단 갤러리가 중첩에 남은 옛 값을 읽어
+                // 지운 사진이 되살아난다. 두 경로를 함께 맞춘다.
+                const _giNested = { exteriorImages: 'exterior', floorPlanImages: 'floorPlan' }[field];
+                if (_giNested) {
+                    const urls = list.map(x => (x && typeof x === 'object' && 'url' in x) ? x.url : x)
+                                     .filter(Boolean);
+                    await update(ref(db, `buildings/${b.id}/images`), { [_giNested]: urls });
+                    if (!b.images) b.images = {};
+                    b.images[_giNested] = urls;
+                }
+
                 b[field] = list;
                 const gi = window.state?.allBuildings?.findIndex(x => x.id === b.id);
                 if (gi >= 0) window.state.allBuildings[gi][field] = list;
