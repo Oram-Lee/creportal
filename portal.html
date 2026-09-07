@@ -183,6 +183,26 @@
             <div class="map-view" id="mapView">
                 <div class="map-container">
                     <div id="kakaoMap"></div>
+
+                    <!-- ★ v4.6: 권역별 마커 색상 범례 -->
+                    <div id="regionLegend" style="position:absolute; left:12px; bottom:12px; z-index:5;
+                         background:rgba(255,255,255,0.94); border:1px solid #e5e7eb; border-radius:8px;
+                         padding:8px 10px; box-shadow:0 2px 8px rgba(0,0,0,0.12); font-size:11px;
+                         line-height:1.7; color:#374151; user-select:none;">
+                        <div style="font-weight:700; margin-bottom:4px; font-size:11px;">권역</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:4px 12px; max-width:250px;">
+                            <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#16a34a;border:1px solid #15803d;margin-right:5px;vertical-align:-1px;"></i>GBD</span>
+                            <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#eab308;border:1px solid #a16207;margin-right:5px;vertical-align:-1px;"></i>YBD</span>
+                            <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#c81e3a;border:1px solid #9f1239;margin-right:5px;vertical-align:-1px;"></i>CBD</span>
+                            <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#2563eb;border:1px solid #1d4ed8;margin-right:5px;vertical-align:-1px;"></i>BBD</span>
+                            <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#d2691e;border:1px solid #a0522d;margin-right:5px;vertical-align:-1px;"></i>Others</span>
+                            <span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#6b7280;border:1px solid #4b5563;margin-right:5px;vertical-align:-1px;"></i>지방</span>
+                        </div>
+                        <div style="margin-top:5px; padding-top:5px; border-top:1px solid #f1f5f9; color:#6b7280; font-size:10px;">
+                            채움 = 공실·자료 있음 &nbsp;·&nbsp; 흰 바탕 = 자료 없음
+                        </div>
+                    </div>
+
                     <div class="map-placeholder" id="mapPlaceholder">
                         <div class="icon">🗺️</div>
                         <p>카카오맵 로딩 중...</p>

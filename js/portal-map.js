@@ -112,12 +112,47 @@ function _computeLists() {
     return { vp, draw };
 }
 
+// ============================================================
+// ★ v4.6: 권역별 마커 색상
+//
+//   GBD    Green      YBD  Yellow    CBD  Crimson
+//   BBD    Blue       Others Chocolate  ETC(지방) Grey
+//
+// 색은 권역을 나타내고, 데이터 보유 여부는 채움/테두리로 구분한다.
+//   데이터 있음 → 권역색으로 채움
+//   데이터 없음 → 흰 바탕에 권역색 테두리
+// NEW 배지는 기존대로 유지한다.
+// ============================================================
+
+const REGION_COLORS = {
+    GBD:    { fill: '#16a34a', border: '#15803d', text: '#fff' },  // Green
+    YBD:    { fill: '#eab308', border: '#a16207', text: '#1f2937' },  // Yellow
+    CBD:    { fill: '#c81e3a', border: '#9f1239', text: '#fff' },  // Crimson
+    BBD:    { fill: '#2563eb', border: '#1d4ed8', text: '#fff' },  // Blue
+    Others: { fill: '#d2691e', border: '#a0522d', text: '#fff' },  // Chocolate
+    ETC:    { fill: '#6b7280', border: '#4b5563', text: '#fff' }   // Grey (5대광역시·지방)
+};
+const REGION_FALLBACK = { fill: '#6b7280', border: '#4b5563', text: '#fff' };
+
+export function regionColor(region) {
+    if (!region) return REGION_FALLBACK;
+    const key = String(region).trim();
+    if (REGION_COLORS[key]) return REGION_COLORS[key];
+    // 대소문자·표기 흔들림 흡수
+    const upper = key.toUpperCase();
+    for (const k of Object.keys(REGION_COLORS)) {
+        if (k.toUpperCase() === upper) return REGION_COLORS[k];
+    }
+    return REGION_FALLBACK;
+}
+
 function _makeOverlay(b) {
     const hasData = b.hasData || b.hasVacancy;
     const isNew = b.isNew;
-    const bgColor = isNew ? '#dc2626' : (hasData ? '#2563eb' : '#fff');
-    const textColor = isNew ? '#fff' : (hasData ? '#fff' : '#333');
-    const borderColor = isNew ? '#b91c1c' : (hasData ? '#1d4ed8' : '#d1d5db');
+    const rc = regionColor(b.region);
+    const bgColor = hasData ? rc.fill : '#fff';
+    const textColor = hasData ? rc.text : '#333';
+    const borderColor = rc.border;
     const newBadge = isNew ?
         '<span style="position:absolute;top:-8px;right:-8px;background:#f59e0b;color:#fff;font-size:8px;font-weight:700;padding:2px 4px;border-radius:3px;">NEW</span>' : '';
 
@@ -134,8 +169,37 @@ function _makeOverlay(b) {
     });
 }
 
+// 권역별 핀 이미지 (SVG data URI). 색·상태 조합마다 1회만 만들어 재사용한다.
+const _pinCache = new Map();
+
+function _pinImage(region, hasData) {
+    const rc = regionColor(region);
+    const key = `${rc.fill}|${hasData ? 1 : 0}`;
+    if (_pinCache.has(key)) return _pinCache.get(key);
+
+    const fill = hasData ? rc.fill : '#ffffff';
+    const stroke = rc.border;
+    const dot = hasData ? '#ffffff' : rc.fill;
+    const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="36" viewBox="0 0 26 36">` +
+        `<path d="M13 35C13 35 25 21.5 25 13A12 12 0 1 0 1 13c0 8.5 12 22 12 22z" ` +
+        `fill="${fill}" stroke="${stroke}" stroke-width="2"/>` +
+        `<circle cx="13" cy="13" r="4.5" fill="${dot}"/></svg>`;
+
+    const img = new kakao.maps.MarkerImage(
+        'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg),
+        new kakao.maps.Size(26, 36),
+        { offset: new kakao.maps.Point(13, 35) }
+    );
+    _pinCache.set(key, img);
+    return img;
+}
+
 function _makeMarker(b) {
-    const m = new kakao.maps.Marker({ position: new kakao.maps.LatLng(b.lat, b.lng) });
+    const m = new kakao.maps.Marker({
+        position: new kakao.maps.LatLng(b.lat, b.lng),
+        image: _pinImage(b.region, b.hasData || b.hasVacancy)
+    });
     kakao.maps.event.addListener(m, 'click', () => window.openDetail(b.id));
     return m;
 }
