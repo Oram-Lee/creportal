@@ -6,6 +6,87 @@
 import { state } from './portal-state.js';
 import { formatNumber, formatFloors, formatStation, isRecentlyUpdated } from './portal-utils.js';
 
+// ============================================================
+// ★ v4.6: 목록 카드의 기준가 표시
+//
+// 기존에는 isOfficial 로 지정된 항목만 표시하고 나머지는 '-' 로 두었다.
+// 실측 기준 기준가 보유 1,273건 중 공식 지정은 141건뿐이고,
+// 나머지 1,132건은 단가가 실제로 있는데도 전부 '-' 로 보였다.
+//
+// 공식 지정이 없으면 effectiveDate 가 가장 최근인 항목을 대신 보여주고,
+// 태그 색과 안내문으로 공식과 구분한다.
+// ============================================================
+
+function _fpDateKey(fp) {
+    const raw = String(fp?.effectiveDate || fp?.createdAt || '').trim();
+    const nums = raw.match(/\d+/g) || [];
+    if (!nums.length) return 0;
+    if (nums[0].length >= 4) {
+        const y = nums[0].slice(0, 4);
+        const m = (nums[1] || '01').padStart(2, '0');
+        const d = (nums[2] || '01').padStart(2, '0');
+        return parseInt(y + m + d, 10) || 0;
+    }
+    return 0;
+}
+
+/** 표시할 기준가 한 건을 고른다. { fp, isOfficial } 또는 null */
+export function pickDisplayPricing(fps) {
+    const list = Array.isArray(fps) ? fps : [];
+    if (!list.length) return null;
+
+    const official = list.find(fp => fp && fp.isOfficial);
+    if (official) return { fp: official, isOfficial: true };
+
+    // 단가가 하나라도 있는 항목 중 가장 최근 것
+    const withPrice = list.filter(fp =>
+        fp && (fp.depositPy != null || fp.rentPy != null || fp.maintenancePy != null));
+    if (!withPrice.length) return null;
+
+    const latest = withPrice.reduce((a, c) => (_fpDateKey(c) >= _fpDateKey(a) ? c : a));
+    return { fp: latest, isOfficial: false };
+}
+
+function renderPriceLine(b) {
+    const fps = b.floorPricing || [];
+    const picked = pickDisplayPricing(fps);
+
+    const tagStyle = (bg) => `display:inline-block; background:${bg}; color:#fff; font-size:10px;` +
+        ` font-weight:600; padding:2px 7px; border-radius:10px; flex-shrink:0; line-height:1.5;`;
+
+    if (!picked) {
+        const tag = `<span style="${tagStyle('#7c3aed')}">기준가</span>`;
+        const why = fps.length ? '등록된 단가 없음' : '기준가 미등록';
+        return `<div class="price" onclick="selectBuildingFromList('${b.id}')" title="${why}" ` +
+            `style="display:flex; align-items:center; gap:6px;">${tag}` +
+            `<span style="color:var(--text-muted,#9ca3af); font-weight:400;">-</span></div>`;
+    }
+
+    const { fp, isOfficial } = picked;
+    // 공식은 진보라, 공식 미지정(최신값 대체)은 연보라 + '최신' 표기
+    const tag = isOfficial
+        ? `<span style="${tagStyle('#7c3aed')}">기준가</span>`
+        : `<span style="${tagStyle('#a78bfa')}">기준가<span style="opacity:.85; font-weight:500;"> 최신</span></span>`;
+
+    const d = toManwon(fp.depositPy), r = toManwon(fp.rentPy), m = toManwon(fp.maintenancePy);
+    const item = (lbl, val, color) => val != null
+        ? `<span style="white-space:nowrap;"><span style="color:var(--text-muted,#9ca3af); font-weight:400;">${lbl}</span> <span style="color:${color}; font-weight:600;">${val}</span><span style="color:var(--text-muted,#9ca3af); font-size:11px;">만원/평</span></span>`
+        : '';
+    const partsArr = [item('보', d, '#2563eb'), item('임', r, 'var(--accent-color,#dc2626)'), item('관', m, '#16a34a')].filter(Boolean);
+    const sep = `<span style="color:var(--text-muted,#cbd5e1);">·</span>`;
+    const priceStr = partsArr.length ? partsArr.join(sep) : `<span style="color:var(--text-muted,#9ca3af);">-</span>`;
+    const more = fps.length > 1 ? `<span style="color:var(--text-muted,#9ca3af); font-size:11px;">외 ${fps.length - 1}건</span>` : '';
+    const title = isOfficial
+        ? '공식 기준가 · 평당 보증금·임대료·관리비 (만원)'
+        : `공식 미지정 — 최신 기준가 표시${fp.label ? ' (' + fp.label + ')' : ''}${fp.effectiveDate ? ' · ' + fp.effectiveDate : ''}`;
+
+    return `<div class="price" onclick="selectBuildingFromList('${b.id}')" ` +
+        `style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; font-size:13px;" ` +
+        `title="${title}">${tag}${priceStr}${more}</div>`;
+}
+
+
+
 // 전역 변수 별칭 (기존 코드 호환성)
 // 주의: 이 변수들은 state와 동기화되어야 함
 window.portalState = state;
@@ -120,24 +201,7 @@ export function renderBuildingList() {
                 ${b.memoCount > 0 ? `<span class="badge badge-memo">메모 ${b.memoCount}</span>` : ''}
                 ${b.hasIncentive ? `<span class="badge badge-incentive">인센티브</span>` : ''}
             </div>
-            ${(() => {
-                const fps = b.floorPricing || [];
-                const official = fps.find(fp => fp.isOfficial);
-                const tag = `<span style="display:inline-block; background:#7c3aed; color:#fff; font-size:10px; font-weight:600; padding:2px 7px; border-radius:10px; flex-shrink:0; line-height:1.5;">기준가</span>`;
-                // 공식(⭐) 기준가 미지정 → 하이픈
-                if (!official) {
-                    return `<div class="price" onclick="selectBuildingFromList('${b.id}')" title="공식 기준가 미지정" style="display:flex; align-items:center; gap:6px;">${tag}<span style="color:var(--text-muted,#9ca3af); font-weight:400;">-</span></div>`;
-                }
-                const d = toManwon(official.depositPy), r = toManwon(official.rentPy), m = toManwon(official.maintenancePy);
-                const item = (lbl, val, color) => val != null
-                    ? `<span style="white-space:nowrap;"><span style="color:var(--text-muted,#9ca3af); font-weight:400;">${lbl}</span> <span style="color:${color}; font-weight:600;">${val}</span><span style="color:var(--text-muted,#9ca3af); font-size:11px;">만원/평</span></span>`
-                    : '';
-                const partsArr = [item('보', d, '#2563eb'), item('임', r, 'var(--accent-color,#dc2626)'), item('관', m, '#16a34a')].filter(Boolean);
-                const sep = `<span style="color:var(--text-muted,#cbd5e1);">·</span>`;
-                const priceStr = partsArr.length ? partsArr.join(sep) : `<span style="color:var(--text-muted,#9ca3af);">-</span>`;
-                const more = fps.length > 1 ? `<span style="color:var(--text-muted,#9ca3af); font-size:11px;">외 ${fps.length - 1}건</span>` : '';
-                return `<div class="price" onclick="selectBuildingFromList('${b.id}')" style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; font-size:13px;" title="공식 기준가 · 평당 보증금·임대료·관리비 (만원)">${tag}${priceStr}${more}</div>`;
-            })()}
+            ${renderPriceLine(b)}
         </div>
         `;
     }).join('');
