@@ -455,7 +455,29 @@ function buildLeasingGuideIndex(leasingGuides) {
 // ============================================================
 export function processBuildings() {
     const { dataCache, currentUser } = state;
-    
+
+    // ★ v4.4: 이미 받아둔 중량 필드(이미지·기준가)를 이월한다.
+    //
+    // processBuildings()는 빌딩 객체를 통째로 새로 만든다. 그런데 이미지와 기준가는
+    // buildings 노드가 아니라 buildingImages·buildingPricing 에 있고 상세를 열 때
+    // 개별 조회로 채워진다. 이월하지 않으면 2단계 로드나 저장 후 재처리 시점에
+    // 이미 받아둔 값이 사라져, 화면에는 남아 있는데 객체는 비어 있는 상태가 된다.
+    // (기준가 적용이 "기준가를 찾을 수 없습니다"로 실패하던 원인)
+    const heavyCarry = new Map();
+    if (Array.isArray(state.allBuildings)) {
+        for (const prev of state.allBuildings) {
+            if (prev && prev._heavyLoaded) {
+                heavyCarry.set(prev.id, {
+                    images: prev.images,
+                    exteriorImages: prev.exteriorImages,
+                    floorPlanImages: prev.floorPlanImages,
+                    exteriorImage: prev.exteriorImage,
+                    floorPricing: prev.floorPricing
+                });
+            }
+        }
+    }
+
     // ★ v4.0: 사전 인덱스 구축 (1회, O(m))
     const rentrollIdx = buildIndex(dataCache.rentrolls);
     const memoIdx = buildIndex(dataCache.memos);
@@ -660,7 +682,21 @@ export function processBuildings() {
             const areaB = parseFloat(b.grossFloorPy) || 0;
             return areaB - areaA || (a.name || '').localeCompare(b.name || '');
         });
-    
+
+    // ★ v4.4: 이전 객체에서 보관해 둔 중량 필드를 새 객체로 되돌린다.
+    if (heavyCarry.size) {
+        for (const nb of state.allBuildings) {
+            const carried = heavyCarry.get(nb.id);
+            if (!carried) continue;
+            if (carried.images) nb.images = carried.images;
+            if (carried.exteriorImages) nb.exteriorImages = carried.exteriorImages;
+            if (carried.floorPlanImages) nb.floorPlanImages = carried.floorPlanImages;
+            if (carried.exteriorImage) nb.exteriorImage = carried.exteriorImage;
+            if (carried.floorPricing) nb.floorPricing = carried.floorPricing;
+            nb._heavyLoaded = true;
+        }
+    }
+
     state.filteredBuildings = [...state.allBuildings];
     
     // ★ v4.0: processBuildings 후 selectedBuilding 자동 재연결

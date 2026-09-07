@@ -357,11 +357,33 @@ function _normalizeImageList(arr) {
     return (arr || []).map(img => (typeof img === 'string' ? { url: img } : img));
 }
 
+/**
+ * 중량 필드(이미지·기준가)가 아직 도착하지 않은 상태인지 판정.
+ *
+ * 새로고침 직후에는 processBuildings()가 빌딩 객체를 새로 만들면서
+ * 이미지·기준가가 빈 상태가 된다. 상세를 열면 hydrateBuildingHeavy()가
+ * 받아오지만 렌더가 먼저 일어나므로, 이 구간에 "없음"이 아니라
+ * "불러오는 중"을 보여줘야 한다.
+ */
+export function isHeavyPending(b) {
+    return !!b && !b._heavyLoaded;
+}
+
+// 로딩 자리표시자 (portal.html CSS에 의존하지 않도록 인라인 스타일 사용)
+function _heavyLoadingBlock(label) {
+    return `
+        <div class="image-empty-area heavy-loading" style="cursor:default;">
+            <div class="empty-icon" style="animation:creSpin 1s linear infinite;display:inline-block;">⏳</div>
+            <div class="empty-text">${label} 불러오는 중…</div>
+        </div>
+        <style>@keyframes creSpin{to{transform:rotate(360deg)}}</style>
+    `;
+}
+
 async function hydrateBuildingHeavy(b) {
     if (b._heavyLoaded || b._heavyLoading) return false;
     b._heavyLoading = true;
-    try {
-        const [imgSnap, prcSnap] = await Promise.all([
+    try {        const [imgSnap, prcSnap] = await Promise.all([
             get(ref(db, `buildingImages/${b.id}`)),
             get(ref(db, `buildingPricing/${b.id}`))
         ]);
@@ -391,7 +413,6 @@ async function hydrateBuildingHeavy(b) {
 
 export function openDetail(id) {
     const target = state.allBuildings.find(b => b.id === id);
-
     // 아직 중량 필드를 안 받았으면 백그라운드로 받아온 뒤 한 번 더 그린다
     if (target && !target._heavyLoaded && !target._heavyLoading) {
         hydrateBuildingHeavy(target).then(changed => {
@@ -402,6 +423,38 @@ export function openDetail(id) {
     }
 
     return _openDetailInternal(id);
+}
+
+/**
+ * 중량 필드 캐시를 무효화한다.
+ * 이미지·기준가를 저장한 뒤 호출하면 다음에 상세를 열 때 새로 받아온다.
+ * id 생략 시 현재 선택된 빌딩이 대상.
+ */
+export function invalidateBuildingHeavy(id) {    const bid = id || state.selectedBuilding?.id;
+    if (!bid) return;
+    const b = state.allBuildings.find(x => x.id === bid);
+    if (b) b._heavyLoaded = false;
+}
+window.invalidateBuildingHeavy = invalidateBuildingHeavy;
+
+/**
+ * 기준가·이미지를 조작하기 전에 중량 필드가 도착했는지 보장한다.
+ *
+ * processBuildings()가 빌딩 객체를 다시 만들면 중량 필드가 비므로,
+ * 그 직후에 기준가 버튼을 누르면 findIndex 가 -1 이 되어 실패한다.
+ * portal-data.js 의 이월 처리로 대부분 방지되지만, 어떤 경로로든
+ * 비어 있는 상태로 들어오면 여기서 한 번 더 받아온다.
+ */
+async function ensureHeavyLoaded(b) {
+    if (!b || b._heavyLoaded) return;
+    if (b._heavyLoading) {
+        // 진행 중이면 끝날 때까지 짧게 대기 (최대 약 3초)
+        for (let i = 0; i < 30 && b._heavyLoading; i++) {
+            await new Promise(r => setTimeout(r, 100));
+        }
+        return;
+    }
+    await hydrateBuildingHeavy(b);
 }
 
 function _openDetailInternal(id) {
@@ -431,7 +484,8 @@ function _openDetailInternal(id) {
     // ★ v4.2: null 필터링 후 카운트
     document.getElementById('memoCount').textContent = (b.memos || []).length;
     document.getElementById('documentCount').textContent = (b.documents || []).length;
-    document.getElementById('pricingCount').textContent = (b.floorPricing || []).length;
+    document.getElementById('pricingCount').textContent =
+        (isHeavyPending(b) && !(b.floorPricing || []).length) ? '…' : (b.floorPricing || []).length;
     document.getElementById('contactCount').textContent = (b.contactPoints || []).length;
     
     // 즐겨찾기 별 상태 업데이트
@@ -564,6 +618,9 @@ export function renderInfoSection() {
     // 이미지 데이터
     const exteriorImages = b.exteriorImages || [];
     const floorPlanImages = b.floorPlanImages || [];
+    // ★ v4.4: 중량 필드가 아직 도착하지 않았으면 "없음" 대신 "불러오는 중"을 표시
+    const heavyPending = isHeavyPending(b);
+    const cntLabel = (n) => (heavyPending && n === 0 ? '…' : `${n}장`);
     
     // ★ 2컬럼 이미지 갤러리 (외관 5:5 평면도)
     const imageGalleryHtml = `
@@ -574,7 +631,7 @@ export function renderInfoSection() {
                     <span class="column-title">🏢 외관</span>
                     <div class="column-header-right">
                         <button class="btn-paste-image" onclick="pasteImageFromClipboard('exterior')" title="클립보드 이미지 붙여넣기">📋 붙여넣기</button>
-                        <span class="column-count">${exteriorImages.length}장</span>
+                        <span class="column-count">${cntLabel(exteriorImages.length)}</span>
                     </div>
                 </div>
                 ${exteriorImages.length > 0 ? `
@@ -609,13 +666,13 @@ export function renderInfoSection() {
                         ` : ''}
                     `}
                     <button class="btn-add-image" onclick="addExteriorImage()">➕ 외관 사진 추가</button>
-                ` : `
+                ` : (heavyPending ? _heavyLoadingBlock('외관 사진') : `
                     <div class="image-empty-area" onclick="addExteriorImage()">
                         <div class="empty-icon">🏢</div>
                         <div class="empty-text">외관 사진 없음</div>
                         <button class="btn-add-empty">➕ 사진 추가</button>
                     </div>
-                `}
+                `)}
             </div>
             
             <!-- 평면도 이미지 영역 -->
@@ -624,7 +681,7 @@ export function renderInfoSection() {
                     <span class="column-title">📐 평면도</span>
                     <div class="column-header-right">
                         <button class="btn-paste-image" onclick="pasteImageFromClipboard('floorplan')" title="클립보드 이미지 붙여넣기">📋 붙여넣기</button>
-                        <span class="column-count">${floorPlanImages.length}장</span>
+                        <span class="column-count">${cntLabel(floorPlanImages.length)}</span>
                     </div>
                 </div>
                 ${floorPlanImages.length > 0 ? `
@@ -659,13 +716,13 @@ export function renderInfoSection() {
                         ` : ''}
                     `}
                     <button class="btn-add-image" onclick="addFloorPlanImage()">➕ 평면도 추가</button>
-                ` : `
+                ` : (heavyPending ? _heavyLoadingBlock('평면도') : `
                     <div class="image-empty-area" onclick="addFloorPlanImage()">
                         <div class="empty-icon">📐</div>
                         <div class="empty-text">평면도 없음</div>
                         <button class="btn-add-empty">➕ 평면도 추가</button>
                     </div>
-                `}
+                `)}
             </div>
         </div>
     `;
@@ -1301,7 +1358,8 @@ export function renderPricingSection() {
     });
     
     // 기준가 개수 업데이트
-    document.getElementById('pricingCount').textContent = allPricing.length;
+    document.getElementById('pricingCount').textContent =
+        (isHeavyPending(b) && !allPricing.length) ? '…' : allPricing.length;
     
     document.getElementById('sectionPricing').innerHTML = `
         <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px;">
@@ -1415,7 +1473,13 @@ export function renderPricingSection() {
         </div>
         ` : ''}
         
-        ${sortedPricing.length === 0 && !hasBasePricing ? `
+        ${sortedPricing.length === 0 && !hasBasePricing ? (isHeavyPending(b) ? `
+        <div class="empty-state" style="text-align: center; padding: 40px 20px;">
+            <div style="font-size: 48px; margin-bottom: 16px; animation: creSpin 1s linear infinite; display:inline-block;">⏳</div>
+            <div style="color: var(--text-muted);">기준가 불러오는 중…</div>
+        </div>
+        <style>@keyframes creSpin{to{transform:rotate(360deg)}}</style>
+        ` : `
         <div class="empty-state" style="text-align: center; padding: 40px 20px;">
             <div style="font-size: 48px; margin-bottom: 16px;">💰</div>
             <div style="color: var(--text-muted); margin-bottom: 16px;">등록된 기준가가 없습니다</div>
@@ -1425,7 +1489,7 @@ export function renderPricingSection() {
             </div>
             <button class="btn btn-primary" onclick="openPricingModal()">+ 첫 기준가 등록</button>
         </div>
-        ` : sortedPricing.length === 0 ? `
+        `) : sortedPricing.length === 0 ? `
         <div style="text-align: center; padding: 20px; color: var(--text-muted); font-size: 13px;">
             선택한 필터 조건에 해당하는 기준가가 없습니다.
         </div>
@@ -1502,7 +1566,9 @@ export function filterPricingBySource(source) {
 // ★ 공식 기준가로 등록
 export async function setOfficialPricing(pricingId) {
     const b = state.selectedBuilding;
-    if (!b || !b.floorPricing) return;
+    if (!b) return;
+    await ensureHeavyLoaded(b);          // ★ v4.4
+    if (!b.floorPricing) return;
     
     const pricingIdx = b.floorPricing.findIndex(fp => fp.id === pricingId);
     if (pricingIdx === -1) {
@@ -1613,7 +1679,9 @@ export async function setOfficialPricing(pricingId) {
 // ★ 공식 기준가 해제
 export async function unsetOfficialPricing(pricingId) {
     const b = state.selectedBuilding;
-    if (!b || !b.floorPricing) return;
+    if (!b) return;
+    await ensureHeavyLoaded(b);          // ★ v4.4
+    if (!b.floorPricing) return;
     
     const pricingIdx = b.floorPricing.findIndex(fp => fp.id === pricingId);
     if (pricingIdx === -1) {
@@ -1640,10 +1708,17 @@ export async function unsetOfficialPricing(pricingId) {
 // ★ 기준가 수정 모달 열기
 export function editPricing(pricingId) {
     const b = state.selectedBuilding;
-    if (!b || !b.floorPricing) return;
-    
-    const pricing = b.floorPricing.find(fp => fp.id === pricingId);
+    if (!b) return;
+
+    const pricing = (b.floorPricing || []).find(fp => fp.id === pricingId);
     if (!pricing) {
+        // ★ v4.4: 중량 필드가 아직 안 왔으면 받아온 뒤 한 번 더 시도
+        if (!b._heavyLoaded) {
+            ensureHeavyLoaded(b).then(() => {
+                if (state.selectedBuilding === b) editPricing(pricingId);
+            });
+            return;
+        }
         showToast('기준가를 찾을 수 없습니다', 'error');
         return;
     }
@@ -1685,6 +1760,7 @@ export function editPricing(pricingId) {
 export async function saveEditPricing() {
     const b = state.selectedBuilding;
     if (!b) return;
+    await ensureHeavyLoaded(b);          // ★ v4.4
     
     const pricingId = document.getElementById('editPricingId').value;
     const pricingIdx = b.floorPricing?.findIndex(fp => fp.id === pricingId);
@@ -1765,7 +1841,9 @@ export function closeEditPricingModal() {
 // ★ 기준가 삭제
 export async function deletePricing(pricingId) {
     const b = state.selectedBuilding;
-    if (!b || !b.floorPricing) return;
+    if (!b) return;
+    await ensureHeavyLoaded(b);          // ★ v4.4
+    if (!b.floorPricing) return;
     
     const pricingIdx = b.floorPricing.findIndex(fp => fp.id === pricingId);
     if (pricingIdx === -1) {
