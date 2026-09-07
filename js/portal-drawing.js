@@ -11,6 +11,7 @@ const drawingState = {
     manager: null,
     currentOverlay: null,
     drawingMode: null,      // 'rectangle', 'circle', 'polygon', null
+    currentShape: null,     // ★ v4.6: 정규화된 도형 { kind, contains(lat,lng) }
     selectedBuildings: [],
     isToolsVisible: false
 };
@@ -74,25 +75,32 @@ export function initDrawingManager() {
     
     // 도형 완성 이벤트
     drawingState.manager.addListener('drawend', (data) => {
-        // data.target이 방금 그린 오버레이
-        drawingState.currentOverlay = data.target;
-        
-        console.log('도형 완성:', data.overlayType, data.target);
-        
-        // 영역 내 빌딩 검색
-        if (drawingState.currentOverlay) {
-            findBuildingsInArea();
+        // ★ v4.6: SDK 버전에 따라 drawend 가 넘겨주는 형태가 다르다.
+        // data.target 이 오버레이 객체인 경우도 있고, 좌표만 오는 경우도 있다.
+        // 어느 쪽이든 동작하도록 도형을 정규화해서 보관한다.
+        drawingState.currentOverlay = data?.target || null;
+        drawingState.currentShape = normalizeShape(data, drawingState.currentOverlay);
+
+        console.log('[drawing] 도형 완성:', data?.overlayType,
+            drawingState.currentShape ? drawingState.currentShape.kind : '판정 불가');
+
+        if (!drawingState.currentShape) {
+            console.warn('[drawing] 도형 좌표를 읽지 못했습니다. drawend 데이터:', data);
+            showToast('도형 정보를 읽지 못했습니다. 다시 그려주세요.', 'error');
+            return;
         }
-        
-        // 지우기 버튼 활성화
+
+        findBuildingsInArea();
         updateDrawingButtons();
     });
     
     // 도형 변경 이벤트 (드래그/편집 후)
     drawingState.manager.addListener('state_changed', () => {
         if (drawingState.currentOverlay) {
-            findBuildingsInArea();
+            drawingState.currentShape =
+                normalizeShape(null, drawingState.currentOverlay) || drawingState.currentShape;
         }
+        if (drawingState.currentShape) findBuildingsInArea();
     });
     
     console.log('DrawingManager 초기화 완료');
@@ -162,9 +170,16 @@ export function clearDrawing() {
     }
     
     drawingState.currentOverlay = null;
+    drawingState.currentShape = null;
     drawingState.drawingMode = null;
     drawingState.selectedBuildings = [];
-    
+
+    // ★ v4.6: 영역 조건 해제 후 목록·지도 복원
+    if (state.drawnAreaIds) {
+        state.drawnAreaIds = null;
+        if (window.applyFilters) window.applyFilters();
+    }
+
     updateDrawingButtons();
     hideDrawingResults();
 }
@@ -208,33 +223,137 @@ function updateDrawingButtons() {
 // 영역 내 빌딩 검색 알고리즘
 // ============================================================
 
+// ============================================================
+// ★ v4.6: 도형 정규화
+//
+// kakao DrawingManager 의 drawend 데이터 형태가 SDK 버전에 따라 다르다.
+// 오버레이 객체가 오기도 하고 좌표 배열만 오기도 한다.
+// 어느 쪽이든 { kind, contains(lat, lng) } 형태로 통일해 사용한다.
+// ============================================================
+
+function _latOf(p) {
+    if (!p) return null;
+    if (typeof p.getLat === 'function') return p.getLat();
+    if (typeof p.y === 'number') return p.y;
+    if (typeof p.lat === 'number') return p.lat;
+    return null;
+}
+function _lngOf(p) {
+    if (!p) return null;
+    if (typeof p.getLng === 'function') return p.getLng();
+    if (typeof p.x === 'number') return p.x;
+    if (typeof p.lng === 'number') return p.lng;
+    return null;
+}
+
+function _toPointList(raw) {
+    if (!raw) return null;
+    const arr = Array.isArray(raw) ? raw : (typeof raw.length === 'number' ? Array.from(raw) : null);
+    if (!arr || arr.length < 3) return null;
+    const pts = arr.map(p => ({ lat: _latOf(p), lng: _lngOf(p) }))
+                   .filter(p => p.lat != null && p.lng != null);
+    return pts.length >= 3 ? pts : null;
+}
+
+function normalizeShape(data, overlay) {
+    const type = (data && data.overlayType ? String(data.overlayType).toLowerCase() : '')
+        || drawingState.drawingMode || '';
+
+    // 다각형
+    if (type.includes('polygon')) {
+        let pts = null;
+        if (overlay && typeof overlay.getPath === 'function') pts = _toPointList(overlay.getPath());
+        if (!pts && data) pts = _toPointList(data.points || data.path || data.coordinates);
+        if (!pts) return null;
+        return {
+            kind: 'polygon',
+            contains(lat, lng) { return rayCast(lat, lng, pts); }
+        };
+    }
+
+    // 사각형
+    if (type.includes('rect')) {
+        let sw = null, ne = null;
+        if (overlay && typeof overlay.getBounds === 'function') {
+            const bd = overlay.getBounds();
+            if (bd) { sw = bd.getSouthWest(); ne = bd.getNorthEast(); }
+        }
+        if ((!sw || !ne) && data) {
+            const a = data.sPoint || data.southWest || (data.bounds && data.bounds.sw);
+            const b = data.ePoint || data.northEast || (data.bounds && data.bounds.ne);
+            if (a && b) { sw = a; ne = b; }
+        }
+        const y1 = _latOf(sw), x1 = _lngOf(sw), y2 = _latOf(ne), x2 = _lngOf(ne);
+        if ([y1, x1, y2, x2].some(v => v == null)) return null;
+        const minLat = Math.min(y1, y2), maxLat = Math.max(y1, y2);
+        const minLng = Math.min(x1, x2), maxLng = Math.max(x1, x2);
+        return {
+            kind: 'rectangle',
+            contains(lat, lng) {
+                return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+            }
+        };
+    }
+
+    // 원
+    if (type.includes('circle')) {
+        let center = null, radius = null;
+        if (overlay && typeof overlay.getPosition === 'function') {
+            center = overlay.getPosition();
+            radius = typeof overlay.getRadius === 'function' ? overlay.getRadius() : null;
+        }
+        if ((!center || radius == null) && data) {
+            center = center || data.center || data.position;
+            radius = radius != null ? radius : data.radius;
+        }
+        const clat = _latOf(center), clng = _lngOf(center);
+        if (clat == null || clng == null || !radius) return null;
+        return {
+            kind: 'circle',
+            contains(lat, lng) {
+                return getDistanceFromLatLng(clat, clng, lat, lng) <= radius;
+            }
+        };
+    }
+
+    return null;
+}
+
+function rayCast(lat, lng, pts) {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const yi = pts[i].lat, xi = pts[i].lng;
+        const yj = pts[j].lat, xj = pts[j].lng;
+        const intersect = ((yi > lat) !== (yj > lat)) &&
+            (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
 export function findBuildingsInArea() {
-    if (!drawingState.currentOverlay) {
+    const shape = drawingState.currentShape;
+    if (!shape) {
         drawingState.selectedBuildings = [];
+        state.drawnAreaIds = null;
+        if (window.applyFilters) window.applyFilters();
         return;
     }
-    
-    const overlay = drawingState.currentOverlay;
-    const type = drawingState.drawingMode;
-    
-    drawingState.selectedBuildings = state.filteredBuildings.filter(b => {
-        if (!b.lat || !b.lng) return false;
-        
-        const point = new kakao.maps.LatLng(b.lat, b.lng);
-        
-        switch (type) {
-            case 'rectangle':
-                return isPointInRectangle(point, overlay);
-            case 'circle':
-                return isPointInCircle(point, overlay);
-            case 'polygon':
-                return isPointInPolygon(point, overlay);
-            default:
-                return false;
-        }
-    });
-    
-    console.log(`도형 내 빌딩: ${drawingState.selectedBuildings.length}개`);
+
+    // ★ v4.6: 전체 빌딩을 대상으로 판정하고, 결과를 필터 파이프라인에 넘긴다.
+    // 이전에는 filteredBuildings 를 다시 걸러 별도 패널에만 표시했기 때문에
+    // 왼쪽 빌딩 목록과 지도 마커에는 영역 조건이 반영되지 않았다.
+    const inArea = state.allBuildings.filter(b =>
+        b.lat && b.lng && shape.contains(Number(b.lat), Number(b.lng)));
+
+    state.drawnAreaIds = new Set(inArea.map(b => b.id));
+
+    // 다른 필터(권역·면적·공실 등)와 AND 로 합성한 최종 목록
+    if (window.applyFilters) window.applyFilters();
+    drawingState.selectedBuildings = (state.filteredBuildings || []).filter(b =>
+        state.drawnAreaIds.has(b.id));
+
+    console.log(`[drawing] ${shape.kind} 내 빌딩 ${inArea.length}개 · 필터 적용 후 ${drawingState.selectedBuildings.length}개`);
     showDrawingResults();
 }
 

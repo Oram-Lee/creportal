@@ -91,6 +91,11 @@ export function toggleLeasingGuideFilter(checked) {
 
 // 모든 필터 초기화
 export function resetAllFilters() {
+    // ★ v4.6: 지도에 그린 영역 조건도 함께 해제한다.
+    if (state.drawnAreaIds) {
+        state.drawnAreaIds = null;
+        if (window.clearDrawing) window.clearDrawing();
+    }
     state.activeFilters = {
         region: [],
         areaMin: null,
@@ -144,6 +149,66 @@ export function updateFilterChipState() {
 }
 
 // 필터 적용 (실제 필터링 로직)
+// ============================================================
+// ★ v4.6: 공실 시점 파싱 · 임대료 해석 공용 헬퍼
+// ============================================================
+
+/** publishDate 문자열을 비교용 정수 YYYYMM 으로. 실패 시 0 */
+function vacancyYM(v) {
+    const raw = String((v && v.publishDate) || '').trim();
+    if (!raw) return 0;
+    const nums = raw.match(/\d+/g) || [];
+    let yyyy = '', mm = '';
+    if (nums.length >= 2) {
+        yyyy = nums[0].length >= 4 ? nums[0].slice(0, 4) : ('20' + nums[0].padStart(2, '0').slice(-2));
+        mm = nums[1].padStart(2, '0');
+    } else if (nums.length === 1 && nums[0].length === 6) {
+        yyyy = nums[0].slice(0, 4); mm = nums[0].slice(4, 6);
+    } else if (nums.length === 1 && nums[0].length === 4) {
+        yyyy = '20' + nums[0].slice(0, 2); mm = nums[0].slice(2, 4);
+    } else return 0;
+    const n = parseInt(yyyy + mm, 10);
+    return isNaN(n) ? 0 : n;
+}
+
+/**
+ * 최신 시점의 공실만 추린다.
+ *
+ * 한 빌딩에 26.07 과 26.08 자료가 함께 있으면 26.08 만 유효한 현황으로 본다.
+ * publishDate 가 없는 항목은 시점을 알 수 없으므로,
+ * 시점이 있는 항목이 하나라도 있으면 제외하고 없으면 전부 사용한다.
+ */
+export function latestVacancies(b) {
+    const vacs = (b && b.vacancies) || [];
+    if (vacs.length <= 1) return vacs;
+    let max = 0;
+    for (const v of vacs) { const ym = vacancyYM(v); if (ym > max) max = ym; }
+    if (!max) return vacs;
+    return vacs.filter(v => vacancyYM(v) === max);
+}
+
+/**
+ * 빌딩의 대표 임대료(원/평).
+ *
+ * 루트 rentPy 는 2,339건 중 215건(9%)만 보유해 그것만 보면
+ * 나머지가 전부 0 으로 걸러진다. 화면에 표시되는 값과 같은 순서로 해석한다.
+ *   ① 공식 기준가 rentPy  ② 최신 공실의 rentPy 최솟값  ③ 루트 rentPy
+ */
+export function resolveRentPy(b) {
+    const toNum = (v) => {
+        const n = parseFloat(String(v ?? '').replace(/[^\d.]/g, ''));
+        return isNaN(n) || n <= 0 ? null : n;
+    };
+    const official = (b.floorPricing || []).find(fp => fp.isOfficial);
+    const fromOfficial = official ? toNum(official.rentPy) : null;
+    if (fromOfficial) return fromOfficial;
+
+    const vals = latestVacancies(b).map(v => toNum(v.rentPy)).filter(Boolean);
+    if (vals.length) return Math.min(...vals);
+
+    return toNum(b.rentPy) || 0;
+}
+
 export function applyFilters() {
     const q = document.getElementById('searchInput').value.toLowerCase().replace(/\s/g, '');
 
@@ -155,6 +220,10 @@ export function applyFilters() {
     const _sortBy = document.getElementById('listSortBy')?.value || 'area_desc';
 
     state.filteredBuildings = state.allBuildings.filter(b => {
+        // ★ v4.6: 지도에 그린 영역(사각형·원·다각형) 조건.
+        // portal-drawing.js 가 state.drawnAreaIds 를 채우면 여기서 AND 로 합성된다.
+        if (state.drawnAreaIds && !state.drawnAreaIds.has(b.id)) return false;
+
         // 검색어 (빌딩명·주소·지번·인근역 + 별칭)
         if (q) {
             const searchStr = [b.name, b.address, b.addressJibun, b.nearbyStation, ...(Array.isArray(b.aliases) ? b.aliases : [])]
@@ -172,7 +241,7 @@ export function applyFilters() {
         
         // 공실 전용면적
         if (state.activeFilters.vacancyAreaMin || state.activeFilters.vacancyAreaMax) {
-            const vacancies = b.vacancies || [];
+            const vacancies = latestVacancies(b);   // ★ v4.6: 최신 시점 공실만
             const hasMatchingVacancy = vacancies.some(v => {
                 const vArea = parseFloat(String(v.exclusiveArea || '').replace(/[^\d.]/g, '')) || 0;
                 if (vArea === 0) return false;
@@ -183,15 +252,16 @@ export function applyFilters() {
             if (!hasMatchingVacancy) return false;
         }
         
-        // 임대료
-        const rentPy = parseFloat(String(b.rentPy || '').replace(/[^\d.]/g, '')) || 0;
-        if (state.activeFilters.rentMin && rentPy < state.activeFilters.rentMin) return false;
-        if (state.activeFilters.rentMax && rentPy > state.activeFilters.rentMax) return false;
+        // 임대료 — ★ v4.6: 공식 기준가 → 최신 공실 → 루트 rentPy 순으로 해석.
+        // 값이 없는 빌딩은 임대료 조건이 걸렸을 때만 제외한다(0 으로 취급해 전부 거르지 않음).
+        if (state.activeFilters.rentMin || state.activeFilters.rentMax) {
+            const rentPy = resolveRentPy(b);
+            if (!rentPy) return false;
+            if (state.activeFilters.rentMin && rentPy < state.activeFilters.rentMin) return false;
+            if (state.activeFilters.rentMax && rentPy > state.activeFilters.rentMax) return false;
+        }
         
-        // 전용률
-        const effRate = parseFloat(String(b.exclusiveRate || '').replace(/[^\d.]/g, '')) || 0;
-        if (state.activeFilters.effMin && effRate < state.activeFilters.effMin) return false;
-        if (state.activeFilters.effMax && effRate > state.activeFilters.effMax) return false;
+        // 전용률 필터는 v4.6 에서 제거됨 (데이터 정합성 정리 후 재도입 검토)
         
         // 인센티브 필터
         if (state.activeFilters.incentiveFilter === 'hasIncentive' && !b.hasIncentive) return false;
