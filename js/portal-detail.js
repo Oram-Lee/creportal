@@ -438,8 +438,7 @@ export function invalidateBuildingHeavy(id) {    const bid = id || state.selecte
 window.invalidateBuildingHeavy = invalidateBuildingHeavy;
 
 /**
- * 기준가·이미지를 조작하기 전에 중량 필드가 도착했는지 보장한다.
- *
+ * 기준가·이미지를 조작하기 전에 중량 필드가 도착했는지 보장한다. *
  * processBuildings()가 빌딩 객체를 다시 만들면 중량 필드가 비므로,
  * 그 직후에 기준가 버튼을 누르면 findIndex 가 -1 이 되어 실패한다.
  * portal-data.js 의 이월 처리로 대부분 방지되지만, 어떤 경로로든
@@ -455,6 +454,50 @@ async function ensureHeavyLoaded(b) {
         return;
     }
     await hydrateBuildingHeavy(b);
+}
+
+// ============================================================
+// ★ v4.4: 이미지 저장 경로 일원화
+//
+// 외관·평면도 이미지는 역사적으로 두 곳에 저장되어 왔다.
+//   buildings/{id}/images/exterior   (중첩)
+//   buildings/{id}/exteriorImages    (최상위)
+// 실측 기준 최상위만 50건, 중첩만 68건, 둘 다 가진 것이 10건이다.
+//
+// 표시는 최상위를 우선하는데 추가·삭제는 중첩만 갱신해 왔다.
+// 그래서 둘 다 가진 빌딩에서는 지워도 다시 나타나고, 추가해도 반영이 어긋났다.
+// 아래 헬퍼로 읽기와 쓰기를 한 곳으로 모은다.
+// ============================================================
+
+const IMG_FIELD = {
+    exterior:  { nested: 'exterior',  top: 'exteriorImages' },
+    floorPlan: { nested: 'floorPlan', top: 'floorPlanImages' }
+};
+
+/** 화면에 실제로 쓰이는 이미지 목록을 URL 문자열 배열로 돌려준다. */
+function getImageUrls(b, kind) {
+    const f = IMG_FIELD[kind];
+    const src = (Array.isArray(b[f.top]) && b[f.top].length)
+        ? b[f.top]
+        : (b.images?.[f.nested] || []);
+    return src.map(img => (img && typeof img === 'object' && 'url' in img) ? img.url : img)
+              .filter(Boolean);
+}
+
+/** 이미지 목록을 두 경로에 함께 기록하고 로컬 상태도 맞춘다. */
+async function persistImageUrls(b, kind, urls) {
+    const f = IMG_FIELD[kind];
+    const hadTop = Array.isArray(b[f.top]) && b[f.top].length > 0;
+
+    await update(ref(db, `buildings/${b.id}/images`), { [f.nested]: urls });
+    // 최상위 필드를 쓰던 빌딩은 그쪽도 맞춰야 표시가 어긋나지 않는다
+    if (hadTop || urls.length === 0) {
+        await update(ref(db, `buildings/${b.id}`), { [f.top]: urls });
+    }
+
+    if (!b.images) b.images = {};
+    b.images[f.nested] = urls;
+    b[f.top] = urls.map(u => ({ url: u }));
 }
 
 function _openDetailInternal(id) {
@@ -5444,14 +5487,11 @@ window.addFloorPlanImage = function() {
             if (!b) return;
             
             // 현재 평면도 배열 가져오기
-            let floorPlanImages = b.images?.floorPlan || [];
-            floorPlanImages = [...floorPlanImages, imageData];
-            
+            // ★ v4.4: 표시에 쓰이는 목록을 기준으로 이어붙이고 두 경로에 함께 기록
+            const floorPlanImages = [...getImageUrls(b, 'floorPlan'), imageData];
+
             try {
-                // Firebase 업데이트
-                await update(ref(db, `buildings/${b.id}/images`), {
-                    floorPlan: floorPlanImages
-                });
+                await persistImageUrls(b, 'floorPlan', floorPlanImages);
                 
                 // 로컬 상태 업데이트
                 if (!b.images) b.images = {};
@@ -5532,18 +5572,11 @@ window.executeDeleteImage = async function(type, index) {
     const fieldName = isExterior ? 'exterior' : 'floorPlan';
     const typeLabel = isExterior ? '외관 사진' : '평면도';
     
-    let images = b.images?.[fieldName] || [];
-    images = images.filter((_, i) => i !== index);
-    
+    // ★ v4.4: 화면에 보이는 목록 기준으로 지우고 두 경로를 함께 갱신
+    const images = getImageUrls(b, fieldName).filter((_, i) => i !== index);
+
     try {
-        // Firebase 업데이트
-        await update(ref(db, `buildings/${b.id}/images`), {
-            [fieldName]: images
-        });
-        
-        // 로컬 상태 업데이트
-        if (!b.images) b.images = {};
-        b.images[fieldName] = images;
+        await persistImageUrls(b, fieldName, images);
         
         if (isExterior) {
             b.exteriorImages = images.map(img => typeof img === 'string' ? { url: img } : img);
@@ -5593,14 +5626,11 @@ window.addExteriorImage = function() {
             if (!b) return;
             
             // 현재 외관 이미지 배열 가져오기
-            let exteriorImages = b.images?.exterior || [];
-            exteriorImages = [...exteriorImages, imageData];
-            
+            // ★ v4.4: 표시에 쓰이는 목록을 기준으로 이어붙이고 두 경로에 함께 기록
+            const exteriorImages = [...getImageUrls(b, 'exterior'), imageData];
+
             try {
-                // Firebase 업데이트
-                await update(ref(db, `buildings/${b.id}/images`), {
-                    exterior: exteriorImages
-                });
+                await persistImageUrls(b, 'exterior', exteriorImages);
                 
                 // 로컬 상태 업데이트
                 if (!b.images) b.images = {};
@@ -5730,11 +5760,10 @@ window.commitPastedImage = async function() {
     const label = PASTE_TYPE_LABEL[pending.type] || '이미지';
 
     try {
-        const imgs = [...(b.images?.[fieldName] || []), pending.imageData];
-        await update(ref(db, `buildings/${b.id}/images`), { [fieldName]: imgs });
+        // ★ v4.4: 표시 목록 기준 + 두 경로 동시 기록
+        const imgs = [...getImageUrls(b, fieldName), pending.imageData];
+        await persistImageUrls(b, fieldName, imgs);
 
-        if (!b.images) b.images = {};
-        b.images[fieldName] = imgs;
         const mapped = imgs.map(img => typeof img === 'string' ? { url: img } : img);
         if (isExterior) b.exteriorImages = mapped;
         else b.floorPlanImages = mapped;
