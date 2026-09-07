@@ -23,7 +23,7 @@ const [_data, _detail, _crud, _misc] = await Promise.all([
     import(`./portal-crud.js?v=${_vMod}`),
     import(`./portal-misc.js?v=${_vMod}`),
 ]);
-const { loadData, processBuildings } = _data;
+const { loadData, loadDataProgressive, processBuildings } = _data;
 const { registerDetailGlobals } = _detail;
 const { registerCrudGlobals, isAdmin, canDeleteBuilding } = _crud;
 const { registerMiscGlobals } = _misc;
@@ -242,7 +242,10 @@ export async function initApp() {
     showLoadingOverlay();
     
     try {
-        await loadData();
+        // ★ v4.3: 분할 로딩 — buildings + users 만 먼저 받아 지도·목록을 그리고
+        // 나머지 컬렉션은 백그라운드로 채운다. 첫 화면까지의 대기가 크게 줄어든다.
+        // 실패 시 loadDataProgressive 내부에서 loadData()로 폴백한다.
+        await loadDataProgressive();
         console.log(`  ✅ 데이터 로드 + 처리 완료 (+${Math.round(performance.now() - t0)}ms)`);
         // ★ 첫 진입: 리스트를 '지도영역'(viewport) 탭으로 시작 — 보이는 지도 영역의 빌딩만 표시.
         //   데이터 로드 완료 후라 filteredBuildings가 채워져 있어 빈 리스트가 안 뜬다.

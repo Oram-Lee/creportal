@@ -253,9 +253,18 @@ async function loadRemainingData() {
 
         processBuildings();
         processLeasingGuideBuildings();
-        if (window.renderBuildingList) window.renderBuildingList();
-        if (state.currentViewMode === 'list' && window.renderTableView) window.renderTableView();
-        if (state.kakaoMap && state.clusterer && window.updateMapMarkers) window.updateMapMarkers();
+
+        // ★ v4.3: processBuildings()가 allBuildings를 새 객체로 다시 만들므로
+        // viewport 탭이 들고 있던 1단계 객체 참조는 낡은 상태가 된다.
+        // 지도영역 탭이면 viewport를 재계산해서 갱신한다.
+        if (state.currentListTab === 'viewport' && window.updateViewportBuildings) {
+            window.updateViewportBuildings();
+        } else {
+            if (window.renderBuildingList) window.renderBuildingList();
+            if (state.currentViewMode === 'list' && window.renderTableView) window.renderTableView();
+            if (state.kakaoMap && state.clusterer && window.updateMapMarkers) window.updateMapMarkers();
+        }
+
         // 1단계 도중 상세를 이미 연 경우, 최신 데이터로 다시 렌더
         if (state.selectedBuilding && window.openDetail) {
             window.openDetail(state.selectedBuilding.id);
