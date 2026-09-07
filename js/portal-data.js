@@ -122,7 +122,7 @@ export async function loadData() {
         const t0 = performance.now();
         
         // ★ 마이그레이션 후: vacancies 독립 컬렉션 추가 로드
-        const [b, r, m, i, mg, docs, u, lg, vac] = await Promise.all([
+        const [b, r, m, i, mg, docs, u, lg, vac, bp] = await Promise.all([
             get(ref(db, 'buildings')),
             get(ref(db, 'rentrolls')),
             get(ref(db, 'memos')),
@@ -131,11 +131,12 @@ export async function loadData() {
             get(ref(db, 'documents')),
             get(ref(db, 'users')),
             loadLeasingGuidesLite(),   // ★ v4.1: 전량 조회 → 필요한 하위 경로만
-            get(ref(db, 'vacancies'))  // ★ 독립 컬렉션
+            get(ref(db, 'vacancies')), // ★ 독립 컬렉션
+            get(ref(db, 'buildingPricing'))  // ★ v4.6: 기준가 (목록·통계에서 사용)
         ]);
         
         const t1 = performance.now();
-        console.log(`  📡 Firebase 9개 컬렉션 다운로드: ${Math.round(t1 - t0)}ms`);
+        console.log(`  📡 Firebase 10개 컬렉션 다운로드: ${Math.round(t1 - t0)}ms`);
         
         state.dataCache = {
             buildings: b.val() || {},
@@ -146,7 +147,8 @@ export async function loadData() {
             documents: docs.val() || {},
             users: u.val() || {},
             leasingGuides: lg || {},   // ★ v4.1: 경량 로더는 스냅샷이 아닌 맵을 반환
-            vacancies: vac.val() || {}  // ★ 독립 컬렉션
+            vacancies: vac.val() || {},  // ★ 독립 컬렉션
+            buildingPricing: bp.val() || {}  // ★ v4.6
         };
         
         console.log(`vacancies 컬렉션: ${Object.keys(state.dataCache.vacancies).length}개 빌딩`);
@@ -205,7 +207,7 @@ export async function loadDataProgressive() {
             users: u.val() || {},
             // 나머지는 빈 객체로 채워 processBuildings가 안전하게 동작 (2단계에서 교체)
             rentrolls: {}, memos: {}, incentives: {}, managements: {},
-            documents: {}, leasingGuides: {}, vacancies: {}
+            documents: {}, leasingGuides: {}, vacancies: {}, buildingPricing: {}
         };
         processBuildings();
         processLeasingGuideBuildings();
@@ -234,14 +236,19 @@ export async function loadDataProgressive() {
 async function loadRemainingData() {
     try {
         const t0 = performance.now();
-        const [r, m, i, mg, docs, lg, vac] = await Promise.all([
+        const [r, m, i, mg, docs, lg, vac, bp] = await Promise.all([
             get(ref(db, 'rentrolls')),
             get(ref(db, 'memos')),
             get(ref(db, 'incentives')),
             get(ref(db, 'managements')),
             get(ref(db, 'documents')),
             loadLeasingGuidesLite(),   // ★ v4.1: 전량 조회 → 필요한 하위 경로만
-            get(ref(db, 'vacancies'))
+            get(ref(db, 'vacancies')),
+            // ★ v4.6: 기준가는 상세 전용이 아니다. 목록 카드의 '기준가' 태그와
+            // 통계 대시보드(portal-stats*.js)가 floorPricing 을 직접 읽는다.
+            // 중량 필드 분리 후 목록·통계에서 값이 비던 문제를 여기서 해소한다.
+            // 1단계에는 넣지 않아 첫 화면 속도는 유지한다.
+            get(ref(db, 'buildingPricing'))
         ]);
         state.dataCache.rentrolls = r.val() || {};
         state.dataCache.memos = m.val() || {};
@@ -250,14 +257,20 @@ async function loadRemainingData() {
         state.dataCache.documents = docs.val() || {};
         state.dataCache.leasingGuides = lg || {};   // ★ v4.1: 경량 로더 반환값
         state.dataCache.vacancies = vac.val() || {};
+        state.dataCache.buildingPricing = bp.val() || {};   // ★ v4.6
 
         processBuildings();
         processLeasingGuideBuildings();
 
-        // ★ v4.3: processBuildings()가 allBuildings를 새 객체로 다시 만들므로
-        // viewport 탭이 들고 있던 1단계 객체 참조는 낡은 상태가 된다.
-        // 지도영역 탭이면 viewport를 재계산해서 갱신한다.
-        if (state.currentListTab === 'viewport' && window.updateViewportBuildings) {
+        // ★ v4.3 / v4.6: processBuildings()가 allBuildings를 새 객체로 다시 만들면서
+        // state.filteredBuildings 를 전체 목록으로 되돌린다.
+        // 2단계가 끝나기 전(약 4초)에 사용자가 걸어 둔 필터·검색어가 이 시점에
+        // 초기화되어 "필터가 안 먹는다"로 보였다.
+        // applyFilters() 는 현재 UI 입력값(검색어·권역·면적·정렬 등)을 다시 읽어
+        // filteredBuildings 를 계산하므로, 여기서 한 번 더 호출해 상태를 복원한다.
+        if (window.applyFilters) {
+            window.applyFilters();          // 내부에서 목록·지도 재렌더까지 수행
+        } else if (state.currentListTab === 'viewport' && window.updateViewportBuildings) {
             window.updateViewportBuildings();
         } else {
             if (window.renderBuildingList) window.renderBuildingList();
@@ -614,7 +627,10 @@ export function processBuildings() {
                 // 신규 필드
                 notes: b.notes || '',
                 contactPoints: b.contactPoints || [],
-                floorPricing: b.floorPricing || [],
+                // ★ v4.6: 기준가는 buildingPricing 노드에 있다. buildings 안에 남아
+                // 있는 값(마이그레이션 전 데이터)도 폴백으로 허용한다.
+                floorPricing: (dataCache.buildingPricing?.[id]?.floorPricing)
+                    || b.floorPricing || [],
                 images: b.images || { exterior: [], floorPlan: [], lobby: [], facilities: [], etc: [] },
                 
                 // ★ 이미지 배열 변환 (portal-detail.js에서 {url: '...'} 형식 기대)
@@ -692,7 +708,11 @@ export function processBuildings() {
             if (carried.exteriorImages) nb.exteriorImages = carried.exteriorImages;
             if (carried.floorPlanImages) nb.floorPlanImages = carried.floorPlanImages;
             if (carried.exteriorImage) nb.exteriorImage = carried.exteriorImage;
-            if (carried.floorPricing) nb.floorPricing = carried.floorPricing;
+            // ★ v4.6: 기준가는 buildingPricing 캐시가 정본이다.
+            // 캐시가 아직 비어 있을 때(1단계 구간)만 이전 값을 이월한다.
+            if (carried.floorPricing && !(nb.floorPricing || []).length) {
+                nb.floorPricing = carried.floorPricing;
+            }
             nb._heavyLoaded = true;
         }
     }

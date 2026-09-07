@@ -138,21 +138,10 @@
                     </div>
                 </div>
             </div>
-            <div class="filter-chip" data-filter="efficiency">
-                <span class="chip-icon">📏</span> 전용률 <span class="arrow">▾</span>
-                <div class="filter-dropdown" id="filterEfficiency">
-                    <h4>전용률 (%)</h4>
-                    <div class="filter-range">
-                        <input type="number" id="effMin" placeholder="최소">
-                        <span>~</span>
-                        <input type="number" id="effMax" placeholder="최대">
-                    </div>
-                    <div class="filter-actions">
-                        <button class="btn btn-secondary btn-sm" onclick="clearFilter('efficiency')">초기화</button>
-                        <button class="btn btn-primary btn-sm" onclick="applyFilter('efficiency')">적용</button>
-                    </div>
-                </div>
-            </div>
+            <!-- ★ v4.6: 전용률 필터 제거 (요청).
+                 전용률 데이터 정합성 정리가 끝난 뒤 재도입 검토.
+                 applyFilter('efficiency') / clearFilter('efficiency') 핸들러는
+                 다른 경로에서 호출되지 않으므로 그대로 두어도 무해함. -->
             <div class="filter-chip" data-filter="incentive">
                 <span class="chip-icon">🎁</span> 인센티브 <span class="arrow">▾</span>
                 <div class="filter-dropdown" id="filterIncentive">
@@ -167,7 +156,12 @@
                     </div>
                 </div>
             </div>
-            <label class="vacancy-filter-check" style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border:none;">
+            <!-- ★ v4.6: '우리 안내문 물건' 숨김 (요청).
+                 임대안내문에서 우리 안내문을 '공식'으로 생성하는 기능이 붙은 뒤 노출 예정.
+                 현재 processLeasingGuideBuildings() 가 항상 빈 Set 을 반환해 항상 0건이므로
+                 (문서 6.1 참조) 노출해도 동작하지 않는다.
+                 요소는 남겨두되 화면에서만 감춘다 — 핸들러가 id 를 참조하기 때문. -->
+            <label class="vacancy-filter-check" style="display:none; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border:none;">
                 <input type="checkbox" id="leasingGuideCheck" onchange="toggleLeasingGuideFilter(this.checked)" style="accent-color:#f59e0b;">
                 <span>📄 우리 안내문 물건</span>
             </label>
@@ -176,7 +170,8 @@
                 <input type="checkbox" id="hasVacancyCheck" checked onchange="toggleVacancyFilter(this.checked)">
                 <span>공실 있는 빌딩만</span>
             </label>
-            <label class="vacancy-filter-check" style="background:#eff6ff; border:1px solid #bfdbfe; color:#1a73e8;">
+            <!-- ★ v4.6: '리서치 대상' 숨김 (요청). 요소는 남겨두고 화면에서만 감춘다. -->
+            <label class="vacancy-filter-check" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; color:#1a73e8;">
                 <input type="checkbox" id="researchFilterCheck" onchange="toggleResearchFilter(this.checked)" style="accent-color:#1a73e8;">
                 <span>🔬 리서치 대상</span>
             </label>
