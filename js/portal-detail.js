@@ -411,6 +411,76 @@ async function hydrateBuildingHeavy(b) {
     }
 }
 
+// ============================================================
+// ★ v4.5: 기준층 면적 필드 해석 일원화
+//
+// 필드 의미 규약 (portal-detail.js 편집 모달 및 admin-research 와 동일)
+//   기준층 임대면적 : typicalFloorPy
+//                     alias — typicalFloorLeasePy, typicalFloorRent
+//   기준층 전용면적 : exclusiveFloorPy
+//                     alias — typicalFloorExclusive
+//   전용률          : exclusiveRate (%)
+//
+// 과거에 '기준층 전용' 표시가 값이 없을 때 typicalFloorPy 로 폴백했는데,
+// 이 필드는 임대면적이므로 전용 자리에 임대값이 그대로 찍혔다.
+// 그 상태에서 빌딩정보수정으로 전용면적을 넣어도 표시가 임대값을 먼저 읽어
+// 계속 같은 값이 보였다. 아래 헬퍼로 두 값을 분리해 해석한다.
+// ============================================================
+
+function _areaNum(...cands) {
+    for (const v of cands) {
+        if (v === null || v === undefined || v === '') continue;
+        const n = parseFloat(String(v).replace(/,/g, ''));
+        if (!isNaN(n) && n > 0) return n;
+    }
+    return null;
+}
+
+/** 기준층 임대면적 */
+export function resolveLeaseFloorPy(b) {
+    if (!b) return null;
+    const r = b._raw || {};
+    return _areaNum(
+        b.typicalFloorRent, b.area?.typicalFloorRent,
+        b.typicalFloorLeasePy, b.area?.typicalFloorLeasePy,
+        b.typicalFloorPy, b.area?.typicalFloorPy,
+        r.typicalFloorLeasePy, r.area?.typicalFloorLeasePy,
+        r.typicalFloorPy, r.area?.typicalFloorPy
+    );
+}
+
+/** 기준층 전용면적. 저장값이 없으면 임대면적 × 전용률로 계산한다. */
+export function resolveExclusiveFloorPy(b) {
+    if (!b) return null;
+    const r = b._raw || {};
+    const stored = _areaNum(
+        b.typicalFloorExclusive, b.area?.typicalFloorExclusive,
+        b.exclusiveFloorPy, b.area?.exclusiveFloorPy,
+        r.exclusiveFloorPy, r.area?.exclusiveFloorPy
+    );
+    if (stored != null) return stored;
+
+    const lease = resolveLeaseFloorPy(b);
+    const rate = _areaNum(b.exclusiveRate, b.area?.exclusiveRate, r.exclusiveRate, r.area?.exclusiveRate);
+    if (lease != null && rate != null) return Math.round(lease * rate / 100 * 100) / 100;
+    return null;
+}
+
+/** 전용률(%). 두 면적이 모두 있으면 계산값, 아니면 저장된 전용률. */
+export function resolveExclusiveRate(b) {
+    if (!b) return null;
+    const r = b._raw || {};
+    const stored = _areaNum(b.exclusiveRate, b.area?.exclusiveRate, r.exclusiveRate, r.area?.exclusiveRate);
+    const lease = resolveLeaseFloorPy(b);
+    const exc = _areaNum(
+        b.typicalFloorExclusive, b.area?.typicalFloorExclusive,
+        b.exclusiveFloorPy, b.area?.exclusiveFloorPy,
+        r.exclusiveFloorPy, r.area?.exclusiveFloorPy
+    );
+    if (lease != null && exc != null) return Math.round(exc / lease * 1000) / 10;
+    return stored;
+}
+
 export function openDetail(id) {
     const target = state.allBuildings.find(b => b.id === id);
     // 아직 중량 필드를 안 받았으면 백그라운드로 받아온 뒤 한 번 더 그린다
@@ -923,9 +993,9 @@ export function renderInfoSection() {
 
         <!-- 기준층/전용률 정보 -->
         <div class="info-grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 8px;">
-            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const v = b.typicalFloorExclusive ?? b.area?.typicalFloorExclusive ?? b.area?.typicalFloorPy ?? b.typicalFloorPy ?? b.area?.exclusiveFloorPy ?? b.exclusiveFloorPy; return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
-            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${(() => { const v = b.typicalFloorRent ?? b.area?.typicalFloorRent ?? b.area?.typicalFloorLeasePy ?? b.typicalFloorLeasePy; return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
-            <div class="info-card"><div class="label">전용률</div><div class="value">${(b.typicalFloorExclusive && b.typicalFloorRent ? Math.round(b.typicalFloorExclusive / b.typicalFloorRent * 1000) / 10 : (b.exclusiveRate ?? b.area?.exclusiveRate)) || '-'}<span class="unit">%</span></div></div>
+            <div class="info-card"><div class="label">기준층 전용</div><div class="value">${(() => { const v = resolveExclusiveFloorPy(b); return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">기준층 임대</div><div class="value">${(() => { const v = resolveLeaseFloorPy(b); return v ? formatNumber(v) : '-'; })()}<span class="unit">평</span></div></div>
+            <div class="info-card"><div class="label">전용률</div><div class="value">${resolveExclusiveRate(b) ?? '-'}<span class="unit">%</span></div></div>
         </div>
         
         <!-- 건물 기본정보 -->
@@ -1668,8 +1738,20 @@ export async function setOfficialPricing(pricingId) {
             if (_d.derived) { _excArea = _n(_d.exclusiveArea); _leaseArea = _n(_d.rentArea); }
         }
         if (_excRate == null && _excArea && _leaseArea) _excRate = Math.round(_excArea / _leaseArea * 1000) / 10;
-        if (_excArea != null)  { updateData.typicalFloorExclusive = _excArea; updateData.typicalFloorPy = _excArea; updateData['area/typicalFloorPy'] = _excArea; }
-        if (_leaseArea != null){ updateData.typicalFloorRent = _leaseArea; updateData.typicalFloorLeasePy = _leaseArea; updateData['area/typicalFloorLeasePy'] = _leaseArea; }
+        // ★ v4.5: 전용면적을 typicalFloorPy(=임대면적 필드)에 쓰지 않는다.
+        // 과거에는 여기에 전용면적을 넣어, 표시부가 전용 자리에 임대값을 읽는 원인이 되었다.
+        if (_excArea != null)  {
+            updateData.typicalFloorExclusive = _excArea;
+            updateData.exclusiveFloorPy = _excArea;
+            updateData['area/exclusiveFloorPy'] = _excArea;
+        }
+        if (_leaseArea != null){
+            updateData.typicalFloorRent = _leaseArea;
+            updateData.typicalFloorLeasePy = _leaseArea;
+            updateData['area/typicalFloorLeasePy'] = _leaseArea;
+            updateData.typicalFloorPy = _leaseArea;
+            updateData['area/typicalFloorPy'] = _leaseArea;
+        }
         if (_excRate != null)  { updateData.exclusiveRate = _excRate;        updateData['area/exclusiveRate'] = _excRate; }
         
         // Firebase는 undefined 값을 거부 — 방어적으로 undefined 키 제거
@@ -1704,13 +1786,21 @@ export async function setOfficialPricing(pricingId) {
         // 면적/전용률 로컬 반영 (루트 + area 둘 다)
         const _applyArea = (obj) => {
             if (!obj) return;
-            if (_excArea != null) { obj.typicalFloorExclusive = _excArea; obj.typicalFloorPy = _excArea; }
-            if (_leaseArea != null) { obj.typicalFloorRent = _leaseArea; obj.typicalFloorLeasePy = _leaseArea; }
+            // ★ v4.5: 전용은 exclusiveFloorPy, 임대는 typicalFloorPy 계열로 분리
+            if (_excArea != null) { obj.typicalFloorExclusive = _excArea; obj.exclusiveFloorPy = _excArea; }
+            if (_leaseArea != null) {
+                obj.typicalFloorRent = _leaseArea;
+                obj.typicalFloorLeasePy = _leaseArea;
+                obj.typicalFloorPy = _leaseArea;
+            }
             if (_excRate != null) obj.exclusiveRate = _excRate;
             if (_excArea != null || _leaseArea != null || _excRate != null) {
                 obj.area = obj.area || {};
-                if (_excArea != null) obj.area.typicalFloorPy = _excArea;
-                if (_leaseArea != null) obj.area.typicalFloorLeasePy = _leaseArea;
+                if (_excArea != null) obj.area.exclusiveFloorPy = _excArea;
+                if (_leaseArea != null) {
+                    obj.area.typicalFloorLeasePy = _leaseArea;
+                    obj.area.typicalFloorPy = _leaseArea;
+                }
                 if (_excRate != null) obj.area.exclusiveRate = _excRate;
             }
         };
